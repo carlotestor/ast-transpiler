@@ -51903,6 +51903,13 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
      *  (an initializer from such a call keeps its own decision). */
     this.rustDeclaredArrayProof = false;
     this.rustArrayGuardedCopies = /* @__PURE__ */ new WeakSet();
+    // ── ral-59i: nil-declared list local assigned before any read ──
+    // `let x = undefined;` (or `let x: T;`, a plain `let`, one declarator) whose every write is `x = await this.<endpoint> (..)`
+    // with the abstract declaration spelling `Promise<List>` (rustDeclaredListProducer: `.into_list()` moves the answer), and
+    // whose first later statement of the same block that mentions x assigns it on every path that falls through (an `if`
+    // with both branches assigning, a block holding an assignment; a branch ending in `throw` / `return` never falls
+    // through) without reading it. Every read then sees a written list: the initial value is never observed.
+    this.rustNilListFirstCache = /* @__PURE__ */ new WeakMap();
     this.rustOptListDecisions = /* @__PURE__ */ new WeakMap();
     this.rustOptListBoxes = /* @__PURE__ */ new WeakMap();
     this.rustHandedDictDecisions = /* @__PURE__ */ new WeakMap();
@@ -53849,6 +53856,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return `${indent}let mut ${varName}: ${type} = ${this.printNode(declaration.initializer, 0).trim()}`;
     }
     if (!declaration.initializer) {
+      const builtNil = node.declarations.length === 1 ? this.printBuiltListDeclaration(declaration, indent, varName) : void 0;
+      if (builtNil !== void 0)
+        return builtNil;
       return `${indent}let mut ${varName}: Value = Value::Null`;
     }
     if (node.declarations.length === 1 && this.rustBytesLocal(declaration))
@@ -75888,6 +75898,10 @@ ${iden}}`;
     if (typeof source === "string" && /[\\/]test[\\/]/.test(source))
       return false;
     const init = this.rustSkipWrappers(declaration.initializer);
+    if (this.rustNilListAssignedFirst(declaration))
+      return this.rustBuiltListLocal(declaration);
+    if (init === void 0)
+      return false;
     if (isArrayLiteralExpression4(init))
       return this.rustBuiltListLocal(declaration);
     if (this.rustDefaultedListRead(init) && isIdentifier3(declaration.name) && this.rustLocalIsReassigned(declaration, String(declaration.name.text)))
@@ -79087,11 +79101,12 @@ ${iden}}`;
     if (/[\\/]test[\\/]/.test(String(declaration.getSourceFile?.()?.fileName ?? "")))
       return false;
     const init = declaration.initializer;
+    const nilAssigned = this.rustNilListAssignedFirst(declaration);
     const read = init !== void 0 && (this.rustDefaultedListRead(this.rustSkipWrappers(init)) || this.rustBuiltListConcatInit(this.rustSkipWrappers(init)));
-    if (init === void 0 || !read && (!isArrayLiteralExpression4(init) || init.elements.some((e) => e.kind === SyntaxKind7.SpreadElement)))
+    if (!nilAssigned && (init === void 0 || !read && (!isArrayLiteralExpression4(init) || init.elements.some((e) => e.kind === SyntaxKind7.SpreadElement))))
       return false;
-    const type = this.typeOfNodeIfAny(read ? init : declaration.name);
-    if (type === void 0 || !this.getChecker().isArrayType(type))
+    const type = nilAssigned ? void 0 : this.typeOfNodeIfAny(read ? init : declaration.name);
+    if (!nilAssigned && (type === void 0 || !this.getChecker().isArrayType(type)))
       return false;
     const name = String(declaration.name.text);
     const fn = this.rustEnclosingFunction(declaration);
@@ -79100,7 +79115,7 @@ ${iden}}`;
     if (this.rustReadBearerKindOfDeclaration(declaration) !== false || this.rustDictLocalIsTyped(declaration) || this.rustVecLocalIsTyped(declaration) || this.rustNestedDictLocalIsTyped(declaration) || this.rustMarketLocalKind(declaration) !== false || this.rustBorrowedDictLocal(declaration) || this.rustNilLocalKind(declaration) !== void 0 || this.rustScalarLocalKind(declaration) !== void 0)
       return false;
     this.rustBuiltListCopiedElement = false;
-    if (String(init.getText()).split("\n")[0].length > (read ? 240 : 120) || !this.rustBuiltListWriteSource(init))
+    if (!nilAssigned && (String(init.getText()).split("\n")[0].length > (read ? 240 : 120) || !this.rustBuiltListWriteSource(init)))
       return false;
     const boxes = [];
     let natives = 0;
@@ -79135,6 +79150,11 @@ ${iden}}`;
         if (isElementAccessExpression4(up) && up.expression === n) {
           natives++;
           return !(isElementAccessExpression4(up.parent) && up.parent.expression === up) && this.rustReadBearerElementUse(up, "list");
+        }
+        if (nilAssigned && isAsExpression3(up) && up.expression === n && isParenthesizedExpression3(up.parent) && isPropertyAccessExpression3(up.parent.parent) && up.parent.parent.expression === up.parent && String(up.parent.parent.name.text) === "length") {
+          const use = up.parent.parent.parent;
+          natives++;
+          return use?.kind !== SyntaxKind7.PrefixUnaryExpression && use?.kind !== SyntaxKind7.PostfixUnaryExpression && !(isBinaryExpression5(use) && use.left === up.parent.parent && rustIsAssignmentOperator(use.operatorToken.kind));
         }
         if (isPropertyAccessExpression3(up) && up.expression === n) {
           const member = String(up.name.text);
@@ -79898,9 +79918,87 @@ ${iden}}`;
     if (!this.rustLentListLocal(declaration) || !this.rustBuiltLists.has(declaration))
       return void 0;
     const init = this.rustSkipWrappers(declaration.initializer);
+    if (this.rustNilListAssignedFirst(declaration))
+      return `${indent}let mut ${varName}: crate::value::List = std::sync::Arc::new(Vec::new())`;
     if (!isArrayLiteralExpression4(init))
       return `${indent}let mut ${varName}: crate::value::List = ${this.printNode(declaration.initializer, 0).trim()}.into_list()`;
     return `${indent}let mut ${varName}: crate::value::List = ${this.printBuiltListLiteral(declaration.initializer)}`;
+  }
+  rustNilListAssignedFirst(declaration) {
+    if (!this.rustNilListFirstCache.has(declaration)) {
+      let ok = false;
+      try {
+        ok = this.rustNilListAssignedFirstUncached(declaration);
+      } catch (e) {
+        ok = false;
+      }
+      this.rustNilListFirstCache.set(declaration, ok);
+    }
+    return this.rustNilListFirstCache.get(declaration);
+  }
+  rustNilListAssignedFirstUncached(declaration) {
+    if (!isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name))
+      return false;
+    const list = declaration.parent;
+    if (list?.kind !== SyntaxKind7.VariableDeclarationList || list.declarations?.length !== 1 || (list.flags & NodeFlags4.Const) !== 0)
+      return false;
+    const statement = list.parent;
+    if (statement?.kind !== SyntaxKind7.VariableStatement || !isBlock4(statement.parent) || this.rustTestTierSource(declaration))
+      return false;
+    const init = this.rustSkipWrappers(declaration.initializer);
+    if (init !== void 0 && this.literalKindOfNode(init) !== "null")
+      return false;
+    const name = String(declaration.name.text);
+    const refs = (root) => {
+      const out = [];
+      const visit = (n) => {
+        if (isIdentifier3(n) && String(n.text) === name && n !== declaration.name && !this.rustIdentifierIsPropertyName(n) && this.rustIdentifierRefersToDeclaration(n, declaration))
+          out.push(n);
+        n.forEachChild(visit);
+      };
+      visit(root);
+      return out;
+    };
+    const isWrite = (n) => isBinaryExpression5(n.parent) && n.parent.left === n && n.parent.operatorToken.kind === SyntaxKind7.EqualsToken && n.parent.parent?.kind === SyntaxKind7.ExpressionStatement;
+    const statements = Array.from(statement.parent.statements);
+    const at = statements.indexOf(statement);
+    let first = void 0;
+    let writes = 0;
+    for (const st of statements.slice(at + 1)) {
+      const own = refs(st);
+      if (own.length === 0)
+        continue;
+      if (first === void 0) {
+        first = st;
+        if (own.some((n) => !isWrite(n)))
+          return false;
+      }
+      for (const n of own) {
+        if (!isWrite(n))
+          continue;
+        if (!this.rustDeclaredListProducer(this.rustSkipWrappers(n.parent.right)))
+          return false;
+        writes++;
+      }
+    }
+    if (first === void 0 || writes === 0)
+      return false;
+    const assigns = (st) => {
+      if (st === void 0)
+        return false;
+      if (st.kind === SyntaxKind7.ThrowStatement || st.kind === SyntaxKind7.ReturnStatement)
+        return true;
+      if (st.kind === SyntaxKind7.ExpressionStatement) {
+        const e = this.rustSkipWrappers(st.expression);
+        return isBinaryExpression5(e) && e.operatorToken.kind === SyntaxKind7.EqualsToken && isIdentifier3(e.left) && refs(e.left).length === 1;
+      }
+      if (isBlock4(st))
+        return Array.from(st.statements).some((x) => assigns(x));
+      if (isIfStatement4(st))
+        return st.elseStatement !== void 0 && assigns(st.thenStatement) && assigns(st.elseStatement);
+      return false;
+    };
+    return assigns(first);
   }
   // ── ral-tf: `x = y` under `if (y !== undefined)`, y an optional list local (`Option<List>`) at its last use ──
   // The guard proves `Some`, so `y.unwrap_or_default()` moves the shared list out exactly (no element copy).

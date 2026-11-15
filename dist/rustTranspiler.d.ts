@@ -3954,6 +3954,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBuiltListBoxedLiteral(node: any): string | undefined;
     printBuiltListLiteral(node: any): string;
     printBuiltListDeclaration(declaration: any, indent: string, varName: string): string | undefined;
+    private rustNilListFirstCache;
+    rustNilListAssignedFirst(declaration: any): boolean;
+    rustNilListAssignedFirstUncached(declaration: any): boolean;
     rustOptListGuardedMove(write: any): any;
     /** A never-reassigned local initialised by a `[]`-defaulted base `safeList*` that still prints as the plain `Value` binding. */
     rustDefaultedListValue(declaration: any, y: any): boolean;
