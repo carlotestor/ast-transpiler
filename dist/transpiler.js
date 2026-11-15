@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -55733,7 +55733,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (this.literalKindOfNode(node) !== void 0 || this.rustScalarIntLiteral(node) !== void 0 || this.rustScalarFloatLiteral(node) !== void 0)
       return true;
     if (isBinaryExpression5(node))
-      return _RustTranspiler.RUST_SCALAR_ARITH_OPS.has(node.operatorToken.kind);
+      return _RustTranspiler.RUST_SCALAR_ARITH_OPS.has(node.operatorToken.kind) || this.rustBoolLeafLogical(node);
+    if (isPrefixUnaryExpression3(node) && node.operator === SyntaxKind7.ExclamationToken)
+      return this.rustBoolLeafLogical(node);
     if (this.rustSbJoinShape(node))
       return true;
     if (isIdentifier3(node) || isConditionalExpression4(node) || this.rustScalarStrMethod(node, true) !== void 0 || this.rustScalarPreciseCall(node) || this.rustArithCombinator(node))
@@ -56181,6 +56183,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (marketField !== void 0)
       return marketField.kind;
     if (fresh && isBinaryExpression5(node) && _RustTranspiler.COMPARISON_OPS.has(node.operatorToken.kind) && this.rustBoolCompareSeed(node))
+      return "bool";
+    if (fresh && this.rustBoolLeafLogical(node) && this.rustBoolNativeText(node) !== void 0)
       return "bool";
     const cast = this.rustStrCastCall(node);
     if (cast !== void 0)
@@ -60479,6 +60483,32 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       return isBinaryExpression5(inner) && this.isLogicalOp(inner.operatorToken.kind) && (owns(inner.left) || owns(inner.right));
     };
     return owns(node) ? this.rustBoolNativeText(node) : void 0;
+  }
+  /** ral-43a: `!x` / `x || y` / `x && y` (nested, parenthesised) whose leaves are identifiers of locals declared in the
+   *  same function (never a parameter or a member): the shape the bool seed above reads through the solver. */
+  rustBoolLeafLogical(expr) {
+    const node = this.unwrapParens(expr);
+    if (node === void 0)
+      return false;
+    const leaf = (n) => {
+      const inner = this.unwrapParens(n);
+      if (isIdentifier3(inner)) {
+        const d = this.rustDeclaredNode(inner);
+        return d !== void 0 && isVariableDeclaration3(d) && d.name !== inner && this.rustEnclosingFunction(d) === this.rustEnclosingFunction(node);
+      }
+      if (isPrefixUnaryExpression3(inner))
+        return inner.operator === SyntaxKind7.ExclamationToken && leaf(inner.operand);
+      if (isBinaryExpression5(inner) && this.isEqualityOp(inner.operatorToken.kind)) {
+        const l = this.unwrapParens(inner.left);
+        const r = this.unwrapParens(inner.right);
+        const lit = (n2) => this.literalKindOfNode(n2) === "string" || this.literalKindOfNode(n2) === "null";
+        return leaf(l) && lit(r) || lit(l) && leaf(r);
+      }
+      return isBinaryExpression5(inner) && this.isLogicalOp(inner.operatorToken.kind) && leaf(inner.left) && leaf(inner.right);
+    };
+    if (isPrefixUnaryExpression3(node))
+      return node.operator === SyntaxKind7.ExclamationToken && leaf(node.operand);
+    return isBinaryExpression5(node) && this.isLogicalOp(node.operatorToken.kind) && leaf(node);
   }
   /** Native `bool` text of a comparison proven native, `!x`, a bool local, or `&&`/`||` over those. */
   rustBoolNativeText(expr) {
@@ -69701,7 +69731,7 @@ ${iden}}`;
         return keyWriteUses.push(n) > 0 && ++keyWrites > 0 && ++reads > 0;
       if (extendReuse && this.rustReuseDynamicKeyWrite(n, declaration))
         return keyWriteUses.push(n) > 0 && ++keyWrites > 0 && ++reads > 0;
-      const handed = () => (this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0 || this.rustBuiltReturnBoxUse(n, init, extendReuse) && ++defaultedBoxes > 0 || this.rustOptReaderBoxUse(n, init) && ++optionalBoxes > 0 || this.rustOptionalParamsSlot(up, n) && (from === "dict" || from === "api" && this.rustDeclaredEndpointKind(init) === "dict") && ++paramsBoxes > 0 || nilDeclared && this.rustDeclaredEndpointBoxUse(n) && ++endpointBoxes > 0) && boxedElementUses.push(n) > 0;
+      const handed = () => (this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0 || this.rustBuiltReturnBoxUse(n, init, extendReuse) && ++defaultedBoxes > 0 || this.rustOptReaderBoxUse(n, init) && ++optionalBoxes > 0 || this.rustOptionalParamsSlot(up, n) && (from === "dict" || from === "api" && this.rustDeclaredEndpointKind(init) === "dict") && ++paramsBoxes > 0 || nilDeclared && this.rustDeclaredEndpointBoxUse(n) && ++endpointBoxes > 0 || endpoint && from !== "api" && !nilDeclared && this.rustDeclaredEndpointWholeBox(n) && ++defaultedBoxes > 0) && boxedElementUses.push(n) > 0;
       const asArg = isAsExpression3(up) && up.expression === n && isCallExpression6(up.parent) && Array.from(up.parent.arguments).includes(up) ? up : void 0;
       if (asArg !== void 0 && this.rustLentAsHandOff(asArg, init, from, endpoint, nilDeclared))
         return ++lentResponses > 0 && ++reads > 0 && (this.rustLentAsNullable(init, nilDeclared, endpoint) ? ++lentNullable > 0 : true);
@@ -71480,6 +71510,15 @@ ${iden}}`;
   rustListPassthroughCallee(call, method) {
     const member = this.rustScalarCallee(call);
     return member !== void 0 && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(member.getSourceFile?.()?.fileName ?? "")) && !this.rustVenueReturnTypesHas(call, method);
+  }
+  /** ral-43a: `{ 'k': x }` (a plain object literal, not a destructuring target) or `return x` of a held endpoint answer. */
+  rustDeclaredEndpointWholeBox(n) {
+    const up = n.parent;
+    if (up === void 0 || this.rustScalarInNestedWrite(n, true))
+      return false;
+    if (up.kind === SyntaxKind7.PropertyAssignment)
+      return up.initializer === n && isObjectLiteralExpression4(up.parent) && !this.rustInDestructureWrite(n);
+    return isReturnStatement4(up) && up.expression === n;
   }
   // ── rustDeclaredEndpointBoxUse (ral-ld): a declared-endpoint optional container handed on whole ──
   // `{ 'info': response }` / `return response`: the box `x.map_or(Value::Null, Value::Dict|Arr)` gives back the
