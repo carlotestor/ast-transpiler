@@ -18515,3 +18515,16 @@ describe('ral-55x O1: a Precise compare written into a nil-declared local', () =
         expect(out).not.toContain('let mut winnerRaw: Value');
     });
 });
+
+describe('ral-55x K1: a ws url local read by replace with a concatenated operand', () => {
+    test('url.replace(\'wss://\' + hostname, \'\') keeps url an Option<String> and the operand a format!', () => {
+        const dir = path.join (rustFixtureRoot, '55x-k1url');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync (path.join (dir, 'ts/src/pro'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Bool = boolean | undefined;\nexport type Int = number | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: string = undefined): string { return o; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/pro/venue.ts'), "import Exchange from '../base/Exchange.js';\nimport type { Dict } from '../base/Exchange.js';\nexport default class venue extends Exchange {\n    client (url: string): any { return url; }\n    async authenticate (params: Dict = {}) {\n        const url = this.safeString (params, 'url');\n        const hostname = this.safeString (params, 'hostname');\n        if (url === undefined || hostname === undefined) {\n            throw new Error ('x');\n        }\n        const relativePath = url.replace ('wss://' + hostname, '');\n        const client = this.client (url);\n        const payload = 'GET' + \"\\n\" + hostname + \"\\n\" + relativePath;\n        return [ client, payload ];\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/pro/venue.ts')).content;
+        expect(out).toContain('let mut url: Option<String> = ');
+        expect(out).toContain('let mut relativePath: Option<String> = (if let Some(__s) = url.as_deref() { Some(__s.replace(format!(');
+    });
+});

@@ -9181,7 +9181,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (shape === 'affix') return { recv, recvKind, method, kind: 'bool' };
         // 41b: the new forms read a typed string local receiver only (a parameter read keeps the old paths)
         if (shape === 'vslice' || shape === 'vaffix' || shape === 'vfind' || shape === 'vreplace') {
-            if (this.rustScalarLocalOf(recv) === undefined || this.rust41bWsKeyLocal(recv)) return undefined;
+            // ral-55x K1: a ws key local (a `url` the client / watch take as a `&str`) may still be read by `replace` (its own new text)
+            if (this.rustScalarLocalOf(recv) === undefined || (this.rust41bWsKeyLocal(recv) && shape !== 'vreplace')) return undefined;
             if (args.some((a) => isIdentifier(this.unwrapParens(a)) && this.rust41bWsKeyLocal(this.unwrapParens(a)))) return undefined;
             if (shape === 'vslice') return this.rustStrSliceVarBounds(args) === undefined ? undefined : { recv, recvKind, method, kind: recvKind };
             if (shape === 'vaffix') return this.rustStrVarNeedle(args[0], method === 'includes') === undefined ? undefined : { recv, recvKind, method, kind: 'bool' };
@@ -9269,7 +9270,43 @@ export class RustTranspiler extends BaseTranspiler {
         const inner: any = this.unwrapParens(node);
         const lit = this.rustNativeStringLiteralArg(inner);
         if (lit !== undefined) return `"${lit}"`;
-        return isIdentifier(inner) && this.rustScalarLocalOf(inner)?.kind === 'str' ? `${super.printIdentifier(inner)}.as_str()` : undefined;
+        if (isIdentifier(inner) && this.rustScalarLocalOf(inner)?.kind === 'str') return `${super.printIdentifier(inner)}.as_str()`;
+        // ral-55x K1: `'lit' + s` of string literals and typed string locals: the printer's own `format!` concat is a `String`
+        // (never `Null`), the same text the boxed `Value::Str(format!(..))` operand held
+        if (isBinaryExpression(inner) && inner.operatorToken.kind === SyntaxKind.PlusToken && this.rustStrConcatOperandLeaves(inner)) {
+            const text = this.rustUnboxedFormatText(this.printNode(inner, 0));
+            if (text !== undefined) return `${text}.as_str()`;
+        }
+        return undefined;
+    }
+
+    /** ral-55x K1: `Value::Str(format!(..).into())` -> the `format!(..)` itself, when that macro call spans the whole box. */
+    rustUnboxedFormatText(text: string): string | undefined {
+        const head = 'Value::Str(format!(';
+        if (!text.startsWith(head) || !text.endsWith(').into())')) return undefined;
+        let depth = 1;
+        let quoted = false;
+        for (let i = head.length; i < text.length; i++) {
+            const c = text[i];
+            if (quoted) { if (c === '\\') i++; else if (c === '"') quoted = false; continue; }
+            if (c === '"') quoted = true;
+            else if (c === '(') depth++;
+            else if (c === ')' && --depth === 0) return text.slice(i + 1) === '.into())' ? text.slice('Value::Str('.length, i + 1) : undefined;
+        }
+        return undefined;
+    }
+
+    /** ral-55x K1: every leaf of a `+` chain is a string literal or a `str` / `ostr` typed local, and at least one is a literal. */
+    rustStrConcatOperandLeaves(node): boolean {
+        let literal = false;
+        const walk = (n: any): boolean => {
+            const inner: any = this.unwrapParens(n);
+            if (isBinaryExpression(inner) && inner.operatorToken.kind === SyntaxKind.PlusToken) return walk(inner.left) && walk(inner.right);
+            if (this.rustNativeStringLiteralArg(inner) !== undefined) { literal = true; return true; }
+            const kind = isIdentifier(inner) ? this.rustScalarLocalOf(inner)?.kind : undefined;
+            return kind === 'str' || kind === 'ostr';
+        };
+        return walk(node) && literal;
     }
 
     private rust41bWsKeyMemo = new WeakMap<any, boolean>();
