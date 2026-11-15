@@ -1211,6 +1211,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A write source the local's type holds exactly: a same-kind value, a typed scalar local of the
      *  same kind, or a ternary of those (its condition printed as a bool). */
     rustScalarWriteOk(kind: string, rhs: any, depth: number): boolean;
+    /** ral-54e: `x = i` (statement write) where `i` is the counter of an enclosing `for (let i = <int>; ..; i++)` that only the
+     *  step writes (rustValueIntCounter: always an `Int`) and the write sits in that loop's body: the `i64` the counter holds. */
+    rust54eCounterWrite(node: any): boolean;
     /** Plain `Value` argument slots: `this.`/`super.` methods without a native-typed slot, and `Precise.*`. */
     rustNilBoxSlotOk(call: any, at: number): boolean;
     /** Test tier: a call of the harness (`exchange.m(..)` on the base `Exchange`, `testSharedMethods.m(..)`) whose
@@ -1592,6 +1595,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ub: a parseToInt local whose partner uses are all ordered / equality tests the solver prints with both operands
      *  decided (`rustScalarCompareText`): its plain reads box like any other typed base call result. */
     rustUbPtiPartnersDecided(declaration: any): boolean;
+    /** ral-54e: `x = this.parseToInt (x + <int literal>)` (the write target, or the operand inside it): a self step of a
+     *  parseToInt local stays inside the local (no other local meets it), so it does not make the local a partner. */
+    rust54ePtiSelfStep(u: any): boolean;
     /** tb: `i OP b` as the condition of `for (let i = <int>; ..; i++)` (the step is the counter's only write, so it is always
      *  an `Int`), `b` a parseToInt `i64` / `Option<i64>` local: the counter operand, else undefined. */
     rustTbCounterBound(cond: any, n: any, kind: string): any;

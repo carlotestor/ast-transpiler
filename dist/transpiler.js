@@ -59906,12 +59906,22 @@ ${binding(plan.indent)}` : ""), head: "" };
     const optional = kind.startsWith("o");
     if (isIdentifier3(node) && node.text !== "undefined") {
       const source = this.rustScalarLocalOf(node)?.kind;
+      if (kind === "int" && depth === 0 && source === void 0 && this.rust54eCounterWrite(node))
+        return true;
       return source === kind || optional && source === kind.slice(1) || kind === "ostr" && source === void 0 && depth === 0 && this.rustNilValueStrAlias(node);
     }
     const value = this.rustScalarValueKind(node, true);
     if (value === kind || optional && (value === "null" || value === kind.slice(1)))
       return true;
     return kind === "ostr" && value === void 0 && this.rustVenueStrCall(node);
+  }
+  /** ral-54e: `x = i` (statement write) where `i` is the counter of an enclosing `for (let i = <int>; ..; i++)` that only the
+   *  step writes (rustValueIntCounter: always an `Int`) and the write sits in that loop's body: the `i64` the counter holds. */
+  rust54eCounterWrite(node) {
+    if (!isIdentifier3(node) || this.rustTestTierSource(node) || !this.rustValueIntCounter(node))
+      return false;
+    const up = this.rustSkipWrappersUp(node.parent);
+    return isBinaryExpression5(up) && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && this.unwrapParens(up.right) === node && isIdentifier3(this.unwrapParens(up.left));
   }
   /** Plain `Value` argument slots: `this.`/`super.` methods without a native-typed slot, and `Precise.*`. */
   rustNilBoxSlotOk(call, at) {
@@ -60588,6 +60598,10 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       return `${super.printIdentifier(left)} = ${super.printIdentifier(alias)}.take()`;
     if (local?.kind === "ostr" && isIdentifier3(alias) && this.rustScalarIdentifierKind(alias) === void 0 && this.rustNilValueStrAlias(alias))
       return `${super.printIdentifier(left)} = ${super.printIdentifier(alias)}.into_opt_string()`;
+    if (local?.kind === "int" && isIdentifier3(alias) && this.rustScalarLocalOf(alias) === void 0 && this.rust54eCounterWrite(alias)) {
+      const name = super.transformIdentifier(alias, this.ReservedKeywordsReplacements[alias.text] ?? alias.text);
+      return `${super.printIdentifier(left)} = ${this.rustI64CounterUse(alias) ? name : `${name}.as_i64().unwrap_or_default()`}`;
+    }
     const text = local === void 0 ? void 0 : this.rustScalarNativeText(local.kind, right);
     const owned = text !== void 0 && isIdentifier3(alias) && text === super.printIdentifier(alias) && _RustTranspiler.RUST_COPY_SCALAR_KINDS.has(local.kind) && !(local.kind === "obool" && text === "None");
     const ownedNone = local?.kind === "obool" && text === "None";
@@ -62760,6 +62774,8 @@ ${ind}];`;
     const d = this.rustDeclaredNode(inner);
     if (d === void 0 || !isVariableDeclaration3(d))
       return d !== void 0 && isParameterDeclaration3(d);
+    if ((d.parent?.flags & NodeFlags4.Const) !== 0 && this.rustScalarIntLiteral(this.unwrapParens(d.initializer)) !== void 0 && this.rustScalarLocalOf(inner)?.kind === "int")
+      return true;
     return this.rustTbParseToIntInit(d) || d.parent?.parent?.kind === SyntaxKind7.ForStatement;
   }
   /** ub: a parseToInt local whose partner uses are all ordered / equality tests the solver prints with both operands
@@ -62773,6 +62789,8 @@ ${ind}];`;
       while (isParenthesizedExpression3(top.parent))
         top = top.parent;
       const up = top.parent;
+      if (this.rust54ePtiSelfStep(u))
+        return true;
       if (this.rustIdentifierIsWritten(u) || isVariableDeclaration3(up) && up.initializer === top)
         ok = false;
       else if (isBinaryExpression5(up) && (_RustTranspiler.NATIVE_COMPARISON_OPERATORS[up.operatorToken.kind] === void 0 && !this.isEqualityOp(up.operatorToken.kind) && !_RustTranspiler.RUST_SCALAR_VALUE_OPERAND_OPS.has(up.operatorToken.kind)))
@@ -62786,6 +62804,22 @@ ${ind}];`;
       return true;
     });
     return ok;
+  }
+  /** ral-54e: `x = this.parseToInt (x + <int literal>)` (the write target, or the operand inside it): a self step of a
+   *  parseToInt local stays inside the local (no other local meets it), so it does not make the local a partner. */
+  rust54ePtiSelfStep(u) {
+    const name = String(u.text);
+    let top = u;
+    while (top.parent !== void 0 && top.parent.kind !== SyntaxKind7.ExpressionStatement)
+      top = top.parent;
+    const write = top;
+    if (!isBinaryExpression5(write) || write.operatorToken.kind !== SyntaxKind7.EqualsToken || !isIdentifier3(write.left) || String(write.left.text) !== name)
+      return false;
+    const call = this.unwrapParens(write.right);
+    if (!isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(call.expression.name.text) !== "parseToInt" || call.arguments.length !== 1)
+      return false;
+    const arg = this.unwrapParens(call.arguments[0]);
+    return isBinaryExpression5(arg) && arg.operatorToken.kind === SyntaxKind7.PlusToken && isIdentifier3(this.unwrapParens(arg.left)) && String(this.unwrapParens(arg.left).text) === name && this.rustScalarIntLiteral(this.unwrapParens(arg.right)) !== void 0 && (u === write.left || u === this.unwrapParens(arg.left));
   }
   /** tb: `i OP b` as the condition of `for (let i = <int>; ..; i++)` (the step is the counter's only write, so it is always
    *  an `Int`), `b` a parseToInt `i64` / `Option<i64>` local: the counter operand, else undefined. */
