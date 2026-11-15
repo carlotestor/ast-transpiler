@@ -65284,13 +65284,13 @@ ${i1}}`;
   // ── string fields of a typed market local as scalar seeds (rustMarketFieldScalar) ──
   /** `m['symbol']` / `m.id` off a loaded `crate::types::Market` local: the field's own `String` / `Option<String>`
    *  (the boxed read cloned the same field), so a local initialised from it is a typed string. */
-  rustMarketFieldScalar(node) {
+  rustMarketFieldScalar(node, placed = true) {
     if (node === void 0 || !(isElementAccessExpression4(node) || isPropertyAccessExpression3(node)))
       return void 0;
     let top = node;
     while (top.parent !== void 0 && (isParenthesizedExpression3(top.parent) || top.parent.kind === SyntaxKind7.AsExpression))
       top = top.parent;
-    if (!isVariableDeclaration3(top.parent) || top.parent.initializer !== top)
+    if (placed && !(isVariableDeclaration3(top.parent) && top.parent.initializer === top) && !this.rust57kMarketTernaryArm(top))
       return void 0;
     const currency = this.rustCurrencyLocalOf(node.expression);
     if (currency !== void 0) {
@@ -65325,6 +65325,40 @@ ${i1}}`;
       return { kind: "str", text: `${recv}.${field}.clone()` };
     const optField = _RustTranspiler.RUST_MARKET_OPT_STR_FIELDS[key];
     return optField !== void 0 ? { kind: "ostr", text: `${recv}.${optField}.as_deref().map(str::to_owned)` } : void 0;
+  }
+  /** ral-57k: an arm of `x = c ? m['quote'] : m['base']` (a statement write into an initialised local, kucoin parseTrade
+   *  `feeCurrency`) whose other arm is a field read of the same kind off the same typed market local: the ternary is that
+   *  one kind, each arm the very `key_read` the boxed form printed (`None` where it held Null). */
+  rust57kMarketTernaryArm(top) {
+    const cond = top?.parent;
+    if (cond === void 0 || !isConditionalExpression4(cond) || cond.whenTrue !== top && cond.whenFalse !== top)
+      return false;
+    let ctop = cond;
+    while (isParenthesizedExpression3(ctop.parent))
+      ctop = ctop.parent;
+    const write = ctop.parent;
+    if (!isBinaryExpression5(write) || write.right !== ctop || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const target = this.unwrapParens(write.left);
+    const local = isIdentifier3(target) ? this.rustDeclaredNode(target) : void 0;
+    if (local === void 0 || !isVariableDeclaration3(local) || local.initializer === void 0 || this.literalKindOfNode(local.initializer) === "null")
+      return false;
+    const strip = (e) => {
+      let x = e;
+      while (x !== void 0 && (isParenthesizedExpression3(x) || x.kind === SyntaxKind7.AsExpression))
+        x = x.expression;
+      return x;
+    };
+    const a = strip(cond.whenTrue);
+    const b = strip(cond.whenFalse);
+    if (!(isElementAccessExpression4(a) || isPropertyAccessExpression3(a)) || !(isElementAccessExpression4(b) || isPropertyAccessExpression3(b)))
+      return false;
+    const ra = this.unwrapParens(a.expression);
+    const rb = this.unwrapParens(b.expression);
+    if (!isIdentifier3(ra) || !isIdentifier3(rb) || this.rustDeclaredNode(ra) === void 0 || this.rustDeclaredNode(ra) !== this.rustDeclaredNode(rb))
+      return false;
+    const ka = this.rustMarketFieldScalar(a, false)?.kind;
+    return ka !== void 0 && ka === this.rustMarketFieldScalar(b, false)?.kind;
   }
   /** A read off a struct local: a listed field natively, any other key off `raw`; `asBool` for a condition slot. */
   printTypedMarketRead(node, asBool = false) {
