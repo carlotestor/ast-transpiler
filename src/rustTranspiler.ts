@@ -4970,7 +4970,7 @@ export class RustTranspiler extends BaseTranspiler {
             const form = this.rustScalarUseForms.get(n);
             // a native insert key borrows the local (`as_deref`); a helper-write key would copy it
             // ral-53i: likewise a key of the two-level bearer's own bucket seed / insert (rustNestedBearerWriteKey: one key text either way)
-            if (form === 'err' || (form === 'key' && !(nativeKeys && (this.rustScalarInsertKeyUse(n) || this.rustNestedBearerKeySlot(n))))) ok = false;
+            if (form === 'err' || (form === 'key' && !(nativeKeys && (this.rustScalarInsertKeyUse(n) || this.rustNestedBearerKeySlot(n) || this.rustPlainFieldInsertKey(n))))) ok = false;
             if (form !== 'box' && form !== 'xbox') return true;
             const up: any = n.parent;
             if (isReturnStatement(up) || this.rustLocalLastUse(n, declaration)) return true;
@@ -10796,6 +10796,33 @@ export class RustTranspiler extends BaseTranspiler {
             return true;
         });
         return keys > 0 && boxed > 0;
+    }
+
+    /** ral-55f: `this.F[k] = v` (statement) on a plain untagged field the printer inserts natively (printNativeDictInsert's
+     *  field receiver, e.g. `options`): the printer prints the key text itself (`k.as_deref().unwrap_or("null").to_string()`, the
+     *  one allocation `stringify_param(&k)` made), so the ccxt build/ key pass never sees a boxed key there. The value must
+     *  not rewrite the key (binance pro authenticate `this.options[type] = this.extend (options, ..)`). Non-test sources. */
+    rustPlainFieldInsertKey(n: any): boolean {
+        if (this.rustTestTierSource(n)) return false;
+        const keyNode: any = this.rustKeyWrapped(n);
+        const access: any = keyNode.parent;
+        if (!isElementAccessExpression(access) || access.argumentExpression !== keyNode) return false;
+        const receiver: any = this.rustNativeInsertReceiver(access.expression);
+        if (receiver === undefined || !receiver.isField || !this.rustReceiverStaysDict(access.expression, receiver)) return false;
+        const write: any = access.parent;
+        if (!isBinaryExpression(write) || write.left !== access || write.operatorToken.kind !== SyntaxKind.EqualsToken || write.parent?.kind !== SyntaxKind.ExpressionStatement) return false;
+        const key = String(n.text);
+        let rewrites = false;
+        const visit = (m: any) => {
+            if (rewrites) return;
+            if (isIdentifier(m) && String(m.text) === key && ((isBinaryExpression(m.parent) && m.parent.left === m
+                && m.parent.operatorToken.kind >= SyntaxKind.FirstAssignment && m.parent.operatorToken.kind <= SyntaxKind.LastAssignment)
+                || ((isPrefixUnaryExpression(m.parent) || isPostfixUnaryExpression(m.parent))
+                    && (m.parent.operator === SyntaxKind.PlusPlusToken || m.parent.operator === SyntaxKind.MinusMinusToken)))) rewrites = true;
+            m.forEachChild?.(visit);
+        };
+        visit(write.right);
+        return !rewrites;
     }
 
     rustScalarOptKeyText(key): string {
