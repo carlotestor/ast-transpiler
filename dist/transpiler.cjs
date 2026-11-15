@@ -60006,7 +60006,8 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       return this.rustStrFindNeedle(args[0], false) === void 0 ? void 0 : { recv, recvKind, method, kind: "int" };
     if ((shape === "pad" || shape === "slice") && this.rustScalarIdentifierKind(recv) === void 0 && this.rustScalarParamRead(recv) === void 0)
       return void 0;
-    if (recvKind === "ostr" && shape !== "case" && shape !== "replace" && shape !== "pad" && shape !== "slice")
+    const ostrSelf = recvKind === "ostr" && method === "toString" && !this.rustTestTierSource(call);
+    if (recvKind === "ostr" && shape !== "case" && shape !== "replace" && shape !== "pad" && shape !== "slice" && !ostrSelf)
       return void 0;
     return { recv, recvKind, method, kind: recvKind };
   }
@@ -61196,6 +61197,10 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
         return wrap(`${name}.replace("${arg(0)}", "${arg(1)}")`);
       }
       const fn = method.method === "toLowerCase" ? "to_lowercase" : "to_uppercase";
+      if (method.recvKind === "ostr" && method.method === "toString") {
+        const local = this.rustScalarLocalOf(method.recv);
+        return wrap(local !== void 0 && this.rustLocalLastUse(method.recv, local.declaration) ? name : `${name}.clone()`);
+      }
       if (method.recvKind === "ostr")
         return wrap(`${name}.as_deref().map(str::${fn})`);
       if (method.method === "trim")

@@ -8585,7 +8585,10 @@ export class RustTranspiler extends BaseTranspiler {
         // pad / slice on a typed local, or on a typed parameter read: a `&str` parameter's binding is never `Null`
         // (callers and dispatch arms convert once), an `Option<&str>` one keeps `None` through the `if let` form
         if ((shape === 'pad' || shape === 'slice') && this.rustScalarIdentifierKind(recv) === undefined && this.rustScalarParamRead(recv) === undefined) return undefined;
-        if (recvKind === 'ostr' && shape !== 'case' && shape !== 'replace' && shape !== 'pad' && shape !== 'slice') return undefined;
+        // ral-48f: `x.toString()` of an `Option<String>` local outside the test tier is the local itself (`None` stays `None`; the
+        // `Value` form displayed its `Null` box as `null`, which the concat / box readers of an `ostr` operand print alike)
+        const ostrSelf = recvKind === 'ostr' && method === 'toString' && !this.rustTestTierSource(call);
+        if (recvKind === 'ostr' && shape !== 'case' && shape !== 'replace' && shape !== 'pad' && shape !== 'slice' && !ostrSelf) return undefined;
         return { recv, recvKind, method, kind: recvKind };
     }
 
@@ -9679,6 +9682,10 @@ export class RustTranspiler extends BaseTranspiler {
                 return wrap(`${name}.replace("${arg(0)}", "${arg(1)}")`);
             }
             const fn = method.method === 'toLowerCase' ? 'to_lowercase' : 'to_uppercase';
+            if (method.recvKind === 'ostr' && method.method === 'toString') {
+                const local = this.rustScalarLocalOf(method.recv);
+                return wrap(local !== undefined && this.rustLocalLastUse(method.recv, local.declaration) ? name : `${name}.clone()`);
+            }
             if (method.recvKind === 'ostr') return wrap(`${name}.as_deref().map(str::${fn})`);
             if (method.method === 'trim') return wrap(`${name}.trim().to_string()`);
             if (method.method === 'toString' && method.recvKind === 'int') return wrap(`format!("{}", ${name})`);
