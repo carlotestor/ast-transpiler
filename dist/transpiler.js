@@ -55997,6 +55997,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return this.rustBoolLeafLogical(node);
     if (this.rustSbJoinShape(node))
       return true;
+    if (this.rustReaderCaseStrRecv(node) !== void 0)
+      return true;
+    if (this.rustPreciseCompareCall(node))
+      return true;
     if (isIdentifier3(node) || isConditionalExpression4(node) || this.rustScalarStrMethod(node, true) !== void 0 || this.rustScalarPreciseCall(node) || this.rustArithCombinator(node))
       return true;
     if (this.rustStrCastCall(node) !== void 0 || this.rustClockString(node) || this.rustIdString(node) || this.rustVenueTypedCall(node) !== void 0)
@@ -56102,6 +56106,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const unused = typedUses === 0 && !handOff && this.rustScalarNeedsNativeUse(declaration.initializer) && !this.rustVenueIntReboxed(declaration, kind, boxed);
     const clientOnce = nativeUses === 0 && boxed === 1 && this.rustWsClientOnlyUse(declaration);
     if (anyLength && typedUses === 0)
+      return void 0;
+    if (nativeUses === 0 && kind === "str" && this.rustReaderCaseStrRecv(this.unwrapParens(declaration.initializer)) !== void 0)
       return void 0;
     if (!ok || unused || storeOnly || clientOnce || guarded && scope.kind !== SyntaxKind7.MethodDeclaration || this.rustOkeyBoxed(declaration, boxed) || this.rustElemKeyInCostly(declaration))
       return void 0;
@@ -56489,6 +56495,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "str";
     if (fresh && this.rustDeclInitPosition(node) && this.rustValueCaseRecv(node) !== void 0)
       return "ostr";
+    if (fresh && this.rustDeclInitPosition(node) && this.rustReaderCaseStrRecv(node) !== void 0)
+      return "str";
+    if (fresh && this.rustPreciseCompareCall(node))
+      return "bool";
     const callee = node.expression;
     if (!isPropertyAccessExpression3(callee) || !this.rustScalarReceiver(callee.expression))
       return void 0;
@@ -56616,6 +56626,21 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     const text = this.printNode(recv, 0).trim();
     return RUST_PLAIN_PLACE.test(text) ? text : void 0;
+  }
+  /** ral-54x K1: the receiver of `<reader>.toUpperCase()` / `.toLowerCase()` (no arguments) when the reader is a base
+   *  string reader with a string-literal default (always a `Str`, so the scalar rule types it `String`), else undefined. */
+  rustReaderCaseStrRecv(call) {
+    if (call === void 0 || !isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || (call.arguments?.length ?? 0) !== 0)
+      return void 0;
+    const method = String(call.expression.name.text);
+    if (method !== "toUpperCase" && method !== "toLowerCase")
+      return void 0;
+    const recv = this.unwrapParens(call.expression.expression);
+    if (recv === void 0 || !isCallExpression6(recv) || !isPropertyAccessExpression3(recv.expression) || recv.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return void 0;
+    if (!_RustTranspiler.RUST_STRING_LOCAL_HELPERS.has(String(recv.expression.name.text)))
+      return void 0;
+    return this.rustScalarValueKind(recv, true) === "str" ? recv : void 0;
   }
   /** The initializer, or one of its ternary arms, is a `rustValueCaseRecv` conversion. */
   rustValueCaseInit(init) {
@@ -60337,6 +60362,13 @@ ${binding(plan.indent)}` : ""), head: "" };
       return this.rustArithCallText(kind, node);
     if (base === "str" && this.rustStrRuntimeCall(node))
       return wrap(this.rustStrRuntimeBareText(node));
+    const readerCase = kind === "str" && this.rustDeclInitPosition(node) ? this.rustReaderCaseStrRecv(node) : void 0;
+    if (readerCase !== void 0) {
+      const recvText = this.rustScalarNativeText("str", readerCase);
+      const fn = String(node.expression.name.text) === "toUpperCase" ? "to_uppercase" : "to_lowercase";
+      if (recvText !== void 0)
+        return `${recvText.endsWith(".to_string()") ? recvText.slice(0, -".to_string()".length) : recvText}.${fn}()`;
+    }
     const caseRecv = kind === "ostr" ? this.rustValueCaseRecv(node) : void 0;
     const caseCallee = node.expression;
     if (caseRecv !== void 0)
@@ -60801,6 +60833,14 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       return false;
     const callee = call.expression;
     return isIdentifier3(callee.expression) && callee.expression.text === "Precise" && _RustTranspiler.RUST_NIL_PRECISE_STR.test(String(callee.name.text));
+  }
+  /** ral-54x: `Precise.stringEq|Gt|Ge|Lt|Le(a, b)`: the runtime answers `Value::Bool` for every operand pair. */
+  rustPreciseCompareCall(node) {
+    const call = this.unwrapParens(node);
+    if (call === void 0 || !isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.arguments.length !== 2)
+      return false;
+    const callee = call.expression;
+    return isIdentifier3(callee.expression) && callee.expression.text === "Precise" && /^string(?:Eq|Gt|Ge|Lt|Le)$/.test(String(callee.name.text));
   }
   /** `s.length` on a typed string local. */
   rustScalarLengthRecv(node, params = false) {

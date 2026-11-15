@@ -676,6 +676,9 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  and answers `Null` for anything else, which is exactly `x.as_str().map(str::to_uppercase)` as an `Option<String>`.
      *  Returns the printed receiver place, else undefined. */
     rustValueCaseRecv(call: any): string | undefined;
+    /** ral-54x K1: the receiver of `<reader>.toUpperCase()` / `.toLowerCase()` (no arguments) when the reader is a base
+     *  string reader with a string-literal default (always a `Str`, so the scalar rule types it `String`), else undefined. */
+    rustReaderCaseStrRecv(call: any): any;
     /** The initializer, or one of its ternary arms, is a `rustValueCaseRecv` conversion. */
     rustValueCaseInit(init: any): boolean;
     rustBaseReturnScalarKind(call: any, name: string): string | undefined;
@@ -1348,6 +1351,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustStrMethodNewUse(call: any): boolean;
     /** `Precise.string<Add|Sub|..>(..)`: a `string | undefined` result. */
     rustScalarPreciseCall(node: any): boolean;
+    /** ral-54x: `Precise.stringEq|Gt|Ge|Lt|Le(a, b)`: the runtime answers `Value::Bool` for every operand pair. */
+    rustPreciseCompareCall(node: any): boolean;
     /** `s.length` on a typed string local. */
     rustScalarLengthRecv(node: any, params?: boolean): any;
     /** Non-optional numeric operand kind (`int|num`), optional (`oint|onum`), or undefined. */
