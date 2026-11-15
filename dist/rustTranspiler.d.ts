@@ -2031,6 +2031,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `parseInt(x)` / `parseFloat(x)` with a single checker-proven string argument
      *  become the runtime helper's own match with native `str::parse`; every other
      *  argument shape keeps the helper call the ccxt post-pass rewrites. */
+    /** ral-41a: `parseInt (x as string)` whose one argument is the cast `top` of an `Option<String>` local. */
+    rustParseIntOfOptStr(call: any, top: any): boolean;
     printNativeParseCall(node: CallExpression): string | undefined;
     isNodeInsideNode(node: Node, container: Node): boolean;
     /** Root place of an access chain (`x` for `x['a']['b']`, `this.balance` for

@@ -14948,3 +14948,21 @@ describe('ral-41a: nil locals written from a venue `Num` parse helper', () => {
         expect(text).toContain('pub fn parseX18(&self, value: Option<&str>) -> Value {');
     });
 });
+
+describe('ral-41a: parseInt of an optional string local read through `as string`', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: any = undefined): Str { return o[k]; }\n}\n";
+    const venue = "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    signedAmount (side: string, amount: string): string {\n        return (side === 'sell') ? ('-' + amount) : amount;\n    }\n    createOrderRequest (side: string, amount: string, contract: boolean) {\n        let contractAmount = 0;\n        let signedAmount: Str = undefined;\n        if (contract) {\n            signedAmount = this.signedAmount (side, amount);\n            contractAmount = parseInt (signedAmount as string);\n        }\n        const request: Dict = {};\n        request['size'] = contractAmount;\n        request['amount'] = signedAmount;\n        return request;\n    }\n}\n";
+    const out = () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-41a-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), venue);
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        try { return t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+    };
+    test('the local is Option<String> and parseInt reads it in place with the runtime parse_int match', () => {
+        const text = out();
+        expect(text).toContain('let mut signedAmount: Option<String> = None');
+        expect(text).toContain('(match signedAmount.as_deref() { Some(__parse_s) => __parse_s.trim().parse::<i64>().map(Value::Int).unwrap_or(Value::Null), None => Value::Null })');
+    });
+});

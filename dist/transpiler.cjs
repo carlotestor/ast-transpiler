@@ -61233,6 +61233,8 @@ ${ind}];`;
       const call = top.parent;
       if (_is.isCallExpression.call(void 0, call) && call.expression !== top && this.rustWsWatchSlot(call, call.arguments.indexOf(top)))
         return "targ";
+      if (kind === "ostr" && this.rustParseIntOfOptStr(call, top))
+        return "native";
     }
     if (_is.isParenthesizedExpression.call(void 0, parent) || parent.kind === _ast.SyntaxKind.AsExpression) {
       const outer = this.rustScalarUseForm(parent, kind);
@@ -65931,6 +65933,10 @@ ${ind}let ${view}: &${map} = &${arc};
   /** `parseInt(x)` / `parseFloat(x)` with a single checker-proven string argument
    *  become the runtime helper's own match with native `str::parse`; every other
    *  argument shape keeps the helper call the ccxt post-pass rewrites. */
+  /** ral-41a: `parseInt (x as string)` whose one argument is the cast `top` of an `Option<String>` local. */
+  rustParseIntOfOptStr(call, top) {
+    return call !== void 0 && _is.isCallExpression.call(void 0, call) && _is.isIdentifier.call(void 0, call.expression) && String(call.expression.text) === "parseInt" && call.arguments.length === 1 && call.arguments[0] === top;
+  }
   printNativeParseCall(node) {
     const callee = node.expression;
     if (!_is.isIdentifier.call(void 0, callee))
@@ -65941,6 +65947,10 @@ ${ind}let ${view}: &${map} = &${arc};
       return void 0;
     if (node.arguments.length !== 1)
       return void 0;
+    const optLocal = name === "parseInt" ? this.rustStrCastLocal(node.arguments[0]) : void 0;
+    if (optLocal !== void 0 && this.rustScalarIdentifierKind(optLocal) === "ostr") {
+      return `(match ${super.printIdentifier(optLocal)}.as_deref() { Some(__parse_s) => __parse_s.trim().parse::<i64>().map(Value::Int).unwrap_or(Value::Null), None => Value::Null })`;
+    }
     const arg = node.arguments[0];
     const type = this.getCheckedTypeOf(arg);
     if (type === void 0 || !this.isStringType(type.flags))

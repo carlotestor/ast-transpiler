@@ -9720,6 +9720,8 @@ export class RustTranspiler extends BaseTranspiler {
             while (isParenthesizedExpression(top.parent)) top = top.parent;
             const call: any = top.parent;
             if (isCallExpression(call) && call.expression !== top && this.rustWsWatchSlot(call, call.arguments.indexOf(top))) return 'targ';
+            // ral-41a: `parseInt (x as string)` of an optional string local reads it in place (`x.as_deref()`, runtime parse_int's own match)
+            if (kind === 'ostr' && this.rustParseIntOfOptStr(call, top)) return 'native';
         }
         if (isParenthesizedExpression(parent) || parent.kind === SyntaxKind.AsExpression) {
             const outer = this.rustScalarUseForm(parent, kind);
@@ -14720,6 +14722,12 @@ export class RustTranspiler extends BaseTranspiler {
     /** `parseInt(x)` / `parseFloat(x)` with a single checker-proven string argument
      *  become the runtime helper's own match with native `str::parse`; every other
      *  argument shape keeps the helper call the ccxt post-pass rewrites. */
+    /** ral-41a: `parseInt (x as string)` whose one argument is the cast `top` of an `Option<String>` local. */
+    rustParseIntOfOptStr(call: any, top: any): boolean {
+        return call !== undefined && isCallExpression(call) && isIdentifier(call.expression) && String(call.expression.text) === 'parseInt'
+            && call.arguments.length === 1 && call.arguments[0] === top;
+    }
+
     printNativeParseCall(node: CallExpression): string | undefined {
         const callee = node.expression;
         if (!isIdentifier(callee)) return undefined;
@@ -14727,6 +14735,11 @@ export class RustTranspiler extends BaseTranspiler {
         const helper = RustTranspiler.RUST_PARSE_HELPERS[name];
         if (helper === undefined) return undefined;
         if (node.arguments.length !== 1) return undefined; // radix / unknown arity
+        // ral-41a: an `Option<String>` local read through `as string`: runtime parse_int on its box is the `Str` arm or `Null`
+        const optLocal: any = name === 'parseInt' ? this.rustStrCastLocal(node.arguments[0]) : undefined;
+        if (optLocal !== undefined && this.rustScalarIdentifierKind(optLocal) === 'ostr') {
+            return `(match ${super.printIdentifier(optLocal)}.as_deref() { Some(__parse_s) => __parse_s.trim().parse::<i64>().map(Value::Int).unwrap_or(Value::Null), None => Value::Null })`;
+        }
         const arg = node.arguments[0];
         const type = this.getCheckedTypeOf(arg);
         if (type === undefined || !this.isStringType(type.flags)) return undefined;
