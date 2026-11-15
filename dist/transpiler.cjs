@@ -61423,7 +61423,7 @@ ${ind}];`;
       return `(if let Some(__m) = ${recv}.as_map() { __m.get(${name}.as_str()).cloned().unwrap_or(Value::Null) } else { Value::Null })`;
     }
     if (this.rustAnyGetValueKeyUse(key))
-      return `get_value(&${recv}, ${name}.${keyKind === "str" ? "as_str" : "as_deref"}())`;
+      return `get_value(&${recv}, ${name}.as_deref())`;
     if (this.rustOkeyKind(node.expression, node) === "map")
       return `${recv}.get(${name}.as_deref().unwrap_or("")).cloned().unwrap_or(Value::Null)`;
     return `(if let (Some(__m), Some(__k)) = (${recv}.as_map(), ${name}.as_deref()) { __m.get(__k).cloned().unwrap_or(Value::Null) } else { Value::Null })`;
