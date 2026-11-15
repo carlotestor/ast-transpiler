@@ -73946,12 +73946,14 @@ ${iden}}`;
       return false;
     if (!_RustTranspiler.RUST_PRO_TIER_FILE.test(String(declaration.getSourceFile().fileName)))
       return false;
-    if (!this.rustHandlerTableValue(declaration.initializer, false))
+    const nilStart = declaration.initializer !== void 0 && this.literalKindOfNode(this.unwrapParens(declaration.initializer)) === "null";
+    if (!nilStart && !this.rustHandlerTableValue(declaration.initializer, false))
       return false;
     const fn = this.rustEnclosingFunction(declaration);
     if (fn === void 0 || isSourceFile5(fn))
       return false;
     let calls = 0;
+    let reads = 0;
     const ok = this.rustBlockLocalUsesAll(declaration, String(declaration.name.text), (n) => {
       if (this.rustEnclosingFunction(n) !== fn)
         return false;
@@ -73960,11 +73962,15 @@ ${iden}}`;
         return this.literalKindOfNode(this.unwrapParens(up.left === n ? up.right : up.left)) === "null";
       if (isPropertyAccessExpression3(up) && up.expression === n && String(up.name.text) === "call" && isCallExpression6(up.parent) && up.parent.expression === up)
         return ++calls > 0;
-      if (isBinaryExpression5(up) && up.left === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement)
+      if (isBinaryExpression5(up) && up.left === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement) {
+        const right = this.rustSkipWrappers(up.right);
+        if (right !== void 0 && !(isPropertyAccessExpression3(right) && right.expression.kind === SyntaxKind7.ThisKeyword))
+          reads++;
         return this.rustHandlerTableValue(up.right, true);
+      }
       return false;
     });
-    return ok && calls > 0;
+    return ok && calls > 0 && (!nilStart || reads > 0);
   }
   // ral-49h: a handler value is a handler-table read, `c ? undefined : <read>` / `c ? <read> : undefined` (aster /
   // modetrade / xt guard the key first) or, for a rewrite only, a `this.<method>` reference (xt `method = this.handleTrade`,
@@ -73991,6 +73997,8 @@ ${iden}}`;
   /** The `Option<String>` text of a handler value accepted by `rustHandlerTableValue`. */
   printHandlerTableValue(expr) {
     const e = this.rustSkipWrappers(expr);
+    if (e !== void 0 && this.literalKindOfNode(this.unwrapParens(e)) === "null")
+      return "None";
     if (e?.kind === SyntaxKind7.ConditionalExpression) {
       const whenTrueNull = this.literalKindOfNode(this.unwrapParens(e.whenTrue)) === "null";
       const cond = this.printCondition(e.condition, 0).trim();
@@ -74002,7 +74010,7 @@ ${iden}}`;
   /** `this.safeValue (table, k)` of a base-tier `safeValue` over a handler table. */
   rustHandlerTableRead(expr) {
     const init = this.rustSkipWrappers(expr);
-    if (!isCallExpression6(init) || !isPropertyAccessExpression3(init.expression) || init.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(init.expression.name.text) !== "safeValue" || init.arguments.length !== 2)
+    if (!isCallExpression6(init) || !isPropertyAccessExpression3(init.expression) || init.expression.expression.kind !== SyntaxKind7.ThisKeyword || !(String(init.expression.name.text) === "safeValue" && init.arguments.length === 2 || String(init.expression.name.text) === "safeValue2" && init.arguments.length === 3))
       return false;
     const callee = this.rustScalarCallee(init);
     if (callee === void 0 || !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(callee.getSourceFile().fileName)))
@@ -74052,7 +74060,11 @@ ${iden}}`;
         return true;
       if (isIdentifier3(v)) {
         const d = this.rustDeclarationOfIdentifier(v);
-        if (d === void 0 || d.name === v || seen.has(d) || seen.size > 16)
+        if (d === void 0 || d.name === v)
+          return false;
+        if (seen.has(d))
+          return true;
+        if (seen.size > 16)
           return false;
         seen.add(d);
         if (isVariableDeclaration3(d)) {
@@ -74162,7 +74174,7 @@ ${iden}}`;
     }
     return this.rustBlockLocalUsesAll(declaration, String(declaration.name.text), (n) => {
       const up = n.parent;
-      if (isCallExpression6(up) && up.arguments[0] === n && isPropertyAccessExpression3(up.expression) && up.expression.expression.kind === SyntaxKind7.ThisKeyword && String(up.expression.name.text) === "safeValue")
+      if (isCallExpression6(up) && up.arguments[0] === n && isPropertyAccessExpression3(up.expression) && up.expression.expression.kind === SyntaxKind7.ThisKeyword && (String(up.expression.name.text) === "safeValue" || String(up.expression.name.text) === "safeValue2"))
         return true;
       if (isCallExpression6(up) && up.arguments.length === 1 && up.arguments[0] === n && isPropertyAccessExpression3(up.expression) && isIdentifier3(up.expression.expression) && String(up.expression.expression.text) === "Object" && String(up.expression.name.text) === "keys")
         return true;
