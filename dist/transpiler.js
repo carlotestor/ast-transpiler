@@ -56269,7 +56269,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     let ok = true;
     this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
       const form = this.rustScalarUseForms.get(n);
-      if (form === "err" || form === "key" && !(nativeKeys && this.rustScalarInsertKeyUse(n)))
+      if (form === "err" || form === "key" && !(nativeKeys && (this.rustScalarInsertKeyUse(n) || this.rustNestedBearerKeySlot(n))))
         ok = false;
       if (form !== "box" && form !== "xbox")
         return true;
@@ -58782,6 +58782,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "box";
     if (this.rustUdNestedBearerValue(n) && (kind === "int" || kind === "num" || kind === "oint" || kind === "onum" || (kind === "str" || kind === "ostr") && this.rustLocalLastUse(n, this.rustDeclaredNode(n))))
       return "box";
+    if ((kind === "str" || kind === "ostr") && this.rustUdNestedBearerKey(n))
+      return "key";
     if (this.rustScalarInNestedWrite(n))
       return void 0;
     if (kind === "str" && this.rustScalarInsertKeyUse(n))
@@ -59630,6 +59632,48 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (!isElementAccessExpression4(outer) || !isElementAccessExpression4(outer.expression))
       return false;
     return this.rustNestedDictBearerDeclaration(outer.expression.expression) !== void 0;
+  }
+  /** ral-53i: `n` is k1 or k2 of a statement `x[k1][k2] = v` with `x` a typed two-level local map (`rustNestedBearerInsert`). */
+  rustUdNestedBearerKey(n) {
+    const keyNode = this.rustKeyWrapped(n);
+    const access = keyNode.parent;
+    if (!isElementAccessExpression4(access) || access.argumentExpression !== keyNode)
+      return false;
+    const outer = isElementAccessExpression4(access.parent) && access.parent.expression === access ? access.parent : access;
+    if (!isElementAccessExpression4(outer.expression))
+      return false;
+    const write = outer.parent;
+    if (!isBinaryExpression5(write) || write.left !== outer || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    if (outer.expression.expression.kind === SyntaxKind7.ElementAccessExpression)
+      return false;
+    return this.rustNestedDictBearerDeclaration(outer.expression.expression) !== void 0;
+  }
+  /** ral-53i: `key` is k1 of a statement bucket seed `x[k1] = {}` or k1 / k2 of a statement write `x[k1][k2] = v` with `x`
+   *  a plain identifier (syntax only: the two-level bearer prints these through rustNestedBearerWriteKey). */
+  rustNestedWriteKeyPosition(key) {
+    const keyNode = this.rustKeyWrapped(key);
+    const access = keyNode.parent;
+    if (!isElementAccessExpression4(access) || access.argumentExpression !== keyNode)
+      return false;
+    const outer = isElementAccessExpression4(access.parent) && access.parent.expression === access ? access.parent : access;
+    const write = outer.parent;
+    if (!isBinaryExpression5(write) || write.left !== outer || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    if (outer === access) {
+      const seed = this.rustSkipWrappers(write.right);
+      return isIdentifier3(access.expression) && isObjectLiteralExpression4(seed) && seed.properties.length === 0;
+    }
+    return isElementAccessExpression4(outer.expression) && isIdentifier3(outer.expression.expression);
+  }
+  /** ral-53i: `n` keys a bucket seed `x[n] = {}` or a write `x[k1][k2] = v` of a typed two-level local map `x`. */
+  rustNestedBearerKeySlot(n) {
+    if (this.rustUdNestedBearerKey(n))
+      return true;
+    if (!this.rustNestedWriteKeyPosition(n))
+      return false;
+    const access = this.rustKeyWrapped(n).parent;
+    return isIdentifier3(access.expression) && this.rustNestedDictBearerDeclaration(access.expression) !== void 0;
   }
   rustScalarInNestedWrite(n, boxUse) {
     let current = n;
@@ -70554,10 +70598,12 @@ ${iden}}`;
       return false;
     if (isStringLiteralLikeNode4(key))
       return _RustTranspiler.rustBearerKeyTextOk(String(key.text));
-    if (!isIdentifier3(key) || !this.rustKeyIsProvenString(key) || this.rustStringLocalIdentifierIsTyped(key))
+    if (!isIdentifier3(key) || !this.rustKeyIsProvenString(key) || this.rustStringLocalIdentifierIsTyped(key) && !this.rustNestedWriteKeyPosition(key))
       return false;
     if (this.rustNodeIsKeyUnsafePlace(String(key.text)) && !this.rustBookMetaPlaceOnLiteral(key))
       return false;
+    if (this.rustNestedWriteKeyPosition(key) && ["str", "ostr"].includes(this.rustScalarLocalOf(key)?.kind))
+      return true;
     return /^[A-Za-z_][A-Za-z0-9_]*$/.test(this.printNode(key, 0).trim());
   }
   /** ral-xf: a book-meta-named key place (`symbol`, `timestamp`, `datetime`, `nonce`, `checksum`) indexing a map-literal
@@ -77275,7 +77321,17 @@ ${iden}}`;
       return false;
     if (isArrayLiteralExpression4(rhs))
       return !rhs.elements.some((e) => e.kind === SyntaxKind7.SpreadElement || isIdentifier3(this.rustSkipWrappers(e)) && !this.rustBuiltListMovedElement(e)) && (!rhs.elements.some((e) => isIdentifier3(this.rustSkipWrappers(e))) || this.rustBuiltListMovedLiteral(rhs) !== void 0) || this.rustBuiltListBoxedLiteral(rhs) !== void 0;
-    return this.rustAlwaysListProducer(rhs) || this.rustDefaultedListRead(rhs) || this.rustDeclaredListProducer(rhs);
+    return this.rustAlwaysListProducer(rhs) || this.rustDefaultedListRead(rhs) || this.rustDeclaredListProducer(rhs) || this.rustVenueListWriteSource(rhs);
+  }
+  /** ral-53i: `[await] this.m (..)` whose venue declaration the printer's typed-return table (rustVenueContainerReturnKind)
+   *  proves a never-null list (`Dict[]` / `any[]` / `List` / `Record[]` / literal tuple, the same type in the whole venue
+   *  family, no override): the call prints `-> Value` holding a `Value::Arr`, so `.into_list()` moves exactly that list. */
+  rustVenueListWriteSource(rhs) {
+    const call = rhs?.kind === SyntaxKind7.AwaitExpression ? this.rustSkipWrappers(rhs.expression) : rhs;
+    if (call === void 0 || !isCallExpression6(call) || this.rustTestTierSource(call))
+      return false;
+    const kind = this.rustVenueContainerReturnKind(call);
+    return kind !== void 0 && kind.kind === "list" && !kind.nullable;
   }
   /** ral-yf: `await this.<endpoint> (..)` whose abstract declaration spells `Promise<List>` (a non-list answer reads as the
    *  empty list, the landed ral-kc `into_list()` behaviour), or `this.parse<X> (..)` whose declaration returns `T[]`

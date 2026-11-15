@@ -1166,6 +1166,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustThisFieldLiteralWrite(n: any): boolean;
     /** ud: `n` is the whole right side of `x[k1][k2] = n` with `x` a typed two-level local map (`rustNestedBearerInsert`). */
     rustUdNestedBearerValue(n: any): boolean;
+    /** ral-53i: `n` is k1 or k2 of a statement `x[k1][k2] = v` with `x` a typed two-level local map (`rustNestedBearerInsert`). */
+    rustUdNestedBearerKey(n: any): boolean;
+    /** ral-53i: `key` is k1 of a statement bucket seed `x[k1] = {}` or k1 / k2 of a statement write `x[k1][k2] = v` with `x`
+     *  a plain identifier (syntax only: the two-level bearer prints these through rustNestedBearerWriteKey). */
+    rustNestedWriteKeyPosition(key: any): boolean;
+    /** ral-53i: `n` keys a bucket seed `x[n] = {}` or a write `x[k1][k2] = v` of a typed two-level local map `x`. */
+    rustNestedBearerKeySlot(n: any): boolean;
     rustScalarInNestedWrite(n: any, boxUse?: boolean): boolean;
     /** ral-41f: a local whose kind the nested-write text passes never decide: declared with an initializer that is
      *  not a safe* reader call, not `undefined` / another identifier (nil-declared and alias locals keep their own
@@ -3564,6 +3571,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBuiltListSelfWriteArg(n: any, name: string): boolean;
     /** A right-hand side that answers a `Value::Arr` on every path. */
     rustBuiltListWriteSource(right: any): boolean;
+    /** ral-53i: `[await] this.m (..)` whose venue declaration the printer's typed-return table (rustVenueContainerReturnKind)
+     *  proves a never-null list (`Dict[]` / `any[]` / `List` / `Record[]` / literal tuple, the same type in the whole venue
+     *  family, no override): the call prints `-> Value` holding a `Value::Arr`, so `.into_list()` moves exactly that list. */
+    rustVenueListWriteSource(rhs: any): boolean;
     /** ral-yf: `await this.<endpoint> (..)` whose abstract declaration spells `Promise<List>` (a non-list answer reads as the
      *  empty list, the landed ral-kc `into_list()` behaviour), or `this.parse<X> (..)` whose declaration returns `T[]`
      *  (every override must return a list too): `.into_list()` moves exactly the list out of the box. */
