@@ -6078,6 +6078,10 @@ export class RustTranspiler extends BaseTranspiler {
                 && !(form === 'box' && trial === 'str' && !this.rustStrNoLend && this.rustClockString(this.unwrapParens(declaration.initializer)) && this.rustLendSlot(n))
                 // ud: a reader string boxed at a lending slot lends there (the one copy the `Value` clone made)
                 && !(form === 'box' && !this.rustStrNoLend && this.rustUdReaderStr(declaration.initializer) && this.rustLendSlot(n) && this.rustUdLent.add(declaration))) return false;
+            // ral-43b: a string concat operand prints inside the concat's own `format!` (native Display of the typed local:
+            // the bare `String`, or `as_deref().unwrap_or("null")` = the Display of the `Null` box): no boxed operand text
+            // reaches a push / write pass, and the concat is a `String` whatever this local's type
+            if (form === 'concat' && (trial === 'str' || trial === 'ostr')) continue;
             // a `.push(..)` argument: ccxt's native-push pass keys on the boxed operand text
             const push: any = findAncestor(n, (m: any) => isStatement(m) || (isCallExpression(m) && isPropertyAccessExpression(m.expression) && m.expression.name.text === 'push'));
             if (push !== undefined && isCallExpression(push) && !this.rustCopyPushPairElement(n, push, trial)) return false;

@@ -15624,3 +15624,31 @@ describe('ral-42b item 2: a nested all-`{}` concat chain on a guarded long line 
         expect(rt.rustFlattenConcatChain(dbg)).toBe(dbg);
     });
 });
+
+describe('ral-43b lift 1: a string concat operand in a sibling-twin block keeps the typed local (native Display in the format!)', () => {
+    const t43 = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+    const root = path.join (rustFixtureRoot, '43b-concat-op');
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n" +
+        "    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    hold (x: any): any { return x; }\n}\n";
+    const venue = (body: string) => "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n";
+    let n = 0;
+    const run = (body: string) => {
+        const dir = path.join (root, String (n++));
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), venue (body));
+        return t43.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    const loop = (stmt: string) => "            for (let i = 0; i < symbols.length; i++) {\n                const symbol = symbols[i];\n                " + stmt + "\n                this.hold (symbol);\n            }\n";
+    const twins = (stmt: string) => "    m (symbols: string[], f: boolean) {\n        const hashes = [];\n        if (f) {\n" + loop (stmt) + "        } else {\n" + loop (stmt) + "        }\n        return this.hold (hashes);\n    }\n";
+    test('a pushed concat operand prints its Display (`as_deref().unwrap_or("null")`, what the Null box displayed)', () => {
+        const out = run (twins ("hashes.push ('trade::' + symbol);"));
+        expect((out.match(/let mut symbol: Option<String> = symbols\.get\(i as usize\)\.and_then\(Value::as_str\)\.map\(str::to_owned\);/g) ?? []).length).toBe(2);
+        expect(out).toContain('hashes.push(Value::Str(format!("{}{}", "trade::", symbol.as_deref().unwrap_or("null")).into()));');
+        expect(out).not.toContain('let mut symbol: Value');
+    });
+    test('negative: a bare push of the twin keeps the old decision (the push pass reads the boxed operand)', () => {
+        const out = run (twins ("hashes.push (symbol);"));
+        expect(out).toContain('let mut symbol: Value');
+    });
+});
