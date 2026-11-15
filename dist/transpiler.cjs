@@ -70643,6 +70643,12 @@ ${iden}}`;
     if (declaration === void 0 || !this.rustExtendReuseLocals.has(declaration) || !this.rustPrintedBorrowed.has(declaration) || !(this.rustSelfExtendWrite(left, declaration) || this.rustSelfMergeWrite(left, declaration) || this.rustReuseProducerWrites.has(left.parent)))
       return void 0;
     const name = super.transformIdentifier(left, _nullishCoalesce(this.ReservedKeywordsReplacements[left.text], () => ( left.text)));
+    const source = this.rustSkipWrappers(right);
+    if (source !== void 0 && _is.isIdentifier.call(void 0, source) && this.rustEndpointAliasWrite(left.parent) !== void 0) {
+      const sourceDeclaration = this.rustDeclaredNode(source);
+      const moved = sourceDeclaration !== void 0 && this.rustLocalLastUse(source, sourceDeclaration);
+      return `${name} = ${this.printNode(right, 0).trim()}${moved ? "" : ".clone()"}.into_dict()`;
+    }
     return `${name} = ${this.printNode(right, 0).trim()}.into_dict()`;
   }
   // ── literal-key writes on built maps (rustBuiltMapKeyWriteOk) ──

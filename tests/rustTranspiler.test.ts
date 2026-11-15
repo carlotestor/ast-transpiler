@@ -16458,6 +16458,10 @@ describe('ral-46f: a `{}` reuse literal written `x = y as Dict` right after `y` 
         expect(out).toMatch(/data = response\.into_dict\(\);/);
         expect(out).toMatch(/let mut data: crate::value::Dict = /);
     });
+    test('a response read after the alias write is copied, not moved', () => {
+        const out = run("    async m (params: Dict = {}): Promise<any> {\n        let response = undefined;\n        let data: Dict = {};\n        response = await this.privatePostA (params);\n        data = response as Dict;\n        return [ this.parseOrder (data), response ];\n    }\n");
+        expect(out).toMatch(/data = response\.clone\(\)\.into_dict\(\);/);
+    });
     test('the alias of an undeclared (Promise<any>) answer keeps the local Value', () => {
         const out = run("    async m (params: Dict = {}): Promise<any> {\n        let response = undefined;\n        let data: Dict = {};\n        response = await this.privatePostC (params);\n        data = response as Dict;\n        return this.parseOrder (data);\n    }\n");
         expect(out).toMatch(/let mut data: Value = /);

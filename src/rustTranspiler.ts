@@ -19445,6 +19445,13 @@ export class RustTranspiler extends BaseTranspiler {
         if (declaration === undefined || !this.rustExtendReuseLocals.has(declaration) || !this.rustPrintedBorrowed.has(declaration)
             || !(this.rustSelfExtendWrite(left, declaration) || this.rustSelfMergeWrite(left, declaration) || this.rustReuseProducerWrites.has(left.parent))) return undefined;
         const name = super.transformIdentifier(left, this.ReservedKeywordsReplacements[left.text] ?? left.text);
+        // ral-46f: an endpoint alias (`x = y as Dict`) moves `y` only at its last use, else reads a copy of the Arc
+        const source: any = this.rustSkipWrappers(right);
+        if (source !== undefined && isIdentifier(source) && this.rustEndpointAliasWrite(left.parent) !== undefined) {
+            const sourceDeclaration: any = this.rustDeclaredNode(source);
+            const moved = sourceDeclaration !== undefined && this.rustLocalLastUse(source, sourceDeclaration);
+            return `${name} = ${this.printNode(right, 0).trim()}${moved ? '' : '.clone()'}.into_dict()`;
+        }
         return `${name} = ${this.printNode(right, 0).trim()}.into_dict()`;
     }
 
