@@ -20592,7 +20592,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (elem !== null && RustTranspiler.RUST_VENUE_RECORD_NAMES.has(elem[1])) return { kind: 'list', nullable: false };
         // ral-43g: a tuple return `[A, B, ..]` whose every return statement is an array literal of that arity: the body
         // builds `Value::from(vec![..])` on every path, so the result is a list (never Null)
-        if (/^\[[^\[\]]+\]$/.test(inner) && this.rustTupleLiteralReturns(declaration, inner.slice(1, -1).split(',').length)) return { kind: 'list', nullable: false };
+        if (/^\[[^[\]]+\]$/.test(inner) && this.rustTupleLiteralReturns(declaration, inner.slice(1, -1).split(',').length)) return { kind: 'list', nullable: false };
         return undefined;
     }
 

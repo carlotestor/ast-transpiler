@@ -71885,7 +71885,7 @@ ${iden}}`;
     const elem = /^(\w+)\[\]$/.exec(inner);
     if (elem !== null && _RustTranspiler.RUST_VENUE_RECORD_NAMES.has(elem[1]))
       return { kind: "list", nullable: false };
-    if (/^\[[^\[\]]+\]$/.test(inner) && this.rustTupleLiteralReturns(declaration, inner.slice(1, -1).split(",").length))
+    if (/^\[[^[\]]+\]$/.test(inner) && this.rustTupleLiteralReturns(declaration, inner.slice(1, -1).split(",").length))
       return { kind: "list", nullable: false };
     return void 0;
   }
