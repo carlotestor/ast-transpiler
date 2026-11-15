@@ -81193,11 +81193,11 @@ _RustTranspiler.RUST_BASE_TYPED_HAND_METHODS = /* @__PURE__ */ new Set(["valueIs
  *  comparators keep `&Value` (a ccxt build/ pass reads their exact signature text). */
 _RustTranspiler.RUST_PRECISE_LENT = /* @__PURE__ */ new Set(["stringAdd", "stringSub", "stringMul", "stringDiv", "stringMod", "stringAbs", "stringNeg", "stringMin", "stringMax", "stringEq", "stringEquals", "stringGt", "stringGe", "stringLt", "stringLe", "stringOr"]);
 // ── byte buffers (rustBytesProducer / rustBytesSlot / rustBytesLocal) ──
-// The hand-written producers of a TS `Uint8Array` return `crate::value::Bytes` (the `Value::Arr` of byte
+// The hand-written producers of a TS `Uint8Array` (ethEncodeStructuredData included) return `crate::value::Bytes` (the `Value::Arr` of byte
 // ints behind a typed handle) and the byte parameters of the hand-written consumers take `impl Into<Value>`.
 // A producer call boxes once (`Value::from`, a move of the shared list) unless it sits in a consumer's byte
 // slot; a local written only from producers holds the handle and lends it (`&x`, an `Arc` bump, no copy).
-_RustTranspiler.RUST_BYTES_PRODUCERS = /* @__PURE__ */ new Set(["encode", "base16ToBinary", "base64ToBinary", "base58ToBinary", "binaryConcat", "numberToBE", "stringToBinary"]);
+_RustTranspiler.RUST_BYTES_PRODUCERS = /* @__PURE__ */ new Set(["encode", "ethEncodeStructuredData", "base16ToBinary", "base64ToBinary", "base58ToBinary", "binaryConcat", "numberToBE", "stringToBinary"]);
 _RustTranspiler.RUST_BYTES_SLOTS = {
   hmac: [0, 1],
   hash: [0],
