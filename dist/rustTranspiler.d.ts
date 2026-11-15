@@ -659,6 +659,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** Base `parseNumber(s)` with no default over a string (literal, string local, `Precise.string*`): the
      *  runtime parses a `Str` to `Float` and answers `Null` otherwise, so the result is exactly an `Option<f64>`. */
     rustParseNumberOfString(call: any): boolean;
+    private static readonly RUST_BASE_STR_FIELDS;
+    /** ral-52k: `this.<field>` of the table whose declaration is the base-tier `string` property (no venue redeclares it). */
+    rustBaseStrFieldRead(node: any): boolean;
     /** True when `node` (through parens) is the `whenTrue`/`whenFalse` arm of a ternary that initialises a declaration. */
     rustTernaryArm(node: any): boolean;
     /** `node` (through parens and ternary arms) is a variable declaration's initializer. */
