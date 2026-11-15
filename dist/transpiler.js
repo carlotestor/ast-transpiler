@@ -70393,6 +70393,8 @@ ${iden}}`;
         writes++;
         if (this.literalKindOfNode(rhs) === "null")
           return ++nullWrites > 0;
+        if (nilDeclared && String(fn?.name?.text ?? "") !== "sign" && this.rustHandedSelfOmit(rhs, declaration) && this.rustOmitLineFits(rhs) && String(rhs.getText()).split("\n")[0].length <= 240)
+          return true;
         if (!nilDeclared && (from === "dict" || from === "list") && this.rustSameKindRewrite(rhs, from))
           return String(rhs.getText()).split("\n")[0].length <= 240;
         const aliasKind = nilDeclared ? this.rustOptAliasSourceKind(rhs, fn) : void 0;
@@ -71048,6 +71050,8 @@ ${iden}}`;
       return true;
     if (_RustTranspiler.RUST_LIST_TELLING_SLOTS.has(String(call.expression?.name?.text ?? "")) && init !== void 0 && this.rustBaseCallNamed(init, _RustTranspiler.RUST_HANDED_DICT_OMIT) && !this.rustOmitOfDict(init))
       return false;
+    if (String(call.expression?.name?.text ?? "") === "omit" && init !== void 0 && this.rustBaseCallNamed(init, _RustTranspiler.RUST_HANDED_DICT_OMIT) && !this.rustOmitOfDict(init) && String(this.rustEnclosingFunction(call)?.name?.text ?? "") === "sign")
+      return false;
     return this.rustLentHelperSlot(call, arg, from) && _RustTranspiler.RUST_LENT_OPTIONAL_HELPERS.has(String(call.expression.name.text));
   }
   /** `this.parseX (x as Dict, ..)`: the assertion only retypes the TS side, the argument lands in the same lent slot. */
@@ -71068,6 +71072,8 @@ ${iden}}`;
   rustLentOptionalOk(declaration, name, fn, init, from) {
     if (from !== "dict" && from !== "list")
       return false;
+    const provenInit = this.rustHandedDictLocal(declaration);
+    const unprovenOmit = init !== void 0 && this.rustBaseCallNamed(init, _RustTranspiler.RUST_HANDED_DICT_OMIT) && !this.rustOmitOfDict(init);
     return this.rustLocalUsesAll(declaration, name, false, (n) => {
       if (this.rustIdentifierIsPropertyName(n) || !this.rustIdentifierRefersToDeclaration(n, declaration) || this.rustEnclosingFunction(n) !== fn)
         return true;
@@ -71078,6 +71084,10 @@ ${iden}}`;
         return true;
       if (this.rustLentResponseSlot(up, n) || this.rustLentEndpointSlot(up, n, from) || this.rustLentWsSettleSlot(up, n))
         return true;
+      if (from === "dict" && this.rustOptExtendOperandUse(n) && !provenInit)
+        return true;
+      if ((unprovenOmit || String(fn?.name?.text ?? "") === "sign") && (_RustTranspiler.RUST_LIST_TELLING_SLOTS.has(String(up.expression?.name?.text ?? "")) || String(fn?.name?.text ?? "") === "sign"))
+        return false;
       return !this.rustLentHelperSlot(up, n, from) || _RustTranspiler.RUST_LENT_OPTIONAL_HELPERS.has(String(up.expression.name.text));
     });
   }
@@ -83158,7 +83168,19 @@ _RustTranspiler.RUST_LENT_ENCODER_SLOTS = /* @__PURE__ */ new Set(["urlencode", 
 // exactly what they answer for the empty map `into_dict()` leaves, so an `omit` whose head may be a list body
 // (`sign`'s `params`) still lends there; `json` keeps its own never-null guard.
 _RustTranspiler.RUST_LIST_TELLING_SLOTS = /* @__PURE__ */ new Set(["isEmpty"]);
-_RustTranspiler.RUST_LENT_OPTIONAL_HELPERS = /* @__PURE__ */ new Set(["toArray", "arrayConcat", "json", "urlencode", "rawencode", "urlencodeNested", "urlencodeWithArrayRepeat", "isEmpty"]);
+_RustTranspiler.RUST_LENT_OPTIONAL_HELPERS = /* @__PURE__ */ new Set([
+  "toArray",
+  "arrayConcat",
+  "json",
+  "urlencode",
+  "rawencode",
+  "urlencodeNested",
+  "urlencodeWithArrayRepeat",
+  "isEmpty",
+  // ral-48d: `omit` takes an optional map lent (`impl OmitSource for &Option<Dict>`): `None` answers `Value::Null`
+  // exactly as the boxed Null passed through, `Some(m)` drops keys from the shared map (copy-on-write)
+  "omit"
+]);
 // ── rustParamReadsByReference / rustReaderTakesContainerByReference: generated readers lend their container ──
 // A generated base reader whose container parameter is only handed to by-reference readers declares it
 // `impl KeyRead`: a `Value` argument still passes by value, and a dict or list local is lent as `&x`.
