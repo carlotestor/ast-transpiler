@@ -4986,7 +4986,8 @@ export class RustTranspiler extends BaseTranspiler {
             const form = this.rustScalarUseForms.get(n);
             // a native insert key borrows the local (`as_deref`); a helper-write key would copy it
             // ral-53i: likewise a key of the two-level bearer's own bucket seed / insert (rustNestedBearerWriteKey: one key text either way)
-            if (form === 'err' || (form === 'key' && !(nativeKeys && (this.rustScalarInsertKeyUse(n) || this.rustNestedBearerKeySlot(n) || this.rustPlainFieldInsertKey(n))))) ok = false;
+            // ral-56f: in the copy-decl mode only the printer-owned options-field insert key lends (rustPlainFieldInsertKey)
+            if (form === 'err' || (form === 'key' && !(nativeKeys && (copyDecls ? this.rustPlainFieldInsertKey(n) : (this.rustScalarInsertKeyUse(n) || this.rustNestedBearerKeySlot(n) || this.rustPlainFieldInsertKey(n)))))) ok = false;
             if (form !== 'box' && form !== 'xbox') return true;
             const up: any = n.parent;
             if (isReturnStatement(up) || this.rustLocalLastUse(n, declaration)) return true;
@@ -8498,6 +8499,8 @@ export class RustTranspiler extends BaseTranspiler {
         const keyNode = this.rustKeyWrapped(n);
         const upper: any = keyNode.parent;
         if (!isElementAccessExpression(upper) || upper.argumentExpression !== keyNode || !isPropertyAccessExpression(upper.expression)) return false;
+        // an int37 upper key keeps 54k's own entry form (rustNestedFieldEntryKey, `stringify_param(&k1)`): one key path
+        if (this.rustSafeStrNoDefaultKey(keyNode) !== undefined) return false;
         const access: any = upper.parent;
         if (!isElementAccessExpression(access) || access.expression !== upper || !this.rustNestedFieldChain(access)) return false;
         const write: any = access.parent;
