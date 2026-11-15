@@ -54637,9 +54637,17 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     if (!this.isNativeStringConcatPair(this.typeOfNodeIfAny(parent.left), this.typeOfNodeIfAny(parent.right)))
       return false;
-    if (!this.alwaysStr(other) && !this.rustNilConcatPartner(other))
+    if (!this.alwaysStr(other) && !this.rustNilConcatPartner(other) && !this.rust56xFormatPartner(other))
       return false;
     return this.rustOptStrConcatFits(n);
+  }
+  /** ral-56x K1: a `+` partner that is itself a concat (or a `.toString()`) the printer already prints as a boxed `Value::Str(format!(..))`
+   *  (always a `Str`, never `Null`), so the optional string joins the same `format!` with its `as_deref().unwrap_or("null")` text. */
+  rust56xFormatPartner(other) {
+    const inner = this.unwrapParensNode(other);
+    if (inner === void 0 || !(isBinaryExpression5(inner) && inner.operatorToken.kind === SyntaxKind7.PlusToken) && !(isCallExpression6(inner) && isPropertyAccessExpression3(inner.expression) && inner.expression.name.text === "toString" && (inner.arguments?.length ?? 0) === 0))
+      return false;
+    return this.rustUnboxedFormatText(this.printNode(inner, 0).trim()) !== void 0;
   }
   /** The `as_deref().unwrap_or("null")` read of a concat operand keeps its statement within the 400-char line budget. */
   rustOptStrConcatFits(n) {

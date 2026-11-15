@@ -434,6 +434,9 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  those displays as the JS concat does (Str text, Null `null`). */
     rustNilConcatPartner(other: any): boolean;
     rustNilOptStrConcatUse(n: any): boolean;
+    /** ral-56x K1: a `+` partner that is itself a concat (or a `.toString()`) the printer already prints as a boxed `Value::Str(format!(..))`
+     *  (always a `Str`, never `Null`), so the optional string joins the same `format!` with its `as_deref().unwrap_or("null")` text. */
+    rust56xFormatPartner(other: any): boolean;
     /** The `as_deref().unwrap_or("null")` read of a concat operand keeps its statement within the 400-char line budget. */
     rustOptStrConcatFits(n: any): boolean;
     /** A write that decodes a `Value` result (a call, or a ternary over one). */
