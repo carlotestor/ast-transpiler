@@ -73871,6 +73871,10 @@ ${iden}}`;
           fn.forEachChild(visit);
           return ok;
         }
+        if (d.kind === SyntaxKind7.BindingElement && d.parent?.kind === SyntaxKind7.ArrayBindingPattern && isVariableDeclaration3(d.parent.parent) && d.parent.parent.parent?.flags & NodeFlags4.Const) {
+          const t = this.typeOfNodeIfAny(v);
+          return this.isStringOrNullishType(t) && this.isStringLikeType(t);
+        }
         if (isParameterDeclaration3(d) && isMethodDeclaration5(d.parent) && isIdentifier3(d.parent.name) && findAncestor(d.parent, isClassDeclaration4) === cls) {
           if (d.initializer !== void 0 && !valueOk(d.initializer))
             return false;
