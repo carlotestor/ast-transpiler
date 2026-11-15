@@ -59846,13 +59846,26 @@ ${binding(plan.indent)}` : ""), head: "" };
       return false;
     const name = new RegExp(`\\b(?:${String(n.text)}|this)\\b`);
     for (let up = access.expression; isElementAccessExpression4(up); up = up.expression) {
-      const k = this.rustSkipWrappers(up.argumentExpression);
-      const kd = isIdentifier3(k) ? this.rustDeclaredNode(k) : void 0;
-      const ki = kd !== void 0 && isVariableDeclaration3(kd) ? this.rustSkipWrappers(kd.initializer) : void 0;
-      if (ki !== void 0 && isCallExpression6(ki) && isPropertyAccessExpression3(ki.expression) && ki.expression.expression.kind === SyntaxKind7.ThisKeyword && /^safeString/.test(String(ki.expression.name.text)) && ki.arguments.length < 3)
+      if (this.rustNestedFieldEntryKey(access) !== void 0)
+        break;
+      if (this.rustSafeStrNoDefaultKey(up.argumentExpression) !== void 0)
         return false;
     }
     return !name.test(String(write.right.getText())) && !name.test(String(access.expression.getText()).replace(/^this\./, ""));
+  }
+  /** int37: `k` is a local read by a `this.safeString*` reader with no default (may be undefined); its identifier. */
+  rustSafeStrNoDefaultKey(key) {
+    const k = this.rustSkipWrappers(key);
+    const kd = isIdentifier3(k) ? this.rustDeclaredNode(k) : void 0;
+    const ki = kd !== void 0 && isVariableDeclaration3(kd) ? this.rustSkipWrappers(kd.initializer) : void 0;
+    return ki !== void 0 && isCallExpression6(ki) && isPropertyAccessExpression3(ki.expression) && ki.expression.expression.kind === SyntaxKind7.ThisKeyword && /^safeString/.test(String(ki.expression.name.text)) && ki.arguments.length < 3 ? k : void 0;
+  }
+  /** ral-54k: `this.F[k1][n]` (exactly one upper hop) with `k1` such an int37 key: the upper key, else undefined. */
+  rustNestedFieldEntryKey(access) {
+    const upper = access.expression;
+    if (!isElementAccessExpression4(upper) || !isPropertyAccessExpression3(upper.expression))
+      return void 0;
+    return this.rustSafeStrNoDefaultKey(upper.argumentExpression);
   }
   /** `this.F[..]['lit'] = n` (statement): the value slot of a nested plain-field insert. */
   rustNestedFieldValueUse(n) {
@@ -59872,7 +59885,9 @@ ${binding(plan.indent)}` : ""), head: "" };
     const keyText = kind === "str" ? `${name}.to_string()` : kind === "ostr" ? `${name}.as_deref().unwrap_or("null").to_string()` : void 0;
     if (keyText === void 0)
       return void 0;
-    const insert = `if let Value::Dict(__r05d) = ${acc} { std::sync::Arc::make_mut(__r05d).insert(${keyText}, ${value}); }`;
+    const upper = this.rustNestedFieldEntryKey(left);
+    const field = upper !== void 0 ? String(left.expression.expression.name.text) : "";
+    const insert = upper !== void 0 && acc === `get_value_mut(&mut self.${field}, &${super.printIdentifier(upper)})` ? `if let Value::Dict(__bf03d0) = &mut self.${field} { let __bf03e1 = std::sync::Arc::make_mut(__bf03d0).entry(crate::runtime::stringify_param(&${super.printIdentifier(upper)})).or_insert(Value::Null); if let Value::Dict(__r05d) = __bf03e1 { std::sync::Arc::make_mut(__r05d).insert(${keyText}, ${value}); } }` : `if let Value::Dict(__r05d) = ${acc} { std::sync::Arc::make_mut(__r05d).insert(${keyText}, ${value}); }`;
     if (insert.split("\n")[0].length + 40 > 400)
       return `add_element_to_object(${acc}, &Value::from(${name}${kind === "str" ? ".as_str()" : ".as_deref()"}), ${value})`;
     return insert;
@@ -62340,6 +62355,25 @@ ${ind}];`;
       return this.rustSplitLongLine(l, nth++, lines.slice(k + 1).join("\n")) ?? l;
     }).join("\n");
   }
+  /** ral-54k: map local `name` is read (not written) by the key local `key` somewhere (`m[key]` outside an assignment target). */
+  rustMapReadByLocal(declaration, name, key) {
+    let read = false;
+    this.rustLocalUsesAll(declaration, name, false, (u) => {
+      const access = u.parent;
+      if (isElementAccessExpression4(access) && access.expression === u && !(isBinaryExpression5(access.parent) && access.parent.left === access)) {
+        const k = this.rustSkipWrappers(access.argumentExpression);
+        if (isIdentifier3(k) && this.rustDeclaredNode(k) === key)
+          read = true;
+      }
+      return true;
+    });
+    return read;
+  }
+  /** ral-54k: `this.safeCurrencyCode (..)` (base reader, `string` return). */
+  rustSafeCurrencyCodeInit(init) {
+    const call = this.rustSkipWrappers(init);
+    return call !== void 0 && isCallExpression6(call) && isPropertyAccessExpression3(call.expression) && call.expression.expression.kind === SyntaxKind7.ThisKeyword && String(call.expression.name.text) === "safeCurrencyCode";
+  }
   /** `m[k] = v` with `k` a `String` local whose single-key write prints a native insert. */
   rustScalarInsertKeyUse(n) {
     const keyNode = this.rustKeyWrapped(n);
@@ -62463,6 +62497,8 @@ ${ind}];`;
           keyRead = true;
         return true;
       });
+      if (enumerated && keyRead && this.rustSafeCurrencyCodeInit(local.initializer) && !this.rustMapReadByLocal(declaration, name, local))
+        return this.rustScalarInsertKeyUse(n);
       if (enumerated)
         return !keyRead && (isElementAccessExpression4(this.rustSkipWrappers(local.initializer)) || this.rustTbNetworkCodeInit(local.initializer)) && this.rustScalarInsertKeyUse(n);
       return this.rustBearerWriteKeyOk(n, name) || this.rustScalarInsertKeyUse(n);

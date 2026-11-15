@@ -1200,6 +1200,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** The statement write `this.F[..][n] = v` whose last key is `n` and whose other operands never name `n` or `this`
      *  (the r05 insert keeps the helper for a value reading `self`). */
     rustNestedFieldKeyUse(n: any): boolean;
+    /** int37: `k` is a local read by a `this.safeString*` reader with no default (may be undefined); its identifier. */
+    rustSafeStrNoDefaultKey(key: any): any;
+    /** ral-54k: `this.F[k1][n]` (exactly one upper hop) with `k1` such an int37 key: the upper key, else undefined. */
+    rustNestedFieldEntryKey(access: any): any;
     /** `this.F[..]['lit'] = n` (statement): the value slot of a nested plain-field insert. */
     rustNestedFieldValueUse(n: any): boolean;
     /** Assignment hook: the r05 insert of a nested plain-field write keyed by a typed string local. */
@@ -1520,6 +1524,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  place. Only all-`{}` format strings (no literal text, no `{:?}`); the inner box is exactly one balanced `format!` slot. */
     rustFlattenConcatChain(line: string): string;
     rustSplitLongLines(text: string, names: string[]): string;
+    /** ral-54k: map local `name` is read (not written) by the key local `key` somewhere (`m[key]` outside an assignment target). */
+    rustMapReadByLocal(declaration: any, name: string, key: any): boolean;
+    /** ral-54k: `this.safeCurrencyCode (..)` (base reader, `string` return). */
+    rustSafeCurrencyCodeInit(init: any): boolean;
     /** `m[k] = v` with `k` a `String` local whose single-key write prints a native insert. */
     rustScalarInsertKeyUse(n: any): boolean;
     /** tb: a `networkIdToCode` result keyed into a map whose written value only READS it (`networks[k] = { 'network': k }`):
@@ -2441,7 +2449,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     nativeEqualityText(node: any): string;
     unwrapParens(node: any): any;
     hasNativeComparisonOperand(node: any): any;
-    printLogicalInBooleanContext(node: any): string;
+    printLogicalInBooleanContext(node: any): any;
     printWhileStatement(node: any, identation: any): string;
     printIfStatement(node: any, identation: any): string;
     printPostFixUnaryExpression(node: any, identation: any): string;
