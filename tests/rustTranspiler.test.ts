@@ -19227,3 +19227,23 @@ describe('ral-56e: a borrowed element is read only at numeric literal keys', () 
         expect(c).not.toContain('let currentTrade: &Value');
     });
 });
+
+describe('ral-57e: a for-counter product read as a safeDict key and as a this.sum (k, 1) key operand is i64', () => {
+    const run = (name: string, venue: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    id: string;\n    safeDict (dictionary: any, key: IndexType, defaultValue: Dict = undefined): Dict | undefined { return defaultValue; }\n    sum (...args: any[]): any { return args[0]; }\n    pick (a: any, b: any): any { return a; }\n}\nexport type IndexType = number | string;\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), venue);
+        return new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } }).transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    const venue = (init: string, second: string) => "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n    rows (responses: any[], n: number): any[] {\n        const out = [];\n        for (let i = 0; i < n; i++) {\n            const priceIndex = " + init + ";\n            const a = this.safeDict (responses, priceIndex);\n            const b = this.safeDict (responses, " + second + ");\n            out.push (this.pick (a, b));\n        }\n        return out;\n    }\n}\n";
+    test('priceIndex = i * 2 is i64', () => {
+        const a = run ('ral57e-prod-a', venue ('i * 2', 'this.sum (priceIndex, 1)'));
+        expect(a).toContain('let mut priceIndex: i64 = (i * 2);');
+        expect(a).toContain('Value::Int((priceIndex + 1))');
+    });
+    test('a sum with a non-literal second operand keeps priceIndex Value', () => {
+        const b = run ('ral57e-prod-b', venue ('i * 2', 'this.sum (priceIndex, responses[0])'));
+        expect(b).toContain('let mut priceIndex: Value = ');
+    });
+});

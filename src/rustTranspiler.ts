@@ -8988,6 +8988,7 @@ export class RustTranspiler extends BaseTranspiler {
             if (this.rustElemInsertKey(n)) return true;
             // ral-53e: the whole key of a plain element read `xs[n]` boxes there as well (`Value::from(n)`)
             if (this.rust53eElemReadKey(n)) { keys++; return true; }
+            if (this.rust57eSumKeyOperand(n)) return true;
             if (!this.rustSafeDictKeyArg(n)) return false;
             keys++;
             return true;
@@ -9002,6 +9003,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (node === undefined) return false;
         if (isBinaryExpression(node)) {
             const op = node.operatorToken.kind;
+            if (op === SyntaxKind.AsteriskToken) return this.rust57eCounterProduct(node, declaration);
             return (op === SyntaxKind.PlusToken || op === SyntaxKind.MinusToken) && this.rustCounterArithInit(node.left, declaration) && this.rustCounterArithInit(node.right, declaration);
         }
         if (this.rustScalarIntLiteral(node) !== undefined) return true;
@@ -9011,9 +9013,30 @@ export class RustTranspiler extends BaseTranspiler {
         return target !== undefined && target !== declaration && this.rustEnclosingFunction(target) === this.rustEnclosingFunction(declaration) && this.rustScalarLocalOf(node)?.kind === 'int';
     }
 
+    /** ral-57e: `j * <int literal>` (either order) over a `for (let j = <int>; ..; j++)` counter only the step writes
+     *  (rustValueIntCounter, always an `Int`): the
+     *  printer already spells it `(j * k)` on the `i64` counter, the `Int` the runtime product of two Ints answers. */
+    rust57eCounterProduct(node: any, declaration: any): boolean {
+        const l: any = this.unwrapParens(node.left);
+        const r: any = this.unwrapParens(node.right);
+        const lit = (x: any) => this.rustScalarIntLiteral(x) !== undefined;
+        const ctr = (x: any) => isIdentifier(x) && this.rustValueIntCounter(x);
+        return (ctr(l) && lit(r)) || (lit(l) && ctr(r));
+    }
+
+    /** ral-57e: `n` is an operand of a base `this.sum (n, <int literal>)` that is itself a base `safeDict` key: with `n` an
+     *  `i64` the sum prints as the native `i64` add (rustArithCallKind 'int') and boxes once into the key slot as the Int
+     *  the runtime `sum` of two Ints answers. */
+    rust57eSumKeyOperand(n: any): boolean {
+        const call: any = n?.parent;
+        if (!isCallExpression(call) || !this.rustSumShape(call) || call.arguments.length !== 2) return false;
+        const other: any = call.arguments[0] === n ? call.arguments[1] : (call.arguments[1] === n ? call.arguments[0] : undefined);
+        return other !== undefined && this.rustScalarIntLiteral(this.unwrapParens(other)) !== undefined && this.rustSafeDictKeyArg(call);
+    }
+
     rustCounterArithHasCounter(expr: any, declaration: any): boolean {
         const node: any = this.unwrapParens(expr);
-        if (isBinaryExpression(node)) return this.rustCounterArithHasCounter(node.left, declaration) || this.rustCounterArithHasCounter(node.right, declaration);
+        if (isBinaryExpression(node)) return (node.operatorToken.kind === SyntaxKind.AsteriskToken && this.rust57eCounterProduct(node, declaration)) || this.rustCounterArithHasCounter(node.left, declaration) || this.rustCounterArithHasCounter(node.right, declaration);
         return isIdentifier(node) && this.rustCounterLoopOf(node, declaration) !== undefined;
     }
 
