@@ -7448,6 +7448,11 @@ export class RustTranspiler extends BaseTranspiler {
         // `entry(..).or_default().insert(k2, ..)` (no ccxt pass reads it): a Copy number boxes, a string moves at its last use
         if (this.rustUdNestedBearerValue(n) && ((kind === 'int' || kind === 'num' || kind === 'oint' || kind === 'onum')
             || ((kind === 'str' || kind === 'ostr') && this.rustLocalLastUse(n, this.rustDeclaredNode(n))))) return 'box';
+        // ral-55k: the whole value of `x['a']['b'] = n` (two string-literal keys) on a typed one-level map bearer: the printer's
+        // own guarded `if let Value::Dict(__d) = x.entry(..).or_default() { make_mut(__d).insert(.., v) }` (rustBearerChainedWrite;
+        // no ccxt pass reads it) takes the box: a Copy number boxes, a string moves at its last use (hyperliquid pro `defaultDex`)
+        if (this.rustBearerLitChainValue(n) && ((kind === 'int' || kind === 'num' || kind === 'oint' || kind === 'onum')
+            || ((kind === 'str' || kind === 'ostr') && this.rustLocalLastUse(n, this.rustDeclaredNode(n))))) return 'box';
         // ral-53i: k1 / k2 of `x[k1][k2] = v` on a typed two-level local map: the printer's own
         // `entry(k1).or_default().insert(k2, ..)` takes the key text (rustNestedBearerWriteKey), no ccxt pass reads it
         if ((kind === 'str' || kind === 'ostr') && this.rustUdNestedBearerKey(n)) return 'key';
@@ -8306,6 +8311,20 @@ export class RustTranspiler extends BaseTranspiler {
         const outer: any = write.left;
         if (!isElementAccessExpression(outer) || !isElementAccessExpression(outer.expression)) return false;
         return this.rustNestedDictBearerDeclaration(outer.expression.expression) !== undefined;
+    }
+
+    /** ral-55k: `n` is the whole right side of a statement `x['a']['b'] = n` with `x` a typed one-level map bearer and both keys
+     *  plain string literals (rustBearerChainedWrite prints the two-level guarded native insert). */
+    rustBearerLitChainValue(n: any): boolean {
+        const write: any = n.parent;
+        if (!isBinaryExpression(write) || write.right !== n || write.operatorToken.kind !== SyntaxKind.EqualsToken || write.parent?.kind !== SyntaxKind.ExpressionStatement) return false;
+        const outer: any = write.left;
+        if (!isElementAccessExpression(outer) || !isElementAccessExpression(outer.expression)) return false;
+        const hop: any = outer.expression;
+        const lit = (k: any) => { const t: any = this.rustSkipWrappers(k); return t !== undefined && isStringLiteral(t) && !(String(t.text) in this.StringLiteralReplacements); };
+        if (!lit(outer.argumentExpression) || !lit(hop.argumentExpression)) return false;
+        const base: any = this.rustStripWrappers(hop.expression);
+        return base !== undefined && isIdentifier(base) && this.rustDictBearerDeclaration(base) !== undefined;
     }
 
     /** ral-53i: `n` is k1 or k2 of a statement `x[k1][k2] = v` with `x` a typed two-level local map (`rustNestedBearerInsert`). */

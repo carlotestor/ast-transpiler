@@ -18510,3 +18510,24 @@ describe('ral-55k: digifinex nested-write key (printer owns the bucket push)', (
         expect(out).toContain('append_to_array(&mut info');
     });
 });
+
+describe('ral-55k: value of a two-literal-key write on a typed one-level map bearer (hyperliquid pro defaultDex)', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeDict (o: any, k: any, d: any = undefined): Dict | undefined { return o; }\n    omit (o: any, k: any): any { return o; }\n    hold (x: any, y: any = undefined, z: any = undefined): any { return x; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    const dex = (tail: string) => "    watch (params: Dict = {}) {\n        let messageHash = 'tickers';\n        const request: Dict = {\n            'method': 'subscribe',\n            'subscription': {\n                'type': 'allMids',\n            },\n        };\n        let defaultDex = this.safeString (params, 'dex');\n        const info = this.safeDict (params, 'info', {});\n        const dexName = this.safeString (info, 'dex');\n        if (dexName !== undefined) {\n            defaultDex = dexName;\n        }\n        if (defaultDex !== undefined) {\n            messageHash = 'tickers:' + defaultDex;\n            request['subscription']['dex'] = defaultDex;\n        }\n" + tail + "        return this.hold (request, messageHash);\n    }\n";
+    test('the value boxes once at its last use and the local is Option<String>', () => {
+        const out = write ('55k-dex', dex (''));
+        expect(out).toContain('let mut defaultDex: Option<String> = ');
+        expect(out).toContain('.or_default() { std::sync::Arc::make_mut(__d).insert("dex".into(), defaultDex.map(Value::from).unwrap_or(Value::Null)); }');
+    });
+    test('negative: a later read keeps the local Value', () => {
+        const out = write ('55k-dex-neg', dex ('        this.hold (defaultDex);\n'));
+        expect(out).toMatch(/let mut defaultDex: Value = /);
+    });
+});
