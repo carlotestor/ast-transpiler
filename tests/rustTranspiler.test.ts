@@ -17642,3 +17642,23 @@ describe('ral-51f: a string-literal-seeded handle*AndParams slot 0 takes the sho
         expect(output).toContain('let __destr_tmp: Vec<Value> = ');
     });
 });
+
+describe('ral-52f: an inline handle*AndParams [0] read of a string slot is a string local', () => {
+    const src =
+        'class E {\n' +
+        '    handleMarketTypeAndParams(methodName: string, market: any = undefined, params: any = {}, defaultValue: string = undefined): [string, any] { return [defaultValue, params]; }\n' +
+        '    hold(x: any): any { return x; }\n' +
+        '    run(params: any) {\n' +
+        "        const marketType = this.handleMarketTypeAndParams ('fetchOrders', undefined, params)[0];\n" +
+        "        if (marketType === 'spot') {\n" +
+        "            throw new Error ('no ' + marketType);\n" +
+        '        }\n' +
+        "        return this.hold ({ 'type': marketType });\n" +
+        '    }\n' +
+        '}';
+    test('types marketType Option<String> off slot 0', () => {
+        const output = transpiler.transpileRust(src).content;
+        expect(output).not.toMatch(/let mut marketType: Value/);
+        expect(output).toMatch(/let mut marketType: Option<String> = /);
+    });
+});
