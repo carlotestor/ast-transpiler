@@ -11588,6 +11588,35 @@ describe('rust ws watch results typed by a resolve proof', () => {
     });
 });
 
+describe('ral-45h: a nil-started hash local is not a hash of any text', () => {
+    const files: Record<string, string> = {
+        "ts/src/base/ws/OrderBook.ts": "export class WsOrderBook {\n    cache: any[] = [];\n    constructor (snapshot: any = {}, depth: any = undefined) {}\n    limit () { return this; }\n    reset (snapshot: any = {}) {}\n}\n",
+        "ts/src/base/ws/Cache.ts": "export class ArrayCache {\n    constructor (maxSize: any = undefined) {}\n    append (item: any) {}\n    getLimit (symbol: any, limit: any): any { return limit; }\n}\n",
+        "ts/src/base/ws/Client.ts": "export default class Client {\n    resolve (result: any, messageHash: string): any { return result; }\n}\n",
+        "ts/src/base/Exchange.ts": "import { WsOrderBook } from './ws/OrderBook.js';\nimport { ArrayCache } from './ws/Cache.js';\nexport interface Dictionary<T> { [key: string]: T }\nexport type Int = number | undefined;\nexport default class Exchange {\n    orderbooks: Dictionary<WsOrderBook> = {};\n    trades: Dictionary<ArrayCache> = {};\n    newUpdates: boolean = true;\n    safeString (obj: any, key: any, defaultValue: string = undefined): string { return obj[key]; }\n    orderBook (snapshot = {}, depth = 100): WsOrderBook { return new WsOrderBook (snapshot, depth); }\n    async watch (url: string, messageHash: string, message: any = undefined, subscribeHash: any = undefined, subscription: any = undefined): Promise<any> { return undefined; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    filterBySinceLimit (array: object[] | undefined, since: Int = undefined, limit: Int = undefined, tail = false): any[] {\n        return [];\n    }\n}\n",
+        "ts/src/pro/venue.ts": "import Exchange from '../base/Exchange.js';\nimport Client from '../base/ws/Client.js';\nimport { ArrayCache } from '../base/ws/Cache.js';\nexport default class venue extends Exchange {\n    async watchOrderBook (symbol: string, limit: any = undefined) {\n        const messageHash = 'orderbook:' + symbol;\n        const orderbook = await this.watch ('wss://x', messageHash, {}, messageHash);\n        return orderbook.limit ();\n    }\n    async watchTrades (symbol: string, since: any = undefined, limit: any = undefined) {\n        let messageHash: string = undefined;\n        if (symbol !== undefined) {\n            messageHash = 'trades:' + symbol;\n        } else {\n            messageHash = 'trades';\n        }\n        const trades = await this.watch ('wss://x', messageHash, {}, messageHash);\n        if (this.newUpdates) {\n            limit = trades.getLimit (symbol, limit);\n        }\n        return this.filterBySinceLimit (trades, since, limit);\n    }\n    async watchTicker (symbol: string) {\n        const messageHash = 'ticker:' + symbol;\n        const ticker = await this.watch ('wss://x', messageHash, {}, messageHash);\n        return ticker;\n    }\n    handleOrderBook (client: Client, message: any) {\n        const symbol = this.safeString (message, 's');\n        const orderbook = this.orderbooks[symbol];\n        client.resolve (orderbook, 'orderbook:' + symbol);\n    }\n    handleTrades (client: Client, message: any) {\n        const symbol = this.safeString (message, 's');\n        let stored = this.trades[symbol];\n        if (stored === undefined) {\n            stored = new ArrayCache (10);\n            this.trades[symbol] = stored;\n        }\n        stored.append (message);\n        let hash: string = undefined;\n        if (symbol !== undefined) {\n            hash = 'trades:' + symbol;\n        } else {\n            hash = 'trades';\n        }\n        client.resolve (stored, hash);\n    }\n    handleTicker (client: Client, message: any) {\n        const symbol = this.safeString (message, 's');\n        client.resolve (message, 'ticker:' + symbol);\n        client.resolve (this.orderbooks[symbol], 'ticker:' + symbol);\n    }\n}\n",
+    };
+    let out: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-watch45h-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = transpiler.transpileRustByPath(path.join (root, 'ts/src/pro/venue.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test('nil-started hash locals on both sides: the watch is an optional cache', () => {
+        expect(out).toMatch(/let mut trades: Option<crate::pro::cache::Cache> = self\.watch\([\s\S]*?\)\.await\.into\(\);/);
+        expect(out).toMatch(/trades\.getLimit\(/);
+        // the rows slot lends it (`&trades`) once the base signature table is loaded; alone it is boxed once
+        expect(out).toMatch(/self\.filterBySinceLimit\((&trades|Value::from\(&trades\)), /);
+    });
+    test('negative: the ticker hash resolved with a dict and a book still stays a Value', () => {
+        expect(out).toMatch(/let mut ticker: Value = self\.watch\(/);
+    });
+});
+
 describe('dict ternaries and arithmetic with a Value operand', () => {
     let n = 0;
     const run = (body: string) => {

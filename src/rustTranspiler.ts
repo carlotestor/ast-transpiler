@@ -22209,6 +22209,8 @@ export class RustTranspiler extends BaseTranspiler {
     // wrapper parameter -> the caller's argument (and the caller's own bindings) while a wrapper hash is read
     private rustWsHashEnv: Map<Node, { arg: any, env: Map<Node, any> | undefined }> | undefined = undefined;
     private rustWsFollowed = new Set<Node>();
+    /** The hash text of a Null hash (`stringify_param(Null)`): a literal no watch spells. */
+    private static readonly RUST_WS_NIL_HASH = 'null';
 
     /** The hash patterns of `n`: segments are literal text or `null` (any text). */
     rustWsHashPatterns(n: any, depth: number, seen: Set<Node>): Array<Array<string | null>> {
@@ -22254,8 +22256,12 @@ export class RustTranspiler extends BaseTranspiler {
                 this.rustWsHashEnv = save;
             }
         }
-        if (declaration === undefined || !isVariableDeclaration(declaration) || declaration.initializer === undefined || seen.has(declaration)) return any;
-        const keyed = this.rustWsSubscriptionKeyRead(declaration.initializer);
+        if (declaration === undefined || !isVariableDeclaration(declaration) || seen.has(declaration)) return any;
+        // ral-45h: a nil-started local (`let h: Str = undefined`) holds the text a resolve under a Null hash uses, which no
+        // literal-led watch hash meets; its later writes join below
+        const nilStart = declaration.initializer === undefined || this.rustWsCacheUndefined(declaration.initializer);
+        if (declaration.initializer === undefined && !this.rustLocalReassigned(declaration)) return any;
+        const keyed = declaration.initializer === undefined ? undefined : this.rustWsSubscriptionKeyRead(declaration.initializer);
         if (keyed !== undefined && !this.rustLocalReassigned(declaration)) {
             // a hash read back from a subscription field: every value the venue class writes under that key
             seen.add(declaration);
@@ -22269,7 +22275,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (scope === undefined) return any;
         seen.add(declaration);
         try {
-            const out = [ ...this.rustWsHashPatterns(declaration.initializer, depth + 1, seen) ];
+            const out: Array<Array<string | null>> = nilStart ? [[ RustTranspiler.RUST_WS_NIL_HASH ]] : [ ...this.rustWsHashPatterns(declaration.initializer, depth + 1, seen) ];
             // every later write of the local joins the patterns
             for (const r of this.rustScopeNameNodes(scope, String((declaration.name as any).text))) {
                 const p: any = (r as any).parent;

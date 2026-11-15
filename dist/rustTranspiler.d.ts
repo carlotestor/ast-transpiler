@@ -3110,6 +3110,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustWsWatchKinds;
     private rustWsHashEnv;
     private rustWsFollowed;
+    /** The hash text of a Null hash (`stringify_param(Null)`): a literal no watch spells. */
+    private static readonly RUST_WS_NIL_HASH;
     /** The hash patterns of `n`: segments are literal text or `null` (any text). */
     rustWsHashPatterns(n: any, depth: number, seen: Set<Node>): Array<Array<string | null>>;
     /** `this.safeString (sub, 'k')` reads field k; `this.safeString (list, i)` / `list[i]` over `const list = this.safeList (sub, 'k', ..)`
