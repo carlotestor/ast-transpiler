@@ -2346,6 +2346,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustShadowMapKey;
     /** `x.length` on a shadowed list parameter — `get_array_length` natively. */
     printShadowLength(node: any, shadow: RustParamShadow): string | undefined;
+    /** The safe-read name when `this.safe<Type>(x, 'k'[, default])` reads a shadowed dict parameter with an inlinable
+     *  literal key: printShadowSafeReadCall then prints `x.get("k")` and never borrows `self` for the call. */
+    rustShadowSafeReadOf(node: any): string | undefined;
+    /** ral-58x: the value expression borrows `self` when printed: it names `this` / `super`, except as the callee of a
+     *  shadow safe read (rustShadowSafeReadOf), which prints a native read of the parameter (its default argument still
+     *  counts). Decided from the node, not from its printed text. */
+    rustValueBorrowsSelf(node: any): boolean;
     /** `this.safe<Type>(x, 'k'[, default])` on a shadowed dict parameter: the
      *  runtime helper's exact semantics over `.get(..)`. */
     printShadowSafeReadCall(node: CallExpression): string | undefined;
