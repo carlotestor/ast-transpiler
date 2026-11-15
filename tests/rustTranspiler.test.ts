@@ -18182,3 +18182,15 @@ describe('ral-54x K1: a cased string reader with a literal default', () => {
         expect(out).toContain('let mut marketId: Value = ');
     });
 });
+describe('ral-54x bitstamp: a Precise compare local is a bool', () => {
+    test('Precise.stringLt local read as a condition', () => {
+        const dir = path.join (rustFixtureRoot, '54x-precise');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Precise.ts'), "export class Precise {\n    static stringLt (a: string, b: string): boolean { return a < b; }\n    static stringNeg (a: string): string { return a; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    safeString (o: any, k: any, d: string = undefined): string { return o; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport { Precise } from './base/Precise.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    pt (trade: Dict) {\n        let amountString = this.safeString (trade, 'amount');\n        const isAmountNeg = Precise.stringLt (amountString, '0');\n        if (isAmountNeg) {\n            amountString = Precise.stringNeg (amountString);\n        }\n        return amountString;\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut isAmountNeg: bool = crate::precise::Precise::stringLt(');
+        expect(out).toContain('.as_bool().unwrap_or(false);');
+    });
+});

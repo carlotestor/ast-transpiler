@@ -4690,6 +4690,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (isPrefixUnaryExpression(node) && node.operator === SyntaxKind.ExclamationToken) return this.rustBoolLeafLogical(node);
         if (this.rustSbJoinShape(node)) return true;
         if (this.rustReaderCaseStrRecv(node) !== undefined) return true;
+        if (this.rustPreciseCompareCall(node)) return true;
         if (isIdentifier(node) || isConditionalExpression(node) || this.rustScalarStrMethod(node, true) !== undefined || this.rustScalarPreciseCall(node) || this.rustArithCombinator(node)) return true;
         if (this.rustStrCastCall(node) !== undefined || this.rustClockString(node) || this.rustIdString(node) || this.rustVenueTypedCall(node) !== undefined) return true;
         if (isPropertyAccessExpression(node)) return isIdentifier(node.name) && node.name.text === 'length' && (isIdentifier(node.expression) || this.rustSelfRootedLengthRecv(node.expression));
@@ -5163,6 +5164,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (fresh && this.rustDeclInitPosition(node) && this.rustValueCaseRecv(node) !== undefined) return 'ostr';
         // ral-54x K1: `this.safeString(o, k, 'lit').toLowerCase()` at a declaration: the reader is a `String` (literal default), so its case is too
         if (fresh && this.rustDeclInitPosition(node) && this.rustReaderCaseStrRecv(node) !== undefined) return 'str';
+        // ral-54x bitstamp: `Precise.stringLt|Le|Gt|Ge|Eq(a, b)` always answers a `Bool` (`false` on a `Null` operand)
+        if (fresh && this.rustPreciseCompareCall(node)) return 'bool';
         const callee: any = node.expression;
         if (!isPropertyAccessExpression(callee) || !this.rustScalarReceiver(callee.expression)) return undefined;
         const name = String(callee.name.text);
@@ -9315,6 +9318,14 @@ export class RustTranspiler extends BaseTranspiler {
         const callee: any = call.expression;
         return isIdentifier(callee.expression) && callee.expression.text === 'Precise'
             && RustTranspiler.RUST_NIL_PRECISE_STR.test(String(callee.name.text));
+    }
+
+    /** ral-54x: `Precise.stringEq|Gt|Ge|Lt|Le(a, b)`: the runtime answers `Value::Bool` for every operand pair. */
+    rustPreciseCompareCall(node): boolean {
+        const call: any = this.unwrapParens(node);
+        if (call === undefined || !isCallExpression(call) || !isPropertyAccessExpression(call.expression) || call.arguments.length !== 2) return false;
+        const callee: any = call.expression;
+        return isIdentifier(callee.expression) && callee.expression.text === 'Precise' && /^string(?:Eq|Gt|Ge|Lt|Le)$/.test(String(callee.name.text));
     }
 
     /** `s.length` on a typed string local. */
