@@ -17953,3 +17953,16 @@ describe('ral-52i: an `in`-tested insert key also stored as a literal value of t
         expect(out).not.toContain('let mut networkCode: Value');
     });
 });
+
+describe('ral-53i: string keys of a typed two-level local map insert', () => {
+    test('`m[code][networkCode] = fee` on a two-level bearer types both keys and prints them in the printer\'s own insert', () => {
+        const dir = path.join (rustFixtureRoot, 'ral-53i-nkey');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Num = number | undefined;\nexport default class Exchange {\n    networkIdToCode (networkId: Str = undefined, currencyCode: Str = undefined): string { return networkId; }\n    safeCurrencyCode (currencyId: Str, currency: any = undefined): Str { return currencyId; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    safeNumber (o: any, k: any, d: Num = undefined): Num { return o[k]; }\n    safeDict (o: any, k: any, d: Dict = undefined): Dict { return o[k]; }\n    safeList (o: any, k: any, d: any[] = undefined): any[] { return o[k]; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    fees (coins: Dict[]) {\n        const withdrawFees: Dict = {};\n        for (let i = 0; i < coins.length; i++) {\n            const entry = this.safeDict (coins, i);\n            const currencyId = this.safeString (entry, 'coin');\n            const code = this.safeCurrencyCode (currencyId);\n            const networkList: Dict[] = this.safeList (entry, 'networkList', []);\n            if (code !== undefined) {\n                withdrawFees[code] = {};\n            }\n            for (let j = 0; j < networkList.length; j++) {\n                const networkEntry = this.safeDict (networkList, j);\n                const networkId = this.safeString (networkEntry, 'network');\n                const networkCode = this.networkIdToCode (networkId, code);\n                const fee = this.safeNumber (networkEntry, 'withdrawFee');\n                if ((code !== undefined) && (networkCode !== undefined)) {\n                    withdrawFees[code][networkCode] = fee;\n                }\n            }\n        }\n        return { 'withdraw': withdrawFees };\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).not.toContain('let mut code: Value');
+        expect(out).not.toContain('stringify_param(&code)');
+        expect(out).toMatch(/withdrawFees\.entry\([^;]*\)\.or_default\(\)\.insert\(/);
+    });
+});
