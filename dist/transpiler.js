@@ -62279,6 +62279,20 @@ ${ind}];`;
       return this.rustSplitLongLine(l, nth++, lines.slice(k + 1).join("\n")) ?? l;
     }).join("\n");
   }
+  /** ral-54k: map local `name` is read (not written) by the key local `key` somewhere (`m[key]` outside an assignment target). */
+  rustMapReadByLocal(declaration, name, key) {
+    let read = false;
+    this.rustLocalUsesAll(declaration, name, false, (u) => {
+      const access = u.parent;
+      if (isElementAccessExpression4(access) && access.expression === u && !(isBinaryExpression5(access.parent) && access.parent.left === access)) {
+        const k = this.rustSkipWrappers(access.argumentExpression);
+        if (isIdentifier3(k) && this.rustDeclaredNode(k) === key)
+          read = true;
+      }
+      return true;
+    });
+    return read;
+  }
   /** ral-54k: `this.safeCurrencyCode (..)` (base reader, `string` return). */
   rustSafeCurrencyCodeInit(init) {
     const call = this.rustSkipWrappers(init);
@@ -62407,7 +62421,7 @@ ${ind}];`;
           keyRead = true;
         return true;
       });
-      if (enumerated && keyRead && this.rustSafeCurrencyCodeInit(local.initializer))
+      if (enumerated && keyRead && this.rustSafeCurrencyCodeInit(local.initializer) && !this.rustMapReadByLocal(declaration, name, local))
         return this.rustScalarInsertKeyUse(n);
       if (enumerated)
         return !keyRead && (isElementAccessExpression4(this.rustSkipWrappers(local.initializer)) || this.rustTbNetworkCodeInit(local.initializer)) && this.rustScalarInsertKeyUse(n);

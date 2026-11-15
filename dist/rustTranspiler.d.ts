@@ -1513,6 +1513,8 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  place. Only all-`{}` format strings (no literal text, no `{:?}`); the inner box is exactly one balanced `format!` slot. */
     rustFlattenConcatChain(line: string): string;
     rustSplitLongLines(text: string, names: string[]): string;
+    /** ral-54k: map local `name` is read (not written) by the key local `key` somewhere (`m[key]` outside an assignment target). */
+    rustMapReadByLocal(declaration: any, name: string, key: any): boolean;
     /** ral-54k: `this.safeCurrencyCode (..)` (base reader, `string` return). */
     rustSafeCurrencyCodeInit(init: any): boolean;
     /** `m[k] = v` with `k` a `String` local whose single-key write prints a native insert. */
