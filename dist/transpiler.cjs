@@ -58248,6 +58248,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     if ((kind === "bool" || kind === "obool") && this.rustIdentifierUseIsCondition(n))
       return "cond";
+    if (kind === "obool" && this.rustClimbLogicalWrappers(n) !== n && this.rustConditionBoolSlot(n))
+      return "cond";
     if ((kind === "str" || kind === "ostr") && this.rustPreciseLentOperand(n) && this.rustPreciseLendLocal(n))
       return "parg";
     if ((kind === "str" || kind === "ostr" || kind === "int" || kind === "oint") && this.rustInArrayNeedle(n) && this.rustPreciseLendLocal(n))
@@ -63863,6 +63865,8 @@ ${i1}}`;
     if (_optionalChain([list, 'optionalAccess', _9404 => _9404.kind]) !== _ast.SyntaxKind.VariableDeclarationList || list.declarations.length !== 1 || (list.flags & _ast.NodeFlags.Const) === 0)
       return void 0;
     if (this.rustDeclarationPrintsNativeBool(declaration) || this.rustEnclosingFunction(inner) !== this.rustEnclosingFunction(declaration))
+      return void 0;
+    if (this.rustScalarLocalOf(inner) !== void 0)
       return void 0;
     const init = this.unwrapParens(declaration.initializer);
     if (init === void 0 || !(_is.isElementAccessExpression.call(void 0, init) || _is.isPropertyAccessExpression.call(void 0, init)))
@@ -82176,7 +82180,8 @@ _RustTranspiler.RUST_MARKET_STR_FIELDS = {
 // fields every loaded market carries (`from_value` defaults only a missing key, which a market never lacks)
 _RustTranspiler.RUST_MARKET_BOOL_FIELDS = /* @__PURE__ */ new Set(["spot", "swap", "future", "option", "contract"]);
 // nullable flags (`Option<bool>`): only a truthiness test reads them natively
-_RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS = /* @__PURE__ */ new Set(["linear", "inverse", "margin"]);
+// (ral-46d: `stock` is `Option<bool>` on `crate::types::Market`, read by `safe_bool` exactly as `linear`)
+_RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS = /* @__PURE__ */ new Set(["linear", "inverse", "margin", "stock"]);
 _RustTranspiler.RUST_MARKET_SAFE_READERS = /* @__PURE__ */ new Set(["safeString", "safeBool"]);
 // `Str` keys of `MarketInterface` (`Option<String>` fields)
 _RustTranspiler.RUST_MARKET_OPT_STR_FIELDS = { settle: "settle", id: "id", baseId: "base_id", quoteId: "quote_id" };

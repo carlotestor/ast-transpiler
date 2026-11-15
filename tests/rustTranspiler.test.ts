@@ -8391,8 +8391,10 @@ describe('rust typed Market locals', () => {
     });
 
     test('flag reads off a market struct print plain bools, never is_true', () => {
-        expect(output).toContain('let mut isStock: Value = crate::value::KeyRead::key_read(&&market, "stock")');
-        expect(output).toContain('isStock.as_bool() == Some(true) && ((market).spot)');
+        // ral-46d: `stock` is the struct's own `Option<bool>` field; the flag local holds it and tests `== Some(true)`
+        expect(output).toContain('let mut isStock: Option<bool> = (market).stock;');
+        expect(output).toContain('(isStock == Some(true)) && ((market).spot)');
+        expect(output).not.toContain('key_read(&&market, "stock")');
         expect(output).toContain('!(market).spot');
         expect(output).not.toContain('is_true(&isStock)');
         expect(output).not.toContain('Value::Bool((market).spot)');
