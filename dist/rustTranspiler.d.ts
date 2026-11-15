@@ -999,6 +999,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** sb: `xs.join(sep)` as a local's initializer: every printed join form is `Value::Str(<String>.into())` (a non-list
      *  receiver joins to `""`, never `Null`), so the local is that `String`. Only at a declaration initializer. */
     rustSbJoinShape(node: any): boolean;
+    /** 51k: the join is one arm of a ternary initializer of a plain identifier whose other arm is a string literal. */
+    rust51kStrTernaryJoin(node: any): boolean;
     /** The `String` inside the printed join, printed at emission only (a print inside a decision perturbs other locals);
      *  any other printed form reads its `Str` back (`join` always answers a `Str`). */
     rustSbJoinText(node: any): string;
@@ -1317,6 +1319,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustScalarLengthRecv(node: any, params?: boolean): any;
     /** Non-optional numeric operand kind (`int|num`), optional (`oint|onum`), or undefined. */
     rustScalarNumericKind(node: any): string | undefined;
+    /** 51k: `a % b` over int literals / `int` / `oint` locals with a non-literal divisor (a parseToInt answer, a const int):
+     *  an `Option<i64>` (`mod_val` answers `Int(a % b)`, `Null` for a zero or `Null` operand). */
+    rust51kLitModKind(node: any): string | undefined;
     /** The exact kind an expression shape yields over typed operands, else undefined. */
     rustScalarExpressionKind(expr: any): string | undefined;
     private static readonly RUST_ALWAYS_INT_CALLS;

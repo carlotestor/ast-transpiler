@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-DSH7DNKY.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -56476,6 +56476,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "int";
     if ((this.rustVenueInitializer(node) || this.rustNilVenueWrite(node)) && this.rustVenueStrCall(node))
       return "ostr";
+    if (fresh && this.rustTernaryArm(node) && this.rustVenueStrCall(node))
+      return "ostr";
     if (fresh && this.rustVenueInitializer(node) && this.rustVenueIntCall(node))
       return "int";
     if (fresh && this.rustVenueInitializer(node) && this.rustVenueTypedCall(node) !== void 0)
@@ -58445,7 +58447,25 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (!isIdentifier3(recv))
       return false;
     const decl = node.parent;
+    if (this.rustTernaryArm(node) && this.rust51kStrTernaryJoin(node))
+      return true;
     return decl !== void 0 && isVariableDeclaration3(decl) && decl.initializer === node && isIdentifier3(decl.name);
+  }
+  /** 51k: the join is one arm of a ternary initializer of a plain identifier whose other arm is a string literal. */
+  rust51kStrTernaryJoin(node) {
+    let child = node;
+    let up = node.parent;
+    while (up !== void 0 && isParenthesizedExpression3(up)) {
+      child = up;
+      up = up.parent;
+    }
+    if (up === void 0 || !isConditionalExpression4(up))
+      return false;
+    const other = this.unwrapParens(up.whenTrue === child ? up.whenFalse : up.whenTrue);
+    let top = up;
+    while (isParenthesizedExpression3(top.parent))
+      top = top.parent;
+    return isVariableDeclaration3(top.parent) && isIdentifier3(top.parent.name) && this.literalKindOfNode(other) === "string" && !(other.text in this.StringLiteralReplacements);
   }
   /** The `String` inside the printed join, printed at emission only (a print inside a decision perturbs other locals);
    *  any other printed form reads its `Str` back (`join` always answers a `Str`). */
@@ -60553,6 +60573,25 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
     const kind = this.rustScalarExpressionKind(inner);
     return kind === "int" || kind === "num" || kind === "oint" || kind === "onum" ? kind : void 0;
   }
+  /** 51k: `a % b` over int literals / `int` / `oint` locals with a non-literal divisor (a parseToInt answer, a const int):
+   *  an `Option<i64>` (`mod_val` answers `Int(a % b)`, `Null` for a zero or `Null` operand). */
+  rust51kLitModKind(node) {
+    if (!isBinaryExpression5(node) || node.operatorToken.kind !== SyntaxKind7.PercentToken)
+      return void 0;
+    const side = (n) => {
+      const i = this.unwrapParens(n);
+      if (this.rustScalarIntLiteral(i) !== void 0)
+        return "lit";
+      if (!isIdentifier3(i))
+        return void 0;
+      const k = this.rustScalarNumericKind(i);
+      return k === "int" || k === "oint" ? k : void 0;
+    };
+    const l = side(node.left), r = side(node.right);
+    if (l === void 0 || r === void 0 || r === "lit")
+      return void 0;
+    return "oint";
+  }
   /** The exact kind an expression shape yields over typed operands, else undefined. */
   rustScalarExpressionKind(expr) {
     const node = this.unwrapParens(expr);
@@ -60583,7 +60622,9 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       if (op === SyntaxKind7.PercentToken) {
         const a = this.rustScalarNumericKind(node.left);
         const k = this.rustScalarIntLiteral(this.unwrapParens(node.right));
-        return (a === "int" || a === "oint") && k !== void 0 && Number(k) !== 0 ? a : void 0;
+        if ((a === "int" || a === "oint") && k !== void 0 && Number(k) !== 0)
+          return a;
+        return this.rust51kLitModKind(node);
       }
       if (op === SyntaxKind7.SlashToken) {
         const a = this.rustScalarNumericKind(node.left);
@@ -60897,7 +60938,9 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
     const positive = cond.operatorToken.kind === SyntaxKind7.ExclamationEqualsToken || cond.operatorToken.kind === SyntaxKind7.ExclamationEqualsEqualsToken;
     const [present, fallback] = positive ? [node.whenTrue, node.whenFalse] : [node.whenFalse, node.whenTrue];
     const param = this.unwrapParens(tested);
-    const own = this.rustOptParamKind(param);
+    const ownParam = this.rustOptParamKind(param);
+    const ownLocal = ownParam === void 0 && isIdentifier3(param) ? this.rustScalarLocalOf(param)?.kind : void 0;
+    const own = ownParam ?? (ownLocal === "oint" || ownLocal === "onum" ? ownLocal : void 0);
     const kind = own === "oint" || own === "onum" ? own : void 0;
     const d = this.unwrapParens(fallback);
     const capped = kind === "oint" ? this.rustOptParamCapped(kind, param, present, d) : void 0;
@@ -60910,6 +60953,8 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
     const base = kind.slice(1);
     if (dk !== base && !(base === "num" && dk === "int"))
       return void 0;
+    if (ownParam === void 0)
+      return { kind: base, text: `${super.printIdentifier(param)}.unwrap_or(${this.rustScalarOperandText(base, d)})` };
     return { kind: base, text: `${super.printIdentifier(param)}.${kind === "oint" ? "as_i64" : "as_f64"}().unwrap_or(${this.rustScalarOperandText(base, d)})` };
   }
   rustOptParamCapped(kind, param, present, d) {
@@ -61406,6 +61451,23 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       return void 0;
     const optional = kind.startsWith("o");
     const wrap = (t) => own === kind ? t : optional && own === kind.slice(1) ? `Some(${t})` : void 0;
+    if (this.rust51kLitModKind(node) !== void 0) {
+      if (own !== kind)
+        return void 0;
+      const side = (n, v) => {
+        const i = this.unwrapParens(n);
+        const lit = this.rustScalarIntLiteral(i);
+        if (lit !== void 0)
+          return { pat: void 0, use: lit };
+        const k = this.rustScalarNumericKind(i);
+        const t = this.rustScalarOperandText(k, i);
+        return { pat: [`Some(${v})`, k === "oint" ? t : `Some(${t})`], use: v };
+      };
+      const l = side(node.left, "__l"), r = side(node.right, "__r");
+      const pats = [l.pat, r.pat].filter((p) => p !== void 0);
+      const one = pats.length === 1;
+      return `(if let ${one ? pats[0][0] : `(${pats.map((p) => p[0]).join(", ")})`} = ${one ? pats[0][1] : `(${pats.map((p) => p[1]).join(", ")})`} { if __r != 0 { Some(${l.use} % __r) } else { None } } else { None })`;
+    }
     if (isIdentifier3(node)) {
       const name = this.rustI64CounterOperand(node) && this.rustI64CounterUse(node) ? String(node.text) : super.printIdentifier(node);
       if (kind === "num" && own === "int")
@@ -61551,6 +61613,8 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
         return dry ? "_" : `${name}.push_str(&${super.printIdentifier(right)})`;
       if (isIdentifier3(right) && this.rustScalarLocalOf(right)?.kind === "ostr")
         return dry ? "_" : `${name}.push_str(${super.printIdentifier(right)}.as_deref().unwrap_or("null"))`;
+      if (isCallExpression6(right) && right.arguments.length === 0 && isPropertyAccessExpression3(right.expression) && String(right.expression.name.text) === "toString" && isIdentifier3(right.expression.expression) && this.rustScalarLocalOf(right.expression.expression)?.kind === "int")
+        return dry ? "_" : `${name}.push_str(&${super.printIdentifier(right.expression.expression)}.to_string())`;
       const joined = this.rustStrPushValueText(node.left, right, dry);
       if (joined !== void 0)
         return dry ? "_" : `${name}.push_str(&${joined})`;
