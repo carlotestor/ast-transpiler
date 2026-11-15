@@ -56018,7 +56018,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const checked = this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name));
     const expected = kind === "ostr" || kind === "str" ? "string" : kind === "bool" || kind === "obool" ? "boolean" : "number";
     const combinatorKind = this.rustArithCombinator(this.unwrapParens(declaration.initializer)) ? this.rustArithCallKind(declaration.initializer) : void 0;
-    if (checked !== expected && !boolTested && !(kind === "ostr" && this.rustAnyStrPushElem(this.unwrapParens(declaration.initializer)) && this.rustAnyStrPlaceRead(declaration)) && !(combinatorKind !== void 0 && combinatorKind === kind && (kind === "int" || checked === void 0)))
+    if (checked !== expected && !boolTested && !(kind === "ostr" && this.rustAnyStrPushElem(this.unwrapParens(declaration.initializer)) && this.rustAnyStrPlaceRead(declaration)) && !(combinatorKind !== void 0 && combinatorKind === kind && (kind === "int" || checked === void 0)) && !(kind === "int" && checked === void 0 && this.rustSafeDictKeyOnlyLocal(declaration)))
       return void 0;
     const seeded = kind;
     kind = this.rustScalarWidenedKind(declaration, kind);
@@ -58514,6 +58514,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "parg";
     if ((kind === "int" || kind === "oint" || kind === "num" || kind === "onum") && this.rustSafeDictKeyArg(n))
       return "parg";
+    if (kind === "int" && this.rustElemInsertKey(n) && this.rustSafeDictKeyOnlyLocal(this.rustDeclaredNode(n)))
+      return "box";
     if ((kind === "str" || kind === "ostr") && this.rustWsCacheMapKeyUse(n))
       return "fin";
     if (kind === "bool" && this.rustScalarBoolLogicalText(this.rustClimbLogicalWrappers(n)) !== void 0)
@@ -59813,6 +59815,22 @@ ${binding(plan.indent)}` : ""), head: "" };
   rustSafeDictKeyParam(param) {
     const method = param?.parent;
     return param?.kind === SyntaxKind7.Parameter && isMethodDeclaration5(method) && method.body !== void 0 && isIdentifier3(method.name) && String(method.name.text) === "safeDict" && method.parameters?.[1] === param && isIdentifier3(param.name) && param.initializer === void 0 && param.questionToken === void 0 && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(param.getSourceFile?.()?.fileName ?? "")) && !this.rustMethodReferencedAsValue(method);
+  }
+  /** ral-50e: a local read only as base `safeDict` keys (its `any` checker type comes from an `any` operand such as
+   *  `response.length`): an `i64` the printer proved passes there as the Int its box held, so the checker's `any` is moot. */
+  rustSafeDictKeyOnlyLocal(declaration) {
+    if (!isIdentifier3(declaration?.name))
+      return false;
+    let keys = 0;
+    const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      if (this.rustElemInsertKey(n))
+        return true;
+      if (!this.rustSafeDictKeyArg(n))
+        return false;
+      keys++;
+      return true;
+    });
+    return ok && keys > 0;
   }
   /** ral-50e: `n` is the key (argument 1) of `this.safeDict (x, n, ..)` resolving to the generated base body, outside the test crate. */
   rustSafeDictKeyArg(n) {
