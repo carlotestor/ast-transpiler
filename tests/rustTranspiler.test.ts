@@ -17979,3 +17979,27 @@ describe('ral-53f: a string tuple slot boxed only as a call argument / object va
         expect(output).toMatch(/let mut urlType: Option<String> = /);
     });
 });
+
+describe('ral-53f: lift 2, a const tuple slot read and the box line budget', () => {
+    const tupleSrc =
+        'class E {\n' +
+        '    hold(x: any): any { return x; }\n' +
+        '    resolveAuthType(methodName: string, params: any = {}): [string, string, any] { return [methodName, undefined, params]; }\n' +
+        '    run(params: any) {\n' +
+        "        const resolvedAuth = this.resolveAuthType ('watchLiquidationsForSymbols', params);\n" +
+        '        const type = resolvedAuth[0];\n' +
+        "        if (type === 'spot') {\n" +
+        '            return this.hold (1);\n' +
+        '        }\n' +
+        '        return this.hold (type);\n' +
+        '    }\n' +
+        '}';
+    test('`const type = resolvedAuth[0]` off a const [string, ..] tuple local is Option<String>', () => {
+        const output = transpiler.transpileRust(tupleSrc).content;
+        expect(output).toMatch(/let mut type_var: Option<String> = resolvedAuth\.get\(0\)\.and_then\(Value::as_str\)\.map\(str::to_owned\);/);
+    });
+    test('a `let` tuple local keeps the slot read Value', () => {
+        const output = transpiler.transpileRust(tupleSrc.replace('const resolvedAuth', 'let resolvedAuth')).content;
+        expect(output).toMatch(/let mut type_var: Value = resolvedAuth/);
+    });
+});
