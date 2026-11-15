@@ -18144,3 +18144,23 @@ describe('ral-53x K1: a pro book-map key re-boxed elsewhere lends its string', (
         expect(out).toContain('let mut symbol: Value = ');
     });
 });
+describe('ral-54x S7: a literal-seeded bool local copied into another local', () => {
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    safeString (o: any, k: any, d: string = undefined): string { return o; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    pm (market: Dict) {\n        const first = this.safeString (market, 'first');\n        let swap = false;\n        if (first === 'PERP') {\n            swap = true;\n        }\n" + body + "    }\n}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('alias that is itself a bool: both locals are bool', () => {
+        const out = write ('54x-s7', "        const contract = swap;\n        let margin = true;\n        if (contract) {\n            margin = false;\n        }\n        return { 'swap': swap, 'contract': contract, 'margin': margin };\n");
+        expect(out).toContain('let mut swap: bool = false;');
+        expect(out).toContain('let mut contract: bool = swap;');
+        expect(out).toContain('Value::Bool(swap)');
+    });
+    test('alias that stays Value boxes the bool once', () => {
+        const out = write ('54x-s7b', "        let active = swap;\n        if (first === undefined) {\n            active = this.safeString (market, 'active');\n        }\n        return { 'active': active };\n");
+        expect(out).toContain('let mut swap: bool = false;');
+        expect(out).toContain('let mut active: Value = Value::Bool(swap);');
+    });
+});

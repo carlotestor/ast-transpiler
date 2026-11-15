@@ -7374,6 +7374,14 @@ export class RustTranspiler extends BaseTranspiler {
         if ((kind === 'str' || kind === 'ostr') && this.rustWsCacheMapKeyUse(n)) return 'fin';
         if (kind === 'bool' && this.rustScalarBoolLogicalText(this.rustClimbLogicalWrappers(n)) !== undefined) return 'cond';
         if (kind === 'bool' && isPrefixUnaryExpression(parent) && this.rustValueNotOfBoolLocal(parent) !== undefined) return 'cond';
+        // ral-54x S7: `let y = x;` copies a literal-seeded `bool` local into a `Value` local: the box is the `Bool` the
+        // `Value` local held (Copy, no clone); the nil-local rule (za) already boxes the same alias of an `Option<bool>`
+        // (a `bool` alias of a `bool` local copies natively: `let y: bool = x;`)
+        if (kind === 'bool' && isVariableDeclaration(parent) && parent.initializer === n && isIdentifier(parent.name) && this.rustNilLocalKind(parent) === undefined) {
+            const aliasKind = this.rustScalarLocalKind(parent);
+            if (aliasKind === undefined) return 'box';
+            if (aliasKind === 'bool') return 'native';
+        }
         if (kind === 'str' || kind === 'ostr') { const fieldForm = this.rustFieldKeyUseForm(n); if (fieldForm !== undefined) return fieldForm; }
         if ((kind === 'str' || kind === 'ostr') && this.rustWsKeyUse(n)) return 'targ';
         if ((kind === 'str' || kind === 'ostr') && this.rustWsSubscriptionWriteValue(n)) return 'box';
