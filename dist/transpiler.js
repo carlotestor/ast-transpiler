@@ -55852,7 +55852,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
    *  then re-checks all of them in declaration order until a whole pass changes nothing (each kept
    *  decision is then proven against the final ones); a candidate that keeps flipping stays `Value`. */
   rustScalarSolveScope(scope) {
-    const candidates = this.rustScopeIndex(scope.getSourceFile()).nodes.filter((n) => (isVariableDeclaration3(n) && isIdentifier3(n.name) && this.rustScalarInitShape(n.initializer) || isBindingElement(n) && this.rustSlotJoinsSolve(n)) && this.rustEnclosingFunction(n) === scope);
+    const candidates = this.rustScopeIndex(scope.getSourceFile()).nodes.filter((n) => (isVariableDeclaration3(n) && isIdentifier3(n.name) && (this.rustScalarInitShape(n.initializer) || this.rustBareTypedLet(n)) || isBindingElement(n) && this.rustSlotJoinsSolve(n)) && this.rustEnclosingFunction(n) === scope);
     this.rustScalarSolving.add(scope);
     try {
       for (const n of candidates) {
@@ -55928,6 +55928,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       this.rustScalarAliasScope = void 0;
       this.rustScalarAliasTarget = void 0;
     }
+  }
+  /** ral-54s: `let x: T;` (one declarator, no initializer, a declared type) inside a function body. */
+  rustBareTypedLet(n) {
+    const list = n?.parent;
+    return n?.initializer === void 0 && n?.type !== void 0 && list?.kind === SyntaxKind7.VariableDeclarationList && list.declarations.length === 1 && (list.flags & NodeFlags4.Const) === 0 && list.parent?.kind === SyntaxKind7.VariableStatement;
   }
   /** ya: a nil local with at least one `x = y;` write whose `y` is an initialised local (cheap pre-filter). */
   rustScalarAliasCandidate(declaration) {

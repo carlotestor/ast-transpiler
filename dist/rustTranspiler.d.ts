@@ -609,6 +609,8 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  `x = y.into_opt_string()` from a `Value` string local `y` at its last use. The alias never feeds back into
      *  `y`'s own rule: it is admitted only when re-deciding every other candidate with it gives the same answers. */
     rustScalarAliasPhase(scope: any, candidates: any[]): void;
+    /** ral-54s: `let x: T;` (one declarator, no initializer, a declared type) inside a function body. */
+    rustBareTypedLet(n: any): boolean;
     /** ya: a nil local with at least one `x = y;` write whose `y` is an initialised local (cheap pre-filter). */
     rustScalarAliasCandidate(declaration: any): boolean;
     rustScalarTry(declaration: any): string | null;
