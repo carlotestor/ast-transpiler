@@ -69398,6 +69398,7 @@ ${iden}}`;
     let endpointBoxes = 0;
     let plainReads = 0;
     let aliasBoxes = 0;
+    let optAliasWrites = 0;
     const boxedElementUses = [];
     const indexReadUses = [];
     const accept = (n) => {
@@ -69433,6 +69434,13 @@ ${iden}}`;
           return ++nullWrites > 0;
         if (!nilDeclared && (from === "dict" || from === "list") && this.rustSameKindRewrite(rhs, from))
           return String(rhs.getText()).split("\n")[0].length <= 240;
+        const aliasKind = nilDeclared ? this.rustOptAliasSourceKind(rhs, fn) : void 0;
+        if (aliasKind !== void 0) {
+          if (from !== void 0 && from !== aliasKind)
+            mixed = true;
+          from = from ?? aliasKind;
+          return ++optAliasWrites > 0;
+        }
         const kind = this.rustNilResponseWriteKind(rhs, nilDeclared, declaration);
         const declaredWrite = nilDeclared && this.rustDeclaredEndpointWrite(rhs);
         if (declaredWrite)
@@ -69511,6 +69519,8 @@ ${iden}}`;
         return ++reads > 0;
       if (from === "dict" && this.rustJwtRequestSlot(up, n))
         return ++jwtLends > 0 && ++reads > 0;
+      if (this.rustOptAliasTargetUse(n, declaration, fn))
+        return ++lentNullable > 0 && ++reads > 0;
       if (this.rustContainerAliasInit(n, declaration))
         return ++aliasBoxes > 0 && boxedElementUses.push(n) > 0;
       if (!isCallExpression6(up) || up.arguments[0] !== n)
@@ -69602,6 +69612,46 @@ ${iden}}`;
     for (const w of reuseProducerWrites)
       this.rustReuseProducerWrites.add(w);
     return from === "list" ? "list" : "dict";
+  }
+  // ── ral-43f: optional-container alias fixed point ──
+  // `let t: NullableDict = undefined; .. t = s;` where `s` is `const s = this.safeDict (o, k)` (nullable default) in the
+  // same function: both partners hold `Option<Dict>` (`Option<List>` for `safeList*`). The target's proof is syntactic on
+  // the source's initializer, so the source may ask the target's decision without a cycle; a source that stays `Value`
+  // is converted at the write (`s.into_opt_dict()`), exactly the write the optional form already prints.
+  rustOptAliasSourceKind(rhs, fn) {
+    if (rhs === void 0 || !isIdentifier3(rhs))
+      return void 0;
+    const d = this.rustDeclarationOfIdentifier(rhs);
+    if (d === void 0 || !isVariableDeclaration3(d) || d.name === rhs || !isIdentifier3(d.name) || this.rustEnclosingFunction(d) !== fn)
+      return void 0;
+    const list = d.parent;
+    if (list?.kind !== SyntaxKind7.VariableDeclarationList || list.declarations?.length !== 1 || (list.flags & NodeFlags4.Const) === 0)
+      return void 0;
+    const init = this.rustSkipWrappers(d.initializer);
+    if (init === void 0 || !isCallExpression6(init) || !isPropertyAccessExpression3(init.expression) || init.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return void 0;
+    const name = String(init.expression.name.text);
+    const kind = /^safeDict2?$/.test(name) ? "dict" : /^safeList2?$/.test(name) ? "list" : void 0;
+    if (kind === void 0 || !this.rustOptContainerSourceOk(init, kind))
+      return void 0;
+    const at = name.endsWith("2") ? 3 : 2;
+    if (init.arguments.length > at && this.literalKindOfNode(this.rustSkipWrappers(init.arguments[at])) !== "null")
+      return void 0;
+    if (String(init.getText()).split("\n")[0].length > 240)
+      return void 0;
+    return kind;
+  }
+  /** The source side: `t = n` (statement) whose target `t` holds the optional form of n's kind through rustOptAliasSourceKind. */
+  rustOptAliasTargetUse(n, declaration, fn) {
+    const up = n.parent;
+    if (!isBinaryExpression5(up) || up.right !== n || up.operatorToken.kind !== SyntaxKind7.EqualsToken || up.parent?.kind !== SyntaxKind7.ExpressionStatement || !isIdentifier3(up.left))
+      return false;
+    if (this.rustOptAliasSourceKind(n, fn) === void 0)
+      return false;
+    const t = this.rustDeclarationOfIdentifier(up.left);
+    if (t === void 0 || t === declaration || !isVariableDeclaration3(t) || t.name === up.left || this.rustBorrowedPending.has(t))
+      return false;
+    return this.rustBorrowedLocalKind(t) === this.rustOptAliasSourceKind(n, fn) && this.rustOptContainerLocals.has(t);
   }
   /** `Promise.all ([..])` (an array literal operand): runtime `promise_all` hands its operand back, so it is always a list. */
   rustPromiseAllListKind(call) {
@@ -71084,6 +71134,11 @@ ${iden}}`;
     const rhs = this.rustSkipWrappers(right);
     if (this.literalKindOfNode(rhs) === "null")
       return `${name} = None`;
+    const src = this.rustOptContainerOf(rhs);
+    if (src !== void 0 && src.kind === local.kind && this.rustPrintedOptional.has(src.declaration)) {
+      const s = super.transformIdentifier(rhs, this.ReservedKeywordsReplacements[rhs.text] ?? rhs.text);
+      return `${name} = ${this.rustOwnedLastUse(rhs, src.declaration) ? s : `${s}.clone()`}`;
+    }
     return `${name} = ${this.printNode(right, 0).trim()}.into_opt_${local.kind}()`;
   }
   /** `x.is_some()` / `x.is_none()` for a null test of the optional form. */
