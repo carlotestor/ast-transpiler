@@ -19080,6 +19080,8 @@ export class RustTranspiler extends BaseTranspiler {
             || !this.rustContainerInitNeverNull(init, from === 'list' ? 'list' : 'map') || this.rustContainerInitReadsStore(init)) return false;
         if (up.kind === SyntaxKind.PropertyAssignment) return up.initializer === n;
         if (isReturnStatement(up) && up.expression === n) return true;
+        // ral-42d: `return x as T` returns the same box (`as` prints nothing)
+        if (isAsExpression(up) && up.expression === n && isReturnStatement(up.parent) && up.parent.expression === up) return true;
         // stored whole into a plain `this.f[..]` / `this.f` slot or an array literal element (D11: stored and boxed back)
         if (up.kind === SyntaxKind.ArrayLiteralExpression) return !this.rustInDestructureWrite(n);
         if (isBinaryExpression(up) && up.right === n && up.operatorToken.kind === SyntaxKind.EqualsToken && up.parent?.kind === SyntaxKind.ExpressionStatement

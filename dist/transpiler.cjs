@@ -70221,6 +70221,8 @@ ${iden}}`;
       return up.initializer === n;
     if (_is.isReturnStatement.call(void 0, up) && up.expression === n)
       return true;
+    if (_is.isAsExpression.call(void 0, up) && up.expression === n && _is.isReturnStatement.call(void 0, up.parent) && up.parent.expression === up)
+      return true;
     if (up.kind === _ast.SyntaxKind.ArrayLiteralExpression)
       return !this.rustInDestructureWrite(n);
     if (_is.isBinaryExpression.call(void 0, up) && up.right === n && up.operatorToken.kind === _ast.SyntaxKind.EqualsToken && _optionalChain([up, 'access', _9750 => _9750.parent, 'optionalAccess', _9751 => _9751.kind]) === _ast.SyntaxKind.ExpressionStatement && (_is.isElementAccessExpression.call(void 0, up.left) || _is.isPropertyAccessExpression.call(void 0, up.left)) && (this.rustThisRootedPlace(up.left) || this.rustLocalKeyPlace(up.left, n)))

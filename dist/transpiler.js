@@ -70222,6 +70222,8 @@ ${iden}}`;
       return up.initializer === n;
     if (isReturnStatement4(up) && up.expression === n)
       return true;
+    if (isAsExpression3(up) && up.expression === n && isReturnStatement4(up.parent) && up.parent.expression === up)
+      return true;
     if (up.kind === SyntaxKind7.ArrayLiteralExpression)
       return !this.rustInDestructureWrite(n);
     if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && (isElementAccessExpression4(up.left) || isPropertyAccessExpression3(up.left)) && (this.rustThisRootedPlace(up.left) || this.rustLocalKeyPlace(up.left, n)))
