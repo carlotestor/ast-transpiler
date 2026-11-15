@@ -1693,6 +1693,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustMarketEmptyDefaultRead(call: any): boolean;
     /** ral-49c: `m as any` (in parentheses or not) as a call argument: the same whole-value hand-off of `m`. */
     rustMarketValueUseThroughCast(n: any): boolean;
+    /** ral-50c: `d[k] = m`: the record stored whole into a map (its raw, an `Arc` bump). */
+    rustMarketStoreUse(n: any): boolean;
     /** A whole-value hand-off: a call argument, an array element, a dict value or a returned value. */
     rustMarketValueUse(n: any): boolean;
     rustMarketLocalKind(declaration: any): false | 'struct' | 'opt' | 'call' | 'smkt';
@@ -1759,6 +1761,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_OPT_MARKET_RETURNS;
     rustReturnsOptMarket(node: any): boolean;
     private static readonly RUST_OPT_OUTCOME_RETURNS;
+    /** ral-50c: prediction venue methods declared with the outcome record (overrides of `fetchOutcome`, predictfun `outcomeForToken`). */
+    private static readonly RUST_OPT_OUTCOME_VENUE_RETURNS;
     /** ral-48c: `outcome` / `safeOutcome` / `loadOutcome` of the prediction base class, declared with the outcome record. */
     rustReturnsOptOutcome(node: any): boolean;
     /** ral-48c: `await this.loadOutcome (..)` is the call itself for the `Option<Market>` proofs. */
@@ -1771,6 +1775,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustVenueReturnsOptMarket(node: any): boolean;
     /** `this.getMarketFromSymbols (..)` resolving to the typed base method (or a venue `rustVenueReturnsOptMarket` one). */
     rustIsOptMarketCall(init: any): boolean;
+    /** ral-50c: `super.fetchOutcome (s)` in a prediction venue override declared with the outcome record (`super_fetch_outcome` answers `Option<Market>`). */
+    rustSuperFetchOutcome(call: any): boolean;
+    /** ral-50c: `c ? this.outcome (s) : {}` (either arm order): the outcome arm. Its local only takes key reads, where `None` reads as `{}` did. */
+    rustOptOutcomeEmptyTernary(init: any): any;
     /** `c ? undefined : this.market (s)` (either arm order): the `this.market` arm. */
     rustOptMarketTernary(init: any): any;
     /** ral-45c: `c ? this.safeMarket (..) : market` (a lent market slot) or `c ? this.safeMarket (..) : undefined` (either arm
@@ -1783,6 +1791,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     printOptSafeMarketTernary(init: any): string | undefined;
     /** `(if c { None } else { Some(market) })` for an `Option<Market>` ternary initializer. */
     printOptMarketTernary(init: any): string | undefined;
+    /** ral-50c: `(if c { self.outcome(s) } else { None })` for a `{}`-armed outcome ternary. */
+    printOptOutcomeEmptyTernary(init: any): string | undefined;
     /** ral-48c: `await this.loadOutcome (..)` in a `Value` place: the answer boxed once after the `.await`. */
     printOptOutcomeAwaitBox(node: any, identation: number): string | undefined;
     /** `return x` in an `Option<Market>` method. */

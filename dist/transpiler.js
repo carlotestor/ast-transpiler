@@ -63258,6 +63258,11 @@ ${i1}}`;
       top = top.parent;
     return top !== n && isCallExpression6(top.parent) && top.parent.expression !== top && Array.from(top.parent.arguments).includes(top);
   }
+  /** ral-50c: `d[k] = m`: the record stored whole into a map (its raw, an `Arc` bump). */
+  rustMarketStoreUse(n) {
+    const up = n.parent;
+    return up !== void 0 && isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && isElementAccessExpression4(up.left);
+  }
   /** A whole-value hand-off: a call argument, an array element, a dict value or a returned value. */
   rustMarketValueUse(n) {
     const parent = n.parent;
@@ -63378,7 +63383,8 @@ ${i1}}`;
       return ok2 && (valueUses2 === 0 || elemUses === 0) ? "call" : false;
     }
     const fromSlot = this.rustMarketSlotParamOf(this.rustSkipWrappers(declaration.initializer)) !== void 0 && (declaration.parent.flags & NodeFlags4.Const) === 0;
-    const fromOpt = this.rustIsOptMarketCall(declaration.initializer) || this.rustOptMarketTernary(declaration.initializer) !== void 0 || fromSlot || this.rustOptSafeMarketTernary(declaration.initializer) !== void 0;
+    const fromOpt = this.rustIsOptMarketCall(declaration.initializer) || this.rustOptMarketTernary(declaration.initializer) !== void 0 || fromSlot || this.rustOptSafeMarketTernary(declaration.initializer) !== void 0 || this.rustOptOutcomeEmptyTernary(declaration.initializer) !== void 0;
+    const emptyLitArm = this.rustOptOutcomeEmptyTernary(declaration.initializer) !== void 0;
     const empty = declaration.initializer === void 0 || this.literalKindOfNode(declaration.initializer) === "null" || fromOpt;
     if (!empty && !this.rustIsTypedMarketCall(declaration.initializer))
       return false;
@@ -63396,6 +63402,8 @@ ${i1}}`;
     const ok = this.rustMarketLocalUsesAll(declaration, String(declaration.name.text), (n) => {
       if (this.rustEnclosingFunction(n) !== scope)
         return false;
+      if (emptyLitArm)
+        return this.rustOptMarketKeyRead(n);
       if (this.rustIsTypedMarketWrite(n)) {
         writes++;
         return true;
@@ -63411,7 +63419,7 @@ ${i1}}`;
       if (empty && this.rustMarketSlotUse(n))
         return true;
       if (empty)
-        return this.rustIsNullTestOf(n) || this.rustMarketValueUse(n) || this.rustMarketValueUseThroughCast(n);
+        return this.rustIsNullTestOf(n) || this.rustMarketValueUse(n) || this.rustMarketValueUseThroughCast(n) || this.rustMarketStoreUse(n);
       if (this.rustIsNullTestOf(n) && this.rustNullTestIsCondition(n))
         return true;
       const key = this.rustMarketReadKey(n);
@@ -63893,10 +63901,10 @@ ${i1}}`;
   rustReturnsOptOutcome(node) {
     if (node === void 0 || node.kind !== SyntaxKind7.MethodDeclaration || node.body === void 0 || !isIdentifier3(node.name))
       return false;
-    const want = _RustTranspiler.RUST_OPT_OUTCOME_RETURNS[String(node.name.text)];
+    const file = String(node.getSourceFile?.()?.fileName ?? "").replace(/\\/g, "/");
+    const name = String(node.name.text);
+    const want = /ts[/]src[/]base[/]PredictionExchange\.ts$/.test(file) ? _RustTranspiler.RUST_OPT_OUTCOME_RETURNS[name] : /ts[/]src[/]prediction[/][^/]+\.ts$/.test(file) ? _RustTranspiler.RUST_OPT_OUTCOME_VENUE_RETURNS[name] : void 0;
     if (want === void 0 || !isClassDeclaration4(node.parent))
-      return false;
-    if (!/ts[/]src[/]base[/]PredictionExchange\.ts$/.test(String(node.getSourceFile?.()?.fileName ?? "").replace(/\\/g, "/")))
       return false;
     let ret = node.type;
     if (ret?.kind === SyntaxKind7.TypeReference && isIdentifier3(ret.typeName) && String(ret.typeName.text) === "Promise" && ret.typeArguments?.length === 1)
@@ -63909,7 +63917,7 @@ ${i1}}`;
     if (inner?.kind !== SyntaxKind7.AwaitExpression)
       return node;
     const call = this.rustSkipWrappers(inner.expression);
-    return call !== void 0 && isCallExpression6(call) && isPropertyAccessExpression3(call.expression) && String(call.expression.name.text) === "loadOutcome" ? call : node;
+    return call !== void 0 && isCallExpression6(call) && isPropertyAccessExpression3(call.expression) && /^(?:loadOutcome|fetchOutcome)$/.test(String(call.expression.name.text)) ? call : node;
   }
   /** ral-46e: a venue (not base-tier) method declared `Market`, not async, no override, never referenced by name as a
    *  value, whose every return is `undefined` or a `safeMarket` record and that returns at least one of each
@@ -63963,6 +63971,8 @@ ${i1}}`;
   /** `this.getMarketFromSymbols (..)` resolving to the typed base method (or a venue `rustVenueReturnsOptMarket` one). */
   rustIsOptMarketCall(init) {
     const call = this.rustSkipWrappers(this.rustSkipOutcomeAwait(init));
+    if (call !== void 0 && isCallExpression6(call) && this.rustSuperFetchOutcome(call))
+      return true;
     if (call === void 0 || !isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword)
       return false;
     if (!_RustTranspiler.RUST_OPT_MARKET_RETURNS.has(String(call.expression.name.text))) {
@@ -63977,6 +63987,27 @@ ${i1}}`;
       declaration = Array.from(declaration.parent.members).find((m) => isMethodDeclaration5(m) && m.body !== void 0 && isIdentifier3(m.name) && String(m.name.text) === name);
     }
     return this.rustReturnsOptMarket(declaration);
+  }
+  /** ral-50c: `super.fetchOutcome (s)` in a prediction venue override declared with the outcome record (`super_fetch_outcome` answers `Option<Market>`). */
+  rustSuperFetchOutcome(call) {
+    if (!isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.SuperKeyword || String(call.expression.name.text) !== "fetchOutcome")
+      return false;
+    const fn = findAncestor(call, isMethodDeclaration5);
+    return fn !== void 0 && isIdentifier3(fn.name) && String(fn.name.text) === "fetchOutcome" && this.rustReturnsOptOutcome(fn);
+  }
+  /** ral-50c: `c ? this.outcome (s) : {}` (either arm order): the outcome arm. Its local only takes key reads, where `None` reads as `{}` did. */
+  rustOptOutcomeEmptyTernary(init) {
+    const cond = init === void 0 ? void 0 : this.unwrapParens(init);
+    if (cond === void 0 || cond.kind !== SyntaxKind7.ConditionalExpression)
+      return void 0;
+    const t = this.unwrapParens(cond.whenTrue);
+    const f = this.unwrapParens(cond.whenFalse);
+    const empty = (o) => isObjectLiteralExpression4(o) && o.properties.length === 0;
+    if (empty(f) && this.rustIsOptMarketCall(t))
+      return t;
+    if (empty(t) && this.rustIsOptMarketCall(f))
+      return f;
+    return void 0;
   }
   /** `c ? undefined : this.market (s)` (either arm order): the `this.market` arm. */
   rustOptMarketTernary(init) {
@@ -64033,6 +64064,23 @@ ${i1}}`;
       return void 0;
     const cond = this.unwrapParens(init);
     const some = `Some${value}`;
+    const armTrue = this.unwrapParens(cond.whenTrue) === arm;
+    return `(if ${this.printCondition(cond.condition, 0)} { ${armTrue ? some : "None"} } else { ${armTrue ? "None" : some} })`;
+  }
+  /** ral-50c: `(if c { self.outcome(s) } else { None })` for a `{}`-armed outcome ternary. */
+  printOptOutcomeEmptyTernary(init) {
+    const arm = this.rustOptOutcomeEmptyTernary(init);
+    if (arm === void 0)
+      return void 0;
+    const call = this.rustSkipWrappers(this.rustSkipOutcomeAwait(arm));
+    this.rustOptMarketBoxing.add(call);
+    let some;
+    try {
+      some = this.printNode(arm, 0).trim();
+    } finally {
+      this.rustOptMarketBoxing.delete(call);
+    }
+    const cond = this.unwrapParens(init);
     const armTrue = this.unwrapParens(cond.whenTrue) === arm;
     return `(if ${this.printCondition(cond.condition, 0)} { ${armTrue ? some : "None"} } else { ${armTrue ? "None" : some} })`;
   }
@@ -64245,7 +64293,7 @@ ${i1}}`;
     const kind = this.rustMarketLocalKind(declaration);
     if (kind === "opt") {
       const slot = this.rustSkipWrappers(declaration.initializer);
-      const init = this.rustIsOptMarketCall(declaration.initializer) ? this.printNode(declaration.initializer, 0).trim() : this.rustMarketSlotParamOf(slot) !== void 0 ? `${super.printIdentifier(slot)}.cloned()` : this.printOptMarketTernary(declaration.initializer) ?? this.printOptSafeMarketTernary(declaration.initializer) ?? "None";
+      const init = this.rustIsOptMarketCall(declaration.initializer) ? this.printNode(declaration.initializer, 0).trim() : this.rustMarketSlotParamOf(slot) !== void 0 ? `${super.printIdentifier(slot)}.cloned()` : this.printOptMarketTernary(declaration.initializer) ?? this.printOptSafeMarketTernary(declaration.initializer) ?? this.printOptOutcomeEmptyTernary(declaration.initializer) ?? "None";
       return `${indent}let mut ${varName}: Option<crate::types::Market> = ${init}`;
     }
     if (kind === "call") {
@@ -64407,7 +64455,7 @@ ${i1}}`;
     if (this.rustCallLocalOf(node) !== void 0) {
       return this.rustMarketValueUse(node) ? `crate::types::IntoRaw::into_raw(${super.printIdentifier(node)}.clone())` : super.printIdentifier(node);
     }
-    if (this.rustOptMarketLocalOf(node) !== void 0 && (this.rustMarketValueUse(node) || this.rustMarketValueUseThroughCast(node) && !this.rustMarketSlotUse(node))) {
+    if (this.rustOptMarketLocalOf(node) !== void 0 && (this.rustMarketValueUse(node) || this.rustMarketStoreUse(node) || this.rustMarketValueUseThroughCast(node) && !this.rustMarketSlotUse(node))) {
       return `crate::Value::from(${super.printIdentifier(node)}.as_ref())`;
     }
     const declaration = this.rustTypedMarketLocalOf(node);
@@ -83417,7 +83465,16 @@ _RustTranspiler.RUST_OPT_OUTCOME_RETURNS = {
   // ral-49c: only `loadOutcome`. `outcome` / `safeOutcome` stay `Value`: their answers are handed back whole by the
   // async-virtual `fetchOutcome` overrides (a `Value` return the dispatch preamble forwards), the kalshi `{}`
   // ternaries and predictfun `outcomeForToken`, which would box the decoded record straight back.
-  "loadOutcome": "PredictionOutcomeHandle"
+  "outcome": "PredictionOutcomeMarket",
+  "safeOutcome": "PredictionOutcomeHandle",
+  "loadOutcome": "PredictionOutcomeHandle",
+  // ral-50c: the async-virtual `fetchOutcome` hands the same record on (declared in ts/src)
+  "fetchOutcome": "PredictionOutcomeHandle"
+};
+/** ral-50c: prediction venue methods declared with the outcome record (overrides of `fetchOutcome`, predictfun `outcomeForToken`). */
+_RustTranspiler.RUST_OPT_OUTCOME_VENUE_RETURNS = {
+  "fetchOutcome": "PredictionOutcomeHandle",
+  "outcomeForToken": "PredictionOutcomeHandle"
 };
 // `MarketInterface` keys typed `Bool`: a raw read of one holds a Bool or Null.
 _RustTranspiler.RUST_MARKET_FLAG_KEYS = /* @__PURE__ */ new Set(["spot", "margin", "swap", "future", "option", "index", "stock", "prediction", "contract", "linear", "inverse", "quanto"]);
