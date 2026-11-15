@@ -77140,7 +77140,17 @@ ${iden}}`;
       return false;
     if (isArrayLiteralExpression4(rhs))
       return !rhs.elements.some((e) => e.kind === SyntaxKind7.SpreadElement || isIdentifier3(this.rustSkipWrappers(e)) && !this.rustBuiltListMovedElement(e)) && (!rhs.elements.some((e) => isIdentifier3(this.rustSkipWrappers(e))) || this.rustBuiltListMovedLiteral(rhs) !== void 0) || this.rustBuiltListBoxedLiteral(rhs) !== void 0;
-    return this.rustAlwaysListProducer(rhs) || this.rustDefaultedListRead(rhs) || this.rustDeclaredListProducer(rhs);
+    return this.rustAlwaysListProducer(rhs) || this.rustDefaultedListRead(rhs) || this.rustDeclaredListProducer(rhs) || this.rustVenueListWriteSource(rhs);
+  }
+  /** ral-53i: `[await] this.m (..)` whose venue declaration the printer's typed-return table (rustVenueContainerReturnKind)
+   *  proves a never-null list (`Dict[]` / `any[]` / `List` / `Record[]` / literal tuple, the same type in the whole venue
+   *  family, no override): the call prints `-> Value` holding a `Value::Arr`, so `.into_list()` moves exactly that list. */
+  rustVenueListWriteSource(rhs) {
+    const call = rhs?.kind === SyntaxKind7.AwaitExpression ? this.rustSkipWrappers(rhs.expression) : rhs;
+    if (call === void 0 || !isCallExpression6(call) || this.rustTestTierSource(call))
+      return false;
+    const kind = this.rustVenueContainerReturnKind(call);
+    return kind !== void 0 && kind.kind === "list" && !kind.nullable;
   }
   /** ral-yf: `await this.<endpoint> (..)` whose abstract declaration spells `Promise<List>` (a non-list answer reads as the
    *  empty list, the landed ral-kc `into_list()` behaviour), or `this.parse<X> (..)` whose declaration returns `T[]`

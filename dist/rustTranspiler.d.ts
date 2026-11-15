@@ -3545,6 +3545,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBuiltListSelfWriteArg(n: any, name: string): boolean;
     /** A right-hand side that answers a `Value::Arr` on every path. */
     rustBuiltListWriteSource(right: any): boolean;
+    /** ral-53i: `[await] this.m (..)` whose venue declaration the printer's typed-return table (rustVenueContainerReturnKind)
+     *  proves a never-null list (`Dict[]` / `any[]` / `List` / `Record[]` / literal tuple, the same type in the whole venue
+     *  family, no override): the call prints `-> Value` holding a `Value::Arr`, so `.into_list()` moves exactly that list. */
+    rustVenueListWriteSource(rhs: any): boolean;
     /** ral-yf: `await this.<endpoint> (..)` whose abstract declaration spells `Promise<List>` (a non-list answer reads as the
      *  empty list, the landed ral-kc `into_list()` behaviour), or `this.parse<X> (..)` whose declaration returns `T[]`
      *  (every override must return a list too): `.into_list()` moves exactly the list out of the box. */
