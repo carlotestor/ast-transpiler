@@ -19263,3 +19263,25 @@ describe('ral-57i: a built list cut by a base arraySlice of itself', () => {
         expect(out).not.toContain('let mut bids: crate::value::List');
     });
 });
+
+describe('ral-57i: a base plural parser overridden only in another venue family', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type List = any[];\nexport interface Trade { amount: any }\nexport default class Exchange {\n    parseTrades (trades: List, market: any = undefined): Trade[] { return []; }\n    keep (o: Dict): Dict { return o; }\n}\n";
+    const other = "import Exchange from './base/Exchange.js';\nimport type { List, Trade } from './base/Exchange.js';\nexport default class other extends Exchange {\n    parseTrades (trades: List, market: any = undefined): Trade[] {\n        return trades;\n    }\n}\n";
+    const body = "        let trades: Trade[] = [];\n        if (events.length > 0) {\n            const executions: Dict[] = [];\n            for (let i = 0; i < events.length; i++) {\n                executions.push (events[i]);\n            }\n            trades = this.parseTrades (executions);\n        }\n        const n = trades.length;\n        return this.keep ({ 'trades': trades, 'n': n });\n";
+    const write = (name: string, own: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/other.ts'), other);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, List, Trade } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    m (events: any[]) {\n" + body + "    }\n" + own + "}\n");
+        return path.join (dir, 'ts/src/venue.ts');
+    };
+    test('the venue local reassigned from the base parser is a List', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-57i-parser-family', '')).content;
+        expect(out).toContain('let mut trades: crate::value::List');
+    });
+    test('an override in the venue family keeps the local Value', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-57i-parser-family-neg', "    parseTrades (trades: List, market: any = undefined): Trade[] {\n        return trades;\n    }\n")).content;
+        expect(out).not.toContain('let mut trades: crate::value::List');
+    });
+});
