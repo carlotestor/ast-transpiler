@@ -61502,7 +61502,7 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
         const test = lk === void 0 ? `${value2} ${sign} (__p as f64)` : `(__p as f64) ${sign} ${value2}`;
         return `matches!(${text(k, typed)}, Some(__p) if ${test})`;
       }
-      if (k !== "int" && k !== "num" || own === void 0 || !this.rustRdOwnInit(own.declaration) || !this.rustScalarValueNumber(other))
+      if (k !== "int" && k !== "num" || own === void 0 || !(this.rustRdOwnInit(own.declaration) || k === "int" && this.rustIntReaderLitDefault(own.declaration)) || !this.rustScalarValueNumber(other))
         return void 0;
       if (dry)
         return "_";
@@ -61600,6 +61600,12 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
   rustScalarValuePartnerTest(typed, other, kind, sign, dry) {
     const self = this.unwrapParens(typed);
     const partner = this.unwrapParens(other);
+    if (_is.isIdentifier.call(void 0, self) && (kind === "int" || kind === "oint") && this.rustScalarIdentifierKind(self) !== void 0 && this.rustIntReaderCall(partner)) {
+      if (dry)
+        return "_";
+      const name2 = super.printIdentifier(self);
+      return `(${kind === "int" ? `Some(${name2} as f64)` : `Value::from(${name2}).as_f64()`} ${sign} ${this.printNode(partner, 0).trim()}.as_f64())`;
+    }
     if (!_is.isIdentifier.call(void 0, self) || !_is.isIdentifier.call(void 0, partner) || this.rustScalarIdentifierKind(self) === void 0)
       return void 0;
     const base = kind.startsWith("o") ? kind.slice(1) : kind;
@@ -62732,6 +62738,14 @@ ${ind}];`;
       return false;
     const base = _RustTranspiler.RUST_SCALAR_INT_HELPERS[String(init.expression.name.text)];
     return base !== void 0 && init.arguments.length === base + 1 && this.rustScalarIntLiteral(this.unwrapParens(init.arguments[base])) !== void 0;
+  }
+  /** ral-54n: `this.safeInteger* (..)` printed as its `Value` (an `Int` or `Null` on every path). */
+  rustIntReaderCall(node) {
+    const call = this.unwrapParens(node);
+    if (call === void 0 || !_is.isCallExpression.call(void 0, call) || !_is.isPropertyAccessExpression.call(void 0, call.expression) || call.expression.expression.kind !== _ast.SyntaxKind.ThisKeyword)
+      return false;
+    const base = _RustTranspiler.RUST_SCALAR_INT_HELPERS[String(call.expression.name.text)];
+    return base !== void 0 && /^safeInteger/.test(String(call.expression.name.text)) && (call.arguments.length === base || call.arguments.length === base + 1 && this.rustScalarIntLiteral(this.unwrapParens(call.arguments[base])) !== void 0);
   }
   /** wi: a tuple slot whose producer builds an exact Int-or-null on every return (`checkOptionInteger`): an `i64` bound too. */
   rustTbExactIntSlot(declaration) {
