@@ -3267,6 +3267,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     printHandlerTableLocalWrite(left: any, right: any): string | undefined;
     /** A local map literal whose every value is a `this.<method>` reference, only read by `this.safeValue (m, k)`. */
     rustHandlerTable(node: any): boolean;
+    /** ral-53h: a never-rebound const list literal of `this.<method>` references, only read by `xs[i]` (as a declaration
+     *  initializer) and `xs.length`: an element read is a handler name, or Null past the end. */
+    rustHandlerList(declaration: any, literal: any): boolean;
     rustHandlerTableLocalOf(node: any): boolean;
     printHandlerTableLocalDeclaration(declaration: any, varName: string, indent: string): string | undefined;
     printHandlerTableNullTest(left: any, right: any, op: any): string | undefined;
@@ -3439,9 +3442,16 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustWsResolvedMap(x: any, depth: number): boolean;
     /** Any write of the local after its declaration (an assignment or an update). */
     rustLocalReassigned(declaration: any): boolean;
+    /** ral-53h: set while the resolve table builds its `rpats` (read only by `await client.future (h)`; watch calls keep `pats`). */
+    private rustWsFoundRefine;
+    /** ral-53h: the literal of a never-rebound `const xs = this.findMessageHashes (client, 'lit')` local that is only read
+     *  (`xs[i]`, `xs.length`); the base method keeps the futures keys whose text contains 'lit'. */
+    rustWsFoundHashesLiteral(list: any): string | undefined;
+    rustWsRefinedHashPatterns(hash: any): Array<Array<string | null>>;
     /** Every resolve of the ws class with its hash patterns and kind; null when the class has ws relatives. */
     rustWsResolveTable(cls: any): Array<{
         pats: Array<Array<string | null>>;
+        rpats?: Array<Array<string | null>>;
         kind: string;
     }> | null;
     /** When `site` sits in a method of `cls` with parameters: the parameter bindings of every call of that method
