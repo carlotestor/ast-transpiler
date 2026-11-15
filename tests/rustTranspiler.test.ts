@@ -19221,3 +19221,45 @@ describe('ral-56i: a built list local wrapped in itself', () => {
         expect(out).not.toContain('let mut ids: crate::value::List');
     });
 });
+
+describe('ral-57i: a built list handed to a this-call in a then-branch whose only later reads sit in the else-branch', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: any = undefined): Str { return o; }\n    json (o: any, p: any = undefined): string { return ''; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    m (flag: boolean, spot: boolean, d: Dict) {\n" + body + "    }\n}\n");
+        return path.join (dir, 'ts/src/venue.ts');
+    };
+    const body = (tail: string) => "        const ids: string[] = [];\n        for (let i = 0; i < 3; i++) {\n            const id = this.safeString (d, i, '');\n            ids.push (id);\n        }\n        const request: Dict = {};\n        if (spot) {\n            request['k'] = ids.join (',');\n        } else {\n            if (flag) {\n                request['a'] = this.json (ids);\n            } else {\n                request['b'] = ids;\n            }\n        }\n" + tail + "        return request;\n";
+    test('the this-call argument moves the list (no clone)', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-57i-branch-move', body (''))).content;
+        expect(out).toContain('let mut ids: crate::value::List = ');
+        expect(out).toMatch(/json\w*\(&?Value::Arr\(ids\)\)/);
+        expect(out).not.toContain('Value::Arr(ids.clone())');
+    });
+    test('a read after the if keeps the clone', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-57i-branch-move-neg', body ("        request['c'] = ids.length;\n"))).content;
+        expect(out).not.toMatch(/json\w*\(&?Value::Arr\(ids\)\)/);
+    });
+});
+
+describe('ral-57i: a built list cut by a base arraySlice of itself', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Int = number | undefined;\nexport default class Exchange {\n    safeList (o: any, k: any, d: any = undefined): any[] { return o; }\n    arraySlice (array: any, first: any, second: Int = undefined) {\n        if (second === undefined) {\n            return array.slice (first);\n        }\n        return array.slice (first, second);\n    }\n    keep (o: Dict): Dict { return o; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Int } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    m (d: Dict, limit: Int = undefined) {\n" + body + "    }\n}\n");
+        return path.join (dir, 'ts/src/venue.ts');
+    };
+    test('`x = this.arraySlice (x, 0, limit)` keeps x a List', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-57i-slice', "        let bids = this.safeList (d, 'bids', []);\n        if (limit !== undefined) {\n            const n = bids.length;\n            if (limit < n) {\n                bids = this.arraySlice (bids, 0, limit);\n            }\n        }\n        return this.keep ({\n            'bids': bids,\n        });\n")).content;
+        expect(out).toContain('let mut bids: crate::value::List');
+        expect(out).toMatch(/bids = self\.(array_slice|arraySlice)\(Value::Arr\(bids\)/);
+    });
+    test('a slice of another list stays Value', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-57i-slice-neg', "        let bids = this.safeList (d, 'bids', []);\n        const asks = this.safeList (d, 'asks', []);\n        if (limit !== undefined) {\n            const n = bids.length;\n            if (limit < n) {\n                bids = this.arraySlice (asks, 0, limit);\n            }\n        }\n        return this.keep ({\n            'bids': bids,\n        });\n")).content;
+        expect(out).not.toContain('let mut bids: crate::value::List');
+    });
+});

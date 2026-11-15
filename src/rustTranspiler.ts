@@ -26440,7 +26440,7 @@ export class RustTranspiler extends BaseTranspiler {
                     if (!isPropertyAccessExpression(callee) || callee.expression.kind !== SyntaxKind.ThisKeyword || !short(n)
                         || RustTranspiler.MUT_SELF_METHODS.has(this.toSnakeCaseName(String(callee.name.text)))
                         || !this.rustNilBoxSlotOk(up, Array.from(up.arguments).indexOf(n))) return false;
-                    boxes.push([n, this.rustLocalLastUse(n, declaration) || this.rustBuiltListSelfWriteArg(n, name) ? 'move' : 'clone']);
+                    boxes.push([n, this.rustLocalLastUse(n, declaration) || this.rustBuiltListSelfWriteArg(n, name) || this.rustBuiltListBranchLastUse(n, declaration) ? 'move' : 'clone']);
                     return true;
                 }
                 return false;
@@ -26534,9 +26534,18 @@ export class RustTranspiler extends BaseTranspiler {
         const call: any = this.rustSkipWrappers(write.right);
         if (!isCallExpression(call) || !isPropertyAccessExpression(call.expression) || call.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
         const method = String(call.expression.name.text);
-        if ((method !== 'sortBy' && method !== 'sortBy2') || this.rustTestTierSource(call) || !this.rustListPassthroughCall(call)) return false;
+        // ral-57i: base `arraySlice (x, a, b)` (exchange_stubs.rs array_slice answers `Value::Array(..)` on every path) is one too
+        const slice = method === 'arraySlice' && !this.rustTestTierSource(call) && this.rustBaseArraySliceCall(call);
+        if (!slice && ((method !== 'sortBy' && method !== 'sortBy2') || this.rustTestTierSource(call) || !this.rustListPassthroughCall(call))) return false;
         const first: any = this.rustSkipWrappers(call.arguments[0]);
         return first !== undefined && isIdentifier(first) && String(first.text) === name && this.rustBuiltListSelfWriteArg(call.arguments[0], name);
+    }
+
+    /** ral-57i: `this.arraySlice (..)` resolved to the base declaration and redeclared by no venue. */
+    rustBaseArraySliceCall(call: any): boolean {
+        if (call.arguments.length < 2 || call.arguments.some((a: any) => a.kind === SyntaxKind.SpreadElement)) return false;
+        const member: any = this.rustScalarCallee(call);
+        return member !== undefined && RustTranspiler.RUST_BASE_TIER_FILE.test(String(member.getSourceFile?.()?.fileName ?? '')) && !this.rustVenueReturnTypesHas(call, 'arraySlice');
     }
 
     /** `x = this.m(.., x, ..)` naming `x` only there and on the left: the old list moves into the call before the write. */
@@ -26813,6 +26822,28 @@ export class RustTranspiler extends BaseTranspiler {
         return !(this.rustLentListLocal(declaration) || this.rustBorrowedLocalKind(declaration) !== undefined || this.rustScalarLocalKind(declaration) !== undefined
             || this.rustNilLocalKind(declaration) !== undefined || this.rustDictLocalIsTyped(declaration) || this.rustVecLocalIsTyped(declaration)
             || this.rustMarketLocalKind(declaration) !== false || this.rustReadBearerKindOfDeclaration(declaration) !== false);
+    }
+
+    /** ral-57i: a `this.X(.., x, ..)` argument in the then-branch of the nearest enclosing if whose later reads all sit in
+     *  that if's else-branch (rustGuardedBranchLastUse), with no other read of x in the same statement: x moves there. */
+    rustBuiltListBranchLastUse(node: any, declaration: any): boolean {
+        let statement: any = node;
+        while (statement.parent !== undefined && !isStatement(statement)) statement = statement.parent;
+        let guard: any = undefined;
+        for (let up: any = statement; up !== undefined && !isFunctionLike(up); up = up.parent) {
+            if (up.parent?.kind === SyntaxKind.IfStatement && up.parent.thenStatement === up) { guard = up.parent; break; }
+        }
+        if (guard === undefined || guard.elseStatement === undefined) return false;
+        const own = this.rustSymbolOf(node);
+        const scope = this.rustEnclosingFunction(declaration);
+        if (own === undefined || scope === undefined) return false;
+        for (const n of this.rustScopeNameNodes(scope, String(declaration.name.text))) {
+            if (n === node || n === declaration.name || !isIdentifier(n) || this.rustIdentifierIsPropertyName(n)) continue;
+            const symbol = this.rustSymbolOf(n);
+            if (symbol !== undefined && symbol !== own) continue;
+            if (n.pos >= statement.pos && n.end <= statement.end) return false;
+        }
+        return this.rustGuardedBranchLastUse(node, declaration, guard);
     }
 
     /** ral-uf: every later read of `node`'s local lies in the else branch of `guard` (a path disjoint from the move) and
