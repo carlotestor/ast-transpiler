@@ -1541,6 +1541,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustScalarOptKeyArg(key: any): string | undefined;
     rustScalarOptKeyCount(declaration: any): number;
     rustScalarOptKeyCostly(declaration: any, kind: string): boolean;
+    /** ral-55f: `this.F[k] = v` (statement) on a plain untagged field the printer inserts natively (printNativeDictInsert's
+     *  field receiver, e.g. `options`): the printer prints the key text itself (`k.as_deref().unwrap_or("null").to_string()`, the
+     *  one allocation `stringify_param(&k)` made), so the ccxt build/ key pass never sees a boxed key there. The value must
+     *  not rewrite the key (binance pro authenticate `this.options[type] = this.extend (options, ..)`). Non-test sources. */
+    rustPlainFieldInsertKey(n: any): boolean;
     rustScalarOptKeyText(key: any): string;
     /** The key is an element-read local (`const k = keys[i]`). */
     rustOkeyLocal(n: any): boolean;
@@ -2918,6 +2923,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** sb: `y = self.omit(&x, ..).into_dict()` for a shared-map alias (`omit` of a proven map answers `Value::Map`: the Arc moves back). */
     private rustSbAliasWrites;
     private rustSbAliasSlotWrites;
+    /** ral-55f: the alias sits outside ts/src/test (the slot rules apply to non-test sources only). */
+    rustSbSlotAliasNonTest(declaration: any): boolean;
     /** ral-54f: a slot write accepted by the shared-map alias rule, printed typed only when the alias printed as the map. */
     rustSbAliasSlotWriteOf(element: any): boolean;
     printSbAliasWrite(node: any, left: any, right: any): string | undefined;
