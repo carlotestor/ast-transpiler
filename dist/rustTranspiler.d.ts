@@ -2068,6 +2068,9 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  the same block mutates (`x['k'] = v` -> `add_element_to_object(&mut x…)`,
      *  `x.push(v)` -> `append_to_array(&mut x…)`). */
     isWriteBackBindRead(read: Node): boolean;
+    /** ral-52e: `const e = xs[k]; e['f'] = v; ..; xs[k] = e;` -- the bind is followed only by top-level writes on `e` and then the
+     *  source's own write-back at the same receiver and key text, so a cloned element read writes the same element back. */
+    rustExplicitWriteBackBind(read: any): boolean;
     /** yb: the ccxt write-back pass (`writeBackIndexedMutations`) only fires when the line right after the bind is a top-level
      *  element / property write or push on the bound local; any other next statement (an `if`, a plain reassignment) leaves
      *  the bind alone, so its counter key may print boxed (`get_value(&xs, &Value::Int(i))`, the same helper call and value). */
@@ -2932,6 +2935,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustAeoBoxedNative(n: any): boolean;
     /** ral-50b: `n[<integer literal>] = v` (statement, one level, `=`). */
     rustListIndexLiteralWrite(n: any): boolean;
+    /** ral-52e: a list index key proved i64: an integer literal, or `+` / `-` over integer literals and i64 scalar locals (at least one literal). */
+    rustListIndexIntKey(key: any, top?: boolean): boolean;
     /** ral-48b: `n['k'] = v` (statement, literal non-digit key) whose value does not read `n`. */
     rustAeoTargetWrite(n: any): boolean;
     /** The source statement of a box (`Value::Dict(x)`, +13 chars) leaves the printed line within 400 chars. */

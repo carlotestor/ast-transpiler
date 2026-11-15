@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -66433,6 +66433,38 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
       return false;
     return this.rustStatementMutatesLocal(siblings[at + 1], name);
   }
+  /** ral-52e: `const e = xs[k]; e['f'] = v; ..; xs[k] = e;` -- the bind is followed only by top-level writes on `e` and then the
+   *  source's own write-back at the same receiver and key text, so a cloned element read writes the same element back. */
+  rustExplicitWriteBackBind(read) {
+    const declaration = read.parent;
+    if (!isIdentifier3(declaration.name) || !isElementAccessExpression4(read) || !isIdentifier3(read.expression))
+      return false;
+    const name = String(declaration.name.text);
+    const recv = String(read.expression.text);
+    const keyText = String(read.argumentExpression.getText());
+    let statement = declaration;
+    while (statement !== void 0 && !isStatement(statement))
+      statement = statement.parent;
+    if (statement?.kind !== SyntaxKind7.VariableStatement || statement.declarationList.declarations.length !== 1)
+      return false;
+    const siblings = statement?.parent?.statements ?? [];
+    let i = siblings.indexOf(statement) + 1;
+    let writes = 0;
+    for (; i < siblings.length; i++) {
+      const st = siblings[i];
+      const e = st.kind === SyntaxKind7.ExpressionStatement ? st.expression : void 0;
+      if (e === void 0 || !isBinaryExpression5(e) || e.operatorToken.kind !== SyntaxKind7.EqualsToken || !isElementAccessExpression4(e.left))
+        return false;
+      if (isIdentifier3(e.left.expression) && String(e.left.expression.text) === name && !isElementAccessExpression4(e.left.argumentExpression)) {
+        if (String(e.right.getText()).includes(recv))
+          return false;
+        writes++;
+        continue;
+      }
+      return writes > 0 && isIdentifier3(e.left.expression) && String(e.left.expression.text) === recv && String(e.left.argumentExpression.getText()) === keyText && isIdentifier3(e.right) && String(e.right.text) === name;
+    }
+    return false;
+  }
   /** yb: the ccxt write-back pass (`writeBackIndexedMutations`) only fires when the line right after the bind is a top-level
    *  element / property write or push on the bound local; any other next statement (an `if`, a plain reassignment) leaves
    *  the bind alone, so its counter key may print boxed (`get_value(&xs, &Value::Int(i))`, the same helper call and value). */
@@ -71404,13 +71436,15 @@ ${iden}}`;
       return false;
     if (isVariableDeclaration3(use) && use.initializer === top && this.primitiveKindOfType(this.typeOfNodeIfAny(use.name)) !== void 0)
       return false;
-    if (this.isWriteBackBindRead(up) || !this.isNativeAccessPositionSafe(up) || top !== up && (this.isWriteBackBindRead(top) || !this.isNativeAccessPositionSafe(top)))
+    if (this.isWriteBackBindRead(up) && !(top === up && this.rustExplicitWriteBackBind(up)) || !this.isNativeAccessPositionSafe(up) || top !== up && (this.isWriteBackBindRead(top) || !this.isNativeAccessPositionSafe(top)))
       return false;
     const key = this.rustSkipWrappers(up.argumentExpression);
     if (key === void 0 || isStringLiteralLikeNode4(key))
       return false;
     if (isNumericLiteral4(key))
       return Number.isInteger(Number(key.text)) && Number(key.text) >= 0;
+    if (isBinaryExpression5(key))
+      return this.rustListIndexIntKey(key);
     if (!isIdentifier3(key))
       return false;
     if (this.isRustValueIndexKey(key))
@@ -72094,7 +72128,24 @@ ${iden}}`;
     if (!isElementAccessExpression4(access) || access.expression !== n || !isBinaryExpression5(write) || write.left !== access || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
       return false;
     const key = this.rustSkipWrappers(access.argumentExpression);
-    return key !== void 0 && key.kind === SyntaxKind7.NumericLiteral && /^\d+$/.test(String(key.text)) && String(write.getText()).split("\n")[0].length <= 240;
+    return key !== void 0 && this.rustListIndexIntKey(key) && String(write.getText()).split("\n")[0].length <= 240;
+  }
+  /** ral-52e: a list index key proved i64: an integer literal, or `+` / `-` over integer literals and i64 scalar locals (at least one literal). */
+  rustListIndexIntKey(key, top = true) {
+    const node = this.rustSkipWrappers(key);
+    if (node === void 0)
+      return false;
+    if (node.kind === SyntaxKind7.NumericLiteral)
+      return /^\d+$/.test(String(node.text));
+    if (top) {
+      if (!isBinaryExpression5(node))
+        return false;
+    }
+    if (isBinaryExpression5(node)) {
+      const op = node.operatorToken.kind;
+      return (op === SyntaxKind7.PlusToken || op === SyntaxKind7.MinusToken) && this.rustListIndexIntKey(node.left, false) && this.rustListIndexIntKey(node.right, false);
+    }
+    return isIdentifier3(node) && this.rustScalarLocalOf(node)?.kind === "int";
   }
   /** ral-48b: `n['k'] = v` (statement, literal non-digit key) whose value does not read `n`. */
   rustAeoTargetWrite(n) {
