@@ -75299,7 +75299,7 @@ ${iden}}`;
       return void 0;
     if (this.rustBorrowedLocalKind(declaration) !== void 0 || this.rustLentListLocal(declaration) || this.rustReaderTables.has(declaration) || this.rustSafeMarketLocalOf(node) !== void 0 || this.rustMarketSlotParamOf(node) !== void 0 || this.rustTypedMarketLocalOf(node) !== void 0 || this.rustCurrencySlotParamOf(node) !== void 0 || this.rustCurrencyLocalOf(node) !== void 0)
       return `&${text}`;
-    if (_is.isVariableDeclaration.call(void 0, declaration) && !this.rustTestTierSource(call) && this.rustHandedDictLocal(declaration) && this.rustLocalIsReassigned(declaration, String(declaration.name.text)))
+    if (_is.isVariableDeclaration.call(void 0, declaration) && !this.rustTestTierSource(call) && this.rustHandedDictLocal(declaration) && (this.rustLocalIsReassigned(declaration, String(declaration.name.text)) || this.rustOmitOfDictInit(declaration)))
       return `&${text}`;
     if (this.rustBearerReaderLend(node) && this.rustDictBearerDeclaration(node) !== void 0)
       return `&${text}`;
@@ -79701,7 +79701,7 @@ ${iden}}`;
           boxes++;
         return mutable !== void 0 || this.rustHandedSlotBoxUse(n, declaration);
       }
-      const ok = call.arguments[0] === n && this.rustBorrowedDictReader(call) !== void 0 || call.arguments[0] === n && call.arguments.length === 2 && this.rustBaseCallNamed(call, _RustTranspiler.RUST_HANDED_DICT_OMIT) || this.rustHandedDictExtendOperand(call) === n || this.rustLentParamsSlot(call, n) || this.rustExtendHeadUse(n) || rewritten && call.arguments[0] === n && !this.rustTestTierSource(call) && this.rustBorrowedAnyKeyReader(call);
+      const ok = call.arguments[0] === n && this.rustBorrowedDictReader(call) !== void 0 || call.arguments[0] === n && call.arguments.length === 2 && this.rustBaseCallNamed(call, _RustTranspiler.RUST_HANDED_DICT_OMIT) || this.rustHandedDictExtendOperand(call) === n || this.rustLentParamsSlot(call, n) || this.rustExtendHeadUse(n) || (rewritten || this.rustOmitOfDictInit(declaration)) && call.arguments[0] === n && !this.rustTestTierSource(call) && this.rustBorrowedAnyKeyReader(call);
       if (ok)
         uses++;
       const boxed = this.rustOptionalParamsSlot(call, n) || this.rustHandedSlotBoxUse(n, declaration);
@@ -79745,6 +79745,13 @@ ${iden}}`;
     const keys = init.arguments[1].elements.map((e) => JSON.stringify(String(e.text))).join(", ");
     const line = `let mut ${declaration.name.text}: crate::value::Dict = self.omit(&${head.text}, &[${keys}], &[]).into_dict();`;
     return depth * 4 + line.length <= 400;
+  }
+  /** ral-57a: a single-binding `const x = this.omit (m, k)` whose head is a proven map (rustOmitOfDict). */
+  rustOmitOfDictInit(declaration) {
+    if (!_is.isVariableDeclaration.call(void 0, declaration))
+      return false;
+    const init = this.rustSkipWrappers(declaration.initializer);
+    return init !== void 0 && this.rustOmitOfDict(init);
   }
   /** ral-55a: a plain `let x = <map>` (rustHandedMapInit) that is reassigned in its function. */
   rustHandedReassignedMap(declaration) {
