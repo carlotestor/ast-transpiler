@@ -10452,7 +10452,7 @@ export class RustTranspiler extends BaseTranspiler {
         const slash: any = this.unwrapParens(node);
         if (isBinaryExpression(slash) && slash.operatorToken.kind === SyntaxKind.SlashToken && this.rustScalarFloatLiteral(slash.right) === undefined) {
             if (own !== 'onum' || kind !== 'onum') return undefined;
-            const side = (n: any) => { const k = this.rustScalarNumericKind(n); const t = this.rustScalarOperandText(k, n); return k === 'oint' ? `${t}.map(|__v| __v as f64)` : (k === 'onum' ? t : `Some(${this.rustScalarOperandText('num', n)})`); };
+            const side = (n: any) => { const k = this.rustScalarNumericKind(n); const t = this.rustScalarOperandText(k, n); return k === 'oint' ? `(if let Some(__v) = ${t} { Some(__v as f64) } else { None })` : (k === 'onum' ? t : `Some(${this.rustScalarOperandText('num', n)})`); };
             return `(if let (Some(__x), Some(__y)) = (${side(slash.left)}, ${side(slash.right)}) { if __y != 0.0 { Some(__x / __y) } else { None } } else { None })`;
         }
         if (isIdentifier(node)) {
