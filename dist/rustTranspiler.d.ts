@@ -2334,6 +2334,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     printCaughtErrorInstanceOf(node: any): string | undefined;
     rustPresenceFlagLocals: WeakSet<object>;
     rustSubscriptionPresenceFlag(declaration: any, parsedValue: string): boolean;
+    /** ral-46i (B219): a const `this.safeValue* (..)` result (not a ws client table) whose every use is a null test in a
+     *  `bool` place: the presence flag `bool` (`x != Value::Null` once), each test reading the flag. */
+    rustNullTestOnlyFlag(declaration: any): boolean;
     /** `X === undefined` / `X !== undefined` that is the whole `if` condition (parens allowed): '==' / '!='. */
     rustPresenceTest(n: any): string | undefined;
     printPresenceFlagTest(left: any, right: any, op: any): string | undefined;

@@ -16662,7 +16662,7 @@ export class RustTranspiler extends BaseTranspiler {
         const init: any = this.unwrapParens(declaration?.initializer);
         if (!isIdentifier(declaration?.name) || !isCallExpression(init) || !isPropertyAccessExpression(init.expression)
             || init.expression.expression.kind !== SyntaxKind.ThisKeyword || init.expression.name.text !== 'safeValue' || init.arguments.length !== 2) return false;
-        if (!/^self\.safe(?:_v|V)alue\((?:\(client\)|__ch|client)\.subscriptions\.clone\(\), [^;\n]*, &\[\]\)$/.test(parsedValue)) return false;
+        if (!/^self\.safe(?:_v|V)alue\((?:\(client\)|__ch|client)\.subscriptions\.clone\(\), [^;\n]*, &\[\]\)$/.test(parsedValue)) return this.rustNullTestOnlyFlag(declaration);
         const fn: any = this.rustEnclosingFunction(declaration);
         const name = String(declaration.name.text);
         // the byte-identical move of the old ccxt text pass: a literal key (printed `safe_value_k`) and a fn whose
@@ -16682,6 +16682,39 @@ export class RustTranspiler extends BaseTranspiler {
             n.forEachChild(visit);
         };
         if (ok) fn.forEachChild(visit);
+        if (!ok || uses === 0) return false;
+        this.rustPresenceFlagLocals.add(declaration);
+        return true;
+    }
+
+    /** ral-46i (B219): a const `this.safeValue* (..)` result (not a ws client table) whose every use is a null test in a
+     *  `bool` place: the presence flag `bool` (`x != Value::Null` once), each test reading the flag. */
+    rustNullTestOnlyFlag(declaration: any): boolean {
+        const init: any = this.unwrapParens(declaration?.initializer);
+        if (!isIdentifier(declaration?.name) || declaration.parent?.declarations?.length !== 1 || (declaration.parent.flags & NodeFlags.Const) === 0) return false;
+        if (!isCallExpression(init) || !isPropertyAccessExpression(init.expression) || init.expression.expression.kind !== SyntaxKind.ThisKeyword
+            || ![ 'safeValue', 'safeValue2', 'safeValueN' ].includes(String(init.expression.name.text))) return false;
+        const file = String(declaration.getSourceFile?.()?.fileName ?? '');
+        if (!/ts[/]src[/]/.test(file) || /ts[/]src[/](pro[/])?test[/]/.test(file)) return false;
+        // ws client tables keep the subscription presence rule above
+        const recv: any = init.arguments[0];
+        if (recv !== undefined && isPropertyAccessExpression(recv) && [ 'subscriptions', 'futures' ].includes(String(recv.name.text))) return false;
+        const fn: any = this.rustEnclosingFunction(declaration);
+        if (fn === undefined || isSourceFile(fn)) return false;
+        const name = String(declaration.name.text);
+        let uses = 0;
+        let ok = true;
+        const visit = (n: any) => {
+            if (!ok) return;
+            if (n !== declaration && (isVariableDeclaration(n) || isParameterDeclaration(n) || isBindingElement(n)) && (n.name as any)?.text === name) { ok = false; return; }
+            if (isIdentifier(n) && n.text === name && n !== declaration.name && !this.rustIdentifierIsPropertyName(n)) {
+                const bin: any = n.parent;
+                if (!this.rustIsNullTestOf(n) || bin.left !== n || !this.rustNullTestIsCondition(n)) { ok = false; return; }
+                uses++;
+            }
+            n.forEachChild(visit);
+        };
+        fn.forEachChild(visit);
         if (!ok || uses === 0) return false;
         this.rustPresenceFlagLocals.add(declaration);
         return true;

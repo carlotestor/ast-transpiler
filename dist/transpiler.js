@@ -67911,7 +67911,7 @@ ${this.getIden(identation)}}`;
     if (!isIdentifier3(declaration?.name) || !isCallExpression6(init) || !isPropertyAccessExpression3(init.expression) || init.expression.expression.kind !== SyntaxKind7.ThisKeyword || init.expression.name.text !== "safeValue" || init.arguments.length !== 2)
       return false;
     if (!/^self\.safe(?:_v|V)alue\((?:\(client\)|__ch|client)\.subscriptions\.clone\(\), [^;\n]*, &\[\]\)$/.test(parsedValue))
-      return false;
+      return this.rustNullTestOnlyFlag(declaration);
     const fn = this.rustEnclosingFunction(declaration);
     const name = String(declaration.name.text);
     if (isStringLiteralLikeNode4(init.arguments[1]) || fn === void 0)
@@ -67939,6 +67939,49 @@ ${this.getIden(identation)}}`;
     };
     if (ok)
       fn.forEachChild(visit);
+    if (!ok || uses === 0)
+      return false;
+    this.rustPresenceFlagLocals.add(declaration);
+    return true;
+  }
+  /** ral-46i (B219): a const `this.safeValue* (..)` result (not a ws client table) whose every use is a null test in a
+   *  `bool` place: the presence flag `bool` (`x != Value::Null` once), each test reading the flag. */
+  rustNullTestOnlyFlag(declaration) {
+    const init = this.unwrapParens(declaration?.initializer);
+    if (!isIdentifier3(declaration?.name) || declaration.parent?.declarations?.length !== 1 || (declaration.parent.flags & NodeFlags4.Const) === 0)
+      return false;
+    if (!isCallExpression6(init) || !isPropertyAccessExpression3(init.expression) || init.expression.expression.kind !== SyntaxKind7.ThisKeyword || !["safeValue", "safeValue2", "safeValueN"].includes(String(init.expression.name.text)))
+      return false;
+    const file = String(declaration.getSourceFile?.()?.fileName ?? "");
+    if (!/ts[/]src[/]/.test(file) || /ts[/]src[/](pro[/])?test[/]/.test(file))
+      return false;
+    const recv = init.arguments[0];
+    if (recv !== void 0 && isPropertyAccessExpression3(recv) && ["subscriptions", "futures"].includes(String(recv.name.text)))
+      return false;
+    const fn = this.rustEnclosingFunction(declaration);
+    if (fn === void 0 || isSourceFile5(fn))
+      return false;
+    const name = String(declaration.name.text);
+    let uses = 0;
+    let ok = true;
+    const visit = (n) => {
+      if (!ok)
+        return;
+      if (n !== declaration && (isVariableDeclaration3(n) || isParameterDeclaration3(n) || isBindingElement(n)) && n.name?.text === name) {
+        ok = false;
+        return;
+      }
+      if (isIdentifier3(n) && n.text === name && n !== declaration.name && !this.rustIdentifierIsPropertyName(n)) {
+        const bin = n.parent;
+        if (!this.rustIsNullTestOf(n) || bin.left !== n || !this.rustNullTestIsCondition(n)) {
+          ok = false;
+          return;
+        }
+        uses++;
+      }
+      n.forEachChild(visit);
+    };
+    fn.forEachChild(visit);
     if (!ok || uses === 0)
       return false;
     this.rustPresenceFlagLocals.add(declaration);

@@ -16484,3 +16484,22 @@ describe('ral-46i: a `const a: Market = s` alias of a safeMarket struct local is
         expect(t).not.toMatch(/let mut market(Resolved|Value): Value/);
     });
 });
+
+describe('ral-46i: a safeValue result used only by null tests is a presence flag bool (B219)', () => {
+    const mk = () => {
+        const dir = path.join (rustFixtureRoot, 'ral46i-null-test-flag');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    urls: Dict = {};\n    safeValue (o: any, k: any, d: any = undefined): any { return o; }\n    safeValueN (o: any, k: any[], d: any = undefined): any { return o; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    fetchCurrencies (params: Dict = {}): Dict {\n        const apiBackup = this.safeValue (this.urls, 'apiBackup');\n        if (apiBackup !== undefined) {\n            return {};\n        }\n        const trigger = this.safeValueN (params, [ 'a', 'b' ]);\n        const stopLoss = this.safeValue (params, 'stopLoss');\n        const isConditional = (trigger !== undefined) || (stopLoss !== undefined);\n        if (isConditional || stopLoss === undefined) {\n            return { 'x': 1 };\n        }\n        const kept = this.safeValue (params, 'kept');\n        if (kept !== undefined) {\n            return { 'k': this.safeString (kept, 'k') };\n        }\n        return {};\n    }\n}\n");
+        return new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } }).transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('only null tests: bool flag; a key read keeps Value', () => {
+        const out = mk();
+        expect(out).toMatch(/let apiBackup: bool = self\.safe\w+\(self\.urls[^\n]*\) != Value::Null;/);
+        expect(out).toContain('if (apiBackup) {');
+        // a null test outside a condition place (a bool local's initializer) keeps the boxed local
+        expect(out).toMatch(/let mut trigger: Value = /);
+        expect(out).toMatch(/let mut stopLoss: Value = /);
+        expect(out).toMatch(/let mut kept: Value = /);
+    });
+});
