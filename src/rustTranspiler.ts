@@ -23202,6 +23202,8 @@ export class RustTranspiler extends BaseTranspiler {
         const declaration: any = this.rustDeclarationOfIdentifier(node);
         if (declaration === undefined || !isVariableDeclaration(declaration) || !isIdentifier(declaration.name) || declaration.name === node) return false;
         const literal: any = this.rustSkipWrappers(declaration.initializer);
+        // ral-53h: luno `const handlers = [ this.handleOrderBook, this.handleTrades ]` read as `handlers[j]` / `handlers.length`
+        if (literal !== undefined && isArrayLiteralExpression(literal)) return this.rustHandlerList(declaration, literal);
         if (literal === undefined || !isObjectLiteralExpression(literal) || literal.properties.length === 0) return false;
         for (const p of literal.properties as any) {
             if (p.kind !== SyntaxKind.PropertyAssignment) return false;
@@ -23228,6 +23230,23 @@ export class RustTranspiler extends BaseTranspiler {
             const use: any = up.parent;
             return (isVariableDeclaration(use) && use.initializer === up)
                 || (isBinaryExpression(use) && use.right === up && use.operatorToken.kind === SyntaxKind.EqualsToken);
+        });
+    }
+
+    /** ral-53h: a never-rebound const list literal of `this.<method>` references, only read by `xs[i]` (as a declaration
+     *  initializer) and `xs.length`: an element read is a handler name, or Null past the end. */
+    rustHandlerList(declaration: any, literal: any): boolean {
+        if (literal.elements.length === 0 || !(declaration.parent?.flags & NodeFlags.Const)) return false;
+        for (const v of literal.elements as any) {
+            if (!isPropertyAccessExpression(v) || v.expression.kind !== SyntaxKind.ThisKeyword) return false;
+            const member: any = symbolValueDeclaration(this.getChecker().getSymbolAtLocation(v.name));
+            if (member === undefined || !isMethodDeclaration(member)) return false;
+        }
+        return this.rustBlockLocalUsesAll(declaration, String(declaration.name.text), (n: any) => {
+            const up: any = n.parent;
+            if (isPropertyAccessExpression(up) && up.expression === n && String(up.name.text) === 'length' && !this.isNativeWriteTargetBase(up)) return true;
+            if (up?.kind !== SyntaxKind.ElementAccessExpression || up.expression !== n || this.isNativeWriteTargetBase(up)) return false;
+            return isVariableDeclaration(up.parent) && up.parent.initializer === up;
         });
     }
 

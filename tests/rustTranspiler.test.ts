@@ -17944,3 +17944,25 @@ describe('ral-53h: a snapshot awaited from client.future (h) takes the kind of i
         expect(out).toContain('let mut snapshot: Value = ');
     });
 });
+
+describe('ral-53h: a const list of handler references read by index', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    safeValue (o: any, k: any, d: any = undefined): any { return o[k]; }\n}\n";
+    const client = "export default class Client {\n    resolve (v: any, h: string | undefined = undefined): void {}\n}\n";
+    const pro = "import Exchange from '../base/Exchange';\nimport type { Dict } from '../base/Exchange';\nimport Client from '../base/ws/Client';\nexport default class venue extends Exchange {\n    handleA (client: Client, message: Dict) {}\n    handleB (client: Client, message: Dict) {}\n    handleMessage (client: Client, message: Dict) {\n        const handlers = [ this.handleA, this.handleB ];\n        for (let j = 0; j < handlers.length; j++) {\n            const handler = handlers[j];\n            handler.call (this, client, message);\n        }\n    }\n    handleOther (client: Client, message: Dict) {\n        const others = [ this.handleA, this.handleB ];\n        others.push (message);\n        for (let j = 0; j < others.length; j++) {\n            const other = others[j];\n            other.call (this, client, message);\n        }\n    }\n}\n";
+    let out = '';
+    beforeAll(() => {
+        const dir = path.join (rustFixtureRoot, 'ral53h-list');
+        fs.mkdirSync (path.join (dir, 'ts/src/base/ws'), { recursive: true });
+        fs.mkdirSync (path.join (dir, 'ts/src/pro'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/base/ws/Client.ts'), client);
+        fs.writeFileSync (path.join (dir, 'ts/src/pro/venue.ts'), pro);
+        out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/pro/venue.ts')).content;
+    });
+    test('an element of a read-only list of this.<method> references is Option<String>', () => {
+        expect(out).toMatch(/let mut handler: Option<String> = [^\n]*\.as_str\(\)\.map\(str::to_owned\);/);
+    });
+    test('negative: a list that is also pushed to keeps the element a Value', () => {
+        expect(out).toMatch(/let mut other: Value = /);
+    });
+});
