@@ -77803,7 +77803,7 @@ ${iden}}`;
           return false;
         const up = n.parent;
         if (isBinaryExpression5(up) && up.left === n) {
-          return up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && (this.rustBuiltListWriteSource(up.right) || this.rustDeclaredArrayCallWriteSource(up.right) || this.rustBuiltListSelfSort(up, name) || this.rustArrayGuardedMove(up) || this.rustOptListGuardedMove(up) !== void 0 || this.rustDefaultedAliasMove(up) !== void 0) && String(up.parent.getText()).split("\n")[0].length <= 200;
+          return up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && (this.rustBuiltListWriteSource(up.right) || this.rustDeclaredArrayCallWriteSource(up.right) || this.rustOverloadListCallWriteSource(up.right) || this.rustTypedCoreListCallWriteSource(up.right) || this.rustBuiltHelperListWriteSource(up.right) || this.rustBuiltListSelfSort(up, name) || this.rustArrayGuardedMove(up) || this.rustOptListGuardedMove(up) !== void 0 || this.rustDefaultedAliasMove(up) !== void 0) && String(up.parent.getText()).split("\n")[0].length <= 200;
         }
         if (isElementAccessExpression4(up) && up.expression === n) {
           natives++;
@@ -78028,6 +78028,155 @@ ${iden}}`;
     } finally {
       this.rustDeclaredArrayProof = saved;
     }
+  }
+  /** ral-55i: `this.m (..)` that the checker resolves to a bodiless overload of a base method (marketIds, marketSymbols):
+   *  the proof reads the real implementation (the same-named member with a body), never the overload's spelled type
+   *  (ccxt compiles without strictNullChecks). Every `return` of the implementation must build a list, or be dead for this
+   *  call: it follows `if (!flag) throw` in its block with `flag` bound to a literal `false` here, or it sits in
+   *  `if (p === undefined)` with `p`'s argument proven present (rustPresentListArg). The callee must not be redeclared by a
+   *  venue, dispatched virtually or typed, so its `-> Value` result holds a `Value::Arr` and `.into_list()` moves it.
+   *  Only a whole reassignment of a built-list local uses it. */
+  rustOverloadListCallWriteSource(right) {
+    const call = this.rustSkipWrappers(right);
+    if (call === void 0 || !isCallExpression6(call) || this.rustTestTierSource(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword || !isIdentifier3(call.expression.name))
+      return false;
+    const name = String(call.expression.name.text);
+    const overload = this.rustScalarCallee(call);
+    if (overload === void 0 || !isMethodDeclaration5(overload) || overload.body !== void 0)
+      return false;
+    const file = String(overload.getSourceFile?.()?.fileName ?? "");
+    if (!_RustTranspiler.RUST_BASE_TIER_FILE.test(file) || !this.rustListPassthroughCallee(call, name))
+      return false;
+    const impl = Array.from(overload.parent?.members ?? []).find((m) => isMethodDeclaration5(m) && m.body !== void 0 && isIdentifier3(m.name) && String(m.name.text) === name);
+    if (impl === void 0 || this.isAsyncFunction(impl) || this.rustVirtualDispatch?.[this.toSnakeCaseName(name)] !== void 0 || this.rustTypedUnified.has(name) || this.rustTypedSignature(impl) !== void 0)
+      return false;
+    const params = Array.from(impl.parameters);
+    const paramAt = (id) => isIdentifier3(id) ? params.findIndex((q) => isIdentifier3(q.name) && String(q.name.text) === String(id.text)) : -1;
+    const unwritten = (i) => i >= 0 && !this.rustParamWritten(params[i]);
+    const falseArg = (i) => i >= 0 && call.arguments[i] !== void 0 && this.rustSkipWrappers(call.arguments[i])?.kind === SyntaxKind7.FalseKeyword;
+    const isThrowOnly = (st) => st !== void 0 && (st.kind === SyntaxKind7.ThrowStatement || isBlock4(st) && st.statements.length === 1 && st.statements[0].kind === SyntaxKind7.ThrowStatement);
+    const deadByFlag = (ret) => {
+      const block = ret.parent;
+      if (!isBlock4(block))
+        return false;
+      for (const st of Array.from(block.statements)) {
+        if (st === ret)
+          return false;
+        if (st.kind === SyntaxKind7.IfStatement && st.elseStatement === void 0 && isThrowOnly(st.thenStatement)) {
+          const cond = this.rustSkipWrappers(st.expression);
+          if (isPrefixUnaryExpression3(cond) && cond.operator === SyntaxKind7.ExclamationToken) {
+            const i = paramAt(this.rustSkipWrappers(cond.operand));
+            if (unwritten(i) && falseArg(i))
+              return true;
+          }
+        }
+      }
+      return false;
+    };
+    const deadByPresent = (ret) => {
+      for (let n = ret; n !== void 0 && n !== impl.body; n = n.parent) {
+        const up = n.parent;
+        if (up?.kind === SyntaxKind7.IfStatement && up.thenStatement === n) {
+          const cond = this.rustSkipWrappers(up.expression);
+          if (isBinaryExpression5(cond) && cond.operatorToken.kind === SyntaxKind7.EqualsEqualsEqualsToken && this.rustSkipWrappers(cond.right)?.kind === SyntaxKind7.Identifier && String(this.rustSkipWrappers(cond.right).text) === "undefined") {
+            const i = paramAt(this.rustSkipWrappers(cond.left));
+            if (unwritten(i) && call.arguments[i] !== void 0 && this.rustPresentListArg(call, call.arguments[i]))
+              return true;
+          }
+        }
+      }
+      return false;
+    };
+    let returns = 0;
+    let ok = true;
+    const visit = (node) => {
+      if (!ok)
+        return;
+      if (node !== impl.body && isFunctionLike(node))
+        return;
+      if (isReturnStatement4(node)) {
+        returns++;
+        if (node.expression === void 0) {
+          ok = false;
+          return;
+        }
+        if (deadByFlag(node) || deadByPresent(node))
+          return;
+        if (this.rustBuiltContainerKind(node.expression, 1) !== "list")
+          ok = false;
+        return;
+      }
+      node.forEachChild(visit);
+    };
+    impl.body.forEachChild(visit);
+    return ok && returns > 0;
+  }
+  /** ral-55i: a whole reassignment from a producer the runtime answers as a fresh `Value::Arr` on every path:
+   *  `Object.keys (x)` (runtime object_keys: `Value::Array` for a map, `[]` otherwise; never a ws client handle's key list),
+   *  and `s.split (sep)` (native or runtime split, an array on every path). */
+  rustBuiltHelperListWriteSource(right) {
+    const call = this.rustSkipWrappers(right);
+    if (call === void 0 || !isCallExpression6(call) || this.rustTestTierSource(call) || !isPropertyAccessExpression3(call.expression))
+      return false;
+    const owner = call.expression.expression;
+    const method = String(call.expression.name.text);
+    if (isIdentifier3(owner) && String(owner.text) === "Object")
+      return method === "keys" && call.arguments.length === 1 && this.printClientHandleKeys(call) === void 0;
+    return owner.kind !== SyntaxKind7.ThisKeyword && method === "split" && call.arguments.length === 1;
+  }
+  /** ral-55i: an identifier argument that cannot be `undefined` at the call: it is a `const` local or an unwritten parameter,
+   *  and the call sits in the then branch of `if (a !== undefined)`, or follows `if (a === undefined) throw ..` in an
+   *  enclosing block of the same function. */
+  rustPresentListArg(call, arg) {
+    const a = this.rustSkipWrappers(arg);
+    if (a === void 0 || !isIdentifier3(a))
+      return false;
+    const text = String(a.text);
+    const declaration = this.rustDeclarationOfIdentifier(a);
+    if (declaration === void 0)
+      return false;
+    if (isVariableDeclaration3(declaration)) {
+      if ((declaration.parent.flags & NodeFlags4.Const) === 0)
+        return false;
+    } else if (!isParameterDeclaration3(declaration) || this.rustParamWritten(declaration))
+      return false;
+    const same = (e, op) => {
+      const c = this.rustSkipWrappers(e);
+      return isBinaryExpression5(c) && c.operatorToken.kind === op && isIdentifier3(this.rustSkipWrappers(c.left)) && String(this.rustSkipWrappers(c.left).text) === text && this.rustDeclarationOfIdentifier(this.rustSkipWrappers(c.left)) === declaration && String(this.rustSkipWrappers(c.right)?.getText?.() ?? "") === "undefined";
+    };
+    const fn = this.rustEnclosingFunction(call);
+    for (let n = call; n !== void 0 && n !== fn; n = n.parent) {
+      const up = n.parent;
+      if (up?.kind === SyntaxKind7.IfStatement && up.thenStatement === n && same(up.expression, SyntaxKind7.ExclamationEqualsEqualsToken))
+        return true;
+      if (up !== void 0 && isBlock4(up)) {
+        for (const st of Array.from(up.statements)) {
+          if (st === n)
+            break;
+          if (st.kind === SyntaxKind7.IfStatement && st.elseStatement === void 0 && same(st.expression, SyntaxKind7.EqualsEqualsEqualsToken)) {
+            const t = st.thenStatement;
+            if (t.kind === SyntaxKind7.ThrowStatement || isBlock4(t) && t.statements.length === 1 && t.statements[0].kind === SyntaxKind7.ThrowStatement)
+              return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+  /** ral-55i: `await this.m (..)` of a typed unified core whose typed return is `Vec<crate::types::T>`: the printer boxes it
+   *  through `IntoRaw::into_raw`, which always builds a `Value::Arr`, so `.into_list()` moves exactly that list. */
+  rustTypedCoreListCallWriteSource(right) {
+    const rhs = this.rustSkipWrappers(right);
+    if (rhs?.kind !== SyntaxKind7.AwaitExpression)
+      return false;
+    const call = this.rustSkipWrappers(rhs.expression);
+    if (call === void 0 || !isCallExpression6(call) || this.rustTestTierSource(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    const declaration = this.rustScalarCallee(call);
+    if (declaration === void 0 || !isMethodDeclaration5(declaration))
+      return false;
+    const typed = this.rustTypedSignature(declaration);
+    return typed !== void 0 && /^Vec<crate::types::\w+>$/.test(typed.ret);
   }
   /** ral-53i: `[await] this.m (..)` whose venue declaration the printer's typed-return table (rustVenueContainerReturnKind)
    *  proves a never-null list (`Dict[]` / `any[]` / `List` / `Record[]` / literal tuple, the same type in the whole venue
