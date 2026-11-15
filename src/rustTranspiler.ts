@@ -22264,7 +22264,7 @@ export class RustTranspiler extends BaseTranspiler {
         const list: any = declaration.parent;
         if (list?.kind !== SyntaxKind.VariableDeclarationList || list.declarations.length !== 1 || list.parent?.kind !== SyntaxKind.VariableStatement) return false;
         if (!RustTranspiler.RUST_PRO_TIER_FILE.test(String(declaration.getSourceFile().fileName))) return false;
-        if (!this.rustHandlerTableRead(declaration.initializer)) return false;
+        if (!this.rustHandlerTableValue(declaration.initializer, false)) return false;
         const fn: any = this.rustEnclosingFunction(declaration);
         if (fn === undefined || isSourceFile(fn)) return false;
         let calls = 0;
@@ -22274,10 +22274,41 @@ export class RustTranspiler extends BaseTranspiler {
             if (isBinaryExpression(up) && this.isEqualityOp(up.operatorToken.kind)) return this.literalKindOfNode(this.unwrapParens(up.left === n ? up.right : up.left)) === 'null';
             if (isPropertyAccessExpression(up) && up.expression === n && String(up.name.text) === 'call' && isCallExpression(up.parent) && up.parent.expression === up) return ++calls > 0;
             // a rewrite from a handler table again (woo / bitvavo fall back from `event` to `topic`)
-            if (isBinaryExpression(up) && up.left === n && up.operatorToken.kind === SyntaxKind.EqualsToken && up.parent?.kind === SyntaxKind.ExpressionStatement) return this.rustHandlerTableRead(up.right);
+            if (isBinaryExpression(up) && up.left === n && up.operatorToken.kind === SyntaxKind.EqualsToken && up.parent?.kind === SyntaxKind.ExpressionStatement) return this.rustHandlerTableValue(up.right, true);
             return false;
         });
         return ok && calls > 0;
+    }
+
+    // ral-49h: a handler value is a handler-table read, `c ? undefined : <read>` / `c ? <read> : undefined` (aster /
+    // modetrade / xt guard the key first) or, for a rewrite only, a `this.<method>` reference (xt `method = this.handleTrade`,
+    // which lowers to its name string). The declaration must be a table read, so a reference alone never starts a local.
+    rustHandlerTableValue(expr: any, write: boolean): boolean {
+        const e: any = this.rustSkipWrappers(expr);
+        if (e === undefined) return false;
+        if (e.kind === SyntaxKind.ConditionalExpression) {
+            const whenTrueNull = this.literalKindOfNode(this.unwrapParens(e.whenTrue)) === 'null';
+            const whenFalseNull = this.literalKindOfNode(this.unwrapParens(e.whenFalse)) === 'null';
+            if (whenTrueNull === whenFalseNull) return false;
+            return this.rustHandlerTableRead(whenTrueNull ? e.whenFalse : e.whenTrue);
+        }
+        if (write && isPropertyAccessExpression(e) && e.expression.kind === SyntaxKind.ThisKeyword) {
+            const member: any = symbolValueDeclaration(this.getChecker().getSymbolAtLocation(e.name));
+            return member !== undefined && isMethodDeclaration(member);
+        }
+        return this.rustHandlerTableRead(e);
+    }
+
+    /** The `Option<String>` text of a handler value accepted by `rustHandlerTableValue`. */
+    printHandlerTableValue(expr: any): string {
+        const e: any = this.rustSkipWrappers(expr);
+        if (e?.kind === SyntaxKind.ConditionalExpression) {
+            const whenTrueNull = this.literalKindOfNode(this.unwrapParens(e.whenTrue)) === 'null';
+            const cond = this.printCondition(e.condition, 0).trim();
+            const read = `${this.printNode(whenTrueNull ? e.whenFalse : e.whenTrue, 0).trim()}.as_str().map(str::to_owned)`;
+            return whenTrueNull ? `(if ${cond} { None } else { ${read} })` : `(if ${cond} { ${read} } else { None })`;
+        }
+        return `${this.printNode(expr, 0).trim()}.as_str().map(str::to_owned)`;
     }
 
     /** `this.safeValue (table, k)` of a base-tier `safeValue` over a handler table. */
@@ -22399,7 +22430,7 @@ export class RustTranspiler extends BaseTranspiler {
 
     printHandlerTableLocalWrite(left: any, right: any): string | undefined {
         if (!this.rustHandlerTableLocalOf(left)) return undefined;
-        return `${String(left.text)} = ${this.printNode(right, 0).trim()}.as_str().map(str::to_owned)`;
+        return `${String(left.text)} = ${this.printHandlerTableValue(right)}`;
     }
 
     /** A local map literal whose every value is a `this.<method>` reference, only read by `this.safeValue (m, k)`. */
@@ -22432,7 +22463,7 @@ export class RustTranspiler extends BaseTranspiler {
 
     printHandlerTableLocalDeclaration(declaration: any, varName: string, indent: string): string | undefined {
         if (!this.rustHandlerTableLocal(declaration)) return undefined;
-        return `${indent}let mut ${varName}: Option<String> = ${this.printNode(declaration.initializer, 0).trim()}.as_str().map(str::to_owned)`;
+        return `${indent}let mut ${varName}: Option<String> = ${this.printHandlerTableValue(declaration.initializer)}`;
     }
 
     printHandlerTableNullTest(left: any, right: any, op: any): string | undefined {
