@@ -79268,7 +79268,8 @@ ${iden}}`;
       return true;
     const short = ": Vec<Value>".length + ".as_array().cloned().unwrap_or_default()".length - ".into_list()".length;
     const own = isIdentifier3(n) ? `${String(n.text)}.clone()` : void 0;
-    const exact = own === void 0 || !firstLine.includes(own) ? void 0 : width + reserve + ".into_dict()".length - (own.length - String(n.text).length - 1) - short;
+    const bareArg = isIdentifier3(n) && firstLine.includes(`(${String(n.text)}, `) ? "&".length : void 0;
+    const exact = own !== void 0 && firstLine.includes(own) ? width + reserve + ".into_dict()".length - (own.length - String(n.text).length - 1) - short : bareArg !== void 0 ? width + reserve + ".into_dict()".length + bareArg - short : void 0;
     if (write === void 0 || !isBinaryExpression5(write) || !isArrayLiteralExpression4(write.left) || !this.rustNativeListSource(write.right) || budget - short > 400 && !(exact !== void 0 && exact <= 400 && this.rustDictSlotOfWrite(n)))
       return false;
     const boolSlot = (el) => {
@@ -79276,8 +79277,40 @@ ${iden}}`;
       return d !== void 0 && isVariableDeclaration3(d) && d.initializer !== void 0 && (d.initializer.kind === SyntaxKind7.TrueKeyword || d.initializer.kind === SyntaxKind7.FalseKeyword);
     };
     const handedSlot = (el) => el === n && write.left.elements.indexOf(el) === 1 && this.rustDictSlotOfWrite(el);
-    if (!write.left.elements.every((el) => isIdentifier3(el) && (this.rustNilSlotWrite(el) || handedSlot(el) || el !== n && boolSlot(el))))
+    const ownMeasured = own !== void 0 && firstLine.includes(own);
+    if (!write.left.elements.every((el) => isIdentifier3(el) && (this.rustNilSlotWrite(el) || handedSlot(el) || el !== n && (ownMeasured || budget - short <= 400) && boolSlot(el))))
       return false;
+    if (!ownMeasured && budget - short > 400) {
+      let typed = true;
+      const condOnly = (el) => {
+        const d = this.rustDeclaredNode(el);
+        const fn = d === void 0 ? void 0 : this.rustEnclosingFunction(d);
+        if (fn === void 0 || !boolSlot(el))
+          return false;
+        let ok = true;
+        const name = String(el.text);
+        const visit = (x) => {
+          if (!ok)
+            return;
+          if (isIdentifier3(x) && String(x.text) === name && x !== d.name) {
+            const up = x.parent;
+            const cond = up.kind === SyntaxKind7.IfStatement && up.expression === x || up.kind === SyntaxKind7.PrefixUnaryExpression && up.operator === SyntaxKind7.ExclamationToken || isBinaryExpression5(up) && (up.operatorToken.kind === SyntaxKind7.AmpersandAmpersandToken || up.operatorToken.kind === SyntaxKind7.BarBarToken) && up.parent?.kind === SyntaxKind7.IfStatement || isArrayLiteralExpression4(up) && isBinaryExpression5(up.parent) && up.parent.left === up;
+            if (!cond)
+              ok = false;
+          }
+          x.forEachChild(visit);
+        };
+        visit(fn);
+        return ok;
+      };
+      try {
+        typed = write.left.elements.every((el) => el === n || !boolSlot(el) && this.rustNilSlotWrite(el) || condOnly(el));
+      } catch (e) {
+        typed = false;
+      }
+      if (!typed)
+        return false;
+    }
     this.rustShortDestrHeads.add(write);
     return true;
   }
