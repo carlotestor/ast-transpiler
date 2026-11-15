@@ -74907,7 +74907,7 @@ ${iden}}`;
       return void 0;
     if (this.rustBorrowedLocalKind(declaration) !== void 0 || this.rustLentListLocal(declaration) || this.rustReaderTables.has(declaration) || this.rustSafeMarketLocalOf(node) !== void 0 || this.rustMarketSlotParamOf(node) !== void 0 || this.rustTypedMarketLocalOf(node) !== void 0 || this.rustCurrencySlotParamOf(node) !== void 0 || this.rustCurrencyLocalOf(node) !== void 0)
       return `&${text}`;
-    if (_is.isVariableDeclaration.call(void 0, declaration) && !this.rustTestTierSource(call) && this.rustHandedDictLocal(declaration) && this.rustLocalIsReassigned(declaration, String(declaration.name.text)))
+    if (_is.isVariableDeclaration.call(void 0, declaration) && !this.rustTestTierSource(call) && this.rustHandedDictLocal(declaration) && (this.rustLocalIsReassigned(declaration, String(declaration.name.text)) || this.rustOmitOfDictInit(declaration)))
       return `&${text}`;
     if (this.rustBearerReaderLend(node) && this.rustDictBearerDeclaration(node) !== void 0)
       return `&${text}`;
