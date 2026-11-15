@@ -3600,6 +3600,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-43b: `call` sits in the right side of a `+=` (the typed `String` target's push_str join keys on the old operand
      *  text, bitget / bybit `channel += limit.toString ()` went back to `Value` in gate 14163): keep the old path there. */
     rust43bInPlusEquals(call: any): boolean;
+    /** ral-43b: `n` is the only argument of `recv.indexOf(n)`, a typed string local (not a ws key), and `recv` is a string-typed
+     *  `Value` place (a plain identifier / property chain that is no typed local): the needle reads as `Option<&str>` in the
+     *  `zip` find, `-1` when either side is not a string, exactly the helper's answer for the `Str` / `Null` the box held. */
+    rust43bValueRecvFindNeedle(n: any, kind: string): boolean;
     printNativeStringIndexOfString(node: any, receiverText: string): string | undefined;
     printNativeStringJoin(node: any, receiverText: string): string | undefined;
     rustOperandKind(node: any): string | undefined;

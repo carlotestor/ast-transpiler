@@ -6837,6 +6837,8 @@ export class RustTranspiler extends BaseTranspiler {
             && parent.expression.expression.kind === SyntaxKind.ThisKeyword && isIdentifier(parent.expression.argumentExpression)) return 'box';
         // 41b: a bound / needle / operand of a string method its typed receiver prints natively
         if (this.rustStrMethodArgNative(n, kind)) return 'native';
+        // ral-43b: the typed string needle of `recv.indexOf(needle)` on a string-typed `Value` receiver (printNativeStringIndexOfString)
+        if (this.rust43bValueRecvFindNeedle(n, kind)) return 'native';
         if (isCallExpression(parent) && parent.expression !== n && parent.arguments.some((a) => a === n)) {
             return this.rustNilBoxSlotOk(parent, parent.arguments.indexOf(n)) || this.rustWsClientCallArg(parent, kind) ? 'box' : this.rustScalarExpressionUseForm(n, kind);
         }
@@ -25916,11 +25918,32 @@ export class RustTranspiler extends BaseTranspiler {
         return top !== undefined && isBinaryExpression(top) && this.isNodeInsideNode(call, top.right);
     }
 
+    /** ral-43b: `n` is the only argument of `recv.indexOf(n)`, a typed string local (not a ws key), and `recv` is a string-typed
+     *  `Value` place (a plain identifier / property chain that is no typed local): the needle reads as `Option<&str>` in the
+     *  `zip` find, `-1` when either side is not a string, exactly the helper's answer for the `Str` / `Null` the box held. */
+    rust43bValueRecvFindNeedle(n, kind: string): boolean {
+        if (kind !== 'str' && kind !== 'ostr') return false;
+        const call: any = n.parent;
+        if (call === undefined || !isCallExpression(call) || call.arguments.length !== 1 || call.arguments[0] !== n || !isPropertyAccessExpression(call.expression)
+            || call.expression.name.text !== 'indexOf') return false;
+        const recv: any = call.expression.expression;
+        const plain = (x: any): boolean => isIdentifier(x) || (isPropertyAccessExpression(x) && isIdentifier(x.name) && plain(x.expression));
+        if (!plain(recv) || this.primitiveKindOfType(this.typeOfNodeIfAny(recv)) !== 'string') return false;
+        if (isIdentifier(recv) && (this.rustStringLocalIdentifierIsTyped(recv) || this.rustScalarLocalOf(recv) !== undefined || this.rustScalarIdentifierKind(recv) !== undefined)) return false;
+        return !this.rust41bWsKeyLocal(n);
+    }
+
     // `x.indexOf(y)` with a proven-string needle: `-1` when either side is not a `Str` (byte index).
     printNativeStringIndexOfString(node, receiverText: string): string | undefined {
         const receiver = this.rustNativeStringReceiver(node, receiverText);
         if (receiver === undefined || node.arguments?.length !== 1) return undefined;
         const needle = node.arguments[0];
+        // ral-43b: a typed string local needle lends its text (`Option<&str>`)
+        const typed = isIdentifier(needle) ? this.rustScalarLocalOf(needle) : undefined;
+        if (typed !== undefined && this.rustScalarUseForms.get(needle) === 'native' && this.rust43bValueRecvFindNeedle(needle, typed.kind)) {
+            const name = super.printIdentifier(needle);
+            return `Value::Int(${receiver}.as_str().zip(${typed.kind === 'str' ? `Some(${name}.as_str())` : `${name}.as_deref()`}).and_then(|(__s, __n)| __s.find(__n)).map(|__i| __i as i64).unwrap_or(-1))`;
+        }
         if (!isIdentifier(needle) || this.primitiveKindOfType(this.typeOfNodeIfAny(needle)) !== 'string') return undefined;
         if (!this.isDeclaredValueIdentifier(needle) || this.rustStringLocalIdentifierIsTyped(needle)) return undefined;
         const needleText = this.printNode(needle, 0).trim();

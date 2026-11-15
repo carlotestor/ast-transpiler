@@ -15682,3 +15682,28 @@ describe('ral-43b lift 2: `n.toString()` of an Option<i64> local displays its bo
     });
 });
 
+
+describe('ral-43b lift 3: a typed string needle of indexOf on a string-typed Value receiver', () => {
+    const t43 = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+    const root = path.join (rustFixtureRoot, '43b-find-needle');
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n" +
+        "    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    hold (x: any): any { return x; }\n}\n";
+    const venue = (body: string) => "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n";
+    let n = 0;
+    const run = (body: string) => {
+        const dir = path.join (root, String (n++));
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), venue (body));
+        return t43.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('the needle keeps Option<String> and lends as_deref() to the zip find', () => {
+        const out = run ("    m (o: Dict, url: string) {\n        const spotUrl = this.safeString (o, 'spot');\n        const isSpot = (spotUrl !== undefined) && (url.indexOf (spotUrl) === 0);\n        return this.hold (isSpot);\n    }\n");
+        expect(out).toContain('let mut spotUrl: Option<String> = ');
+        expect(out).toContain('.zip(spotUrl.as_deref()).and_then(|(__s, __n)| __s.find(__n))');
+    });
+    test('negative: a needle whose receiver is a typed string local keeps the 41b path', () => {
+        const out = run ("    m (o: Dict) {\n        const hay = this.safeString (o, 'h');\n        const k = this.safeString (o, 'k');\n        return this.hold (hay.indexOf (k));\n    }\n");
+        expect(out).not.toContain('.zip(k.as_deref())');
+    });
+});
