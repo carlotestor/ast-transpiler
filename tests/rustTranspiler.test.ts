@@ -19273,3 +19273,31 @@ describe('ral-56h: request-id echoes through requestId (url), const copies, and 
         expect(emit ("            hashes.push (url);\n", '')).toContain('let mut snapshot: Value = ');
     });
 });
+
+describe('ral-57h: request-id echoes through incrementingNonce, numberToString and a parameter every caller binds to one', () => {
+    const base: Record<string, string> = {
+        "ts/src/base/ws/Cache.ts": "export class ArrayCache {\n    constructor (maxSize: any = undefined) {}\n    append (item: any) {}\n}\n",
+        "ts/src/base/ws/Client.ts": "export default class Client {\n    futures: any = {};\n    subscriptions: any = {};\n    resolve (result: any, messageHash: string): any { return result; }\n    future (messageHash: string): any { return undefined; }\n}\n",
+        "ts/src/base/Exchange.ts": "import { ArrayCache } from './ws/Cache.js';\nexport default class Exchange {\n    positions: ArrayCache = undefined;\n    safeString (obj: any, key: any, defaultValue: string = undefined): string { return obj[key]; }\n    numberToString (x: any): string { return String (x); }\n    incrementingNonce (): number { return 1; }\n    async watch (url: string, messageHash: string, message: any = undefined, subscribeHash: any = undefined, subscription: any = undefined): Promise<any> { return undefined; }\n}\n",
+    };
+    const venue = "import Exchange from '../base/Exchange.js';\nimport Client from '../base/ws/Client.js';\nimport { ArrayCache } from '../base/ws/Cache.js';\nexport default class venue extends Exchange {\n    async watchPositions (client: Client) {\n        const cache = this.positions;\n        if (cache === undefined) {\n            const snapshot = await client.future ('fetchPositionsSnapshot');\n            return snapshot;\n        }\n        return cache;\n    }\n    loadSnapshot (client: Client, messageHash: string) {\n        this.positions = new ArrayCache ();\n        const cache = this.positions;\n        if (messageHash in client.futures) {\n            const future = client.futures[messageHash];\n            future.resolve (cache);\n        }\n    }\n    async sendRequest (nonce: number) {\n        const message = { 'id': nonce };\n        return await this.watch ('u', this.numberToString (nonce), message, true);\n    }\n    async createThing () {\n        const messageHash = this.incrementingNonce ();\n        return await this.sendRequest (messageHash);\n    }\n    async cancelThing (OTHER) {\n        const id = this.incrementingNonce ();\n        const message = { 'id': this.numberToString (id) };\n        return await this.watch ('u', 'c', message, 'c');\n    }\n    handleThing (client: Client, message: any) {\n        const messageHash = this.safeString (message, 'id');\n        client.resolve ({ 'a': 1 }, messageHash);\n    }\n}\n";
+    const emit = (other: string) => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-57h-nonce-'));
+        const files = { ...base, 'ts/src/pro/venue.ts': venue.replace ('OTHER', other) };
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        try {
+            return transpiler.transpileRustByPath(path.join (root, 'ts/src/pro/venue.ts')).content;
+        } finally {
+            fs.rmSync (root, { recursive: true, force: true });
+        }
+    };
+    test('ids from incrementingNonce, its numberToString and a parameter bound only to one are digits: the snapshot is an optional cache', () => {
+        expect(emit ('')).toContain('let mut snapshot: Option<crate::pro::cache::Cache> = ');
+    });
+    test('negative: a caller passing a server field to the id parameter keeps the snapshot a Value', () => {
+        expect(emit ("message: any) {\n        await this.sendRequest (this.safeString (message, 'x'));\n    }\n    async cancelOther (")).toContain('let mut snapshot: Value = ');
+    });
+});

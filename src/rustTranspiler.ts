@@ -25139,10 +25139,22 @@ export class RustTranspiler extends BaseTranspiler {
             if (x !== undefined && isCallExpression(x) && x.arguments.length === 0 && isPropertyAccessExpression(x.expression) && String(x.expression.name.text) === 'toString') x = this.rustStripWrappers(x.expression.expression);
             if (x !== undefined && isIdentifier(x) && depth < 3) {
                 const d: any = this.rustDeclarationOfIdentifier(x);
+                // ral-57h: a never-rewritten method parameter whose every caller (calls only) passes a proven id
+                if (d !== undefined && d.kind === SyntaxKind.Parameter && isIdentifier(d.name) && d.initializer === undefined && d.dotDotDotToken === undefined && !this.rustLocalReassigned(d)) {
+                    const cls: any = findAncestor(d, isClassDeclaration);
+                    const sites = cls === undefined ? undefined : this.rustWsHelperCallSites(cls, d, [ d ]);
+                    if (sites === undefined || sites.length === 0) return false;
+                    return sites.every((env) => { const b = env.get(d); return b !== undefined && b.arg !== undefined && idCall(b.arg, depth + 1); });
+                }
                 return d !== undefined && isVariableDeclaration(d) && !!(d.parent?.flags & NodeFlags.Const) && idCall(d.initializer, depth + 1);
             }
+            // ral-57h: `this.numberToString (x)` of a proven id prints the same digits
+            if (x !== undefined && isCallExpression(x) && x.arguments.length === 1 && isPropertyAccessExpression(x.expression) && x.expression.expression.kind === SyntaxKind.ThisKeyword
+                && String(x.expression.name.text) === 'numberToString') return idCall(x.arguments[0], depth + 1);
             if (x === undefined || !isCallExpression(x) || !isPropertyAccessExpression(x.expression) || x.expression.expression.kind !== SyntaxKind.ThisKeyword
-                || String(x.expression.name.text) !== 'requestId') return false;
+                || ![ 'requestId', 'incrementingNonce' ].includes(String(x.expression.name.text))) return false;
+            // ral-57h: `this.incrementingNonce ()` is the base counter (declared int, never negative)
+            if (String(x.expression.name.text) === 'incrementingNonce' && x.arguments.length !== 0) return false;
             const callee: any = this.rustScalarCallee(x);
             const ret = callee?.type !== undefined ? String(callee.type.getText?.() ?? '') : '';
             return ret === 'int' || ret === 'number' || ret === 'Int';
