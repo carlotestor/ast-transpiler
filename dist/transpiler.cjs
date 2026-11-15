@@ -75386,92 +75386,99 @@ ${iden}}`;
         st = st.parent;
       return st !== void 0 && String(st.getText()).split("\n")[0].length <= 160;
     };
-    const safe = this.rustLocalUsesAll(declaration, name, false, (n) => {
-      if (this.rustIdentifierIsPropertyName(n))
-        return !(_optionalChain([n, 'access', _10162 => _10162.parent, 'optionalAccess', _10163 => _10163.kind]) === _ast.SyntaxKind.ShorthandPropertyAssignment && n.parent.name === n);
-      if (!this.rustIdentifierRefersToDeclaration(n, declaration) || this.rustEnclosingFunction(n) !== fn)
+    const ownNameSkip = this.rustOwnNameSkip;
+    this.rustOwnNameSkip = true;
+    let safe;
+    try {
+      safe = this.rustLocalUsesAll(declaration, name, false, (n) => {
+        if (this.rustIdentifierIsPropertyName(n))
+          return !(_optionalChain([n, 'access', _10162 => _10162.parent, 'optionalAccess', _10163 => _10163.kind]) === _ast.SyntaxKind.ShorthandPropertyAssignment && n.parent.name === n);
+        if (!this.rustIdentifierRefersToDeclaration(n, declaration) || this.rustEnclosingFunction(n) !== fn)
+          return false;
+        const up = n.parent;
+        if (_is.isBinaryExpression.call(void 0, up) && up.left === n) {
+          return up.operatorToken.kind === _ast.SyntaxKind.EqualsToken && _optionalChain([up, 'access', _10164 => _10164.parent, 'optionalAccess', _10165 => _10165.kind]) === _ast.SyntaxKind.ExpressionStatement && (this.rustBuiltListWriteSource(up.right) || this.rustBuiltListSelfSort(up, name) || this.rustArrayGuardedMove(up) || this.rustOptListGuardedMove(up) !== void 0 || this.rustDefaultedAliasMove(up) !== void 0) && String(up.parent.getText()).split("\n")[0].length <= 200;
+        }
+        if (_is.isElementAccessExpression.call(void 0, up) && up.expression === n) {
+          natives++;
+          return !(_is.isElementAccessExpression.call(void 0, up.parent) && up.parent.expression === up) && this.rustReadBearerElementUse(up, "list");
+        }
+        if (_is.isPropertyAccessExpression.call(void 0, up) && up.expression === n) {
+          const member = String(up.name.text);
+          natives++;
+          if (member === "push")
+            return this.rustVecPushShape(up.parent, name);
+          const use = up.parent;
+          return member === "length" && _optionalChain([use, 'optionalAccess', _10166 => _10166.kind]) !== _ast.SyntaxKind.PrefixUnaryExpression && _optionalChain([use, 'optionalAccess', _10167 => _10167.kind]) !== _ast.SyntaxKind.PostfixUnaryExpression && !(_is.isBinaryExpression.call(void 0, use) && use.left === up && rustIsAssignmentOperator(use.operatorToken.kind));
+        }
+        if (_is.isCallExpression.call(void 0, up) && up.arguments[0] === n && this.rustBorrowedAnyKeyReader(up)) {
+          natives++;
+          return true;
+        }
+        if (_is.isReturnStatement.call(void 0, up) && up.expression === n) {
+          boxes.push([n, "move"]);
+          return true;
+        }
+        if (_optionalChain([up, 'optionalAccess', _10168 => _10168.kind]) === _ast.SyntaxKind.AsExpression && up.expression === n && _is.isReturnStatement.call(void 0, up.parent) && up.parent.expression === up) {
+          boxes.push([n, "move"]);
+          return true;
+        }
+        const hashSlot = this.rustWatchHashListSlot(up, n);
+        if (hashSlot !== void 0) {
+          boxes.push([n, hashSlot]);
+          return true;
+        }
+        if (this.rustLentWsSettleSlot(up, n)) {
+          boxes.push([n, this.rustLocalLastUse(n, declaration) ? "move" : "lend"]);
+          handOffs++;
+          return true;
+        }
+        const lentSlot = this.rustBuiltListLentHelperSlot(up, n);
+        if (lentSlot !== void 0) {
+          const move = lentSlot !== "inArray" && (this.rustLocalLastUse(n, declaration) || lentSlot === "arrayConcat" && this.rustBuiltListSelfWriteArg(n, name));
+          boxes.push([n, move ? "move" : "lend"]);
+          handOffs++;
+          return true;
+        }
+        if (this.rustBuiltListPromiseAllOperand(up, n)) {
+          if (!this.rustLocalLastUse(n, declaration) || !short(n))
+            return false;
+          boxes.push([n, "move"]);
+          handOffs++;
+          return true;
+        }
+        if (_is.isCallExpression.call(void 0, up) && up.expression !== n && !this.rustTestTierSource(up) && (this.rustLentListSlot(up, n) || this.rustLentVenueSlot(up, n) !== void 0)) {
+          boxes.push([n, "lend"]);
+          handOffs++;
+          return true;
+        }
+        if (_optionalChain([up, 'optionalAccess', _10169 => _10169.kind]) === _ast.SyntaxKind.PropertyAssignment && up.initializer === n && this.rustLocalLastUse(n, declaration) && short(n)) {
+          boxes.push([n, "move"]);
+          handOffs++;
+          return true;
+        }
+        if (_is.isBinaryExpression.call(void 0, up) && up.right === n && up.operatorToken.kind === _ast.SyntaxKind.EqualsToken && _optionalChain([up, 'access', _10170 => _10170.parent, 'optionalAccess', _10171 => _10171.kind]) === _ast.SyntaxKind.ExpressionStatement && (_is.isElementAccessExpression.call(void 0, up.left) || _is.isPropertyAccessExpression.call(void 0, up.left)) && this.rustLocalKeyPlace(up.left, n) && short(n)) {
+          boxes.push([n, "move"]);
+          handOffs++;
+          return true;
+        }
+        if (_optionalChain([up, 'optionalAccess', _10172 => _10172.kind]) === _ast.SyntaxKind.PropertyAssignment && up.initializer === n && short(n) && this.rustBuiltListFrozenAfter(n, declaration, name)) {
+          boxes.push([n, "clone"]);
+          handOffs++;
+          return true;
+        }
+        if (_is.isCallExpression.call(void 0, up) && up.expression !== n && up.arguments.some((a) => a === n)) {
+          const callee = up.expression;
+          if (!_is.isPropertyAccessExpression.call(void 0, callee) || callee.expression.kind !== _ast.SyntaxKind.ThisKeyword || !short(n) || _RustTranspiler.MUT_SELF_METHODS.has(this.toSnakeCaseName(String(callee.name.text))) || !this.rustNilBoxSlotOk(up, Array.from(up.arguments).indexOf(n)))
+            return false;
+          boxes.push([n, this.rustLocalLastUse(n, declaration) || this.rustBuiltListSelfWriteArg(n, name) ? "move" : "clone"]);
+          return true;
+        }
         return false;
-      const up = n.parent;
-      if (_is.isBinaryExpression.call(void 0, up) && up.left === n) {
-        return up.operatorToken.kind === _ast.SyntaxKind.EqualsToken && _optionalChain([up, 'access', _10164 => _10164.parent, 'optionalAccess', _10165 => _10165.kind]) === _ast.SyntaxKind.ExpressionStatement && (this.rustBuiltListWriteSource(up.right) || this.rustBuiltListSelfSort(up, name) || this.rustArrayGuardedMove(up) || this.rustOptListGuardedMove(up) !== void 0 || this.rustDefaultedAliasMove(up) !== void 0) && String(up.parent.getText()).split("\n")[0].length <= 200;
-      }
-      if (_is.isElementAccessExpression.call(void 0, up) && up.expression === n) {
-        natives++;
-        return !(_is.isElementAccessExpression.call(void 0, up.parent) && up.parent.expression === up) && this.rustReadBearerElementUse(up, "list");
-      }
-      if (_is.isPropertyAccessExpression.call(void 0, up) && up.expression === n) {
-        const member = String(up.name.text);
-        natives++;
-        if (member === "push")
-          return this.rustVecPushShape(up.parent, name);
-        const use = up.parent;
-        return member === "length" && _optionalChain([use, 'optionalAccess', _10166 => _10166.kind]) !== _ast.SyntaxKind.PrefixUnaryExpression && _optionalChain([use, 'optionalAccess', _10167 => _10167.kind]) !== _ast.SyntaxKind.PostfixUnaryExpression && !(_is.isBinaryExpression.call(void 0, use) && use.left === up && rustIsAssignmentOperator(use.operatorToken.kind));
-      }
-      if (_is.isCallExpression.call(void 0, up) && up.arguments[0] === n && this.rustBorrowedAnyKeyReader(up)) {
-        natives++;
-        return true;
-      }
-      if (_is.isReturnStatement.call(void 0, up) && up.expression === n) {
-        boxes.push([n, "move"]);
-        return true;
-      }
-      if (_optionalChain([up, 'optionalAccess', _10168 => _10168.kind]) === _ast.SyntaxKind.AsExpression && up.expression === n && _is.isReturnStatement.call(void 0, up.parent) && up.parent.expression === up) {
-        boxes.push([n, "move"]);
-        return true;
-      }
-      const hashSlot = this.rustWatchHashListSlot(up, n);
-      if (hashSlot !== void 0) {
-        boxes.push([n, hashSlot]);
-        return true;
-      }
-      if (this.rustLentWsSettleSlot(up, n)) {
-        boxes.push([n, this.rustLocalLastUse(n, declaration) ? "move" : "lend"]);
-        handOffs++;
-        return true;
-      }
-      const lentSlot = this.rustBuiltListLentHelperSlot(up, n);
-      if (lentSlot !== void 0) {
-        const move = lentSlot !== "inArray" && (this.rustLocalLastUse(n, declaration) || lentSlot === "arrayConcat" && this.rustBuiltListSelfWriteArg(n, name));
-        boxes.push([n, move ? "move" : "lend"]);
-        handOffs++;
-        return true;
-      }
-      if (this.rustBuiltListPromiseAllOperand(up, n)) {
-        if (!this.rustLocalLastUse(n, declaration) || !short(n))
-          return false;
-        boxes.push([n, "move"]);
-        handOffs++;
-        return true;
-      }
-      if (_is.isCallExpression.call(void 0, up) && up.expression !== n && !this.rustTestTierSource(up) && (this.rustLentListSlot(up, n) || this.rustLentVenueSlot(up, n) !== void 0)) {
-        boxes.push([n, "lend"]);
-        handOffs++;
-        return true;
-      }
-      if (_optionalChain([up, 'optionalAccess', _10169 => _10169.kind]) === _ast.SyntaxKind.PropertyAssignment && up.initializer === n && this.rustLocalLastUse(n, declaration) && short(n)) {
-        boxes.push([n, "move"]);
-        handOffs++;
-        return true;
-      }
-      if (_is.isBinaryExpression.call(void 0, up) && up.right === n && up.operatorToken.kind === _ast.SyntaxKind.EqualsToken && _optionalChain([up, 'access', _10170 => _10170.parent, 'optionalAccess', _10171 => _10171.kind]) === _ast.SyntaxKind.ExpressionStatement && (_is.isElementAccessExpression.call(void 0, up.left) || _is.isPropertyAccessExpression.call(void 0, up.left)) && this.rustLocalKeyPlace(up.left, n) && short(n)) {
-        boxes.push([n, "move"]);
-        handOffs++;
-        return true;
-      }
-      if (_optionalChain([up, 'optionalAccess', _10172 => _10172.kind]) === _ast.SyntaxKind.PropertyAssignment && up.initializer === n && short(n) && this.rustBuiltListFrozenAfter(n, declaration, name)) {
-        boxes.push([n, "clone"]);
-        handOffs++;
-        return true;
-      }
-      if (_is.isCallExpression.call(void 0, up) && up.expression !== n && up.arguments.some((a) => a === n)) {
-        const callee = up.expression;
-        if (!_is.isPropertyAccessExpression.call(void 0, callee) || callee.expression.kind !== _ast.SyntaxKind.ThisKeyword || !short(n) || _RustTranspiler.MUT_SELF_METHODS.has(this.toSnakeCaseName(String(callee.name.text))) || !this.rustNilBoxSlotOk(up, Array.from(up.arguments).indexOf(n)))
-          return false;
-        boxes.push([n, this.rustLocalLastUse(n, declaration) || this.rustBuiltListSelfWriteArg(n, name) ? "move" : "clone"]);
-        return true;
-      }
-      return false;
-    });
+      });
+    } finally {
+      this.rustOwnNameSkip = ownNameSkip;
+    }
     if (!safe || natives === 0 && (handOffs === 0 || handOffs + boxes.filter(([b]) => _is.isReturnStatement.call(void 0, b.parent) || _optionalChain([b, 'access', _10173 => _10173.parent, 'optionalAccess', _10174 => _10174.kind]) === _ast.SyntaxKind.AsExpression && _is.isReturnStatement.call(void 0, b.parent.parent)).length !== boxes.length || boxes.some(([, form]) => form === "clone")))
       return false;
     for (const [n, form] of boxes)
