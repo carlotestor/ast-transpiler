@@ -1389,6 +1389,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rust53eElemReadKey(n: any): boolean;
     /** Identifier hook: a `box` use converts with the standard `From` impls (scalars are `Copy`). */
     printRustScalarLocalRead(node: any): string | undefined;
+    /** ral-59x: a local declared `let y = x` / `const y = x` from another local (an alias of it). */
+    rust59xAliasDecl(declaration: any): boolean;
     /** The native value of a scalar expression for a local of `kind` (`Some(..)` for optional kinds). */
     rustScalarNativeText(kind: string, expr: any): string | undefined;
     /** Declaration hook: `let mut x: <scalar> = <native init>`, else undefined. */
