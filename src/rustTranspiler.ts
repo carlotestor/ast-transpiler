@@ -20308,7 +20308,12 @@ export class RustTranspiler extends BaseTranspiler {
         // ral-qa: only string-key reads (no null test, write, length, box or lend could tell a non-map from the empty map)
         if ((keyReadOnly || elemKeyReadOnly) && (!safe || plainReads === 0 || plainReads !== reads || nullTests + writes + lengths + indexLikeReads + boxedElementUses.length + lentResponses + lentNullable + keySets + keyWrites + extendHeads + jwtLends > 0)) return undefined;
         const optAliasBoxOnly = optAliasInit && optionalBoxes > 0 && optionalBoxes === boxedElementUses.length;
-        if (!safe || (reads === 0 && !builtBoxOnly && !boxOnly && !endpointBoxOnly && !optAliasBoxOnly && !this.rustNullTestedDictLocal(init, nullTests, writes)) || mixed || from === undefined
+        // ral-55f: a shared-map alias rewritten only at a venue callee's bare `Dict` slot (ral-54f slot write) and otherwise handed
+        // whole to a `handle*` optional params slot (bitget pro watchOrders `paramsInstType` -> handleMarginModeAndParams): a
+        // map on every path, boxed once (`Value::from(&x)` / `Value::Dict(x)`); non-test sources, each box line within 400
+        const sbSlotParamsBoxOnly = sbAlias && sbMapWrites > 0 && reads === 0 && writes === 0 && nullTests === 0 && paramsBoxes > 0
+            && paramsBoxes === boxedElementUses.length && this.rustSbSlotAliasNonTest(declaration) && boxedElementUses.every((u: any) => this.rustBoxLineOk(u));
+        if (!safe || (reads === 0 && !builtBoxOnly && !boxOnly && !endpointBoxOnly && !optAliasBoxOnly && !sbSlotParamsBoxOnly && !this.rustNullTestedDictLocal(init, nullTests, writes)) || mixed || from === undefined
             || ((this.rustNilResponseLocals.has(declaration) || from === 'api' || this.rustDictElementSource(init)) && (nullTests > 0 || lengths > 0 || (indexLikeReads > 0 && !this.rustUrlsMapEntry(init))))
             || (this.rustListElementSource(init) && (nullTests > 0 || lengths > 0))) return undefined;
         // ral-kc: a declared endpoint answering off its declared shape is `None` in the optional form: a null test would tell it apart
@@ -20744,6 +20749,12 @@ export class RustTranspiler extends BaseTranspiler {
     /** sb: `y = self.omit(&x, ..).into_dict()` for a shared-map alias (`omit` of a proven map answers `Value::Map`: the Arc moves back). */
     private rustSbAliasWrites = new WeakSet<any>();
     private rustSbAliasSlotWrites = new WeakSet<any>();
+    /** ral-55f: the alias sits outside ts/src/test (the slot rules apply to non-test sources only). */
+    rustSbSlotAliasNonTest(declaration: any): boolean {
+        const source: any = declaration?.getSourceFile?.()?.fileName;
+        return typeof source === 'string' && !/[\\/]test[\\/]/.test(source);
+    }
+
     /** ral-54f: a slot write accepted by the shared-map alias rule, printed typed only when the alias printed as the map. */
     rustSbAliasSlotWriteOf(element: any): boolean {
         if (!isIdentifier(element) || !this.rustSbAliasSlotWrites.has(element)) return false;

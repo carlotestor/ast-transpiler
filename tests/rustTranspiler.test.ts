@@ -18480,3 +18480,17 @@ describe('ral-54f: a params alias rewritten by a venue [Str, Dict] destructure w
         expect(out).toMatch(/paramsInstType = __destr_tmp\.get\(1\)\.cloned\(\)\.unwrap_or\(Value::Null\)\.into_dict\(\)/);
     });
 });
+
+describe('ral-55f: a params alias handed to a base handle*AndParams params slot', () => {
+    test('bitget pro watchOrders: paramsInstType rewritten by getInstType and handed to handleMarginModeAndParams is a Dict', () => {
+        const dir = path.join (rustFixtureRoot, 'ral55f-inst');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Bool = boolean | undefined;\nexport default class Exchange {\n    extend (a: any, b: any): any { return a; }\n    safeString (o: any, k: any): string { return o[k]; }\n    hold (x: any): any { return x; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    handleOptionBoolAndParams (params: Dict, methodName: Str, optionName: string, defaultValue: Bool = undefined): [Bool, Dict] { return [ defaultValue, params ]; }\n    handleMarginModeAndParams (methodName: string, params: Dict = {}, defaultValue: Str = undefined): [Str, Dict] { return [ defaultValue, params ]; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    getInstType (methodName: Str, uta: boolean = false, params: Dict = {}): [Str, Dict] {\n        return [ this.safeString (params, 'x'), params ];\n    }\n    m (params: Dict = {}, has: boolean = false) {\n        let instType: Str = 'SPOT';\n        const [ uta, paramsSubType ] = this.handleOptionBoolAndParams (params, 'watchOrders', 'uta', false);\n        let paramsInstType: Dict = paramsSubType;\n        if (has) {\n            [ instType, paramsInstType ] = this.getInstType ('watchOrders', uta, paramsSubType);\n        }\n        const [ marginMode, paramsMarginMode ] = this.handleMarginModeAndParams ('watchOrders', paramsInstType);\n        let paramsRequest = paramsMarginMode;\n        if (uta) {\n            paramsRequest = this.extend (paramsMarginMode, { 'uta': true });\n        }\n        return this.hold ([ instType, marginMode, paramsRequest ]);\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toMatch(/let mut paramsSubType: crate::value::Dict = /);
+        expect(out).toMatch(/let mut paramsInstType: crate::value::Dict = Value::from\(&paramsSubType\)\.into_dict\(\);/);
+        expect(out).toMatch(/paramsInstType = __destr_tmp\.get\(1\)\.cloned\(\)\.unwrap_or\(Value::Null\)\.into_dict\(\)/);
+        expect(out).toContain('self.handleMarginModeAndParams(Value::Str("watchOrders".into()), &[Value::Dict(paramsInstType)])');
+    });
+});
