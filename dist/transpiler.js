@@ -53574,6 +53574,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const assignments = typedSlots.map((t, idx) => t ?? `${this.printNode(left.elements[idx], 0)} = ${slotRead(idx)}`).join("; ");
       if (nativeList && typedSlots.every((t) => t !== void 0) && this.rustShortDestrHeads.has(node))
         return `{ let ${tmpName} = ${rhs}.into_list(); ${assignments}; }`;
+      if (nativeList && typedSlots.every((t) => t !== void 0) && this.rustStrSlotShortHead(node, `{ ${head}; ${assignments}; }`))
+        return `{ let ${tmpName} = ${rhs}.into_list(); ${assignments}; }`;
       return `{ ${head}; ${assignments}; }`;
     }
     const flagWrite = isAssign && isIdentifier3(left) ? this.printMarketFlagBoolWrite(left, right) : void 0;
@@ -67598,11 +67600,28 @@ ${idn}}`;
       const column = write.getStart() - String(write.getSourceFile().text).lastIndexOf("\n", write.getStart()) - 1;
       const length = column + Math.max(...this.printNode(write, 0).split("\n").map((l) => l.trim().length));
       fits = length + ".as_str().map(str::to_owned)".length <= 400;
+      const short = ": Vec<Value>".length + ".as_array().cloned().unwrap_or_default()".length - ".into_list()".length;
+      if (!fits && length + ".as_str().map(str::to_owned)".length - short + 16 <= 400 && !this.rustTestTierSource(write) && write.left.elements.every((el) => isIdentifier3(el) && this.rustNilSlotWrite(el))) {
+        this.rustShortDestrHeads.add(write);
+        fits = true;
+      }
     } catch (e) {
       fits = false;
     }
     this.rustStrSlotLineMemo.set(write, fits);
     return fits;
+  }
+  /** ral-50f: the typed destructure line of a string slot write would newly cross 400 chars: the short head keeps it under. */
+  rustStrSlotShortHead(write, printed) {
+    if (this.rustTestTierSource(write) || !write.left.elements.some((el) => isIdentifier3(el) && this.rustScalarUseForms.get(el) === "slot" && this.rustScalarLocalOf(el)?.kind === "ostr"))
+      return false;
+    let depth = 0;
+    for (let up = write; up !== void 0 && !isFunctionLike(up); up = up.parent)
+      if (isBlock4(up))
+        depth++;
+    const width = (depth + 1) * 4 + printed.length;
+    const short = ": Vec<Value>".length + ".as_array().cloned().unwrap_or_default()".length - ".into_list()".length;
+    return width + 16 > 400 && width - short <= 400;
   }
   /** Some write of the initialised local is a string tuple slot (`rustStrSlotWrite`). */
   rustStrSlotWrites(declaration) {
