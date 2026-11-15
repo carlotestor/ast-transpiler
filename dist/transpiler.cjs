@@ -63120,6 +63120,8 @@ ${i1}}`;
     const ret = this.rustTypedCallResultType(init);
     if (ret === "crate::types::Tickers")
       return "map";
+    if (ret === "crate::types::OHLCVsBySymbol")
+      return "map2";
     const m = ret === void 0 ? null : /^Vec<crate::types::(\w+)>$/.exec(ret);
     return m !== null && _RustTranspiler.RUST_RAW_RECORD_TYPES.has(m[1]) ? "vec" : void 0;
   }
@@ -63135,7 +63137,7 @@ ${i1}}`;
     }
     if (!_is.isElementAccessExpression.call(void 0, parent) || parent.expression !== n || !readOnly)
       return false;
-    if (_is.isElementAccessExpression.call(void 0, up) && up.expression === parent)
+    if (_is.isElementAccessExpression.call(void 0, up) && up.expression === parent && !(elem === "map2" && this.rustTypedResultReadOnlyAt(up)))
       return false;
     if (_is.isPropertyAccessExpression.call(void 0, up) && up.expression === parent)
       return false;
@@ -63154,6 +63156,11 @@ ${i1}}`;
       return false;
     return this.rustScalarLocalOf(key) === void 0;
   }
+  /** `x` is read only: not written, deleted, updated or called. */
+  rustTypedResultReadOnlyAt(x) {
+    const up = x.parent;
+    return up !== void 0 && !(_is.isBinaryExpression.call(void 0, up) && up.left === x && rustIsAssignmentOperator(up.operatorToken.kind)) && up.kind !== _ast.SyntaxKind.DeleteExpression && !_is.isPrefixUnaryExpression.call(void 0, up) && up.kind !== _ast.SyntaxKind.PostfixUnaryExpression && !(_is.isCallExpression.call(void 0, up) && up.expression === x) && !(_is.isElementAccessExpression.call(void 0, up) && up.expression === x) && !(_is.isPropertyAccessExpression.call(void 0, up) && up.expression === x);
+  }
   /** Element-access hook: the native read of a typed result element, boxed through its shared record handle. */
   printTypedResultElemRead(node) {
     const recv = node.expression;
@@ -63165,7 +63172,7 @@ ${i1}}`;
       return void 0;
     const name = super.printIdentifier(recv);
     const key = this.rustSkipWrappers(node.argumentExpression);
-    if (elem === "map")
+    if (elem === "map" || elem === "map2")
       return `crate::value::KeyRead::read(&&${name}, &${this.printNode(key, 0).trim()})`;
     return `${name}.get(${this.printTypedResultIndex(key)}).map(crate::Value::from).unwrap_or_default()`;
   }
@@ -66932,6 +66939,13 @@ ${ind}let ${view}: &${map} = &${arc};
     let acc = this.printNode(current, 0);
     for (const link of chain) {
       const { expression: receiver, argumentExpression: key } = link;
+      if (link === chain[0] && chain.length > 1) {
+        const typedElem2 = this.printTypedResultElemRead(link);
+        if (typedElem2 !== void 0) {
+          acc = typedElem2;
+          continue;
+        }
+      }
       if (link === chain[0] && this.rustBorrowedIndexReads.has(link) && _is.isIdentifier.call(void 0, receiver)) {
         const borrowedKey = _is.isIdentifier.call(void 0, key) && this.rustBorrowedStrElems.has(this.rustDeclarationOfIdentifier(key));
         acc = `crate::value::KeyRead::read(&&${super.printIdentifier(receiver)}, &${borrowedKey ? `Value::from(${super.printIdentifier(key)})` : _nullishCoalesce(this.rustI64HelperKeyText(key, node), () => ( this.printNode(key, 0)))})`;
