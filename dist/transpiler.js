@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -69796,7 +69796,7 @@ ${iden}}`;
         return keyWriteUses.push(n) > 0 && ++keyWrites > 0 && ++reads > 0;
       if (extendReuse && this.rustReuseDynamicKeyWrite(n, declaration))
         return keyWriteUses.push(n) > 0 && ++keyWrites > 0 && ++reads > 0;
-      const handed = () => (this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0 || this.rustBuiltReturnBoxUse(n, init, extendReuse) && ++defaultedBoxes > 0 || this.rustOptReaderBoxUse(n, init) && ++optionalBoxes > 0 || this.rustOptionalParamsSlot(up, n) && (from === "dict" || from === "api" && this.rustDeclaredEndpointKind(init) === "dict") && ++paramsBoxes > 0 || nilDeclared && this.rustDeclaredEndpointBoxUse(n) && ++endpointBoxes > 0 || endpoint && from !== "api" && !nilDeclared && this.rustDeclaredEndpointWholeBox(n) && ++defaultedBoxes > 0) && boxedElementUses.push(n) > 0;
+      const handed = () => (this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0 || this.rustBuiltReturnBoxUse(n, init, extendReuse) && ++defaultedBoxes > 0 || this.rustOptReaderBoxUse(n, init) && ++optionalBoxes > 0 || this.rustOptionalParamsSlot(up, n) && (from === "dict" || from === "api" && this.rustDeclaredEndpointKind(init) === "dict") && ++paramsBoxes > 0 || nilDeclared && this.rustDeclaredEndpointBoxUse(n) && ++endpointBoxes > 0 || endpoint && from !== "api" && !nilDeclared && this.rustDeclaredEndpointWholeBox(n) && ++defaultedBoxes > 0 || !nilDeclared && from === "dict" && endpoint && this.rustSafeDictDefaultUse(n)) && boxedElementUses.push(n) > 0;
       const asArg = isAsExpression3(up) && up.expression === n && isCallExpression6(up.parent) && Array.from(up.parent.arguments).includes(up) ? up : void 0;
       if (asArg !== void 0 && this.rustLentAsHandOff(asArg, init, from, endpoint, nilDeclared))
         return ++lentResponses > 0 && ++reads > 0 && (this.rustLentAsNullable(init, nilDeclared, endpoint) ? ++lentNullable > 0 : true);
@@ -70067,12 +70067,16 @@ ${iden}}`;
     const up = n.parent;
     if (!isBinaryExpression5(up) || up.left !== n || up.operatorToken.kind !== SyntaxKind7.EqualsToken || up.parent?.kind !== SyntaxKind7.ExpressionStatement)
       return false;
-    const rhs = this.rustSkipWrappers(up.right);
+    let rhs = this.rustSkipWrappers(up.right);
+    if (rhs?.kind === SyntaxKind7.AwaitExpression)
+      rhs = this.rustSkipWrappers(rhs.expression);
     if (rhs === void 0 || !isCallExpression6(rhs) || String(up.getText()).split("\n")[0].length > 240)
       return false;
     const names = (x) => isIdentifier3(x) && x.text === n.text || (x.forEachChild(names) ?? false);
     if (names(rhs))
       return false;
+    if (this.rustSkipWrappers(up.right)?.kind === SyntaxKind7.AwaitExpression)
+      return this.rustReuseEndpointWrite(up.right);
     if (this.rustBaseCallNamed(rhs, _RustTranspiler.RUST_ALWAYS_MAP_HELPERS))
       return true;
     if (this.rustOmitOfDict(rhs) && this.rustOmitLineFits(rhs))
@@ -70081,9 +70085,27 @@ ${iden}}`;
       return true;
     return false;
   }
+  /** ral-44d: `n` is the default (third) operand of a base `safeDict (o, k, n)`: the `&[Value]` default slot takes the box
+   *  (`Value::from(&n)`, the Arc bump the `.clone()` paid), and `safeDict` hands that very map back when the key misses. */
+  rustSafeDictDefaultUse(n) {
+    const call = n.parent;
+    return call !== void 0 && isCallExpression6(call) && call.arguments.length === 3 && call.arguments[2] === n && this.rustBaseCallNamed(call, _RustTranspiler.RUST_REUSE_SAFE_DICT) && !this.rustTestTierSource(call);
+  }
+  /** ral-44d: `await this.<endpoint> (..)` of a REST endpoint declared `Promise<Dict>`: the declared-endpoint initialiser
+   *  already prints `.await.into_dict()`, so the same write into a reuse literal replaces the owned map with the parsed
+   *  response (parsed JSON carries no runtime tag). */
+  rustReuseEndpointWrite(right) {
+    const awaited = this.rustSkipWrappers(right);
+    if (awaited?.kind !== SyntaxKind7.AwaitExpression)
+      return false;
+    const call = this.rustSkipWrappers(awaited.expression);
+    return call !== void 0 && isCallExpression6(call) && !this.rustTestTierSource(call) && /(?:^|[\\/])ts[\\/]src[\\/][^\\/]+\.ts$/.test(String(call.getSourceFile?.()?.fileName ?? "")) && this.rustBorrowedSourceKind(call) === "api" && this.rustDeclaredEndpointKind(call) === "dict";
+  }
   /** The producer of a reuse write builds from untagged operands only: `extend` / `omit` operands proven plain
    *  (`rustUntaggedMapOperand`), `indexBy` / `groupBy` fresh maps, a REST `safeDict` read off a local (parsed JSON). */
   rustReuseProducerUntagged(n, rhs) {
+    if (this.rustReuseEndpointWrite(n.parent.right))
+      return true;
     const method = String(rhs.expression?.name?.text ?? "");
     if (method === "indexBy" || method === "groupBy")
       return true;

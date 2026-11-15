@@ -2634,6 +2634,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A statement `n = <map producer>` whose right side does not name `n`. */
     rustReuseMapProducerWrite(n: any): boolean;
     private static readonly RUST_REUSE_SAFE_DICT;
+    /** ral-44d: `n` is the default (third) operand of a base `safeDict (o, k, n)`: the `&[Value]` default slot takes the box
+     *  (`Value::from(&n)`, the Arc bump the `.clone()` paid), and `safeDict` hands that very map back when the key misses. */
+    rustSafeDictDefaultUse(n: any): boolean;
+    /** ral-44d: `await this.<endpoint> (..)` of a REST endpoint declared `Promise<Dict>`: the declared-endpoint initialiser
+     *  already prints `.await.into_dict()`, so the same write into a reuse literal replaces the owned map with the parsed
+     *  response (parsed JSON carries no runtime tag). */
+    rustReuseEndpointWrite(right: any): boolean;
     /** The producer of a reuse write builds from untagged operands only: `extend` / `omit` operands proven plain
      *  (`rustUntaggedMapOperand`), `indexBy` / `groupBy` fresh maps, a REST `safeDict` read off a local (parsed JSON). */
     rustReuseProducerUntagged(n: any, rhs: any): boolean;
