@@ -3015,6 +3015,13 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  rebound by `get_arg(.., Value::Map({}))`, so it is always a map (`From<Value> for Params` drops a non-map, and
      *  the empty set's `Value::Null` takes the `{}` default). A list body only reaches untyped `sign` / `request`. */
     rustTypedParamsParam(d: any): boolean;
+    /** ral-47g: the trailing `params: Dict = {}` of a venue's own helper (createOrderRequest and the like), never
+     *  reassigned, not an override, whose every caller in the venue file, its pro file and each subclass that inherits
+     *  it passes a map or leaves it out (the `{}` default): the `sign` caller proof keyed on the helper name. A dynamic
+     *  `this[m] (..)` / `callDynamically` call, an extra argument or any unproven argument fails the venue closed. */
+    rustHelperParamsProvenMap(d: any): boolean;
+    /** The helper is called by name somewhere in its venue or pro file and is not a base Exchange method. */
+    rustHelperHasCaller(root: string, venue: string, name: string): boolean;
     private static readonly RUST_SIGN_MAP_PROOF;
     private static rustSignProofApi;
     /** A venue `sign (path, api, method, params)` whose `params` is a map on every path. `params` reaches `sign` only
@@ -3026,7 +3033,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  declared `Dict`, or a local whose every write is one of these. Any list literal, any dynamic `this[name] (..)`
      *  / `callDynamically` call, or anything else unproven fails the venue (fail closed). */
     rustSignParamsProvenMap(fn: any): boolean;
-    rustSignParamsProofUncached(root: string, venue: string): boolean;
+    rustSignParamsProofUncached(root: string, venue: string, target?: {
+        name: string;
+        at: number;
+    }): boolean;
     /** ral-40h: the method names a dynamic `this[m]` can hold, read syntactically: `const m = 'a' + k + 'b'` where `k` is
      *  `const k = this.safeString (L, ..)` over a `const L = { .. }` literal whose every value is a string literal (a
      *  missing key leaves `k` undefined, which the venue throws on before the call), or `m` itself a string literal. */
