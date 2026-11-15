@@ -56098,6 +56098,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "int";
     if (fresh && this.rustVenueInitializer(node) && this.rustVenueTypedCall(node) !== void 0)
       return this.rustVenueTypedCall(node);
+    if (fresh && this.rustNilVenueWrite(node) && this.rustVenueTypedCall(node) === "onum")
+      return "onum";
     const declaration = this.rustScalarCallee(node);
     if (declaration === void 0 || !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile().fileName)))
       return void 0;
@@ -57636,7 +57638,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       declared = promised;
     }
     const name = declared.kind === SyntaxKind7.TypeReference && isIdentifier3(declared.typeName) ? String(declared.typeName.text) : "";
-    const kind = declared.kind === SyntaxKind7.StringKeyword || name === "Str" ? "ostr" : declared.kind === SyntaxKind7.BooleanKeyword ? "bool" : name === "int" ? "int" : void 0;
+    const numHelper = name === "Num" && !this.isAsyncFunction(declaration);
+    const kind = declared.kind === SyntaxKind7.StringKeyword || name === "Str" ? "ostr" : declared.kind === SyntaxKind7.BooleanKeyword ? "bool" : name === "int" ? "int" : numHelper ? "onum" : void 0;
     if (kind === void 0)
       return void 0;
     const expected = kind === "ostr" ? "string" : kind === "bool" ? "boolean" : "number";
@@ -57647,6 +57650,12 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (isReturnStatement4(n)) {
         const value = this.unwrapParens(n.expression);
         const nullish = value === void 0 || this.literalKindOfNode(value) === "null";
+        if (kind === "onum") {
+          if (!nullish && !this.rustParseNumberStrCall(value))
+            ok = false;
+          n.forEachChild(visit);
+          return;
+        }
         const type = nullish ? void 0 : this.getCheckedTypeOf(this.rustVenueReturnSource(n) ?? value);
         if (nullish ? kind !== "ostr" : type === void 0 || (type.flags & TypeFlags6.Any) !== 0 || this.primitiveKindOfType(type) !== expected || kind !== "ostr" && (type.flags & TypeFlags6.Union) !== 0 && typeParts(type).some((t) => (t.flags & (TypeFlags6.Undefined | TypeFlags6.Null)) !== 0))
           ok = false;
@@ -57698,6 +57707,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return `${text}.as_str().map(str::to_owned)`;
     if (kind === "bool")
       return `${text}.as_bool().unwrap_or_default()`;
+    if (kind === "onum")
+      return `${text}.as_f64()`;
     return `${text}.as_i64().unwrap_or_default()`;
   }
   /** A venue typed string is copied out of the `Value` once: a box short of a moving last use, or a hand-on, would copy it again. */

@@ -4860,6 +4860,8 @@ export class RustTranspiler extends BaseTranspiler {
         if ((this.rustVenueInitializer(node) || this.rustNilVenueWrite(node)) && this.rustVenueStrCall(node)) return 'ostr';
         if (fresh && this.rustVenueInitializer(node) && this.rustVenueIntCall(node)) return 'int';
         if (fresh && this.rustVenueInitializer(node) && this.rustVenueTypedCall(node) !== undefined) return this.rustVenueTypedCall(node);
+        // ral-41a: the whole right side of a write into a nil-declared local, from a venue `Num` parse helper (`Float` or `Null`)
+        if (fresh && this.rustNilVenueWrite(node) && this.rustVenueTypedCall(node) === 'onum') return 'onum';
         const declaration: any = this.rustScalarCallee(node);
         if (declaration === undefined || !RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile().fileName))) return undefined;
         const readerKind = this.rustReaderDefaultKind(name, args, fresh); if (readerKind !== undefined) return readerKind;
@@ -6409,7 +6411,9 @@ export class RustTranspiler extends BaseTranspiler {
             declared = promised;
         }
         const name = declared.kind === SyntaxKind.TypeReference && isIdentifier(declared.typeName) ? String(declared.typeName.text) : '';
-        const kind = declared.kind === SyntaxKind.StringKeyword || name === 'Str' ? 'ostr' : (declared.kind === SyntaxKind.BooleanKeyword ? 'bool' : (name === 'int' ? 'int' : undefined));
+        // ral-41a: a sync `Num` helper every return of which is `undefined` or a base `parseNumber` of a string (`Float` or `Null`)
+        const numHelper = name === 'Num' && !this.isAsyncFunction(declaration);
+        const kind = declared.kind === SyntaxKind.StringKeyword || name === 'Str' ? 'ostr' : (declared.kind === SyntaxKind.BooleanKeyword ? 'bool' : (name === 'int' ? 'int' : (numHelper ? 'onum' : undefined)));
         if (kind === undefined) return undefined;
         const expected = kind === 'ostr' ? 'string' : (kind === 'bool' ? 'boolean' : 'number');
         let ok = declaration.body.statements.length > 0;
@@ -6418,6 +6422,7 @@ export class RustTranspiler extends BaseTranspiler {
             if (isReturnStatement(n)) {
                 const value: any = this.unwrapParens(n.expression);
                 const nullish = value === undefined || this.literalKindOfNode(value) === 'null';
+                if (kind === 'onum') { if (!nullish && !this.rustParseNumberStrCall(value)) ok = false; n.forEachChild(visit); return; }
                 const type: any = nullish ? undefined : this.getCheckedTypeOf(this.rustVenueReturnSource(n) ?? value);
                 // `any` proves nothing; only a `Str` return may be absent
                 if (nullish ? kind !== 'ostr' : (type === undefined || (type.flags & TypeFlags.Any) !== 0 || this.primitiveKindOfType(type) !== expected
@@ -6467,6 +6472,7 @@ export class RustTranspiler extends BaseTranspiler {
         const text = this.printNode(this.unwrapParens(expr), 0).trim();
         if (kind === 'ostr') return `${text}.as_str().map(str::to_owned)`;
         if (kind === 'bool') return `${text}.as_bool().unwrap_or_default()`;
+        if (kind === 'onum') return `${text}.as_f64()`;
         return `${text}.as_i64().unwrap_or_default()`;
     }
 
