@@ -815,6 +815,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** Some statement of the parameter's function assigns the parameter itself. */
     rustParamWritten(param: any): boolean;
     rustReaderDefaultKind(name: string, args: any[], fresh: boolean): string | undefined;
+    /** ral-49i: a `sign` reader default `m['<lit>']` (or `m['<lit>'] as string`) where `m` is the reader's own receiver, a
+     *  never-written `const m = this.urls['api']` (rustUrlsMapEntry) of the same function, and every venue file of the family
+     *  writes `'<lit>'` only as a string literal (the describe() urls literal; checked by rustOptionsElemKind's scan of
+     *  literal `'<lit>': v` writes): the default the runtime reader hands back unconverted is a `Str` or `Null`. */
+    rust49iUrlsLitDefault(fallback: any, receiver: any): boolean;
+    rust49iUrlsLitDefaultX(fallback: any, receiver: any): boolean;
     /** zd: `this.options['k']` as a reader default, where every write of key `k` over the venue family (describe()
      *  literals `'k': v` anywhere in the family's files, incl. request literals, and `this.options['k'] = v`) is a string
      *  literal or `undefined`: a string-or-Null default. Any other value, a dynamic options key write, an options
