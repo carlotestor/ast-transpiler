@@ -11696,6 +11696,11 @@ export class RustTranspiler extends BaseTranspiler {
     rustMarketLocalIsTypedUncached(declaration: any): false | 'struct' | 'opt' | 'call' | 'smkt' {
         if (!isIdentifier(declaration.name) || declaration.parent?.declarations?.length !== 1) return false;
         if (this.rustIsSafeMarketCall(declaration.initializer)) return this.rustSafeMarketLocalOk(declaration) ? 'smkt' : false;
+        // ral-46i: `const a: Market = s` of a `safeMarket` struct local is the same record (an owned copy)
+        if (this.rustSmktAliasSource(declaration) !== undefined) {
+            const source = this.rustSmktAliasSource(declaration);
+            return this.rustMarketLocalKind(source) === 'smkt' && this.rustSafeMarketLocalOk(declaration, true) ? 'smkt' : false;
+        }
         if (this.rustTypedCallResultType(declaration.initializer) !== undefined) {
             if ((declaration.parent.flags & NodeFlags.Const) === 0) return false;
             const callFile = String(declaration.getSourceFile?.()?.fileName ?? '');
@@ -12428,6 +12433,8 @@ export class RustTranspiler extends BaseTranspiler {
             const value = this.printTypedMarketValue(this.rustSkipWrappers(declaration.initializer).expression);
             return ret === undefined || value === undefined ? undefined : `${indent}let mut ${varName}: ${ret} = ${value}`;
         }
+        // ral-46i: a const alias of a `safeMarket` struct local borrows it (no record copy)
+        if (kind === 'smkt' && this.rustSmktAliasSource(declaration) !== undefined) return `${indent}let ${varName}: &crate::types::Market = ${this.printNode(declaration.initializer, 0).trim()}`;
         if (kind === 'smkt') return `${indent}let mut ${varName}: crate::types::Market = ${this.printNode(declaration.initializer, 0).trim()}`;
         if (kind !== 'struct') return undefined;
         const value = this.printTypedMarketValue(declaration.initializer);
@@ -12564,7 +12571,15 @@ export class RustTranspiler extends BaseTranspiler {
             return `crate::Value::from(${super.printIdentifier(node)}.as_ref())`;
         }
         const declaration = this.rustTypedMarketLocalOf(node);
-        if (declaration === undefined || this.rustMarketReadKey(node) !== undefined || this.rustMarketLocalKind(declaration) === 'smkt') return undefined;
+        if (declaration !== undefined && this.rustMarketLocalKind(declaration) === 'smkt') {
+            // ral-46i: the alias's initializer is an owned copy of the source record; its `Value` hand-offs box the record's `raw`
+            const up: any = node.parent;
+            if (up?.kind === SyntaxKind.VariableDeclaration && up.initializer === node && this.rustSmktAliasSource(up) === declaration
+                && this.rustMarketLocalKind(up) === 'smkt') return `&${super.printIdentifier(node)}`;
+            if (this.rustSmktAliasValueUse(node)) return `crate::Value::from(${super.printIdentifier(node)})`;
+            return undefined;
+        }
+        if (declaration === undefined || this.rustMarketReadKey(node) !== undefined) return undefined;
         if (this.rustMarketReaderArg(node) || this.rustMarketSlotUse(node)) return undefined;
         return `(${String(node.text)}).raw.clone()`;
     }
@@ -29484,7 +29499,31 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     /** `const m = this.safeMarket (..)` whose every use reads a key, lends the record, or rewrites it from `safeMarket`. */
-    rustSafeMarketLocalOk(declaration: any): boolean {
+    /** ral-46i: `const a: Market = s` where `s` is a const declared from `this.safeMarket (..)`: the declaration of `s`. */
+    rustSmktAliasSource(declaration: any): any {
+        if (declaration?.kind !== SyntaxKind.VariableDeclaration || !isIdentifier(declaration.name) || declaration.parent?.declarations?.length !== 1) return undefined;
+        if ((declaration.parent.flags & NodeFlags.Const) === 0) return undefined;
+        const type: any = declaration.type;
+        if (type === undefined || type.kind !== SyntaxKind.TypeReference || !isIdentifier(type.typeName) || String(type.typeName.text) !== 'Market') return undefined;
+        const init: any = declaration.initializer;
+        if (init === undefined || !isIdentifier(init)) return undefined;
+        const source: any = this.rustDeclarationOfIdentifier(init);
+        if (source === undefined || source === declaration || source.kind !== SyntaxKind.VariableDeclaration || source.name === init) return undefined;
+        if ((source.parent?.flags & NodeFlags.Const) === 0 || !this.rustIsSafeMarketCall(source.initializer)) return undefined;
+        return this.rustEnclosingFunction(source) === this.rustEnclosingFunction(declaration) ? source : undefined;
+    }
+
+    /** ral-46i: a whole-value hand-off of a `safeMarket` alias that is neither a lent market slot nor a reader's record. */
+    rustSmktAliasValueUse(n: any): boolean {
+        const declaration: any = isIdentifier(n) ? this.rustDeclarationOfIdentifier(n) : undefined;
+        if (declaration === undefined || declaration.name === n || this.rustSmktAliasSource(declaration) === undefined) return false;
+        const up: any = n.parent;
+        if (up === undefined || !isCallExpression(up) || up.expression === n) return false;
+        const at = Array.from(up.arguments).indexOf(n);
+        return at >= 0 && !this.rustMarketSlot(this.rustCalleeParams(up), at);
+    }
+
+    rustSafeMarketLocalOk(declaration: any, alias = false): boolean {
         const file = String(declaration.getSourceFile?.()?.fileName ?? '');
         if (!/ts[/]src[/]/.test(file) || /ts[/]src[/](pro[/])?test[/]/.test(file)) return false;
         const name = String(declaration.name.text);
@@ -29493,10 +29532,20 @@ export class RustTranspiler extends BaseTranspiler {
         return this.rustMarketLocalUsesAll(declaration, name, (n: any) => {
             if (this.rustEnclosingFunction(n) !== scope) return false;
             const up: any = n.parent;
+            // ral-46i: a borrowed alias is only lent to a market slot or boxed into a `Value` argument
+            if (alias) {
+                if (!isCallExpression(up) || up.expression === n) return false;
+                const at = Array.from(up.arguments).indexOf(n);
+                if (at < 0) return false;
+                return this.rustMarketSlot(this.rustCalleeParams(up), at) || this.rustSmktAliasValueUse(n);
+            }
             if (isBinaryExpression(up) && up.left === n && up.operatorToken.kind === SyntaxKind.EqualsToken) {
                 return up.parent?.kind === SyntaxKind.ExpressionStatement && this.rustIsSafeMarketCall(up.right);
             }
             if (this.rustDictKeyReadUse(n)) return true;
+            // ral-46i: the initializer of a `const a: Market = m` alias whose own uses all take the struct
+            if (up?.kind === SyntaxKind.VariableDeclaration && up.initializer === n && this.rustSmktAliasSource(up) === declaration
+                && this.rustSafeMarketLocalOk(up, true)) return true;
             // `m['symbol']` keying another lookup reads the struct's own field (a `Value` key either way)
             if (this.rustMarketKeyOfLookup(n)) return true;
             // ral-43e: handed back whole from a market-returning venue method
@@ -29524,7 +29573,9 @@ export class RustTranspiler extends BaseTranspiler {
         if (isIdentifier(inner)) {
             const name = super.printIdentifier(inner);
             if (this.rustMarketSlotParamOf(inner) !== undefined) return name;
-            if (this.rustSafeMarketLocalOf(inner) !== undefined || this.rustTypedMarketLocalOf(inner) !== undefined) return `Some(&${name})`;
+            const smkt = this.rustSafeMarketLocalOf(inner);
+            if (smkt !== undefined && this.rustSmktAliasSource(smkt) !== undefined) return `Some(${name})`;
+            if (smkt !== undefined || this.rustTypedMarketLocalOf(inner) !== undefined) return `Some(&${name})`;
             if (this.rustOptMarketLocalOf(inner) !== undefined) return `${name}.as_ref()`;
         }
         if (this.rustIsSafeMarketCall(inner)) return `Some(&${this.printNode(inner, identation).trim()})`;

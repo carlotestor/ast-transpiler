@@ -16467,3 +16467,20 @@ describe('ral-45c: a Dictionary<Dict> row written at a literal key with a write-
         expect(r).toContain('add_element_to_object(&mut value');
     });
 });
+
+describe('ral-46i: a `const a: Market = s` alias of a safeMarket struct local is a struct', () => {
+    test('both the safeMarket local and its alias print crate::types::Market; the alias borrows the record (no copy); Value places take Value::from(alias)', () => {
+        const dir = path.join (rustFixtureRoot, 'ral46i-smkt-alias');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface MarketInterface { symbol: string; [key: string]: any }\nexport type Market = MarketInterface | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeMarket (marketId: Str = undefined, market: Market = undefined, delimiter: Str = undefined): MarketInterface { return { 'symbol': marketId } as MarketInterface; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Market } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parseFee (fee: Dict, market: Market = undefined): Dict {\n        return { 'symbol': this.safeString (market, 'symbol') };\n    }\n    fromEp (ep: any, market: any = undefined) {\n        return ep;\n    }\n    parseTicker (ticker: Dict, market: Market = undefined): Dict {\n        const marketId = this.safeString (ticker, 'symbol');\n        const marketResolved = this.safeMarket (marketId, market);\n        const marketValue: Market = marketResolved;\n        const symbol = marketResolved['symbol'];\n        const last = this.fromEp (this.safeString (ticker, 'close'), marketValue);\n        return { 'symbol': symbol, 'last': last, 'fee': this.parseFee (ticker, marketValue) };\n    }\n}\n");
+        const out = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } }).transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        const t = out.slice(out.indexOf('fn parseTicker'));
+        expect(t).toContain('let mut marketResolved: crate::types::Market = ');
+        expect(t).toContain('let marketValue: &crate::types::Market = &marketResolved;');
+        expect(t).toContain('crate::Value::from(marketValue)');
+        expect(t).toContain('Some(marketValue)');
+        expect(t).not.toContain('from_raw(');
+        expect(t).not.toMatch(/let mut market(Resolved|Value): Value/);
+    });
+});

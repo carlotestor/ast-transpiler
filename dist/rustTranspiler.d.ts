@@ -4088,7 +4088,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `this.safeMarket (..)` / `super.safeMarket (..)` resolving to a method that returns the typed market. */
     rustIsSafeMarketCall(init: any): boolean;
     /** `const m = this.safeMarket (..)` whose every use reads a key, lends the record, or rewrites it from `safeMarket`. */
-    rustSafeMarketLocalOk(declaration: any): boolean;
+    /** ral-46i: `const a: Market = s` where `s` is a const declared from `this.safeMarket (..)`: the declaration of `s`. */
+    rustSmktAliasSource(declaration: any): any;
+    /** ral-46i: a whole-value hand-off of a `safeMarket` alias that is neither a lent market slot nor a reader's record. */
+    rustSmktAliasValueUse(n: any): boolean;
+    rustSafeMarketLocalOk(declaration: any, alias?: boolean): boolean;
     /** A use of a `safeMarket` struct local. */
     rustSafeMarketLocalOf(node: any): any;
     /** Argument text for a lent market slot: a typed market lends itself, any other value decodes once. */

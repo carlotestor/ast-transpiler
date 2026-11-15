@@ -63019,6 +63019,10 @@ ${i1}}`;
       return false;
     if (this.rustIsSafeMarketCall(declaration.initializer))
       return this.rustSafeMarketLocalOk(declaration) ? "smkt" : false;
+    if (this.rustSmktAliasSource(declaration) !== void 0) {
+      const source = this.rustSmktAliasSource(declaration);
+      return this.rustMarketLocalKind(source) === "smkt" && this.rustSafeMarketLocalOk(declaration, true) ? "smkt" : false;
+    }
     if (this.rustTypedCallResultType(declaration.initializer) !== void 0) {
       if ((declaration.parent.flags & NodeFlags4.Const) === 0)
         return false;
@@ -63791,6 +63795,8 @@ ${i1}}`;
       const value2 = this.printTypedMarketValue(this.rustSkipWrappers(declaration.initializer).expression);
       return ret === void 0 || value2 === void 0 ? void 0 : `${indent}let mut ${varName}: ${ret} = ${value2}`;
     }
+    if (kind === "smkt" && this.rustSmktAliasSource(declaration) !== void 0)
+      return `${indent}let ${varName}: &crate::types::Market = ${this.printNode(declaration.initializer, 0).trim()}`;
     if (kind === "smkt")
       return `${indent}let mut ${varName}: crate::types::Market = ${this.printNode(declaration.initializer, 0).trim()}`;
     if (kind !== "struct")
@@ -63940,7 +63946,15 @@ ${i1}}`;
       return `crate::Value::from(${super.printIdentifier(node)}.as_ref())`;
     }
     const declaration = this.rustTypedMarketLocalOf(node);
-    if (declaration === void 0 || this.rustMarketReadKey(node) !== void 0 || this.rustMarketLocalKind(declaration) === "smkt")
+    if (declaration !== void 0 && this.rustMarketLocalKind(declaration) === "smkt") {
+      const up = node.parent;
+      if (up?.kind === SyntaxKind7.VariableDeclaration && up.initializer === node && this.rustSmktAliasSource(up) === declaration && this.rustMarketLocalKind(up) === "smkt")
+        return `&${super.printIdentifier(node)}`;
+      if (this.rustSmktAliasValueUse(node))
+        return `crate::Value::from(${super.printIdentifier(node)})`;
+      return void 0;
+    }
+    if (declaration === void 0 || this.rustMarketReadKey(node) !== void 0)
       return void 0;
     if (this.rustMarketReaderArg(node) || this.rustMarketSlotUse(node))
       return void 0;
@@ -81240,7 +81254,37 @@ ${this.getIden(identation)}}`;
     return this.rustReturnsMarket(declaration);
   }
   /** `const m = this.safeMarket (..)` whose every use reads a key, lends the record, or rewrites it from `safeMarket`. */
-  rustSafeMarketLocalOk(declaration) {
+  /** ral-46i: `const a: Market = s` where `s` is a const declared from `this.safeMarket (..)`: the declaration of `s`. */
+  rustSmktAliasSource(declaration) {
+    if (declaration?.kind !== SyntaxKind7.VariableDeclaration || !isIdentifier3(declaration.name) || declaration.parent?.declarations?.length !== 1)
+      return void 0;
+    if ((declaration.parent.flags & NodeFlags4.Const) === 0)
+      return void 0;
+    const type = declaration.type;
+    if (type === void 0 || type.kind !== SyntaxKind7.TypeReference || !isIdentifier3(type.typeName) || String(type.typeName.text) !== "Market")
+      return void 0;
+    const init = declaration.initializer;
+    if (init === void 0 || !isIdentifier3(init))
+      return void 0;
+    const source = this.rustDeclarationOfIdentifier(init);
+    if (source === void 0 || source === declaration || source.kind !== SyntaxKind7.VariableDeclaration || source.name === init)
+      return void 0;
+    if ((source.parent?.flags & NodeFlags4.Const) === 0 || !this.rustIsSafeMarketCall(source.initializer))
+      return void 0;
+    return this.rustEnclosingFunction(source) === this.rustEnclosingFunction(declaration) ? source : void 0;
+  }
+  /** ral-46i: a whole-value hand-off of a `safeMarket` alias that is neither a lent market slot nor a reader's record. */
+  rustSmktAliasValueUse(n) {
+    const declaration = isIdentifier3(n) ? this.rustDeclarationOfIdentifier(n) : void 0;
+    if (declaration === void 0 || declaration.name === n || this.rustSmktAliasSource(declaration) === void 0)
+      return false;
+    const up = n.parent;
+    if (up === void 0 || !isCallExpression6(up) || up.expression === n)
+      return false;
+    const at = Array.from(up.arguments).indexOf(n);
+    return at >= 0 && !this.rustMarketSlot(this.rustCalleeParams(up), at);
+  }
+  rustSafeMarketLocalOk(declaration, alias = false) {
     const file = String(declaration.getSourceFile?.()?.fileName ?? "");
     if (!/ts[/]src[/]/.test(file) || /ts[/]src[/](pro[/])?test[/]/.test(file))
       return false;
@@ -81252,10 +81296,20 @@ ${this.getIden(identation)}}`;
       if (this.rustEnclosingFunction(n) !== scope)
         return false;
       const up = n.parent;
+      if (alias) {
+        if (!isCallExpression6(up) || up.expression === n)
+          return false;
+        const at2 = Array.from(up.arguments).indexOf(n);
+        if (at2 < 0)
+          return false;
+        return this.rustMarketSlot(this.rustCalleeParams(up), at2) || this.rustSmktAliasValueUse(n);
+      }
       if (isBinaryExpression5(up) && up.left === n && up.operatorToken.kind === SyntaxKind7.EqualsToken) {
         return up.parent?.kind === SyntaxKind7.ExpressionStatement && this.rustIsSafeMarketCall(up.right);
       }
       if (this.rustDictKeyReadUse(n))
+        return true;
+      if (up?.kind === SyntaxKind7.VariableDeclaration && up.initializer === n && this.rustSmktAliasSource(up) === declaration && this.rustSafeMarketLocalOk(up, true))
         return true;
       if (this.rustMarketKeyOfLookup(n))
         return true;
@@ -81287,7 +81341,10 @@ ${this.getIden(identation)}}`;
       const name = super.printIdentifier(inner);
       if (this.rustMarketSlotParamOf(inner) !== void 0)
         return name;
-      if (this.rustSafeMarketLocalOf(inner) !== void 0 || this.rustTypedMarketLocalOf(inner) !== void 0)
+      const smkt = this.rustSafeMarketLocalOf(inner);
+      if (smkt !== void 0 && this.rustSmktAliasSource(smkt) !== void 0)
+        return `Some(${name})`;
+      if (smkt !== void 0 || this.rustTypedMarketLocalOf(inner) !== void 0)
         return `Some(&${name})`;
       if (this.rustOptMarketLocalOf(inner) !== void 0)
         return `${name}.as_ref()`;
