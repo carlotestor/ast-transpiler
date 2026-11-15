@@ -1308,6 +1308,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_BORROW_STR_METHODS;
     /** wg: `k.m (..)` with `m` a pure string method (reads the receiver, returns a fresh value). */
     rustBorrowStrMethodRecv(n: any): boolean;
+    /** ral-57f: `bucket` (`this.F[k]`) is the receiver of a plain two-level read `this.F[k][k2]` that is no assignment
+     *  target, update, delete or deeper chain link, in a non-test source. */
+    rustFieldBucketChainRead(bucket: any): boolean;
     /** ral-56f: `read` (`this.F[k]`) is an argument of a `this.` call that is the whole value of the statement write
      *  `this.F[k] = this.m (.., this.F[k], ..)` whose key admits the bucket reread. */
     rustFieldBucketRereadUse(wrapped: any, read: any): boolean;
@@ -2017,10 +2020,14 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBoolCompareSeed(node: any): boolean;
     /** `m['symbol']` / `m.id` off a loaded `crate::types::Market` local: the field's own `String` / `Option<String>`
      *  (the boxed read cloned the same field), so a local initialised from it is a typed string. */
-    rustMarketFieldScalar(node: any): {
+    rustMarketFieldScalar(node: any, placed?: boolean): {
         kind: string;
         text: string;
     } | undefined;
+    /** ral-57k: an arm of `x = c ? m['quote'] : m['base']` (a statement write into an initialised local, kucoin parseTrade
+     *  `feeCurrency`) whose other arm is a field read of the same kind off the same typed market local: the ternary is that
+     *  one kind, each arm the very `key_read` the boxed form printed (`None` where it held Null). */
+    rust57kMarketTernaryArm(top: any): boolean;
     /** A read off a struct local: a listed field natively, any other key off `raw`; `asBool` for a condition slot. */
     printTypedMarketRead(node: any, asBool?: boolean): string | undefined;
     private static readonly RUST_MARKET_FLAG_KEYS;

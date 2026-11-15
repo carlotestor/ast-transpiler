@@ -59672,6 +59672,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       return "frd";
     if (this.rustFieldBucketRereadUse(wrapped, up))
       return "frd";
+    if (this.rustFieldBucketChainRead(up))
+      return "frd";
     if (!isBinaryExpression5(write) || write.left !== up || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
       return void 0;
     if (new RegExp(`\\b${String(n.text)}\\b`).test(String(write.right.getText()))) {
@@ -60182,14 +60184,14 @@ ${binding(plan.indent)}` : ""), head: "" };
     const last = this.rustSkipWrappers(left.argumentExpression);
     const lkind = isIdentifier3(last) ? this.rustScalarLocalOf(last)?.kind : void 0;
     const lname = isIdentifier3(last) ? super.printIdentifier(last) : "";
-    const lastText = isStringLiteral3(last) ? `${JSON.stringify(String(last.text))}.to_string()` : this.rustScalarUseForms.get(last) !== "nkey" ? void 0 : lkind === "str" ? `${lname}.to_string()` : lkind === "ostr" ? `${lname}.as_deref().unwrap_or("null").to_string()` : void 0;
+    const lastText = isStringLiteral3(last) ? `${JSON.stringify(String(last.text))}.to_string()` : this.rustScalarUseForms.get(last) !== "nkey" ? lkind === void 0 && isIdentifier3(last) && /^[A-Za-z_]\w*$/.test(lname) ? `crate::runtime::stringify_param(&${lname})` : void 0 : lkind === "str" ? `${lname}.to_string()` : lkind === "ostr" ? `${lname}.as_deref().unwrap_or("null").to_string()` : void 0;
     if (lastText === void 0)
       return void 0;
     const bound = /\bself\b/.test(value);
     const chain = `if let Value::Dict(__bf03d0) = &mut self.${field} { let __bf03e1 = std::sync::Arc::make_mut(__bf03d0).entry(${upperText}).or_insert(Value::Null); if let Value::Dict(__r05d) = __bf03e1 { std::sync::Arc::make_mut(__r05d).insert(${lastText}, ${bound ? "__be_tmp" : value}); } }`;
     const insert = bound ? `{ let __be_tmp = ${value}; ${chain} }` : chain;
     if (insert.split("\n").some((l) => l.length + 10 > 400)) {
-      const lastKey = isStringLiteral3(last) ? `Value::Str(${JSON.stringify(String(last.text))}.into())` : `Value::from(${lname}${lkind === "str" ? ".as_str()" : ".as_deref()"})`;
+      const lastKey = isStringLiteral3(last) ? `Value::Str(${JSON.stringify(String(last.text))}.into())` : lkind === void 0 ? lname : `Value::from(${lname}${lkind === "str" ? ".as_str()" : ".as_deref()"})`;
       return `add_element_to_object(get_value_mut(&mut self.${field}, &Value::from(${uname}${ukind === "str" ? ".as_str()" : ".as_deref()"})), &${lastKey}, ${value})`;
     }
     return insert;
@@ -60488,6 +60490,21 @@ ${binding(plan.indent)}` : ""), head: "" };
     const access = n.parent;
     const call = access?.parent;
     return isPropertyAccessExpression3(access) && access.expression === n && _RustTranspiler.RUST_BORROW_STR_METHODS.has(String(access.name.text)) && isCallExpression6(call) && call.expression === access;
+  }
+  /** ral-57f: `bucket` (`this.F[k]`) is the receiver of a plain two-level read `this.F[k][k2]` that is no assignment
+   *  target, update, delete or deeper chain link, in a non-test source. */
+  rustFieldBucketChainRead(bucket) {
+    if (this.rustTestTierSource(bucket))
+      return false;
+    const outer = bucket.parent;
+    if (!isElementAccessExpression4(outer) || outer.expression !== bucket)
+      return false;
+    const up = outer.parent;
+    if (up === void 0 || isElementAccessExpression4(up) && up.expression === outer || isPropertyAccessExpression3(up) || up.kind === SyntaxKind7.DeleteExpression || isPrefixUnaryExpression3(up) || up.kind === SyntaxKind7.PostfixUnaryExpression)
+      return false;
+    if (isBinaryExpression5(up) && up.left === outer && rustIsAssignmentOperator(up.operatorToken.kind))
+      return false;
+    return this.isNativeAccessPositionSafe(outer) && !this.isNativeWriteTargetBase(outer) && !this.isNativeWriteTargetBase(bucket);
   }
   /** ral-56f: `read` (`this.F[k]`) is an argument of a `this.` call that is the whole value of the statement write
    *  `this.F[k] = this.m (.., this.F[k], ..)` whose key admits the bucket reread. */
@@ -65607,13 +65624,13 @@ ${i1}}`;
   // ── string fields of a typed market local as scalar seeds (rustMarketFieldScalar) ──
   /** `m['symbol']` / `m.id` off a loaded `crate::types::Market` local: the field's own `String` / `Option<String>`
    *  (the boxed read cloned the same field), so a local initialised from it is a typed string. */
-  rustMarketFieldScalar(node) {
+  rustMarketFieldScalar(node, placed = true) {
     if (node === void 0 || !(isElementAccessExpression4(node) || isPropertyAccessExpression3(node)))
       return void 0;
     let top = node;
     while (top.parent !== void 0 && (isParenthesizedExpression3(top.parent) || top.parent.kind === SyntaxKind7.AsExpression))
       top = top.parent;
-    if (!isVariableDeclaration3(top.parent) || top.parent.initializer !== top)
+    if (placed && !(isVariableDeclaration3(top.parent) && top.parent.initializer === top) && !this.rust57kMarketTernaryArm(top))
       return void 0;
     const currency = this.rustCurrencyLocalOf(node.expression);
     if (currency !== void 0) {
@@ -65648,6 +65665,40 @@ ${i1}}`;
       return { kind: "str", text: `${recv}.${field}.clone()` };
     const optField = _RustTranspiler.RUST_MARKET_OPT_STR_FIELDS[key];
     return optField !== void 0 ? { kind: "ostr", text: `${recv}.${optField}.as_deref().map(str::to_owned)` } : void 0;
+  }
+  /** ral-57k: an arm of `x = c ? m['quote'] : m['base']` (a statement write into an initialised local, kucoin parseTrade
+   *  `feeCurrency`) whose other arm is a field read of the same kind off the same typed market local: the ternary is that
+   *  one kind, each arm the very `key_read` the boxed form printed (`None` where it held Null). */
+  rust57kMarketTernaryArm(top) {
+    const cond = top?.parent;
+    if (cond === void 0 || !isConditionalExpression4(cond) || cond.whenTrue !== top && cond.whenFalse !== top)
+      return false;
+    let ctop = cond;
+    while (isParenthesizedExpression3(ctop.parent))
+      ctop = ctop.parent;
+    const write = ctop.parent;
+    if (!isBinaryExpression5(write) || write.right !== ctop || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const target = this.unwrapParens(write.left);
+    const local = isIdentifier3(target) ? this.rustDeclaredNode(target) : void 0;
+    if (local === void 0 || !isVariableDeclaration3(local) || local.initializer === void 0 || this.literalKindOfNode(local.initializer) === "null")
+      return false;
+    const strip = (e) => {
+      let x = e;
+      while (x !== void 0 && (isParenthesizedExpression3(x) || x.kind === SyntaxKind7.AsExpression))
+        x = x.expression;
+      return x;
+    };
+    const a = strip(cond.whenTrue);
+    const b = strip(cond.whenFalse);
+    if (!(isElementAccessExpression4(a) || isPropertyAccessExpression3(a)) || !(isElementAccessExpression4(b) || isPropertyAccessExpression3(b)))
+      return false;
+    const ra = this.unwrapParens(a.expression);
+    const rb = this.unwrapParens(b.expression);
+    if (!isIdentifier3(ra) || !isIdentifier3(rb) || this.rustDeclaredNode(ra) === void 0 || this.rustDeclaredNode(ra) !== this.rustDeclaredNode(rb))
+      return false;
+    const ka = this.rustMarketFieldScalar(a, false)?.kind;
+    return ka !== void 0 && ka === this.rustMarketFieldScalar(b, false)?.kind;
   }
   /** A read off a struct local: a listed field natively, any other key off `raw`; `asBool` for a condition slot. */
   printTypedMarketRead(node, asBool = false) {
@@ -67315,6 +67366,9 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
         return void 0;
       return this.printNativeListIndex(receiverText, index, receiverNode);
     }
+    const fieldKeyRead = isElementAccessExpression4(keyNode.parent) && keyNode.parent.argumentExpression === keyNode ? this.printFieldKeyRead(keyNode.parent) : void 0;
+    if (fieldKeyRead !== void 0)
+      return fieldKeyRead;
     const dictRead = this.rustBearerDictDynamicRead(receiverText, receiverNode, keyNode) ?? this.printNativeDynamicMapAccess(receiverText, receiverNode, keyNode) ?? this.printNativeThisFieldDynamicMapAccess(receiverText, receiverNode, keyNode) ?? this.rustDynamicRead(receiverText, receiverNode, keyNode) ?? this.rustFieldDynamicRead(receiverText, receiverNode, keyNode) ?? this.rustLocalDictRead(receiverText, receiverNode, keyNode);
     if (dictRead !== void 0)
       return dictRead;
