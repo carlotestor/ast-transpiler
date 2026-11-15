@@ -54240,6 +54240,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       let write = _is.isIdentifier.call(void 0, rhs) && this.literalKindOfNode(rhs) !== "null" ? _nullishCoalesce(this.rustScalarIdentifierKind(rhs), () => ( (this.rustNilValueStrAlias(rhs) ? "ostr" : void 0))) : this.rustScalarValueKind(rhs, true);
       if (write === void 0)
         write = this.rustNilSelfArmTernaryKind(rhs, declaration);
+      if (write === void 0 && this.rust45bSelfStrWrite(rhs, declaration))
+        write = "ostr";
       joined = this.rustScalarJoinKinds(joined, write);
       if (joined === void 0)
         return void 0;
@@ -54277,6 +54279,22 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (boxed.length > 0)
       this.rustScalarGuarded.add(declaration);
     return kind;
+  }
+  /** ral-45b: `x.slice(..)` / case of the declared local itself, in a shape whose `Option<String>`
+   *  receiver form maps `None` to `None` (the boxed helper gives `Null` for a `Null` receiver too). */
+  rust45bSelfStrWrite(rhs, declaration) {
+    const m = this.rustScalarStrMethod(rhs, true);
+    if (m === void 0 || !_is.isIdentifier.call(void 0, m.recv) || this.rustDeclaredNode(m.recv) !== declaration)
+      return false;
+    const args = Array.from(_nullishCoalesce(rhs.arguments, () => ( [])));
+    if (m.method === "slice") {
+      if (this.rustScalarSeeding && args.length >= 1 && args.length <= 2)
+        return true;
+      return this.rustStrSliceBounds(args) !== void 0 || this.rustStrSliceVarBounds(args) !== void 0;
+    }
+    if (m.method === "toLowerCase" || m.method === "toUpperCase")
+      return args.length === 0;
+    return false;
   }
   /** za: kind of the scalar arm of `c ? <scalar> : x` / `c ? x : <scalar>` where the other arm is the written local itself. */
   rustNilSelfArmTernaryKind(rhs, declaration) {

@@ -390,6 +390,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_NIL_SCALAR_NATIVE_FORMS;
     /** `ostr|oint|onum` for an empty local the scalar rule types, else undefined. */
     rustNilScalarKind(declaration: any): string | undefined;
+    /** ral-45b: `x.slice(..)` / case of the declared local itself, in a shape whose `Option<String>`
+     *  receiver form maps `None` to `None` (the boxed helper gives `Null` for a `Null` receiver too). */
+    rust45bSelfStrWrite(rhs: any, declaration: any): boolean;
     /** za: kind of the scalar arm of `c ? <scalar> : x` / `c ? x : <scalar>` where the other arm is the written local itself. */
     rustNilSelfArmTernaryKind(rhs: any, declaration: any): string | undefined;
     rustNilScalarHandOff(declaration: any, scope: any, kind: string, boxed: any[]): boolean;

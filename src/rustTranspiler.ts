@@ -2861,6 +2861,9 @@ export class RustTranspiler extends BaseTranspiler {
             let write = isIdentifier(rhs) && this.literalKindOfNode(rhs) !== 'null' ? (this.rustScalarIdentifierKind(rhs) ?? (this.rustNilValueStrAlias(rhs) ? 'ostr' : undefined)) : this.rustScalarValueKind(rhs, true);
             // za: `x = c ? <scalar> : x` keeps x on one arm: the write's kind is the other arm's (joined below with x's own)
             if (write === undefined) write = this.rustNilSelfArmTernaryKind(rhs, declaration);
+            // ral-45b: `x = x.slice(..)` / `x.toLowerCase()` keeps x's own optional string (the native
+            // forms map `None` through), so the self write adds no kind of its own
+            if (write === undefined && this.rust45bSelfStrWrite(rhs, declaration)) write = 'ostr';
             joined = this.rustScalarJoinKinds(joined, write);
             if (joined === undefined) return undefined;
         }
@@ -2893,6 +2896,22 @@ export class RustTranspiler extends BaseTranspiler {
         // boxed uses are checked against the printed method lines
         if (boxed.length > 0) this.rustScalarGuarded.add(declaration);
         return kind;
+    }
+
+    /** ral-45b: `x.slice(..)` / case of the declared local itself, in a shape whose `Option<String>`
+     *  receiver form maps `None` to `None` (the boxed helper gives `Null` for a `Null` receiver too). */
+    rust45bSelfStrWrite(rhs: any, declaration: any): boolean {
+        const m = this.rustScalarStrMethod(rhs, true);
+        if (m === undefined || !isIdentifier(m.recv) || this.rustDeclaredNode(m.recv) !== declaration) return false;
+        const args: any[] = Array.from(rhs.arguments ?? []);
+        if (m.method === 'slice') {
+            // while the solver seeds, a bound local may still be undecided (its own kind can hang on this local, as
+            // `quesPos = uri.indexOf ('?')`): assume it, the later passes re-prove the bounds
+            if (this.rustScalarSeeding && args.length >= 1 && args.length <= 2) return true;
+            return this.rustStrSliceBounds(args) !== undefined || this.rustStrSliceVarBounds(args) !== undefined;
+        }
+        if (m.method === 'toLowerCase' || m.method === 'toUpperCase') return args.length === 0;
+        return false;
     }
 
     /** za: kind of the scalar arm of `c ? <scalar> : x` / `c ? x : <scalar>` where the other arm is the written local itself. */
