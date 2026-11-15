@@ -10667,20 +10667,6 @@ export class RustTranspiler extends BaseTranspiler {
         }).join('\n');
     }
 
-    /** ral-54k: map local `name` is read (not written) by the key local `key` somewhere (`m[key]` outside an assignment target). */
-    rustMapReadByLocal(declaration: any, name: string, key: any): boolean {
-        let read = false;
-        this.rustLocalUsesAll(declaration, name, false, (u) => {
-            const access: any = u.parent;
-            if (isElementAccessExpression(access) && access.expression === u && !(isBinaryExpression(access.parent) && access.parent.left === access)) {
-                const k: any = this.rustSkipWrappers(access.argumentExpression);
-                if (isIdentifier(k) && this.rustDeclaredNode(k) === key) read = true;
-            }
-            return true;
-        });
-        return read;
-    }
-
     /** ral-54k: `this.safeCurrencyCode (..)` (base reader, `string` return). */
     rustSafeCurrencyCodeInit(init: any): boolean {
         const call: any = this.rustSkipWrappers(init);
@@ -10808,7 +10794,9 @@ export class RustTranspiler extends BaseTranspiler {
             // ral-54k: a `safeCurrencyCode` result (an owned `Option<String>`, never a borrowed element read) keys the insert by
             // its own text even when the enumerated map is also read by key afterwards (htx fetchBalance `subResult[code]`):
             // the later reads key by other locals and the map's keys are the same strings either way
-            if (enumerated && keyRead && this.rustSafeCurrencyCodeInit(local.initializer) && !this.rustMapReadByLocal(declaration, name, local)) return this.rustScalarInsertKeyUse(n);
+            // ral-55k: a map also read back by the key local itself is fine too (digifinex): the read prints `m.get(k.as_deref()..)`
+            // and the push on the bucket read is printed natively by arrPush (rustLitKeyBearerReadLocal), not by a ccxt pass
+            if (enumerated && keyRead && this.rustSafeCurrencyCodeInit(local.initializer)) return this.rustScalarInsertKeyUse(n);
             if (enumerated) return !keyRead && (isElementAccessExpression(this.rustSkipWrappers(local.initializer)) || this.rustTbNetworkCodeInit(local.initializer))
                 && this.rustScalarInsertKeyUse(n);
             return this.rustBearerWriteKeyOk(n, name) || this.rustScalarInsertKeyUse(n);
@@ -30100,6 +30088,15 @@ export class RustTranspiler extends BaseTranspiler {
             const bareValue = RustTranspiler.cloneIfBareLocal(bareArg);
             return `if let Value::Arr(__a) = &mut ${name} { std::sync::Arc::make_mut(__a).push(${bareValue}); }`;
         }
+        // ral-55k: `const f = m[k]; const x = f['lit']; x.push (v)` with `m` a typed plain map: `x` is plain data two reads down.
+        // The printer owns this push (it used to be finished by ccxt's rustVecPushInline, which proves the
+        // `m.get(k.as_str()..)` text only and so lost the push once `k` printed as a typed key)
+        if (name !== undefined && parsedArg !== undefined && this.rustLitKeyBearerReadLocal(recv)
+            && node?.arguments?.length === 1 && node.arguments[0].kind !== SyntaxKind.SpreadElement
+            && node.parent?.kind === SyntaxKind.ExpressionStatement && name.trim() === this.printNode(recv, 0).trim()
+            && this.rustVecPushShape(node, String(recv.text))) {
+            return `if let Value::Arr(__a) = &mut ${name} { std::sync::Arc::make_mut(__a).push(${RustTranspiler.cloneIfBareLocal(parsedArg.trim())}); }`;
+        }
         if (name === undefined || parsedArg === undefined || node?.arguments?.length !== 1
             || node.arguments[0].kind === SyntaxKind.SpreadElement || node.parent?.kind !== SyntaxKind.ExpressionStatement
             || !this.arrLocal(recv, false) || name.trim() !== this.printNode(recv, 0).trim()) return undefined;
@@ -30111,6 +30108,20 @@ export class RustTranspiler extends BaseTranspiler {
         // `append_to_array` takes the value by move; ccxt's post-pass cloned a bare local there.
         const value = RustTranspiler.cloneIfBareLocal(arg);
         return `if let Value::Arr(__a) = &mut ${name} { std::sync::Arc::make_mut(__a).push(${value}); }`;
+    }
+
+    /** ral-55k: a never-reassigned `Value` local initialised `f['lit']` (string-literal key), where `f` is itself a never-reassigned
+     *  bearerReadLocal (an element read of a typed plain map local). ccxt's write-back pass binds identifier keys only. */
+    rustLitKeyBearerReadLocal(ident: any): boolean {
+        if (ident === undefined || !isIdentifier(ident)) return false;
+        const declaration: any = this.rustSingleLocalDeclaration(ident);
+        if (declaration === undefined || !isVariableDeclaration(declaration) || !isIdentifier(declaration.name)) return false;
+        const init: any = this.rustSkipWrappers(declaration.initializer);
+        if (init === undefined || !isElementAccessExpression(init) || !isStringLiteral(init.argumentExpression)) return false;
+        const base: any = this.rustStripWrappers(init.expression);
+        if (base === undefined || !isIdentifier(base) || !this.bearerReadLocal(base)) return false;
+        const baseDecl: any = this.rustSingleLocalDeclaration(base);
+        return baseDecl !== undefined && isVariableDeclaration(baseDecl) && !this.rustLocalReassigned(baseDecl) && !this.rustLocalReassigned(declaration);
     }
 
     /** A `Value` local whose single declaration is an element read of a local typed as a

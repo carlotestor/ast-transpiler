@@ -18476,12 +18476,37 @@ describe('ral-54k: nested-write keys (bucket entry under an int37 upper key; saf
         expect(out).toContain('let mut code: Option<String> = ');
         expect(out).toContain('.insert(code.as_deref().unwrap_or("null").to_string(), ');
     });
-    test('negative: a safeCurrencyCode key that also reads the map back by itself keeps the local Value (digifinex)', () => {
-        const out = write ('54k-htx-self', htx ('this.safeCurrencyCode').replace ('subResult[code] = this.hold (balance, code, subResult);', 'subResult[code] = this.hold (balance, code, subResult);\n                this.hold (subResult[code]);'));
-        expect(out).toMatch(/let mut code: Value = self/);
-    });
+
     test('negative: a hold() key of the same map keeps the local Value', () => {
         const out = write ('54k-htx-neg', htx ('this.hold'));
         expect(out).toMatch(/let mut code: Value = /);
+    });
+});
+
+describe('ral-55k: digifinex nested-write key (printer owns the bucket push)', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeDict (o: any, k: any, d: any = undefined): Dict | undefined { return o; }\n    safeCurrencyCode (currencyId: Str, currency: any = undefined): Str { return currencyId; }\n    hold (x: any, y: any = undefined, z: any = undefined): any { return x; }\n    depositWithdrawFee (info: any): Dict { return {}; }\n    assignDefaultDepositWithdrawFees (fee: any, currency: any = undefined): any { return fee; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    const fees = (reader: string) => "    parse (rows: Dict[]) {\n        const result: Dict = {};\n        for (let i = 0; i < rows.length; i++) {\n            const entry = this.safeDict (rows, i);\n            const code = " + reader + " (this.safeString (entry, 'currency'));\n            if (code !== undefined) {\n                if (!(code in result)) {\n                    const fee = this.depositWithdrawFee ({});\n                    fee['info'] = [];\n                    result[code] = fee;\n                }\n                const bucket: Dict = result[code];\n                const info = bucket['info'];\n                info.push (entry);\n            }\n        }\n        const codes = Object.keys (result);\n        for (let k = 0; k < codes.length; k++) {\n            const c = codes[k];\n            result[c] = this.assignDefaultDepositWithdrawFees (result[c]);\n        }\n        return result;\n    }\n";
+    test('a safeCurrencyCode key that also reads the map back by itself is Option<String>, and the bucket push is native', () => {
+        const out = write ('55k-dg', fees ('this.safeCurrencyCode'));
+        expect(out).toContain('let mut code: Option<String> = ');
+        expect(out).toContain('.get(code.as_deref().unwrap_or(""))');
+        expect(out).toContain('if let Value::Arr(__a) = &mut info { std::sync::Arc::make_mut(__a).push(');
+        expect(out).not.toContain('append_to_array(&mut info');
+    });
+    test('negative: a hold() key keeps the local Value and the map boxed, so the push keeps the helper', () => {
+        const out = write ('55k-dg-neg', fees ('this.hold'));
+        expect(out).toMatch(/let mut code: Value = /);
+        expect(out).toContain('append_to_array(&mut info');
+    });
+    test('negative: a reassigned bucket read keeps the helper push', () => {
+        const out = write ('55k-dg-re', fees ('this.safeCurrencyCode').replace ('const info = bucket[\'info\'];', 'let info = bucket[\'info\'];\n                info = this.hold (info);'));
+        expect(out).toContain('append_to_array(&mut info');
     });
 });
