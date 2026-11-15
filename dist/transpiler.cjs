@@ -77468,7 +77468,7 @@ ${iden}}`;
           return false;
         const up = n.parent;
         if (_is.isBinaryExpression.call(void 0, up) && up.left === n) {
-          return up.operatorToken.kind === _ast.SyntaxKind.EqualsToken && _optionalChain([up, 'access', _10385 => _10385.parent, 'optionalAccess', _10386 => _10386.kind]) === _ast.SyntaxKind.ExpressionStatement && (this.rustBuiltListWriteSource(up.right) || this.rustDeclaredArrayCallWriteSource(up.right) || this.rustOverloadListCallWriteSource(up.right) || this.rustTypedCoreListCallWriteSource(up.right) || this.rustBuiltListSelfSort(up, name) || this.rustArrayGuardedMove(up) || this.rustOptListGuardedMove(up) !== void 0 || this.rustDefaultedAliasMove(up) !== void 0) && String(up.parent.getText()).split("\n")[0].length <= 200;
+          return up.operatorToken.kind === _ast.SyntaxKind.EqualsToken && _optionalChain([up, 'access', _10385 => _10385.parent, 'optionalAccess', _10386 => _10386.kind]) === _ast.SyntaxKind.ExpressionStatement && (this.rustBuiltListWriteSource(up.right) || this.rustDeclaredArrayCallWriteSource(up.right) || this.rustOverloadListCallWriteSource(up.right) || this.rustTypedCoreListCallWriteSource(up.right) || this.rustBuiltHelperListWriteSource(up.right) || this.rustBuiltListSelfSort(up, name) || this.rustArrayGuardedMove(up) || this.rustOptListGuardedMove(up) !== void 0 || this.rustDefaultedAliasMove(up) !== void 0) && String(up.parent.getText()).split("\n")[0].length <= 200;
         }
         if (_is.isElementAccessExpression.call(void 0, up) && up.expression === n) {
           natives++;
@@ -77775,6 +77775,19 @@ ${iden}}`;
     };
     impl.body.forEachChild(visit);
     return ok && returns > 0;
+  }
+  /** ral-55i: a whole reassignment from a producer the runtime answers as a fresh `Value::Arr` on every path:
+   *  `Object.keys (x)` (runtime object_keys: `Value::Array` for a map, `[]` otherwise; never a ws client handle's key list),
+   *  and `s.split (sep)` (native or runtime split, an array on every path). */
+  rustBuiltHelperListWriteSource(right) {
+    const call = this.rustSkipWrappers(right);
+    if (call === void 0 || !_is.isCallExpression.call(void 0, call) || this.rustTestTierSource(call) || !_is.isPropertyAccessExpression.call(void 0, call.expression))
+      return false;
+    const owner = call.expression.expression;
+    const method = String(call.expression.name.text);
+    if (_is.isIdentifier.call(void 0, owner) && String(owner.text) === "Object")
+      return method === "keys" && call.arguments.length === 1 && this.printClientHandleKeys(call) === void 0;
+    return owner.kind !== _ast.SyntaxKind.ThisKeyword && method === "split" && call.arguments.length === 1;
   }
   /** ral-55i: an identifier argument that cannot be `undefined` at the call: it is a `const` local or an unwritten parameter,
    *  and the call sits in the then branch of `if (a !== undefined)`, or follows `if (a === undefined) throw ..` in an

@@ -3625,6 +3625,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  venue, dispatched virtually or typed, so its `-> Value` result holds a `Value::Arr` and `.into_list()` moves it.
      *  Only a whole reassignment of a built-list local uses it. */
     rustOverloadListCallWriteSource(right: any): boolean;
+    /** ral-55i: a whole reassignment from a producer the runtime answers as a fresh `Value::Arr` on every path:
+     *  `Object.keys (x)` (runtime object_keys: `Value::Array` for a map, `[]` otherwise; never a ws client handle's key list),
+     *  and `s.split (sep)` (native or runtime split, an array on every path). */
+    rustBuiltHelperListWriteSource(right: any): boolean;
     /** ral-55i: an identifier argument that cannot be `undefined` at the call: it is a `const` local or an unwritten parameter,
      *  and the call sits in the then branch of `if (a !== undefined)`, or follows `if (a === undefined) throw ..` in an
      *  enclosing block of the same function. */
