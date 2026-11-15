@@ -924,6 +924,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  local: only uses bound to its own symbol are walked. Any other second binding keeps the plain walk. */
     rustBlockLocalUsesAll(declaration: any, name: string, acceptUse: (n: any) => boolean, scalar?: boolean, skipPropertyNames?: boolean): boolean;
     rustBindingUsesWalk(declaration: any, nodes: any[], own: any, home: any, skip: any[], skipPropertyNames: boolean, acceptUse: (n: any) => boolean, scalar: boolean): boolean;
+    /** ral-58k: the key argument of a base `this.safeDict (src, k, dflt)` that is the whole source of a write to a local
+     *  declared `Dict` (bitget pro handleBalance `account = this.safeDict (this.balance, code, account)`): the written local's
+     *  type is its annotation, never this key's, and the reader takes the key as a boxed `Value` either way. */
+    rust58kDictReaderKeyWrite(n: any, write: any): boolean;
     /** ral-53s: a direct operand of a base `this.sum (a, b)` that is the whole source of a write to another local
      *  (`endTime = this.sum (startTime, oneWeek)`): with this operand typed the call keeps its own combinator kind
      *  (`rustArithCallKind`), so the write prints the same native combinator text the other operands decide, and the
