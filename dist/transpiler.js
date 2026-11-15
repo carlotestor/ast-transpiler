@@ -61940,19 +61940,45 @@ ${ind}];`;
       return false;
     const recv = read.expression;
     const d = this.rustDeclaredNode(recv);
-    if (d === void 0 || d === recv || d.name === recv || !isParameterDeclaration3(d))
+    if (d === void 0 || d === recv || d.name === recv)
+      return false;
+    const ownKeys = !isParameterDeclaration3(d) && this.rustOwnKeysElementKey(recv, n);
+    if (!isParameterDeclaration3(d) && !ownKeys)
       return false;
     const t = this.getChecker().getTypeAtLocation(recv);
-    if (t === void 0 || (t.flags & TypeFlags6.Any) === 0)
+    if (!ownKeys && (t === void 0 || (t.flags & TypeFlags6.Any) === 0))
       return false;
     const up = read.parent;
     if (up === void 0 || isElementAccessExpression4(up) && up.expression === read || up.kind === SyntaxKind7.DeleteExpression || isPrefixUnaryExpression3(up) || up.kind === SyntaxKind7.PostfixUnaryExpression)
       return false;
     if (isBinaryExpression5(up) && up.left === read && rustIsAssignmentOperator(up.operatorToken.kind))
       return false;
-    if (!this.isNativeAccessPositionSafe(read) || this.isNativeWriteTargetBase(read) || this.isWriteBackBindRead(read))
+    if (!this.isNativeAccessPositionSafe(read) || this.isNativeWriteTargetBase(read) || this.isWriteBackBindRead(read) && !(ownKeys && this.rustOwnKeysTypedRowRead(read)))
       return false;
     return !this.isTestSource(recv) && this.rustMapParamDeclaration(recv) === void 0 && this.rustOkeyKind(recv, read) === void 0 && this.rustReadBearerKind(recv) === void 0 && this.rustParamShadowOf(recv) === void 0 && !this.rustLentListUse(recv) && this.printOptListElement(recv, n) === void 0;
+  }
+  /** ral-49e: the read's checker type is a declared record (`Dictionary<Dict>` receiver): its bind prints as the held
+   *  `Option<Dict>` form, which ccxt's `Value`-bind write-back pass never matched, so the borrowed key changes no write-back. */
+  rustOwnKeysTypedRowRead(read) {
+    const t = this.typeOfNodeIfAny(read);
+    return t !== void 0 && (t.flags & TypeFlags6.Any) === 0 && this.primitiveKindOfType(t) === void 0;
+  }
+  /** ral-49e: `k` is `const k = keys[i]` where `keys` is `const keys = Object.keys (m)` and `m` is the receiver's own
+   *  declaration (a local of the same function): every key the list holds is a key `m` had when listed. */
+  rustOwnKeysElementKey(recv, key) {
+    if (!isIdentifier3(key) || !isIdentifier3(recv) || this.rustTestTierSource(key))
+      return false;
+    const kd = this.rustDeclaredNode(key);
+    const init = kd !== void 0 && isVariableDeclaration3(kd) ? this.unwrapParens(kd.initializer) : void 0;
+    if (init === void 0 || !isElementAccessExpression4(init) || !isIdentifier3(init.expression))
+      return false;
+    const ld = this.rustDeclaredNode(init.expression);
+    const call = ld !== void 0 && isVariableDeclaration3(ld) ? this.unwrapParens(ld.initializer) : void 0;
+    if (call === void 0 || !isCallExpression6(call) || call.arguments.length !== 1 || call.expression.getText().replace(/\s+/g, "") !== "Object.keys")
+      return false;
+    const arg = this.unwrapParens(call.arguments[0]);
+    const md = this.rustDeclaredNode(recv);
+    return isIdentifier3(arg) && md !== void 0 && isVariableDeclaration3(md) && this.rustDeclaredNode(arg) === md && this.rustEnclosingFunction(md) === this.rustEnclosingFunction(key);
   }
   /** ral-yg: `this.urls['<lit>'][k]` read only (no write, chain link, delete or update) where `this.urls['<lit>']` is the
    *  base-declared string-keyed map (`rustUrlsMapEntry`): the native read takes the borrowed key off the map the boxed
