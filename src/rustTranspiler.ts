@@ -6813,6 +6813,8 @@ export class RustTranspiler extends BaseTranspiler {
         // 40b: any initialised `String` local keys a proven map read by borrowing it (`m.get(k.as_str())` is the entry
         // `get_value` reads for its `Str` box); ws cache / subscription keys never reach here (rustWsCacheMapKeyUse above)
         if (kind === 'str' && this.rustInitKeyLocal(n) && !this.rustTestTierSource(n) && !this.rust40bProTier(n) && this.rust40bFieldKeyRead(n)) return 'okey';
+        // ral-43c: a string key into an unproven `any` receiver reads through `get_value`, whose key is `impl ValueKey`
+        if ((kind === 'str' || kind === 'ostr') && this.rustInitKeyLocal(n) && !this.rustTestTierSource(n) && this.rustAnyGetValueKeyUse(n)) return 'okey';
         if (kind === 'ostr' && this.rustInitKeyLocal(n) && this.rustElemKeyInUse(n)) return 'kin';
         // qf: the key of any other `k in obj` test boxes once (`in_op` reads a `Str` key or misses on `Null`, as the `Value` local did)
         // td: also through a `(k as string)` cast of the key (the cast prints nothing)
@@ -9814,6 +9816,29 @@ export class RustTranspiler extends BaseTranspiler {
         return kind === 'map' || (kind === 'value' && RUST_PLAIN_PLACE.test(this.printNode(read.expression, 0).trim()));
     }
 
+    /** ral-43c: a one-level read `m[k]` (no write, chain link, delete or update) on an identifier parameter typed `any` that no
+     *  typed-container rule holds: the boxed read is `get_value(&m, &k)`; the typed key is handed to `get_value` as is
+     *  (`impl ValueKey` boxes it inside, so the lookup is the same `Str` / `Null` key the boxed read took). */
+    rustAnyGetValueKeyUse(n: any): boolean {
+        const read: any = n.parent;
+        if (!isElementAccessExpression(read) || read.argumentExpression !== n || !isIdentifier(read.expression)) return false;
+        // a parameter receiver only, checked before any typing rule runs (a local receiver's own typing would be decided
+        // re-entrantly from here and cached early: ws `tickers` locals fell back to Value in the probe)
+        const recv: any = read.expression;
+        const d: any = this.rustDeclaredNode(recv);
+        if (d === undefined || d === recv || d.name === recv || !isParameterDeclaration(d)) return false;
+        const t: any = this.getChecker().getTypeAtLocation(recv);
+        if (t === undefined || (t.flags & TypeFlags.Any) === 0) return false;
+        const up: any = read.parent;
+        if (up === undefined || (isElementAccessExpression(up) && up.expression === read) || up.kind === SyntaxKind.DeleteExpression
+            || isPrefixUnaryExpression(up) || up.kind === SyntaxKind.PostfixUnaryExpression) return false;
+        if (isBinaryExpression(up) && up.left === read && rustIsAssignmentOperator(up.operatorToken.kind)) return false;
+        if (!this.isNativeAccessPositionSafe(read) || this.isNativeWriteTargetBase(read) || this.isWriteBackBindRead(read)) return false;
+        return !this.isTestSource(recv) && this.rustMapParamDeclaration(recv) === undefined && this.rustOkeyKind(recv, read) === undefined
+            && this.rustReadBearerKind(recv) === undefined && this.rustParamShadowOf(recv) === undefined && !this.rustLentListUse(recv)
+            && this.printOptListElement(recv, n) === undefined;
+    }
+
     /** ral-yg: `this.urls['<lit>'][k]` read only (no write, chain link, delete or update) where `this.urls['<lit>']` is the
      *  base-declared string-keyed map (`rustUrlsMapEntry`): the native read takes the borrowed key off the map the boxed
      *  read reached (a non-map entry or a `None` key reads Null, as `get_value` did on a non-map or a `Null` key). */
@@ -9843,10 +9868,12 @@ export class RustTranspiler extends BaseTranspiler {
         if (this.rustBorrowedIndexReads.has(node)) return undefined;
         const recv = this.printNode(node.expression, 0).trim();
         const name = super.printIdentifier(key);
+        if (keyKind === 'str' && this.rustAnyGetValueKeyUse(key)) return `get_value(&${recv}, ${name}.as_str())`;
         if (keyKind === 'str') {
             if (this.rustOkeyKind(node.expression, node) === 'map') return `${recv}.get(${name}.as_str()).cloned().unwrap_or(Value::Null)`;
             return `(if let Some(__m) = ${recv}.as_map() { __m.get(${name}.as_str()).cloned().unwrap_or(Value::Null) } else { Value::Null })`;
         }
+        if (this.rustAnyGetValueKeyUse(key)) return `get_value(&${recv}, ${name}.${keyKind === 'str' ? 'as_str' : 'as_deref'}())`;
         if (this.rustOkeyKind(node.expression, node) === 'map') return `${recv}.get(${name}.as_deref().unwrap_or("")).cloned().unwrap_or(Value::Null)`;
         return `(if let (Some(__m), Some(__k)) = (${recv}.as_map(), ${name}.as_deref()) { __m.get(__k).cloned().unwrap_or(Value::Null) } else { Value::Null })`;
     }

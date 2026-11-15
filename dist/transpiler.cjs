@@ -58122,6 +58122,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "okey";
     if (kind === "str" && this.rustInitKeyLocal(n) && !this.rustTestTierSource(n) && !this.rust40bProTier(n) && this.rust40bFieldKeyRead(n))
       return "okey";
+    if ((kind === "str" || kind === "ostr") && this.rustInitKeyLocal(n) && !this.rustTestTierSource(n) && this.rustAnyGetValueKeyUse(n))
+      return "okey";
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustElemKeyInUse(n))
       return "kin";
     if ((kind === "str" || kind === "ostr") && this.rustInKeyTop(n) !== void 0 && !this.rustTestTierSource(n) && this.rustInKeyInitialised(n))
@@ -61360,6 +61362,29 @@ ${ind}];`;
     const kind = this.rustOkeyKind(read.expression, read);
     return kind === "map" || kind === "value" && RUST_PLAIN_PLACE.test(this.printNode(read.expression, 0).trim());
   }
+  /** ral-43c: a one-level read `m[k]` (no write, chain link, delete or update) on an identifier parameter typed `any` that no
+   *  typed-container rule holds: the boxed read is `get_value(&m, &k)`; the typed key is handed to `get_value` as is
+   *  (`impl ValueKey` boxes it inside, so the lookup is the same `Str` / `Null` key the boxed read took). */
+  rustAnyGetValueKeyUse(n) {
+    const read = n.parent;
+    if (!_is.isElementAccessExpression.call(void 0, read) || read.argumentExpression !== n || !_is.isIdentifier.call(void 0, read.expression))
+      return false;
+    const recv = read.expression;
+    const d = this.rustDeclaredNode(recv);
+    if (d === void 0 || d === recv || d.name === recv || !_is.isParameterDeclaration.call(void 0, d))
+      return false;
+    const t = this.getChecker().getTypeAtLocation(recv);
+    if (t === void 0 || (t.flags & _sync.TypeFlags.Any) === 0)
+      return false;
+    const up = read.parent;
+    if (up === void 0 || _is.isElementAccessExpression.call(void 0, up) && up.expression === read || up.kind === _ast.SyntaxKind.DeleteExpression || _is.isPrefixUnaryExpression.call(void 0, up) || up.kind === _ast.SyntaxKind.PostfixUnaryExpression)
+      return false;
+    if (_is.isBinaryExpression.call(void 0, up) && up.left === read && rustIsAssignmentOperator(up.operatorToken.kind))
+      return false;
+    if (!this.isNativeAccessPositionSafe(read) || this.isNativeWriteTargetBase(read) || this.isWriteBackBindRead(read))
+      return false;
+    return !this.isTestSource(recv) && this.rustMapParamDeclaration(recv) === void 0 && this.rustOkeyKind(recv, read) === void 0 && this.rustReadBearerKind(recv) === void 0 && this.rustParamShadowOf(recv) === void 0 && !this.rustLentListUse(recv) && this.printOptListElement(recv, n) === void 0;
+  }
   /** ral-yg: `this.urls['<lit>'][k]` read only (no write, chain link, delete or update) where `this.urls['<lit>']` is the
    *  base-declared string-keyed map (`rustUrlsMapEntry`): the native read takes the borrowed key off the map the boxed
    *  read reached (a non-map entry or a `None` key reads Null, as `get_value` did on a non-map or a `Null` key). */
@@ -61390,11 +61415,15 @@ ${ind}];`;
       return void 0;
     const recv = this.printNode(node.expression, 0).trim();
     const name = super.printIdentifier(key);
+    if (keyKind === "str" && this.rustAnyGetValueKeyUse(key))
+      return `get_value(&${recv}, ${name}.as_str())`;
     if (keyKind === "str") {
       if (this.rustOkeyKind(node.expression, node) === "map")
         return `${recv}.get(${name}.as_str()).cloned().unwrap_or(Value::Null)`;
       return `(if let Some(__m) = ${recv}.as_map() { __m.get(${name}.as_str()).cloned().unwrap_or(Value::Null) } else { Value::Null })`;
     }
+    if (this.rustAnyGetValueKeyUse(key))
+      return `get_value(&${recv}, ${name}.${keyKind === "str" ? "as_str" : "as_deref"}())`;
     if (this.rustOkeyKind(node.expression, node) === "map")
       return `${recv}.get(${name}.as_deref().unwrap_or("")).cloned().unwrap_or(Value::Null)`;
     return `(if let (Some(__m), Some(__k)) = (${recv}.as_map(), ${name}.as_deref()) { __m.get(__k).cloned().unwrap_or(Value::Null) } else { Value::Null })`;

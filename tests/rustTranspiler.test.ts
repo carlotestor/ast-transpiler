@@ -15601,3 +15601,27 @@ describe('ral-43c: an Option<Dict> local as the extend head', () => {
         expect(t3).toContain('let mut raw: Value =');
     });
 });
+
+describe('ral-43c: a typed string key into an any receiver hands the key to get_value', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    hold (x: any): any { return x; }\n}\n";
+    const venue = "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n    walk (ledger: any) {\n        const keys = Object.keys (ledger);\n        const out = [];\n        for (let i = 0; i < keys.length; i++) {\n            const key = keys[i];\n            const value = ledger[key];\n            out.push (this.hold (value));\n        }\n        return out;\n    }\n    pick (markets: any, symbols: string[]) {\n        for (let i = 0; i < symbols.length; i++) {\n            const symbol = symbols[i];\n            this.hold (markets[symbol]);\n        }\n    }\n    write (store: any, symbols: string[]) {\n        for (let i = 0; i < symbols.length; i++) {\n            const sym = symbols[i];\n            store[sym] = 1;\n        }\n    }\n}\n";
+    const out = () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-43c2-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), venue);
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        try { return t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+    };
+    test('element-read key locals are typed and lent to get_value; a write key keeps the box', () => {
+        const text = out();
+        expect(text).toContain('let mut key: Option<&str> =');
+        expect(text).toContain('get_value(&ledger, key.as_deref())');
+        expect(text).toContain('let mut symbol: Option<String> =');
+        expect(text).toContain('get_value(&markets, symbol.as_deref())');
+        expect(text).not.toContain('get_value(&ledger, &key)');
+        // negative: a write target keeps its own (unchanged) path
+        const w = text.slice(text.indexOf('fn write'));
+        expect(w).not.toContain('get_value(&store, sym.as_deref())');
+    });
+});
