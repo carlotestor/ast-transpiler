@@ -3697,6 +3697,8 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  items of the `Value::Arr` it is handed and answers a new `Value::Arr` (exchange_stubs.rs sort_by / sort_by2: any
      *  other variant is handed back as it came, and the moved-in box is always an Arr), so `.into_list()` takes exactly it. */
     rustBuiltListSelfSort(write: any, name: string): boolean;
+    /** ral-57i: `this.arraySlice (..)` resolved to the base declaration and redeclared by no venue. */
+    rustBaseArraySliceCall(call: any): boolean;
     /** `x = this.m(.., x, ..)` naming `x` only there and on the left: the old list moves into the call before the write. */
     rustBuiltListSelfWriteArg(n: any, name: string): boolean;
     /** A right-hand side that answers a `Value::Arr` on every path. */
@@ -3744,6 +3746,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustArrayGuardedCopies;
     /** ral-52i: `id` names a plain `Value` local or parameter of its own function (no typed local form). */
     rustPlainValueBinding(id: any): boolean;
+    /** ral-57i: a `this.X(.., x, ..)` argument in the then-branch of the nearest enclosing if whose later reads all sit in
+     *  that if's else-branch (rustGuardedBranchLastUse), with no other read of x in the same statement: x moves there. */
+    rustBuiltListBranchLastUse(node: any, declaration: any): boolean;
     /** ral-uf: every later read of `node`'s local lies in the else branch of `guard` (a path disjoint from the move) and
      *  nothing reads it after the if statement; no loop or closure sits between the move and the declaration. */
     rustGuardedBranchLastUse(node: any, declaration: any, guard: any): boolean;

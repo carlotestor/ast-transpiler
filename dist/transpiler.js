@@ -78124,7 +78124,7 @@ ${iden}}`;
           const callee = up.expression;
           if (!isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword || !short(n) || _RustTranspiler.MUT_SELF_METHODS.has(this.toSnakeCaseName(String(callee.name.text))) || !this.rustNilBoxSlotOk(up, Array.from(up.arguments).indexOf(n)))
             return false;
-          boxes.push([n, this.rustLocalLastUse(n, declaration) || this.rustBuiltListSelfWriteArg(n, name) ? "move" : "clone"]);
+          boxes.push([n, this.rustLocalLastUse(n, declaration) || this.rustBuiltListSelfWriteArg(n, name) || this.rustBuiltListBranchLastUse(n, declaration) ? "move" : "clone"]);
           return true;
         }
         return false;
@@ -78222,10 +78222,18 @@ ${iden}}`;
     if (!isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword)
       return false;
     const method = String(call.expression.name.text);
-    if (method !== "sortBy" && method !== "sortBy2" || this.rustTestTierSource(call) || !this.rustListPassthroughCall(call))
+    const slice = method === "arraySlice" && !this.rustTestTierSource(call) && this.rustBaseArraySliceCall(call);
+    if (!slice && (method !== "sortBy" && method !== "sortBy2" || this.rustTestTierSource(call) || !this.rustListPassthroughCall(call)))
       return false;
     const first = this.rustSkipWrappers(call.arguments[0]);
     return first !== void 0 && isIdentifier3(first) && String(first.text) === name && this.rustBuiltListSelfWriteArg(call.arguments[0], name);
+  }
+  /** ral-57i: `this.arraySlice (..)` resolved to the base declaration and redeclared by no venue. */
+  rustBaseArraySliceCall(call) {
+    if (call.arguments.length < 2 || call.arguments.some((a) => a.kind === SyntaxKind7.SpreadElement))
+      return false;
+    const member = this.rustScalarCallee(call);
+    return member !== void 0 && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(member.getSourceFile?.()?.fileName ?? "")) && !this.rustVenueReturnTypesHas(call, "arraySlice");
   }
   /** `x = this.m(.., x, ..)` naming `x` only there and on the left: the old list moves into the call before the write. */
   rustBuiltListSelfWriteArg(n, name) {
@@ -78517,6 +78525,36 @@ ${iden}}`;
     if (isParameterDeclaration3(declaration))
       return false;
     return !(this.rustLentListLocal(declaration) || this.rustBorrowedLocalKind(declaration) !== void 0 || this.rustScalarLocalKind(declaration) !== void 0 || this.rustNilLocalKind(declaration) !== void 0 || this.rustDictLocalIsTyped(declaration) || this.rustVecLocalIsTyped(declaration) || this.rustMarketLocalKind(declaration) !== false || this.rustReadBearerKindOfDeclaration(declaration) !== false);
+  }
+  /** ral-57i: a `this.X(.., x, ..)` argument in the then-branch of the nearest enclosing if whose later reads all sit in
+   *  that if's else-branch (rustGuardedBranchLastUse), with no other read of x in the same statement: x moves there. */
+  rustBuiltListBranchLastUse(node, declaration) {
+    let statement = node;
+    while (statement.parent !== void 0 && !isStatement(statement))
+      statement = statement.parent;
+    let guard = void 0;
+    for (let up = statement; up !== void 0 && !isFunctionLike(up); up = up.parent) {
+      if (up.parent?.kind === SyntaxKind7.IfStatement && up.parent.thenStatement === up) {
+        guard = up.parent;
+        break;
+      }
+    }
+    if (guard === void 0 || guard.elseStatement === void 0)
+      return false;
+    const own = this.rustSymbolOf(node);
+    const scope = this.rustEnclosingFunction(declaration);
+    if (own === void 0 || scope === void 0)
+      return false;
+    for (const n of this.rustScopeNameNodes(scope, String(declaration.name.text))) {
+      if (n === node || n === declaration.name || !isIdentifier3(n) || this.rustIdentifierIsPropertyName(n))
+        continue;
+      const symbol = this.rustSymbolOf(n);
+      if (symbol !== void 0 && symbol !== own)
+        continue;
+      if (n.pos >= statement.pos && n.end <= statement.end)
+        return false;
+    }
+    return this.rustGuardedBranchLastUse(node, declaration, guard);
   }
   /** ral-uf: every later read of `node`'s local lies in the else branch of `guard` (a path disjoint from the move) and
    *  nothing reads it after the if statement; no loop or closure sits between the move and the declaration. */
