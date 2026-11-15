@@ -2324,7 +2324,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     nativeEqualityText(node: any): string;
     unwrapParens(node: any): any;
     hasNativeComparisonOperand(node: any): any;
-    printLogicalInBooleanContext(node: any): any;
+    printLogicalInBooleanContext(node: any): string;
     printWhileStatement(node: any, identation: any): string;
     printIfStatement(node: any, identation: any): string;
     printPostFixUnaryExpression(node: any, identation: any): string;
@@ -2714,6 +2714,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustBorrowedDictDecisions;
     rustBorrowedDictLocal(declaration: any): boolean;
     private rustBorrowedPending;
+    /** ral-49a: an alias refused while its source was open: no decision derived from that refusal is cached. */
+    private rustSbAliasReask;
     rustBorrowedDictLocalUncached(declaration: any): boolean;
     /** `'dict' | 'list'` for a local that holds the shared container and lends it to every read, else undefined. */
     rustBorrowedLocalKind(declaration: any): 'dict' | 'list' | undefined;
