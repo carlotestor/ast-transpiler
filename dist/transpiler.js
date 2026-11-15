@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-DSH7DNKY.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -51799,6 +51799,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustNilMapDecisions = /* @__PURE__ */ new Map();
     this.rustNilListLocals = /* @__PURE__ */ new WeakSet();
     this.rustMutableBuiltLocals = /* @__PURE__ */ new WeakSet();
+    /** ral-48b: statement writes `x['k'] = v` printed as `add_element_to_object(&mut x, ..)` on a typed map local. */
+    this.rustAeoWrites = /* @__PURE__ */ new WeakSet();
     this.rustDictElementBoxes = /* @__PURE__ */ new WeakMap();
     this.rustContainerAliasInits = /* @__PURE__ */ new WeakSet();
     this.rustContainerAliasAsking = /* @__PURE__ */ new WeakSet();
@@ -53628,6 +53630,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       for (const key of keyStrs.slice(0, -1))
         acc = `get_value_mut(${acc}, &${key})`;
       const rhs = this.printNode(right, 0);
+      if (keyStrs.length === 1 && this.rustAeoWrites.has(node))
+        return `add_element_to_object(${acc}, &${keyStrs[0]}, ${this.rustOwnedArgText(right, rhs.trim())})`;
       const nestedKeyWrite = keyStrs.length > 1 ? this.printNestedFieldKeyWrite(left, acc, ((owned) => owned.startsWith("") ? owned : _RustTranspiler.cloneIfBareLocal(owned))(this.rustOwnedArgText(right, rhs.trim()))) : void 0;
       if (nestedKeyWrite !== void 0)
         return nestedKeyWrite;
@@ -70358,6 +70362,7 @@ ${iden}}`;
     let optAliasWrites = 0;
     const boxedElementUses = [];
     const indexReadUses = [];
+    const aeoWriteUses = [];
     const accept = (n) => {
       if (this.rustIdentifierIsPropertyName(n))
         return !(n.parent?.kind === SyntaxKind7.ShorthandPropertyAssignment && n.parent.name === n);
@@ -70460,6 +70465,8 @@ ${iden}}`;
         return keyWriteUses.push(n) > 0 && ++keyWrites > 0 && ++reads > 0;
       if (extendReuse && this.rustReuseDynamicKeyWrite(n, declaration))
         return keyWriteUses.push(n) > 0 && ++keyWrites > 0 && ++reads > 0;
+      if (!extendReuse && !sbAlias && this.rustAeoTargetWrite(n) && !this.rustAeoBoxedNative(n))
+        return aeoWriteUses.push(n) > 0 && ++reads > 0;
       const handed = () => (optAliasInit && this.rustLocalStoreHandOff(n) && !this.rustScalarInNestedWrite(n, true) && ++optionalBoxes > 0 || this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0 || this.rustBuiltReturnBoxUse(n, init, extendReuse) && ++defaultedBoxes > 0 || this.rustOptReaderBoxUse(n, init) && ++optionalBoxes > 0 || this.rustOptionalParamsSlot(up, n) && (from === "dict" || from === "api" && this.rustDeclaredEndpointKind(init) === "dict") && ++paramsBoxes > 0 || nilDeclared && this.rustDeclaredEndpointBoxUse(n) && ++endpointBoxes > 0 || endpoint && !nilDeclared && (from !== "api" && this.rustDeclaredEndpointWholeBox(n) && ++defaultedBoxes > 0 || from === "dict" && this.rustSafeDictDefaultUse(n))) && boxedElementUses.push(n) > 0;
       const asArg = isAsExpression3(up) && up.expression === n && isCallExpression6(up.parent) && Array.from(up.parent.arguments).includes(up) ? up : void 0;
       if (asArg !== void 0 && this.rustLentAsHandOff(asArg, init, from, endpoint, nilDeclared))
@@ -70555,8 +70562,14 @@ ${iden}}`;
       return void 0;
     if (init !== void 0 && isCallExpression6(init) && this.rustBuiltReturnSourceKind(init) !== void 0 && boxedElementUses.some((n) => !this.rustBoxLineOk(n)))
       return void 0;
-    if (keyWrites > 0)
+    if (aeoWriteUses.length > 0 && (from !== "dict" || aeoWriteUses.some((n) => !this.rustBuiltKeyWriteLineOk(n, 30))))
+      return void 0;
+    if (aeoWriteUses.length > 0 && !optional && !(init !== void 0 && (this.rustLentContainerSource(init) || isCallExpression6(init) && this.rustBuiltReturnSourceKind(init) === "dict")))
+      return void 0;
+    if (keyWrites > 0 && aeoWriteUses.length === 0)
       this.rustMutableBuiltLocals.add(declaration);
+    for (const n of aeoWriteUses)
+      this.rustAeoWrites.add(n.parent.parent);
     const declaredListOnly = nilDeclared && from === "list" && !mixed && nullTests === 0 && declaredEndpointWrites > 0 && declaredEndpointWrites + nullWrites === writes;
     if (castLengths > 0 && !declaredListOnly)
       return void 0;
@@ -71323,6 +71336,26 @@ ${iden}}`;
     if (this.rustNilMapAliasInit(node) !== void 0)
       return moves ? `${text}` : `${text}.clone()`;
     return `${text}${moves ? "" : ".clone()"}.map_or(Value::Null, Value::${this.rustNilListLocals.has(declaration) ? "Arr" : "Dict"})`;
+  }
+  /** ral-48b: the boxed local's write is already a native insert (asked while the local's kind is pending, i.e. the
+   *  untyped view): that write is not a helper row, and its source proof is the native-insert rule's, not this one. */
+  rustAeoBoxedNative(n) {
+    const access = n.parent;
+    try {
+      const key = this.printNode(access.argumentExpression, 0);
+      return (this.printNativeDictInsert(n, access.argumentExpression, key, "x") ?? this.rustNativeDictInsert(n, access.argumentExpression, key, "x")) !== void 0;
+    } catch (e) {
+      return true;
+    }
+  }
+  /** ral-48b: `n['k'] = v` (statement, literal non-digit key) whose value does not read `n`. */
+  rustAeoTargetWrite(n) {
+    if (this.rustUntilHeadKeyWrite(n) === void 0)
+      return false;
+    const write = n.parent.parent;
+    const name = String(n.text);
+    const reads = (x) => isIdentifier3(x) && String(x.text) === name || (x.forEachChild(reads) ?? false);
+    return !reads(write.right);
   }
   /** The source statement of a box (`Value::Dict(x)`, +13 chars) leaves the printed line within 400 chars. */
   rustBoxLineOk(n) {
