@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-DSH7DNKY.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -56015,6 +56015,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const boolTested = kind === void 0 && this.rustAnyBoolTestedLocal(declaration);
     if (boolTested)
       kind = "obool";
+    if (kind === void 0 && this.rustCounterArithInit(declaration.initializer, declaration) && this.rustCounterArithHasCounter(declaration.initializer, declaration) && this.rustSafeDictKeyOnlyLocal(declaration))
+      kind = "int";
     if (kind === void 0 || kind === "null")
       return void 0;
     if (this.rustSafeStringLocalIsTyped(declaration) || this.rustStringMethodLocalInit(declaration) !== void 0 || kind === "bool" && this.getRustBoolLocalInitializer(declaration, this.printNode(declaration.initializer, 0)) !== void 0)
@@ -59906,6 +59908,72 @@ ${binding(plan.indent)}` : ""), head: "" };
       return true;
     });
     return ok && keys > 0;
+  }
+  /** ral-51e: `+` / `-` over int literals, `i64` scalar locals and the counter of an enclosing `for (let j = <int>; j < <i64 local>; j++)`
+   *  whose body never writes it (the counter the loop prints as an `i64`; while the scope solves it is not registered yet). */
+  rustCounterArithInit(expr, declaration) {
+    const node = this.unwrapParens(expr);
+    if (node === void 0)
+      return false;
+    if (isBinaryExpression5(node)) {
+      const op = node.operatorToken.kind;
+      return (op === SyntaxKind7.PlusToken || op === SyntaxKind7.MinusToken) && this.rustCounterArithInit(node.left, declaration) && this.rustCounterArithInit(node.right, declaration);
+    }
+    if (this.rustScalarIntLiteral(node) !== void 0)
+      return true;
+    if (!isIdentifier3(node))
+      return false;
+    if (this.rustCounterLoopOf(node, declaration) !== void 0)
+      return true;
+    const target = this.rustDeclaredNode(node);
+    return target !== void 0 && target !== declaration && this.rustEnclosingFunction(target) === this.rustEnclosingFunction(declaration) && this.rustScalarLocalOf(node)?.kind === "int";
+  }
+  rustCounterArithHasCounter(expr, declaration) {
+    const node = this.unwrapParens(expr);
+    if (isBinaryExpression5(node))
+      return this.rustCounterArithHasCounter(node.left, declaration) || this.rustCounterArithHasCounter(node.right, declaration);
+    return isIdentifier3(node) && this.rustCounterLoopOf(node, declaration) !== void 0;
+  }
+  /** The enclosing `for` whose block-scoped counter `node` reads (int-literal start, `j++` / `++j` step, `j < <i64 local>`, never written in the body). */
+  rustCounterLoopOf(node, declaration) {
+    let loop = declaration?.parent;
+    while (loop !== void 0 && loop.kind !== SyntaxKind7.ForStatement)
+      loop = loop.parent;
+    if (loop === void 0 || this.rustEnclosingFunction(loop) !== this.rustEnclosingFunction(declaration))
+      return void 0;
+    const init = loop.initializer;
+    if (init?.kind !== SyntaxKind7.VariableDeclarationList || init.declarations.length !== 1 || !(init.flags & NodeFlags4.BlockScoped))
+      return void 0;
+    const counter = init.declarations[0];
+    if (!isIdentifier3(counter.name) || String(counter.name.text) !== String(node.text) || this.rustDeclaredNode(node) !== counter)
+      return void 0;
+    if (this.rustScalarIntLiteral(this.unwrapParens(counter.initializer)) === void 0)
+      return void 0;
+    const incr = loop.incrementor;
+    const stepped = incr !== void 0 && (incr.kind === SyntaxKind7.PostfixUnaryExpression || incr.kind === SyntaxKind7.PrefixUnaryExpression) && incr.operator === SyntaxKind7.PlusPlusToken && isIdentifier3(incr.operand) && String(incr.operand.text) === String(node.text);
+    if (!stepped)
+      return void 0;
+    const cond = loop.condition;
+    if (cond === void 0 || !isBinaryExpression5(cond) || cond.operatorToken.kind !== SyntaxKind7.LessThanToken || !isIdentifier3(cond.left) || String(cond.left.text) !== String(node.text))
+      return void 0;
+    const bound = this.unwrapParens(cond.right);
+    if (!isIdentifier3(bound) || this.rustScalarLocalOf(bound)?.kind !== "int")
+      return void 0;
+    const symbol = this.rustSymbolOf(counter.name);
+    for (const n of this.rustScopeNameNodes(loop.statement, String(node.text))) {
+      if (n.kind === SyntaxKind7.VariableDeclaration && this.rustBindsName(n, String(node.text)))
+        return void 0;
+      if (n.kind === SyntaxKind7.Identifier && this.rustSymbolOf(n) === symbol && this.rustIdentifierIsWritten(n))
+        return void 0;
+      if (n.kind === SyntaxKind7.Identifier && this.rustSymbolOf(n) === symbol) {
+        let up = n.parent;
+        while (up !== void 0 && (isBinaryExpression5(up) || isParenthesizedExpression3(up)))
+          up = up.parent;
+        if (up === void 0 || !isVariableDeclaration3(up) || up.initializer === void 0 || !this.isNodeInsideNode(n, up.initializer))
+          return void 0;
+      }
+    }
+    return loop;
   }
   /** ral-50e: `n` is the key (argument 1) of `this.safeDict (x, n, ..)` resolving to the generated base body, outside the test crate. */
   rustSafeDictKeyArg(n) {
@@ -74115,6 +74183,11 @@ ${iden}}`;
     });
     if (!safe || natives === 0 || defaulted && indexed === 0 && boxes.some(([, form]) => form === "clone"))
       return false;
+    if (rowWrites > 0) {
+      for (const box of boxes)
+        if (box[1] === "clone" && this.rustLocalLastUse(box[0], declaration))
+          box[1] = "move";
+    }
     if (rowWrites > 0 && boxes.some(([, form]) => form === "clone"))
       return false;
     for (const [n, form] of boxes)
