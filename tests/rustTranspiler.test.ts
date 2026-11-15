@@ -17293,3 +17293,18 @@ describe('ral-50b: map-literal producers (handleUntilOption list write, aeo writ
         expect(s).toContain('Value::Dict(current)); };');
     });
 });
+
+describe('ral-50b: index write on a never-null list local (impl AddTarget for List)', () => {
+    test('coinbase-like orders[0] = extend (..) keeps the list typed; a nullable source stays Value', () => {
+        const dir = path.join (rustFixtureRoot, 'ral50b-list-target');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type List = any[];\nexport default class Exchange {\n    extend (...args: any[]): any { return {}; }\n    safeDict (o: any, k: any, d: Dict = undefined): Dict { return o; }\n    safeList (o: any, k: any, d: List = undefined): List { return o; }\n    safeString (o: any, k: any, d: string = undefined): string { return o; }\n    parseOrders (o: any, m: any = undefined): any { return o; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    one (response: Dict): any {\n        const orders = this.safeList (response, 'orders', []);\n        const cursor = this.safeString (response, 'cursor');\n        if ((cursor !== undefined) && (cursor !== '')) {\n            orders[0] = this.extend (this.safeDict (orders, 0, {}), { 'cursor': cursor });\n        }\n        return this.parseOrders (orders, undefined);\n    }\n    nullable (response: Dict): any {\n        const orders = this.safeList (response, 'orders');\n        orders[0] = 1;\n        return this.parseOrders (orders, undefined);\n    }\n}\n");
+        const out = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } }).transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        const one = out.slice(out.indexOf('fn one'), out.indexOf('fn nullable'));
+        expect(one).toContain('let mut orders: crate::value::List =');
+        expect(one).toContain('add_element_to_object(&mut orders, &Value::Int(0),');
+        const nul = out.slice(out.indexOf('fn nullable'));
+        expect(nul).toContain('let mut orders: Value =');
+    });
+});

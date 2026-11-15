@@ -19319,6 +19319,7 @@ export class RustTranspiler extends BaseTranspiler {
         const boxedElementUses: any[] = [];
         const indexReadUses: any[] = [];
         const aeoWriteUses: any[] = [];
+        let listIndexWrites = 0;
         const accept = (n: any) => {
             if (this.rustIdentifierIsPropertyName(n)) return !(n.parent?.kind === SyntaxKind.ShorthandPropertyAssignment && n.parent.name === n);
             if (!this.rustIdentifierRefersToDeclaration(n, declaration) || this.rustEnclosingFunction(n) !== fn) return false;
@@ -19422,6 +19423,10 @@ export class RustTranspiler extends BaseTranspiler {
             // `add_element_to_object` takes the typed map itself (`impl AddTarget for Dict / Option<Dict>`) and runs the very tag
             // hooks (book meta, ws subscriptions, cache buckets) the boxed `Value::Dict` arm ran; `None` skips as `Null` did
             if (!sbAlias && this.rustAeoTargetWrite(n) && !this.rustAeoBoxedNative(n)) return aeoWriteUses.push(n) > 0 && ++reads > 0;
+            // ral-50b: `xs[0] = v` (statement, one level, integer literal index) on a never-null list local: the runtime
+            // `add_element_to_object` takes the typed list (`impl AddTarget for List`) and writes the index exactly as the boxed
+            // `Value::Arr` arm did (padding with Null); the value may read `xs` (bound first, as the boxed write did)
+            if (from === 'list' && !nilDeclared && this.rustListIndexLiteralWrite(n)) return ++listIndexWrites > 0 && ++reads > 0;
             const handed = () => (optAliasInit && this.rustLocalStoreHandOff(n) && !this.rustScalarInNestedWrite(n, true) && ++optionalBoxes > 0
                 || this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0
                 || this.rustBuiltReturnBoxUse(n, init, extendReuse) && ++defaultedBoxes > 0 || this.rustOptReaderBoxUse(n, init) && ++optionalBoxes > 0
@@ -19557,6 +19562,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (aeoWriteUses.length > 0 && !optional && !extendReuse && !(init !== undefined && (this.rustLentContainerSource(init)
             || (isCallExpression(init) && this.rustBuiltReturnSourceKind(init) === 'dict')))) return undefined;
         if (keyWrites > 0 && aeoWriteUses.length === 0) this.rustMutableBuiltLocals.add(declaration);
+        // ral-50b: index writes need a list on every path (a never-null list source, the plain form)
+        if (listIndexWrites > 0 && (from !== 'list' || optional || init === undefined || !this.rustContainerInitNeverNull(init, 'list'))) return undefined;
         for (const n of aeoWriteUses) this.rustAeoWrites.add(n.parent.parent);
         // ral-ua: an all-declared `Promise<List>` optional list (never null-tested) reads its length through the slice (0 for `None`)
         const declaredListOnly = nilDeclared && from === 'list' && !mixed && nullTests === 0 && declaredEndpointWrites > 0 && declaredEndpointWrites + nullWrites === writes;
@@ -20362,6 +20369,16 @@ export class RustTranspiler extends BaseTranspiler {
         } catch (e) {
             return true;
         }
+    }
+
+    /** ral-50b: `n[<integer literal>] = v` (statement, one level, `=`). */
+    rustListIndexLiteralWrite(n: any): boolean {
+        const access: any = n.parent;
+        const write: any = access?.parent;
+        if (!isElementAccessExpression(access) || access.expression !== n || !isBinaryExpression(write) || write.left !== access
+            || write.operatorToken.kind !== SyntaxKind.EqualsToken || write.parent?.kind !== SyntaxKind.ExpressionStatement) return false;
+        const key: any = this.rustSkipWrappers(access.argumentExpression);
+        return key !== undefined && key.kind === SyntaxKind.NumericLiteral && /^\d+$/.test(String(key.text)) && String(write.getText()).split('\n')[0].length <= 240;
     }
 
     /** ral-48b: `n['k'] = v` (statement, literal non-digit key) whose value does not read `n`. */
