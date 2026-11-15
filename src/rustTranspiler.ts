@@ -7554,6 +7554,11 @@ export class RustTranspiler extends BaseTranspiler {
         if (this.rustFieldKeyReceiver(up.expression) === undefined) {
             if (!this.rustDictShapedFieldInsert(up.expression) || !isBinaryExpression(write) || write.left !== up || write.operatorToken.kind !== SyntaxKind.EqualsToken
                 || write.parent?.kind !== SyntaxKind.ExpressionStatement || new RegExp(`\\b${String(n.text)}\\b`).test(String(write.right.getText()))) return undefined;
+            // a no-default safeString-family reader is retyped after printing by the ccxt `_opt` reader pass (see ya): leave it there
+            const source: any = this.rustDeclaredNode(n);
+            const init: any = source !== undefined && isVariableDeclaration(source) ? this.unwrapParens(source.initializer) : undefined;
+            const reader = init !== undefined && isCallExpression(init) ? this.rustNilSelfHelperName(init) : undefined;
+            if (reader !== undefined && RustTranspiler.RUST_STRING_LOCAL_HELPERS.has(reader) && init.arguments.length <= (RustTranspiler.RUST_SAFE_STRING_KEY_ARGS[reader] ?? 2)) return undefined;
             return 'key';
         }
         if (this.rustOkeyReadUse(wrapped)) return 'frd';
@@ -9983,7 +9988,9 @@ export class RustTranspiler extends BaseTranspiler {
         const kind = isIdentifier(key) && this.rustScalarUseForms.get(key) === 'key' ? this.rustScalarLocalOf(key)?.kind : undefined;
         if (kind === 'ostr') return this.rustScalarOptKeyText(key);
         // a field insert copies the key text like the `stringify_param` it replaces (one allocation either way)
-        if (kind === 'str' && this.rustFieldKeyReceiver(this.rustKeyWrapped(key).parent?.expression) !== undefined) return `${super.printIdentifier(key)}.to_string()`;
+        // ral-46b: likewise a dict-shaped field insert (`fundingRates`): the same native insert, the same one key allocation
+        const keyField: any = this.rustKeyWrapped(key).parent?.expression;
+        if (kind === 'str' && (this.rustFieldKeyReceiver(keyField) !== undefined || this.rustDictShapedFieldInsert(keyField))) return `${super.printIdentifier(key)}.to_string()`;
         return kind === 'str' ? `${super.printIdentifier(key)}.clone()` : undefined;
     }
 

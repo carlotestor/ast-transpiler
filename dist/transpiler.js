@@ -58914,6 +58914,11 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (this.rustFieldKeyReceiver(up.expression) === void 0) {
       if (!this.rustDictShapedFieldInsert(up.expression) || !isBinaryExpression5(write) || write.left !== up || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement || new RegExp(`\\b${String(n.text)}\\b`).test(String(write.right.getText())))
         return void 0;
+      const source = this.rustDeclaredNode(n);
+      const init = source !== void 0 && isVariableDeclaration3(source) ? this.unwrapParens(source.initializer) : void 0;
+      const reader = init !== void 0 && isCallExpression6(init) ? this.rustNilSelfHelperName(init) : void 0;
+      if (reader !== void 0 && _RustTranspiler.RUST_STRING_LOCAL_HELPERS.has(reader) && init.arguments.length <= (_RustTranspiler.RUST_SAFE_STRING_KEY_ARGS[reader] ?? 2))
+        return void 0;
       return "key";
     }
     if (this.rustOkeyReadUse(wrapped))
@@ -61573,7 +61578,8 @@ ${ind}];`;
     const kind = isIdentifier3(key) && this.rustScalarUseForms.get(key) === "key" ? this.rustScalarLocalOf(key)?.kind : void 0;
     if (kind === "ostr")
       return this.rustScalarOptKeyText(key);
-    if (kind === "str" && this.rustFieldKeyReceiver(this.rustKeyWrapped(key).parent?.expression) !== void 0)
+    const keyField = this.rustKeyWrapped(key).parent?.expression;
+    if (kind === "str" && (this.rustFieldKeyReceiver(keyField) !== void 0 || this.rustDictShapedFieldInsert(keyField)))
       return `${super.printIdentifier(key)}.to_string()`;
     return kind === "str" ? `${super.printIdentifier(key)}.clone()` : void 0;
   }

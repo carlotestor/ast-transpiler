@@ -16473,5 +16473,6 @@ describe('ral-46b lift 2: a string local keying a dict-shaped field insert (`fun
         const out = run ("    handleFundingRate (fundingRate: Dict) {\n        const symbol = this.safeString (fundingRate, 'symbol', '');\n        this.fundingRates[symbol] = fundingRate;\n        const messageHash = 'fundingrate:' + symbol;\n        this.resolve (fundingRate, messageHash);\n    }\n");
         expect(out).toContain('let mut symbol: String = ');
         expect(out).not.toContain('stringify_param(&symbol)');
+        expect(out).toContain('insert(symbol.to_string(), ');
     });
 });

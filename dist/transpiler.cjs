@@ -58913,6 +58913,11 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (this.rustFieldKeyReceiver(up.expression) === void 0) {
       if (!this.rustDictShapedFieldInsert(up.expression) || !_is.isBinaryExpression.call(void 0, write) || write.left !== up || write.operatorToken.kind !== _ast.SyntaxKind.EqualsToken || _optionalChain([write, 'access', _8979 => _8979.parent, 'optionalAccess', _8980 => _8980.kind]) !== _ast.SyntaxKind.ExpressionStatement || new RegExp(`\\b${String(n.text)}\\b`).test(String(write.right.getText())))
         return void 0;
+      const source = this.rustDeclaredNode(n);
+      const init = source !== void 0 && _is.isVariableDeclaration.call(void 0, source) ? this.unwrapParens(source.initializer) : void 0;
+      const reader = init !== void 0 && _is.isCallExpression.call(void 0, init) ? this.rustNilSelfHelperName(init) : void 0;
+      if (reader !== void 0 && _RustTranspiler.RUST_STRING_LOCAL_HELPERS.has(reader) && init.arguments.length <= (_nullishCoalesce(_RustTranspiler.RUST_SAFE_STRING_KEY_ARGS[reader], () => ( 2))))
+        return void 0;
       return "key";
     }
     if (this.rustOkeyReadUse(wrapped))
@@ -61572,7 +61577,8 @@ ${ind}];`;
     const kind = _is.isIdentifier.call(void 0, key) && this.rustScalarUseForms.get(key) === "key" ? _optionalChain([this, 'access', _9187 => _9187.rustScalarLocalOf, 'call', _9188 => _9188(key), 'optionalAccess', _9189 => _9189.kind]) : void 0;
     if (kind === "ostr")
       return this.rustScalarOptKeyText(key);
-    if (kind === "str" && this.rustFieldKeyReceiver(_optionalChain([this, 'access', _9190 => _9190.rustKeyWrapped, 'call', _9191 => _9191(key), 'access', _9192 => _9192.parent, 'optionalAccess', _9193 => _9193.expression])) !== void 0)
+    const keyField = _optionalChain([this, 'access', _9190 => _9190.rustKeyWrapped, 'call', _9191 => _9191(key), 'access', _9192 => _9192.parent, 'optionalAccess', _9193 => _9193.expression]);
+    if (kind === "str" && (this.rustFieldKeyReceiver(keyField) !== void 0 || this.rustDictShapedFieldInsert(keyField)))
       return `${super.printIdentifier(key)}.to_string()`;
     return kind === "str" ? `${super.printIdentifier(key)}.clone()` : void 0;
   }
