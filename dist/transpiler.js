@@ -62304,8 +62304,10 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       const name2 = super.printIdentifier(self);
       return `(${kind === "int" ? `Some(${name2} as f64)` : `Value::from(${name2}).as_f64()`} ${sign} ${this.printNode(partner, 0).trim()}.as_f64())`;
     }
-    if (!isIdentifier3(self) || !isIdentifier3(partner) || this.rustScalarIdentifierKind(self) === void 0)
+    if (!isIdentifier3(self) || this.rustScalarIdentifierKind(self) === void 0)
       return void 0;
+    if (!isIdentifier3(partner))
+      return this.rust59nValueReaderPartner(partner) && !this.rust59nKeysElementRead(self) ? this.rustScalarPayloadPartnerTest(self, partner, kind, sign, dry) : void 0;
     const base = kind.startsWith("o") ? kind.slice(1) : kind;
     if (base !== "str" && base !== "int" || this.rustScalarValuePartnerKind(partner) !== base)
       return this.rustScalarPayloadPartnerTest(self, partner, kind, sign, dry);
@@ -62346,7 +62348,8 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
   /** qf: a typed local against an untyped `Value` partner (a local or parameter) that the checker types like the local:
    *  the `Value` pair printed `a.<payload>() == p.<payload>()` (PAYLOAD_ACCESSORS by checker kind), and the typed local
    *  is exactly `a.<payload>()` (`None` where the `Value` was `Null`), so the same compare reads `own == p.<payload>()`.
-   *  `Option<i64>` is left out (its payload is an `f64`, which needs a closure). */
+   *  ral-59n: an `Option<i64>` local prints `Value::from(x).as_f64()` (the very `as_f64` of the box it held, no closure),
+   *  and the partner may also be a base `safe*` scalar read off `this` (rust59nValueReaderPartner), which prints a `Value`. */
   rustScalarPayloadPartnerTest(self, partner, kind, sign, dry) {
     const forms = {
       str: ["string", (n) => `Some(${n}.as_str())`],
@@ -62355,25 +62358,58 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       obool: ["boolean", (n) => n],
       int: ["number", (n) => `Some(${n} as f64)`],
       num: ["number", (n) => `Some(${n})`],
-      onum: ["number", (n) => n]
+      onum: ["number", (n) => n],
+      oint: ["number", (n) => `Value::from(${n}).as_f64()`]
     };
     const form = forms[kind];
     if (form === void 0 || this.rustTestTierSource(partner))
       return void 0;
-    if (this.rustScalarIdentifierKind(partner) !== void 0 || this.rustScalarParamRead(partner) !== void 0 || !this.printsValueExpression(partner))
-      return void 0;
-    const declaration = this.rustDeclaredNode(partner);
-    if (declaration === void 0 || !isVariableDeclaration3(declaration) && declaration.kind !== SyntaxKind7.Parameter)
-      return void 0;
-    if (isVariableDeclaration3(declaration) && (declaration.initializer === void 0 || this.literalKindOfNode(this.unwrapParens(declaration.initializer)) === "null"))
-      return void 0;
+    const reader = this.rust59nValueReaderPartner(partner);
+    if (!reader) {
+      if (this.rustScalarIdentifierKind(partner) !== void 0 || this.rustScalarParamRead(partner) !== void 0 || !this.printsValueExpression(partner))
+        return void 0;
+      const declaration = this.rustDeclaredNode(partner);
+      if (declaration === void 0 || !isVariableDeclaration3(declaration) && declaration.kind !== SyntaxKind7.Parameter)
+        return void 0;
+      if (isVariableDeclaration3(declaration) && (declaration.initializer === void 0 || this.literalKindOfNode(this.unwrapParens(declaration.initializer)) === "null"))
+        return void 0;
+    }
     const selfDecl = kind === "int" ? this.rustDeclaredNode(self) : void 0;
     const lengthSelf = selfDecl !== void 0 && isVariableDeclaration3(selfDecl) && (selfDecl.parent?.flags & NodeFlags4.Const) !== 0 && this.rustListLengthInit(this.unwrapParens(selfDecl.initializer));
     if (this.primitiveKindOfType(this.typeOfNodeIfAny(partner)) !== form[0] || !lengthSelf && this.primitiveKindOfType(this.typeOfNodeIfAny(self)) !== form[0])
       return void 0;
     if (dry)
       return "_";
-    return `(${form[1](super.printIdentifier(self))} ${sign} ${super.printIdentifier(partner)}.${_RustTranspiler.PAYLOAD_ACCESSORS[form[0]]}())`;
+    const partnerText = reader ? this.printNode(this.unwrapParens(partner), 0).trim() : super.printIdentifier(partner);
+    return `(${form[1](super.printIdentifier(self))} ${sign} ${partnerText}.${_RustTranspiler.PAYLOAD_ACCESSORS[form[0]]}())`;
+  }
+  /** ral-59n: some read of the local is the argument of an element access `m[x]` (decided on the TS AST). */
+  rust59nKeysElementRead(self) {
+    const declaration = this.rustDeclaredNode(self);
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name))
+      return true;
+    let keys = false;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      let top = n;
+      while (isParenthesizedExpression3(top.parent) || top.parent?.kind === SyntaxKind7.AsExpression)
+        top = top.parent;
+      if (isElementAccessExpression4(top.parent) && top.parent.argumentExpression === top)
+        keys = true;
+      return true;
+    });
+    return keys;
+  }
+  /** ral-59n: `this.safeString|Integer|Number|Bool(..)` declared in the base tier (no venue override): printed as the
+   *  generated `self.safe_*` reader, a `Value`. The boxed compare against it was the payload pair `a.<p>() == r.<p>()`
+   *  (printNativeEqualityComparison, both sides `Value`, same checker kind), so the typed side prints its own payload. */
+  rust59nValueReaderPartner(node) {
+    const call = this.unwrapParens(node);
+    if (call === void 0 || !isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    if (!_RustTranspiler.RUST_59N_VALUE_READERS.has(String(call.expression.name.text)))
+      return false;
+    const declaration = this.rustScalarCallee(call);
+    return declaration !== void 0 && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile().fileName));
   }
   /** `'str'` / `'int'` when `p` is a plain `Value` local (no typed-local rule claims it) whose initializer and every
    *  write is a fresh `str|ostr|null` (`int|oint|null`) producer, written only by whole `p = ..` statements. */
@@ -86182,6 +86218,8 @@ _RustTranspiler.RUST_PARAM_READ = {
   num: "as_f64().unwrap_or_default()",
   bool: "as_bool().unwrap_or_default()"
 };
+// ral-59n: base readers whose generated Rust answers a plain `Value` of one primitive family (or `Null`)
+_RustTranspiler.RUST_59N_VALUE_READERS = /* @__PURE__ */ new Set(["safeString", "safeString2", "safeStringLower", "safeStringUpper", "safeInteger", "safeInteger2", "safeNumber", "safeNumber2", "safeBool", "safeBool2"]);
 _RustTranspiler.RUST_SCALAR_VALUE_OPERAND_OPS = /* @__PURE__ */ new Set([
   SyntaxKind7.PlusToken,
   SyntaxKind7.MinusToken,

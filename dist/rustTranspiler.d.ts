@@ -1583,8 +1583,16 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** qf: a typed local against an untyped `Value` partner (a local or parameter) that the checker types like the local:
      *  the `Value` pair printed `a.<payload>() == p.<payload>()` (PAYLOAD_ACCESSORS by checker kind), and the typed local
      *  is exactly `a.<payload>()` (`None` where the `Value` was `Null`), so the same compare reads `own == p.<payload>()`.
-     *  `Option<i64>` is left out (its payload is an `f64`, which needs a closure). */
+     *  ral-59n: an `Option<i64>` local prints `Value::from(x).as_f64()` (the very `as_f64` of the box it held, no closure),
+     *  and the partner may also be a base `safe*` scalar read off `this` (rust59nValueReaderPartner), which prints a `Value`. */
     rustScalarPayloadPartnerTest(self: any, partner: any, kind: string, sign: string, dry: boolean): string | undefined;
+    private static readonly RUST_59N_VALUE_READERS;
+    /** ral-59n: some read of the local is the argument of an element access `m[x]` (decided on the TS AST). */
+    rust59nKeysElementRead(self: any): boolean;
+    /** ral-59n: `this.safeString|Integer|Number|Bool(..)` declared in the base tier (no venue override): printed as the
+     *  generated `self.safe_*` reader, a `Value`. The boxed compare against it was the payload pair `a.<p>() == r.<p>()`
+     *  (printNativeEqualityComparison, both sides `Value`, same checker kind), so the typed side prints its own payload. */
+    rust59nValueReaderPartner(node: any): boolean;
     /** `'str'` / `'int'` when `p` is a plain `Value` local (no typed-local rule claims it) whose initializer and every
      *  write is a fresh `str|ostr|null` (`int|oint|null`) producer, written only by whole `p = ..` statements. */
     rustScalarValuePartnerKind(partner: any): string | undefined;
