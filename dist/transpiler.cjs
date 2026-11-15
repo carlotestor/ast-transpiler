@@ -61443,7 +61443,7 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       if (dry)
         return "_";
       const name2 = super.printIdentifier(self);
-      return `(${kind === "int" ? `Some(${name2} as f64)` : `${name2}.map(|__v| __v as f64)`} ${sign} ${this.printNode(partner, 0).trim()}.as_f64())`;
+      return `(${kind === "int" ? `Some(${name2} as f64)` : `Value::from(${name2}).as_f64()`} ${sign} ${this.printNode(partner, 0).trim()}.as_f64())`;
     }
     if (!_is.isIdentifier.call(void 0, self) || !_is.isIdentifier.call(void 0, partner) || this.rustScalarIdentifierKind(self) === void 0)
       return void 0;
