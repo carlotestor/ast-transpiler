@@ -1216,6 +1216,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-50e: a local read only as base `safeDict` keys (its `any` checker type comes from an `any` operand such as
      *  `response.length`): an `i64` the printer proved passes there as the Int its box held, so the checker's `any` is moot. */
     rustSafeDictKeyOnlyLocal(declaration: any): boolean;
+    /** ral-51e: `+` / `-` over int literals, `i64` scalar locals and the counter of an enclosing `for (let j = <int>; j < <i64 local>; j++)`
+     *  whose body never writes it (the counter the loop prints as an `i64`; while the scope solves it is not registered yet). */
+    rustCounterArithInit(expr: any, declaration: any): boolean;
+    rustCounterArithHasCounter(expr: any, declaration: any): boolean;
+    /** The enclosing `for` whose block-scoped counter `node` reads (int-literal start, `j++` / `++j` step, `j < <i64 local>`, never written in the body). */
+    rustCounterLoopOf(node: any, declaration: any): any;
     /** ral-50e: `n` is the key (argument 1) of `this.safeDict (x, n, ..)` resolving to the generated base body, outside the test crate. */
     rustSafeDictKeyArg(n: any): boolean;
     /** xd: `n` is the only argument of `this.iso8601 (n)` outside the test crate (hand-written `iso8601(ts: impl Into<Value>)`). */
