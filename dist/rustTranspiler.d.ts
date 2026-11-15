@@ -740,6 +740,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustSumShape(node: any): boolean;
     /** A cast, clock-string or `sum` local must earn a native use, and a string one never copies where the `Value` moved. */
     rustNewShapeCostly(init: any, typedUses: number, copied: number): boolean;
+    /** ral-45g: `p.toString()` (no radix) of a parameter the checker types `number`: the printer already boxes
+     *  `format!("{}", p)` (the decimal text `Display` gives the `Int` / `Float` box), so the local holds that String. */
+    rustNumParamToString(node: any): boolean;
     /** `n.toString()` of an `i64` scalar local. */
     rustIntToStringShape(node: any): boolean;
     rustStrCastCall(node: any): any;

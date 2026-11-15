@@ -4910,6 +4910,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (fresh && this.rustBoolLeafLogical(node) && this.rustBoolNativeText(node) !== undefined) return 'bool';
         const cast = this.rustStrCastCall(node); if (cast !== undefined) return this.rustScalarValueKind(cast, fresh) === 'ostr' ? 'ostr' : undefined;
         if (fresh && this.rustClockString(node)) return 'str';
+        if (fresh && this.rustNumParamToString(node)) return 'str';
         if (fresh && this.rustSbJoinShape(node)) return 'str';
         if (this.rustArithCombinator(node)) return this.rustArithCallKind(node);
         if (fresh && isBinaryExpression(node) && node.operatorToken.kind === SyntaxKind.PlusToken
@@ -5568,6 +5569,16 @@ export class RustTranspiler extends BaseTranspiler {
         const node: any = this.unwrapParens(init);
         if (this.rustStrCastCall(node) === undefined && !this.rustClockString(node) && !this.rustSumShape(node) && !this.rustIntToStringShape(node)) return false;
         return typedUses === 0 || copied > 0;
+    }
+
+    /** ral-45g: `p.toString()` (no radix) of a parameter the checker types `number`: the printer already boxes
+     *  `format!("{}", p)` (the decimal text `Display` gives the `Int` / `Float` box), so the local holds that String. */
+    rustNumParamToString(node): boolean {
+        if (node === undefined || !isCallExpression(node) || node.arguments.length !== 0 || !isPropertyAccessExpression(node.expression) || String(node.expression.name.text) !== 'toString') return false;
+        const recv: any = this.unwrapParens(node.expression.expression);
+        if (recv === undefined || !isIdentifier(recv) || this.rustTestTierSource(node)) return false;
+        const d: any = this.rustDeclaredNode(recv);
+        return d !== undefined && isParameterDeclaration(d) && d.type !== undefined && d.questionToken === undefined && d.initializer === undefined && this.primitiveKindOfType(this.typeOfNodeIfAny(recv)) === 'number';
     }
 
     /** `n.toString()` of an `i64` scalar local. */
@@ -8224,6 +8235,11 @@ export class RustTranspiler extends BaseTranspiler {
         const clock: any = base === 'str' && this.rustClockString(node) && isPropertyAccessExpression(node.expression) ? node.expression.expression : undefined;
         if (clock !== undefined && this.rustNonceCall(this.unwrapParens(clock))) return wrap(`format!("{}", ${this.printNode(this.unwrapParens(clock), 0).trim()})`);
         if (clock !== undefined) return wrap(`format!("{}", ${this.rustScalarNativeText('int', clock)})`);
+        // ral-45g: `p.toString()` of a `number` parameter: the String the `format!` box held
+        if (base === 'str' && this.rustNumParamToString(node)) {
+            const boxed = text.match(/^Value::Str\((format!\(.*\))\.into\(\)\)$/s);
+            return boxed !== null ? wrap(boxed[1]) : wrap(`${text}.as_str().unwrap_or_default().to_string()`);
+        }
         const fallback: any = node.arguments[node.arguments.length - 1];
         const defaulted = this.rustScalarValueKind(node, true) === base;
         if (kind === 'int' && this.rustVenueParseToInt(node) && this.rustBaseTypedReturnKind(node) === 'oint') return `${this.rustBaseTypedBareText(node)}.unwrap_or_default()`;

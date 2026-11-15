@@ -56192,6 +56192,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return this.rustScalarValueKind(cast, fresh) === "ostr" ? "ostr" : void 0;
     if (fresh && this.rustClockString(node))
       return "str";
+    if (fresh && this.rustNumParamToString(node))
+      return "str";
     if (fresh && this.rustSbJoinShape(node))
       return "str";
     if (this.rustArithCombinator(node))
@@ -56850,6 +56852,17 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (this.rustStrCastCall(node) === void 0 && !this.rustClockString(node) && !this.rustSumShape(node) && !this.rustIntToStringShape(node))
       return false;
     return typedUses === 0 || copied > 0;
+  }
+  /** ral-45g: `p.toString()` (no radix) of a parameter the checker types `number`: the printer already boxes
+   *  `format!("{}", p)` (the decimal text `Display` gives the `Int` / `Float` box), so the local holds that String. */
+  rustNumParamToString(node) {
+    if (node === void 0 || !_is.isCallExpression.call(void 0, node) || node.arguments.length !== 0 || !_is.isPropertyAccessExpression.call(void 0, node.expression) || String(node.expression.name.text) !== "toString")
+      return false;
+    const recv = this.unwrapParens(node.expression.expression);
+    if (recv === void 0 || !_is.isIdentifier.call(void 0, recv) || this.rustTestTierSource(node))
+      return false;
+    const d = this.rustDeclaredNode(recv);
+    return d !== void 0 && _is.isParameterDeclaration.call(void 0, d) && d.type !== void 0 && d.questionToken === void 0 && d.initializer === void 0 && this.primitiveKindOfType(this.typeOfNodeIfAny(recv)) === "number";
   }
   /** `n.toString()` of an `i64` scalar local. */
   rustIntToStringShape(node) {
@@ -59624,6 +59637,10 @@ ${binding(plan.indent)}` : ""), head: "" };
       return wrap(`format!("{}", ${this.printNode(this.unwrapParens(clock), 0).trim()})`);
     if (clock !== void 0)
       return wrap(`format!("{}", ${this.rustScalarNativeText("int", clock)})`);
+    if (base === "str" && this.rustNumParamToString(node)) {
+      const boxed = text.match(/^Value::Str\((format!\(.*\))\.into\(\)\)$/s);
+      return boxed !== null ? wrap(boxed[1]) : wrap(`${text}.as_str().unwrap_or_default().to_string()`);
+    }
     const fallback = node.arguments[node.arguments.length - 1];
     const defaulted = this.rustScalarValueKind(node, true) === base;
     if (kind === "int" && this.rustVenueParseToInt(node) && this.rustBaseTypedReturnKind(node) === "oint")
