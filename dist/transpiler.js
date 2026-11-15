@@ -60233,7 +60233,7 @@ ${binding(plan.indent)}` : ""), head: "" };
     const lastText = isStringLiteral3(last) ? `${JSON.stringify(String(last.text))}.to_string()` : this.rustScalarUseForms.get(last) !== "nkey" ? void 0 : lkind === "str" ? `${lname}.to_string()` : lkind === "ostr" ? `${lname}.as_deref().unwrap_or("null").to_string()` : void 0;
     if (lastText === void 0)
       return void 0;
-    const bound = /\bself\b/.test(value);
+    const bound = this.rustValueBorrowsSelf(left.parent?.right);
     const chain = `if let Value::Dict(__bf03d0) = &mut self.${field} { let __bf03e1 = std::sync::Arc::make_mut(__bf03d0).entry(${upperText}).or_insert(Value::Null); if let Value::Dict(__r05d) = __bf03e1 { std::sync::Arc::make_mut(__r05d).insert(${lastText}, ${bound ? "__be_tmp" : value}); } }`;
     const insert = bound ? `{ let __be_tmp = ${value}; ${chain} }` : chain;
     if (insert.split("\n").some((l) => l.length + 10 > 400)) {
@@ -67896,9 +67896,11 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
       return void 0;
     return this.printNativeLength(node, shadow.name);
   }
-  /** `this.safe<Type>(x, 'k'[, default])` on a shadowed dict parameter: the
-   *  runtime helper's exact semantics over `.get(..)`. */
-  printShadowSafeReadCall(node) {
+  /** The safe-read name when `this.safe<Type>(x, 'k'[, default])` reads a shadowed dict parameter with an inlinable
+   *  literal key: printShadowSafeReadCall then prints `x.get("k")` and never borrows `self` for the call. */
+  rustShadowSafeReadOf(node) {
+    if (!isCallExpression6(node))
+      return void 0;
     const callee = this.rustShadowSafeCallee(node);
     if (callee === void 0)
       return void 0;
@@ -67914,6 +67916,34 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     const text = String(key.text);
     if (!this.rustShadowKeyLiteral(text) || this.rustNodeIsKeyUnsafePlace(text))
       return void 0;
+    return callee;
+  }
+  /** ral-58x: the value expression borrows `self` when printed: it names `this` / `super`, except as the callee of a
+   *  shadow safe read (rustShadowSafeReadOf), which prints a native read of the parameter (its default argument still
+   *  counts). Decided from the node, not from its printed text. */
+  rustValueBorrowsSelf(node) {
+    if (node === void 0)
+      return false;
+    if (node.kind === SyntaxKind7.ThisKeyword || node.kind === SyntaxKind7.SuperKeyword)
+      return true;
+    if (this.rustShadowSafeReadOf(node) !== void 0)
+      return (node.arguments ?? []).some((a) => this.rustValueBorrowsSelf(a));
+    let found = false;
+    node.forEachChild((c) => {
+      if (!found && this.rustValueBorrowsSelf(c))
+        found = true;
+    });
+    return found;
+  }
+  /** `this.safe<Type>(x, 'k'[, default])` on a shadowed dict parameter: the
+   *  runtime helper's exact semantics over `.get(..)`. */
+  printShadowSafeReadCall(node) {
+    const callee = this.rustShadowSafeReadOf(node);
+    if (callee === void 0)
+      return void 0;
+    const args = node.arguments ?? [];
+    const shadow = this.rustParamShadowOf(args[0]);
+    const text = String(args[1].text);
     const fallback = args.length === 3 ? this.printNode(args[2], 0).trim() : "Value::Null";
     const get = `${shadow.name}.get("${text}")`;
     const wrap = (text2) => `(${text2})`;
