@@ -18125,3 +18125,23 @@ describe('INT-60: a push on an element read off a borrowed list local stays the 
         expect(out).not.toContain('append_to_array(&mut lastTrade');
     });
 });
+describe('ral-53s: an i64 local handed to a base `sum` written whole to another local keeps its type', () => {
+    // binance fetchMyTrades: `oneWeek` has a same-named sibling, so the per-binding walk vetted the write `endTime = this.sum (..)`
+    const write = (name: string, sum: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export type Int = number | undefined;\nexport default class Exchange {\n    sum (...args: any[]): any { return args[0] + args[1]; }\n    milliseconds (): number { return 0; }\n    safeInteger (o: any, k: any, d: any = undefined): Int { return o[k] ?? d; }\n    hold (x: any): any { return x; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Int } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    async f (symbol: string, since: Int = undefined, params = {}): Promise<any> {\n        const request: any = {};\n        let endTime = this.safeInteger (params, 'until');\n        if (since !== undefined) {\n            const startTime = since;\n            request['startTime'] = startTime;\n            const currentTimestamp = this.milliseconds ();\n            const oneWeek = 604800000;\n            if ((currentTimestamp - since) >= oneWeek) {\n                if (endTime === undefined) {\n                    endTime = " + sum + ";\n                    const endTimeValue = (endTime === undefined) ? 0 : endTime;\n                    endTime = Math.min (endTimeValue, currentTimestamp);\n                }\n            }\n        }\n        if (endTime !== undefined) {\n            request['endTime'] = endTime;\n        }\n        if (symbol === 'x') {\n            const endTimeResolved = this.safeInteger (request, 'endTime', this.milliseconds ());\n            if (since === undefined) {\n                const oneWeek = 604800000;\n                request['startTime'] = endTimeResolved - oneWeek;\n            }\n        }\n        return this.hold (request);\n    }\n}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('`endTime = this.sum (startTime, oneWeek)`: oneWeek is an i64 and the sum prints natively', () => {
+        const out = write ('53s-sum', 'this.sum (startTime, oneWeek)');
+        expect(out).toContain('let mut oneWeek: i64 = 604800000;\n            if ');
+        expect(out).toContain('endTime = (if let Some(__m0) = startTime { Some((__m0 + oneWeek)) } else { None });');
+        expect(out).not.toContain('self.sum(');
+    });
+    test('negative: a sum whose other operand is an untyped Value keeps the operand boxed', () => {
+        const out = write ('53s-sumn', 'this.sum (params, oneWeek)');
+        expect(out).toContain('let mut oneWeek: Value = Value::Int(604800000);');
+    });
+});
