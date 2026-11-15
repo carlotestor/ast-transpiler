@@ -2614,6 +2614,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustOptAliasSourceKind(rhs: any, fn: any): 'dict' | 'list' | undefined;
     /** The source side: `t = n` (statement) whose target `t` holds the optional form of n's kind through rustOptAliasSourceKind. */
     rustOptAliasTargetUse(n: any, declaration: any, fn: any): boolean;
+    /** ral-45f: the source side of `let t = n` whose target holds the optional form through the initialised alias rule. */
+    rustOptAliasInitTargetUse(n: any, declaration: any, fn: any): boolean;
     private rustBorrowedIndexReads;
     /** `Promise.all ([..])` (an array literal operand): runtime `promise_all` hands its operand back, so it is always a list. */
     rustPromiseAllListKind(call: any): 'list' | undefined;
