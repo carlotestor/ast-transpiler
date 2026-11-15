@@ -51718,6 +51718,16 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustI64Counters = /* @__PURE__ */ new Map();
     // counter identifiers printed as a `.get(i as usize)` key or a `Value::Int(i)` box while the body prints
     this.rustI64ClosedUses = /* @__PURE__ */ new WeakSet();
+    // ── typed caught errors (ral-44h; was ccxt build/ rustTypedCaughtErrors) ──
+    // A catch binding whose every read is an error-object sink prints as `crate::error::CaughtError` (ccxt's catch
+    // lowering binds it with `CaughtError::from_panic`, same `[Kind] message` text): `throw e` (Display),
+    // `e instanceof K` (`e.names("K")` for a class with no subclass, else `e.is_instance_of("K")`), the first argument of
+    // `<recv>.reject (e, ..)` and of `this.exceptionMessage (e, ..)` (both `impl Into<Value>`). Any other read keeps `Value`.
+    this.rustCaughtErrorMemo = /* @__PURE__ */ new WeakMap();
+    // ── ws subscription presence flags (ral-44h; was ccxt build/ rustSubscriptionPresenceFlags) ──
+    // `const X = this.safeValue (<client>.subscriptions, key)` whose every read is an `if (X === undefined)` /
+    // `if (X !== undefined)` test prints `let X: bool = <read> != Value::Null` and the tests as `(!X)` / `(X)`.
+    this.rustPresenceFlagLocals = /* @__PURE__ */ new WeakSet();
     // `const x = []` locals declared `Vec<Value>` when every use is a statement
     // `x.push(v)` (native push), `x.length`, `return x` or an argument inside a `return`
     // (boxed once as `Value::from(x)`). Anything else keeps the `Value` box and `append_to_array`.
@@ -51931,6 +51941,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustTypedUnified = new Set(config["typedUnified"] ?? []);
     this.rustVirtualDispatch = config["virtualDispatch"] ?? {};
     this.rustNonVirtualShims = new Set(config["nonVirtualShims"] ?? []);
+    this.rustErrorClassesWithSubclasses = new Set(config["errorClassesWithSubclasses"] ?? []);
     this.requiresParameterType = true;
     this.requiresReturnType = false;
     this.asyncTranspiling = true;
@@ -52565,6 +52576,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const counterTest = isBinaryExpression5(left?.parent) && left.parent.right === right ? this.printI64CounterCompare(left.parent) : void 0;
     if (counterTest !== void 0)
       return counterTest.startsWith("Value::Bool(") ? counterTest.slice("Value::Bool(".length, -1) : counterTest;
+    const presence = this.printPresenceFlagTest(left, right, op);
+    if (presence !== void 0)
+      return presence;
     const nilLocal = this.printRustNilLocalEquality(left, right, op);
     if (nilLocal !== void 0)
       return nilLocal;
@@ -53758,6 +53772,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (scalarDecl !== void 0)
       return scalarDecl;
     const parsedValue = this.printNode(declaration.initializer, identation).trim();
+    if (node.declarations.length === 1 && this.rustSubscriptionPresenceFlag(declaration, parsedValue))
+      return `${indent}let ${varName}: bool = ${parsedValue} != Value::Null`;
     if (declaration.initializer.kind === SyntaxKind7.NewExpression) {
       return `${indent}let mut ${varName} = ${parsedValue}`;
     }
@@ -67126,6 +67142,10 @@ ${idn}}`;
     if (notHelper !== node && notHelper?.kind === SyntaxKind7.PrefixUnaryExpression && notHelper.operator === SyntaxKind7.ExclamationToken && this.rustBaseTypedReturnKind(this.unwrapParens(notHelper.operand)) === "bool" && this.rustLogicalChainIsCondition(this.unwrapParens(notHelper.operand))) {
       return `${idn}(${this.printPrefixUnaryExpression(notHelper, 0)})`;
     }
+    const caughtTest = this.unwrapParens(node);
+    const caughtInstance = isBinaryExpression5(caughtTest) && caughtTest.operatorToken.kind === SyntaxKind7.InstanceOfKeyword ? this.printCaughtErrorInstanceOf(caughtTest) : void 0;
+    if (caughtInstance !== void 0)
+      return idn + (caughtTest !== node ? `(${caughtInstance})` : caughtInstance);
     const handleCondition = this.printClientHandleCondition(node);
     if (handleCondition !== void 0)
       return idn + handleCondition;
@@ -67390,6 +67410,9 @@ ${this.getIden(identation)}}`;
     return this.printBearerDelete(node) ?? this.printWsBookMapDelete(node) ?? this.printWsCacheMapDelete(node) ?? this.printClientHandleDelete(node) ?? this.provenDictFieldDelete(node) ?? `remove(&mut ${this.printNode(node.expression.expression, 0)}, &${this.printNode(node.expression.argumentExpression, 0)})`;
   }
   printInstanceOfExpression(node, identation) {
+    const caught = this.printCaughtErrorInstanceOf(node);
+    if (caught !== void 0)
+      return `${this.getIden(identation)}${caught}`;
     return `${this.getIden(identation)}is_instance(&${this.printNode(node.left, 0)}, &${this.printNode(node.right, 0)})`;
   }
   printConditionalExpression(node, identation) {
@@ -67637,6 +67660,123 @@ ${this.getIden(identation)}}`;
   printThrowStatement(node, identation) {
     return `${this.getIden(identation)}panic!("{}", ${this.printNode(node.expression, 0)});`;
   }
+  rustCaughtErrorBinding(catchClause) {
+    const memo = this.rustCaughtErrorMemo.get(catchClause);
+    if (memo !== void 0)
+      return memo;
+    const answer = this.rustCaughtErrorBindingProof(catchClause);
+    this.rustCaughtErrorMemo.set(catchClause, answer);
+    return answer;
+  }
+  rustCaughtErrorBindingProof(catchClause) {
+    const name = String(catchClause?.variableDeclaration?.name?.text ?? "");
+    if (name === "" || !isIdentifier3(catchClause.variableDeclaration.name) || this.rustTestTierSource(catchClause))
+      return false;
+    let ok = true;
+    const visit = (n) => {
+      if (!ok)
+        return;
+      if (n !== catchClause.block && (isVariableDeclaration3(n) || isParameterDeclaration3(n) || isBindingElement(n) || n.kind === SyntaxKind7.CatchClause) && (n.name?.text === name || n.variableDeclaration?.name?.text === name)) {
+        ok = false;
+        return;
+      }
+      if (isIdentifier3(n) && n.text === name && !this.rustIdentifierIsPropertyName(n) && !this.rustCaughtErrorSink(n)) {
+        ok = false;
+        return;
+      }
+      n.forEachChild(visit);
+    };
+    catchClause.block.forEachChild(visit);
+    return ok;
+  }
+  rustCaughtErrorSink(n) {
+    const parent = n.parent;
+    if (parent?.kind === SyntaxKind7.ThrowStatement)
+      return parent.expression === n;
+    if (isBinaryExpression5(parent))
+      return parent.left === n && parent.operatorToken.kind === SyntaxKind7.InstanceOfKeyword && this.rustCaughtErrorClassName(parent.right) !== void 0;
+    if (isCallExpression6(parent) && parent.arguments[0] === n && isPropertyAccessExpression3(parent.expression)) {
+      const callee = String(parent.expression.name.text);
+      return callee === "reject" || callee === "exceptionMessage" && parent.expression.expression.kind === SyntaxKind7.ThisKeyword;
+    }
+    return false;
+  }
+  rustCaughtErrorClassName(node) {
+    const name = isIdentifier3(node) ? String(node.text) : "";
+    return _RustTranspiler.RUST_NAME_VALUE_IMPORTS.has(name) && /^[A-Z]/.test(name) ? name : void 0;
+  }
+  /** `e instanceof K` over a typed caught binding. */
+  printCaughtErrorInstanceOf(node) {
+    const left = node.left;
+    const cls = this.rustCaughtErrorClassName(node.right);
+    if (!isIdentifier3(left) || cls === void 0)
+      return void 0;
+    const clause = findAncestor(node, (m) => m.kind === SyntaxKind7.CatchClause && m.variableDeclaration?.name?.text === left.text);
+    if (clause === void 0 || !this.rustCatchBindingIsRead(clause.block, String(left.text)) || !this.rustCaughtErrorBinding(clause))
+      return void 0;
+    return `${left.text}.${this.rustErrorClassesWithSubclasses.has(cls) ? "is_instance_of" : "names"}("${cls}")`;
+  }
+  rustSubscriptionPresenceFlag(declaration, parsedValue) {
+    const init = this.unwrapParens(declaration?.initializer);
+    if (!isIdentifier3(declaration?.name) || !isCallExpression6(init) || !isPropertyAccessExpression3(init.expression) || init.expression.expression.kind !== SyntaxKind7.ThisKeyword || init.expression.name.text !== "safeValue" || init.arguments.length !== 2)
+      return false;
+    if (!/^self\.safe(?:_v|V)alue\((?:\(client\)|__ch|client)\.subscriptions\.clone\(\), [^;\n]*, &\[\]\)$/.test(parsedValue))
+      return false;
+    const fn = this.rustEnclosingFunction(declaration);
+    const name = String(declaration.name.text);
+    if (isStringLiteralLikeNode4(init.arguments[1]) || fn === void 0)
+      return false;
+    const fnText = String(fn.getSourceFile().text).slice(fn.pos, fn.end);
+    if (new RegExp(`//[^\\n]*(?<![A-Za-z0-9_])${name}(?![A-Za-z0-9_])`).test(fnText))
+      return false;
+    let uses = 0;
+    let ok = fn !== void 0;
+    const visit = (n) => {
+      if (!ok)
+        return;
+      if (n !== declaration && (isVariableDeclaration3(n) || isParameterDeclaration3(n) || isBindingElement(n)) && n.name?.text === name) {
+        ok = false;
+        return;
+      }
+      if (isIdentifier3(n) && n.text === name && n !== declaration.name && !this.rustIdentifierIsPropertyName(n)) {
+        if (this.rustPresenceTest(n) === void 0) {
+          ok = false;
+          return;
+        }
+        uses++;
+      }
+      n.forEachChild(visit);
+    };
+    if (ok)
+      fn.forEachChild(visit);
+    if (!ok || uses === 0)
+      return false;
+    this.rustPresenceFlagLocals.add(declaration);
+    return true;
+  }
+  /** `X === undefined` / `X !== undefined` that is the whole `if` condition (parens allowed): '==' / '!='. */
+  rustPresenceTest(n) {
+    const bin = n.parent;
+    if (!isBinaryExpression5(bin) || bin.left !== n || this.literalKindOfNode(bin.right) !== "null")
+      return void 0;
+    const op = bin.operatorToken.kind;
+    const eq = op === SyntaxKind7.EqualsEqualsEqualsToken || op === SyntaxKind7.EqualsEqualsToken;
+    if (!eq && op !== SyntaxKind7.ExclamationEqualsEqualsToken && op !== SyntaxKind7.ExclamationEqualsToken)
+      return void 0;
+    let up = bin;
+    while (up.parent?.kind === SyntaxKind7.ParenthesizedExpression)
+      up = up.parent;
+    return up.parent?.kind === SyntaxKind7.IfStatement && up.parent.expression === up ? eq ? "==" : "!=" : void 0;
+  }
+  printPresenceFlagTest(left, right, op) {
+    if (!isIdentifier3(left) || this.literalKindOfNode(right) !== "null")
+      return void 0;
+    const declaration = this.rustDeclaredNode(left);
+    if (declaration === void 0 || !this.rustPresenceFlagLocals.has(declaration))
+      return void 0;
+    const eq = op === SyntaxKind7.EqualsEqualsEqualsToken || op === SyntaxKind7.EqualsEqualsToken;
+    return eq ? `!${left.text}` : String(left.text);
+  }
   rustCatchBindingIsRead(block, name) {
     let read = false;
     const visit = (n) => {
@@ -67656,7 +67796,9 @@ ${this.getIden(identation)}}`;
     const rawName = node.catchClause?.variableDeclaration?.name?.text;
     const iden = this.getIden(identation);
     const errorName = rawName ? `_${rawName}` : "_e";
-    const head = rawName !== void 0 && this.rustCatchBindingIsRead(node.catchClause.block, rawName) ? `if let Err(${errorName}) = _try_result {` : "if _try_result.is_err() {";
+    const read = rawName !== void 0 && this.rustCatchBindingIsRead(node.catchClause.block, rawName);
+    const caught = read && this.rustCaughtErrorBinding(node.catchClause);
+    const head = read ? `if let Err(${errorName}) = _try_result {${caught ? " /* CaughtError */" : ""}` : "if _try_result.is_err() {";
     return `${iden}let _try_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
 ${body(node.tryBlock)}
 ${iden}}));
