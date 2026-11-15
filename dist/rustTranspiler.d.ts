@@ -1707,6 +1707,14 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustIsOptMarketCall(init: any): boolean;
     /** `c ? undefined : this.market (s)` (either arm order): the `this.market` arm. */
     rustOptMarketTernary(init: any): any;
+    /** ral-45c: `c ? this.safeMarket (..) : market` (a lent market slot) or `c ? this.safeMarket (..) : undefined` (either arm
+     *  order): the `safeMarket` arm and the other one. `safeMarket` never answers Null, the slot is `Option<&Market>`. */
+    rustOptSafeMarketTernary(init: any): {
+        arm: any;
+        other: any;
+    } | undefined;
+    /** `(if c { Some(self.safe_market(..)) } else { market.cloned() })` for the ternary above. */
+    printOptSafeMarketTernary(init: any): string | undefined;
     /** `(if c { None } else { Some(market) })` for an `Option<Market>` ternary initializer. */
     printOptMarketTernary(init: any): string | undefined;
     /** `return x` in an `Option<Market>` method. */

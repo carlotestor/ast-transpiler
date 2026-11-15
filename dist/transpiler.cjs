@@ -63006,7 +63006,7 @@ ${i1}}`;
       return ok2 && (valueUses2 === 0 || elemUses === 0) ? "call" : false;
     }
     const fromSlot = this.rustMarketSlotParamOf(this.rustSkipWrappers(declaration.initializer)) !== void 0 && (declaration.parent.flags & _ast.NodeFlags.Const) === 0;
-    const fromOpt = this.rustIsOptMarketCall(declaration.initializer) || this.rustOptMarketTernary(declaration.initializer) !== void 0 || fromSlot;
+    const fromOpt = this.rustIsOptMarketCall(declaration.initializer) || this.rustOptMarketTernary(declaration.initializer) !== void 0 || fromSlot || this.rustOptSafeMarketTernary(declaration.initializer) !== void 0;
     const empty = declaration.initializer === void 0 || this.literalKindOfNode(declaration.initializer) === "null" || fromOpt;
     if (!empty && !this.rustIsTypedMarketCall(declaration.initializer))
       return false;
@@ -63533,6 +63533,40 @@ ${i1}}`;
       return t;
     return void 0;
   }
+  /** ral-45c: `c ? this.safeMarket (..) : market` (a lent market slot) or `c ? this.safeMarket (..) : undefined` (either arm
+   *  order): the `safeMarket` arm and the other one. `safeMarket` never answers Null, the slot is `Option<&Market>`. */
+  rustOptSafeMarketTernary(init) {
+    const cond = init === void 0 ? void 0 : this.unwrapParens(init);
+    if (cond === void 0 || cond.kind !== _ast.SyntaxKind.ConditionalExpression)
+      return void 0;
+    const t = this.unwrapParens(cond.whenTrue);
+    const f = this.unwrapParens(cond.whenFalse);
+    const otherOk = (o) => this.literalKindOfNode(o) === "null" || this.rustMarketSlotParamOf(this.rustSkipWrappers(o)) !== void 0;
+    const smkt = (a) => _is.isCallExpression.call(void 0, this.rustSkipWrappers(a)) && this.rustIsSafeMarketCall(a);
+    if (smkt(t) && otherOk(f))
+      return { arm: t, other: f };
+    if (smkt(f) && otherOk(t))
+      return { arm: f, other: t };
+    return void 0;
+  }
+  /** `(if c { Some(self.safe_market(..)) } else { market.cloned() })` for the ternary above. */
+  printOptSafeMarketTernary(init) {
+    const tern = this.rustOptSafeMarketTernary(init);
+    if (tern === void 0)
+      return void 0;
+    const cond = this.unwrapParens(init);
+    const call = this.rustSkipWrappers(tern.arm);
+    this.rustSafeMarketBoxing.add(call);
+    let some;
+    try {
+      some = `Some(${this.printCallExpression(call, 0).trim()})`;
+    } finally {
+      this.rustSafeMarketBoxing.delete(call);
+    }
+    const other = this.literalKindOfNode(tern.other) === "null" ? "None" : `${super.printIdentifier(this.rustSkipWrappers(tern.other))}.cloned()`;
+    const armTrue = this.unwrapParens(cond.whenTrue) === tern.arm;
+    return `(if ${this.printCondition(cond.condition, 0)} { ${armTrue ? some : other} } else { ${armTrue ? other : some} })`;
+  }
   /** `(if c { None } else { Some(market) })` for an `Option<Market>` ternary initializer. */
   printOptMarketTernary(init) {
     const arm = this.rustOptMarketTernary(init);
@@ -63710,7 +63744,7 @@ ${i1}}`;
     const kind = this.rustMarketLocalKind(declaration);
     if (kind === "opt") {
       const slot = this.rustSkipWrappers(declaration.initializer);
-      const init = this.rustIsOptMarketCall(declaration.initializer) ? this.printNode(declaration.initializer, 0).trim() : this.rustMarketSlotParamOf(slot) !== void 0 ? `${super.printIdentifier(slot)}.cloned()` : _nullishCoalesce(this.printOptMarketTernary(declaration.initializer), () => ( "None"));
+      const init = this.rustIsOptMarketCall(declaration.initializer) ? this.printNode(declaration.initializer, 0).trim() : this.rustMarketSlotParamOf(slot) !== void 0 ? `${super.printIdentifier(slot)}.cloned()` : _nullishCoalesce(_nullishCoalesce(this.printOptMarketTernary(declaration.initializer), () => ( this.printOptSafeMarketTernary(declaration.initializer))), () => ( "None"));
       return `${indent}let mut ${varName}: Option<crate::types::Market> = ${init}`;
     }
     if (kind === "call") {
