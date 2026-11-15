@@ -58762,6 +58762,13 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "cond";
     if (kind === "bool" && _is.isPrefixUnaryExpression.call(void 0, parent) && this.rustValueNotOfBoolLocal(parent) !== void 0)
       return "cond";
+    if (kind === "bool" && _is.isVariableDeclaration.call(void 0, parent) && parent.initializer === n && _is.isIdentifier.call(void 0, parent.name) && this.rustNilLocalKind(parent) === void 0) {
+      const aliasKind = this.rustScalarLocalKind(parent);
+      if (aliasKind === void 0)
+        return "box";
+      if (aliasKind === "bool")
+        return "native";
+    }
     if (kind === "str" || kind === "ostr") {
       const fieldForm = this.rustFieldKeyUseForm(n);
       if (fieldForm !== void 0)
