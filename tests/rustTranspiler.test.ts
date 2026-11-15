@@ -14905,6 +14905,10 @@ describe('ral-41g: a borrowed string element decides its own uses only (a same-n
         const m = out.match(/let mut key: Option<&str> = keys\.get\(i as usize\)\.and_then\(Value::as_str\);/g) ?? [];
         expect(m.length).toBe(2);
     });
+    test('negative: a key whose map read initialises a pushed local keeps Value (the native push is proven from the Value key text)', () => {
+        const out = mk('            const grouped = byKey[key];\n            grouped.push (1);');
+        expect(out).not.toMatch(/let mut key: Option<&str>/);
+    });
     test('negative: a twin whose own use only a Value prints (arithmetic on its length) keeps Value; the other twin borrows', () => {
         const out = mk('            out.push (key.length + 1);');
         expect(out).toMatch(/let mut key: Value = keys\.get\(i as usize\)\.cloned\(\)/);

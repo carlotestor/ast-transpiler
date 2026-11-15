@@ -1073,6 +1073,8 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  argument, object-literal value, array element, dict write or `+` operand (`Value::from(k.as_deref())`: the copy the `Value`
      *  clone made, never more). */
     rustBorrowStrElem(declaration: any): boolean;
+    /** ral-41g: `const g = m[k]` (k the use `n`) where `g`, or a same-named local of the method, is the receiver of a `.push (..)`. */
+    rustElemKeyFeedsPushedLocal(n: any): boolean;
     /** wg: a `string[]` / `Strings` parameter whose list holds only strings: declared so by the base tier (a unified method:
      *  its callers are the typed API and `fetch2`), or proven at every call site of a venue-private method. */
     rustStrListParam(param: any, depth: number): boolean;

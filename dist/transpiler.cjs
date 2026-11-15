@@ -58928,6 +58928,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       const form = this.rustScalarUseForms.get(n);
       if (keyed && (form === "okey" || form === "kin" || form === "key" || form === "inbox"))
         return false;
+      if (this.rustElemKeyFeedsPushedLocal(n))
+        return false;
       if (form === "test" || form === "concat" || form === "okey" || form === "kin" || form === "key" || form === "inbox")
         return true;
       if (form === "parg" && this.rustInArrayNeedle(n))
@@ -58938,6 +58940,24 @@ ${binding(plan.indent)}` : ""), head: "" };
         return false;
       const up = n.parent;
       return _is.isCallExpression.call(void 0, up) && up.expression !== n || up.kind === _ast.SyntaxKind.PropertyAssignment && up.initializer === n || _is.isArrayLiteralExpression.call(void 0, up) && !(_is.isBinaryExpression.call(void 0, up.parent) && up.parent.left === up) || this.rustDictWriteValue(n) || _is.isBinaryExpression.call(void 0, up) && up.operatorToken.kind === _ast.SyntaxKind.PlusToken;
+    });
+  }
+  /** ral-41g: `const g = m[k]` (k the use `n`) where `g`, or a same-named local of the method, is the receiver of a `.push (..)`. */
+  rustElemKeyFeedsPushedLocal(n) {
+    const read = n.parent;
+    if (read === void 0 || !_is.isElementAccessExpression.call(void 0, read) || read.argumentExpression !== n)
+      return false;
+    let up = read.parent;
+    while (up !== void 0 && (_is.isParenthesizedExpression.call(void 0, up) || up.kind === _ast.SyntaxKind.AsExpression || up.kind === _ast.SyntaxKind.NonNullExpression))
+      up = up.parent;
+    if (up === void 0 || !_is.isVariableDeclaration.call(void 0, up) || !_is.isIdentifier.call(void 0, up.name))
+      return false;
+    const scope = this.rustEnclosingFunction(up);
+    if (scope === void 0)
+      return true;
+    return this.rustScopeNameNodes(scope, String(up.name.text)).some((u) => {
+      const acc = u.parent;
+      return _is.isIdentifier.call(void 0, u) && _is.isPropertyAccessExpression.call(void 0, acc) && acc.expression === u && String(acc.name.text) === "push" && _is.isCallExpression.call(void 0, acc.parent) && acc.parent.expression === acc;
     });
   }
   /** wg: a `string[]` / `Strings` parameter whose list holds only strings: declared so by the base tier (a unified method:
