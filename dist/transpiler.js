@@ -55004,7 +55004,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "Vec<String>";
     if (this.rustParamReadsByReference(param))
       return "impl KeyRead";
-    if (this.rustParamIsLentResponse(param) || this.rustParamIsLentVenue(param))
+    if (this.rustParamIsLentResponse(param) || this.rustParamIsLentVenue(param) || this.rustSafeDictKeyParam(param))
       return "impl Into<crate::Value>";
     if (this.rustBookSideParam(param))
       return this.rustWsBookPath(param, "pro::order_book::Side");
@@ -58512,6 +58512,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "parg";
     if ((kind === "int" || kind === "oint" || kind === "num" || kind === "onum") && this.rustIso8601Arg(n))
       return "parg";
+    if ((kind === "int" || kind === "oint" || kind === "num" || kind === "onum") && this.rustSafeDictKeyArg(n))
+      return "parg";
     if ((kind === "str" || kind === "ostr") && this.rustWsCacheMapKeyUse(n))
       return "fin";
     if (kind === "bool" && this.rustScalarBoolLogicalText(this.rustClimbLogicalWrappers(n)) !== void 0)
@@ -59805,6 +59807,26 @@ ${binding(plan.indent)}` : ""), head: "" };
   rustInArrayNeedle(node) {
     const call = node?.parent;
     return !this.rustTestTierSource(node) && isCallExpression6(call) && call.arguments[0] === node && isPropertyAccessExpression3(call.expression) && String(call.expression.name.text) === "inArray" && this.rustBaseTypedReturnKind(call) === "bool";
+  }
+  /** ral-50e: the `key` parameter (slot 1) of the generated base `safeDict`: prints `impl Into<crate::Value>` and binds
+   *  `let mut key: Value = key.into();` (every `Value` argument still passes; a number local passes unboxed). */
+  rustSafeDictKeyParam(param) {
+    const method = param?.parent;
+    return param?.kind === SyntaxKind7.Parameter && isMethodDeclaration5(method) && method.body !== void 0 && isIdentifier3(method.name) && String(method.name.text) === "safeDict" && method.parameters?.[1] === param && isIdentifier3(param.name) && param.initializer === void 0 && param.questionToken === void 0 && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(param.getSourceFile?.()?.fileName ?? "")) && !this.rustMethodReferencedAsValue(method);
+  }
+  /** ral-50e: `n` is the key (argument 1) of `this.safeDict (x, n, ..)` resolving to the generated base body, outside the test crate. */
+  rustSafeDictKeyArg(n) {
+    const call = n?.parent;
+    if (this.rustTestTierSource(n) || !isCallExpression6(call) || call.arguments[1] !== n || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(call.expression.name.text) !== "safeDict")
+      return false;
+    let declaration = this.rustScalarCallee(call);
+    if (declaration === void 0 || !isMethodDeclaration5(declaration))
+      return false;
+    if (declaration.body === void 0) {
+      const owner = declaration.parent;
+      declaration = (owner !== void 0 && isClassDeclaration4(owner) ? Array.from(owner.members) : []).find((m) => isMethodDeclaration5(m) && m.body !== void 0 && isIdentifier3(m.name) && String(m.name.text) === "safeDict");
+    }
+    return declaration !== void 0 && this.rustSafeDictKeyParam(declaration.parameters?.[1]);
   }
   /** xd: `n` is the only argument of `this.iso8601 (n)` outside the test crate (hand-written `iso8601(ts: impl Into<Value>)`). */
   rustIso8601Arg(n) {
@@ -78250,7 +78272,7 @@ ${iden}}`;
   }
   /** `let mut params: Value = params.into();` heading a method whose params dict is lent: the body reads the `Value`. */
   rustLentParamsBinding(node, identation) {
-    const lent = Array.from(node.parameters ?? []).filter((p) => this.rustParamIsLentDict(p) || this.rustParamIsLentList(p) || this.rustParamIsLentResponse(p) || this.rustParamIsLentVenue(p) || this.rustVenueStrParamType(p) !== void 0 && !this.rustVenueStrParamUnbound(p));
+    const lent = Array.from(node.parameters ?? []).filter((p) => this.rustParamIsLentDict(p) || this.rustParamIsLentList(p) || this.rustParamIsLentResponse(p) || this.rustParamIsLentVenue(p) || this.rustSafeDictKeyParam(p) || this.rustVenueStrParamType(p) !== void 0 && !this.rustVenueStrParamUnbound(p));
     return lent.map((p) => {
       const name = this.printNode(p.name, 0);
       return `${this.getIden(identation + 2)}let mut ${name}: Value = ${name}.into();

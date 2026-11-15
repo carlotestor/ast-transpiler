@@ -1205,6 +1205,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** vg: `Object.keys (x)` (never a ws client handle's key list) or a non-empty literal of string literals: only strings. */
     rustExactStrListInit(init: any): boolean;
     rustInArrayNeedle(node: any): boolean;
+    /** ral-50e: the `key` parameter (slot 1) of the generated base `safeDict`: prints `impl Into<crate::Value>` and binds
+     *  `let mut key: Value = key.into();` (every `Value` argument still passes; a number local passes unboxed). */
+    rustSafeDictKeyParam(param: any): boolean;
+    /** ral-50e: `n` is the key (argument 1) of `this.safeDict (x, n, ..)` resolving to the generated base body, outside the test crate. */
+    rustSafeDictKeyArg(n: any): boolean;
     /** xd: `n` is the only argument of `this.iso8601 (n)` outside the test crate (hand-written `iso8601(ts: impl Into<Value>)`). */
     rustIso8601Arg(n: any): boolean;
     /** Identifier hook: a `box` use converts with the standard `From` impls (scalars are `Copy`). */
