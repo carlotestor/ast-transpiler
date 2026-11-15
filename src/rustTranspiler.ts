@@ -26429,6 +26429,14 @@ export class RustTranspiler extends BaseTranspiler {
                     handOffs++;
                     return true;
                 }
+                // ral-57i: `y = x` (statement) into another plain `Value` local at x's provable last use: JS shares the reference and
+                // nothing reads or pushes x afterwards, so `Value::Arr(x)` moves the list into y (one box, no copy)
+                if (isBinaryExpression(up) && up.right === n && up.operatorToken.kind === SyntaxKind.EqualsToken && up.parent?.kind === SyntaxKind.ExpressionStatement
+                    && isIdentifier(up.left) && up.left.text !== name && this.rustLocalLastUse(n, declaration) && short(n) && this.rustBuiltListAliasTarget(up.left)) {
+                    boxes.push([n, 'move']);
+                    handOffs++;
+                    return true;
+                }
                 // ral-56i: `x = [ x ]` (statement) wraps the list in a fresh one-element list: the old list moves into its box
                 if (this.rustBuiltListSelfWrap(n, declaration)) {
                     boxes.push([n, 'move']);
@@ -26540,6 +26548,22 @@ export class RustTranspiler extends BaseTranspiler {
         const first: any = this.rustSkipWrappers(call.arguments[0]);
         return first !== undefined && isIdentifier(first) && String(first.text) === name && this.rustBuiltListSelfWriteArg(call.arguments[0], name);
     }
+
+    /** ral-57i: the target of `y = x`: a `let` local of the same function that is never a built list itself, still printed as the plain
+     *  `Value` binding (no typed local, scalar, nil or borrowed decision). */
+    rustBuiltListAliasTarget(left: any): boolean {
+        const target: any = this.rustDeclarationOfIdentifier(left);
+        if (target === undefined || target.name === left || !isVariableDeclaration(target) || this.rustBuiltLists.has(target)) return false;
+        if (this.rustBuiltListAliasGuard.has(target)) return false;
+        this.rustBuiltListAliasGuard.add(target);
+        try {
+            return this.rustPlainValueBinding(left);
+        } finally {
+            this.rustBuiltListAliasGuard.delete(target);
+        }
+    }
+
+    private rustBuiltListAliasGuard = new Set<any>();
 
     /** ral-57i: `this.arraySlice (..)` resolved to the base declaration and redeclared by no venue. */
     rustBaseArraySliceCall(call: any): boolean {
