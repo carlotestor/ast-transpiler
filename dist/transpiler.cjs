@@ -77813,6 +77813,8 @@ ${iden}}`;
           natives++;
           if (member === "push")
             return this.rustVecPushShape(up.parent, name);
+          if (member === "join")
+            return this.vecJoinUse(up);
           const use = up.parent;
           return member === "length" && _optionalChain([use, 'optionalAccess', _10426 => _10426.kind]) !== _ast.SyntaxKind.PrefixUnaryExpression && _optionalChain([use, 'optionalAccess', _10427 => _10427.kind]) !== _ast.SyntaxKind.PostfixUnaryExpression && !(_is.isBinaryExpression.call(void 0, use) && use.left === up && rustIsAssignmentOperator(use.operatorToken.kind));
         }

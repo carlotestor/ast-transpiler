@@ -77814,6 +77814,8 @@ ${iden}}`;
           natives++;
           if (member === "push")
             return this.rustVecPushShape(up.parent, name);
+          if (member === "join")
+            return this.vecJoinUse(up);
           const use = up.parent;
           return member === "length" && use?.kind !== SyntaxKind7.PrefixUnaryExpression && use?.kind !== SyntaxKind7.PostfixUnaryExpression && !(isBinaryExpression5(use) && use.left === up && rustIsAssignmentOperator(use.operatorToken.kind));
         }
