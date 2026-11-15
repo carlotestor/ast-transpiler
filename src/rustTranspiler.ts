@@ -18335,7 +18335,11 @@ export class RustTranspiler extends BaseTranspiler {
             const handed = () => (this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0
                 || this.rustBuiltReturnBoxUse(n, init, extendReuse) && ++defaultedBoxes > 0 || this.rustOptReaderBoxUse(n, init) && ++optionalBoxes > 0
                 || this.rustOptionalParamsSlot(up, n) && (from === 'dict' || from === 'api' && this.rustDeclaredEndpointKind(init) === 'dict') && ++paramsBoxes > 0
-                || nilDeclared && this.rustDeclaredEndpointBoxUse(n) && ++endpointBoxes > 0) && boxedElementUses.push(n) > 0;
+                || nilDeclared && this.rustDeclaredEndpointBoxUse(n) && ++endpointBoxes > 0
+                // ral-43a: a declared `Promise<Dict>` / `Promise<List>` endpoint answer (plain form, read natively) handed on
+                // whole as an object-literal value or the return: the box gives back the declared container (the same
+                // invariant the plain form's reads take); an optional local refuses it below (defaulted box)
+                || endpoint && from !== 'api' && !nilDeclared && this.rustDeclaredEndpointWholeBox(n) && ++defaultedBoxes > 0) && boxedElementUses.push(n) > 0;
             const asArg: any = isAsExpression(up) && up.expression === n && isCallExpression(up.parent) && Array.from(up.parent.arguments).includes(up) ? up : undefined;
             if (asArg !== undefined && this.rustLentAsHandOff(asArg, init, from, endpoint, nilDeclared)) return ++lentResponses > 0 && ++reads > 0 && (this.rustLentAsNullable(init, nilDeclared, endpoint) ? ++lentNullable > 0 : true);
             // ral-40a: the sole extra operand of a base `extend` takes the optional map lent (`&[&x]`, MergeOperands for
@@ -20035,6 +20039,14 @@ export class RustTranspiler extends BaseTranspiler {
     rustListPassthroughCallee(call: any, method: string): boolean {
         const member: any = this.rustScalarCallee(call);
         return member !== undefined && RustTranspiler.RUST_BASE_TIER_FILE.test(String(member.getSourceFile?.()?.fileName ?? '')) && !this.rustVenueReturnTypesHas(call, method);
+    }
+
+    /** ral-43a: `{ 'k': x }` (a plain object literal, not a destructuring target) or `return x` of a held endpoint answer. */
+    rustDeclaredEndpointWholeBox(n: any): boolean {
+        const up: any = n.parent;
+        if (up === undefined || this.rustScalarInNestedWrite(n, true)) return false;
+        if (up.kind === SyntaxKind.PropertyAssignment) return up.initializer === n && isObjectLiteralExpression(up.parent) && !this.rustInDestructureWrite(n);
+        return isReturnStatement(up) && up.expression === n;
     }
 
     // ── rustDeclaredEndpointBoxUse (ral-ld): a declared-endpoint optional container handed on whole ──

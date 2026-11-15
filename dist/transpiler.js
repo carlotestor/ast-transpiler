@@ -69491,7 +69491,7 @@ ${iden}}`;
         return keyWriteUses.push(n) > 0 && ++keyWrites > 0 && ++reads > 0;
       if (extendReuse && this.rustReuseDynamicKeyWrite(n, declaration))
         return keyWriteUses.push(n) > 0 && ++keyWrites > 0 && ++reads > 0;
-      const handed = () => (this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0 || this.rustBuiltReturnBoxUse(n, init, extendReuse) && ++defaultedBoxes > 0 || this.rustOptReaderBoxUse(n, init) && ++optionalBoxes > 0 || this.rustOptionalParamsSlot(up, n) && (from === "dict" || from === "api" && this.rustDeclaredEndpointKind(init) === "dict") && ++paramsBoxes > 0 || nilDeclared && this.rustDeclaredEndpointBoxUse(n) && ++endpointBoxes > 0) && boxedElementUses.push(n) > 0;
+      const handed = () => (this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0 || this.rustBuiltReturnBoxUse(n, init, extendReuse) && ++defaultedBoxes > 0 || this.rustOptReaderBoxUse(n, init) && ++optionalBoxes > 0 || this.rustOptionalParamsSlot(up, n) && (from === "dict" || from === "api" && this.rustDeclaredEndpointKind(init) === "dict") && ++paramsBoxes > 0 || nilDeclared && this.rustDeclaredEndpointBoxUse(n) && ++endpointBoxes > 0 || endpoint && from !== "api" && !nilDeclared && this.rustDeclaredEndpointWholeBox(n) && ++defaultedBoxes > 0) && boxedElementUses.push(n) > 0;
       const asArg = isAsExpression3(up) && up.expression === n && isCallExpression6(up.parent) && Array.from(up.parent.arguments).includes(up) ? up : void 0;
       if (asArg !== void 0 && this.rustLentAsHandOff(asArg, init, from, endpoint, nilDeclared))
         return ++lentResponses > 0 && ++reads > 0 && (this.rustLentAsNullable(init, nilDeclared, endpoint) ? ++lentNullable > 0 : true);
@@ -71264,6 +71264,15 @@ ${iden}}`;
   rustListPassthroughCallee(call, method) {
     const member = this.rustScalarCallee(call);
     return member !== void 0 && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(member.getSourceFile?.()?.fileName ?? "")) && !this.rustVenueReturnTypesHas(call, method);
+  }
+  /** ral-43a: `{ 'k': x }` (a plain object literal, not a destructuring target) or `return x` of a held endpoint answer. */
+  rustDeclaredEndpointWholeBox(n) {
+    const up = n.parent;
+    if (up === void 0 || this.rustScalarInNestedWrite(n, true))
+      return false;
+    if (up.kind === SyntaxKind7.PropertyAssignment)
+      return up.initializer === n && isObjectLiteralExpression4(up.parent) && !this.rustInDestructureWrite(n);
+    return isReturnStatement4(up) && up.expression === n;
   }
   // ── rustDeclaredEndpointBoxUse (ral-ld): a declared-endpoint optional container handed on whole ──
   // `{ 'info': response }` / `return response`: the box `x.map_or(Value::Null, Value::Dict|Arr)` gives back the

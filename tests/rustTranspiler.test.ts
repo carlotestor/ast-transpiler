@@ -15604,3 +15604,26 @@ describe('ral-42h: a never-null venue container result handed on whole is held',
         expect(out).not.toContain('let mut signature: crate::value::Dict = ');
     });
 });
+
+describe('ral-43a: a declared endpoint answer read natively and handed on whole is held', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type List = any[];\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    hold (x: any): any { return x; }\n}\n";
+    const api = "import Exchange from '../base/Exchange.js';\nimport type { Dict, List } from '../base/Exchange.js';\nexport default abstract class venueApi extends Exchange {\n    publicGetMap (params = {}): Promise<Dict> { return this.hold (params); }\n    publicGetAny (params = {}): Promise<Dict | List> { return this.hold (params); }\n}\n";
+    const run = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync (path.join (dir, 'ts/src/abstract'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/abstract/venue.ts'), api);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import venueApi from './abstract/venue.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends venueApi {\n" + body + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('a Promise<Dict> answer read by key and stored as the info value is a held Dict', () => {
+        const out = run ('r43a-endpoint-info', "    async fetchStatus (params: Dict = {}) {\n        const response = await this.publicGetMap (params);\n        const status = this.safeString (response, 'status');\n        return { 'status': status, 'info': response };\n    }\n");
+        expect(out).toContain('let mut response: crate::value::Dict = ');
+        expect(out).toContain('Value::Dict(response)');
+    });
+    test('negative: a Dict | List answer stays boxed', () => {
+        const out = run ('r43a-endpoint-any', "    async fetchStatus (params: Dict = {}) {\n        const response = await this.publicGetAny (params);\n        const status = this.safeString (response, 'status');\n        return { 'status': status, 'info': response };\n    }\n");
+        expect(out).not.toContain('let mut response: crate::value::Dict = ');
+    });
+});

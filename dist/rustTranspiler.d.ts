@@ -2827,6 +2827,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustSortOfTypedList(call: any): boolean;
     /** `this.m (..)` resolves to the base declaration and no venue redeclares `m`. */
     rustListPassthroughCallee(call: any, method: string): boolean;
+    /** ral-43a: `{ 'k': x }` (a plain object literal, not a destructuring target) or `return x` of a held endpoint answer. */
+    rustDeclaredEndpointWholeBox(n: any): boolean;
     rustDeclaredEndpointBoxUse(n: any): boolean;
     /** `this.F` for a checker dict-shaped field (`fundingRates: Dictionary<FundingRate>`) the native insert writes
      *  (`printNativeDictInsert`: `rustFieldStaysDict`). The insert stores whatever handle it is given, so a built map
