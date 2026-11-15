@@ -18259,3 +18259,32 @@ describe('ral-54h: a safeValue read of client.futures keyed by a string paramete
         expect(out).toMatch(/fn loadOther[\s\S]*let mut future: Value = /);
     });
 });
+
+describe('ral-54h: book locals of one name in sibling blocks are proven each on its own', () => {
+    const files: Record<string, string> = {
+        "ts/src/base/ws/OrderBook.ts": "export class WsOrderBook {\n    cache: any[] = [];\n    constructor (snapshot: any = {}, depth: any = undefined) {}\n    limit () { return this; }\n    reset (snapshot: any = {}) {}\n}\n",
+        "ts/src/base/ws/Client.ts": "export default class Client {\n    resolve (result: any, messageHash: string): any { return result; }\n}\n",
+        "ts/src/base/Exchange.ts": "import { WsOrderBook } from './ws/OrderBook.js';\nexport interface Dictionary<T> { [key: string]: T }\nexport default class Exchange {\n    orderbooks: Dictionary<WsOrderBook> = {};\n    orderBook (snapshot = {}, depth = 100): WsOrderBook { return new WsOrderBook (snapshot, depth); }\n}\n",
+        "ts/src/pro/venue.ts": "import Exchange from '../base/Exchange.js';\nimport Client from '../base/ws/Client.js';\nexport default class venue extends Exchange {\n" +
+            "    handleBook (client: Client, message: any, symbol: string, type: string) {\n        if (type === 'snapshot') {\n            const orderbook = this.orderbooks[symbol];\n            orderbook.reset (message);\n            client.resolve (orderbook, 'book');\n        } else if (type === 'update') {\n            const orderbook = this.orderbooks[symbol];\n            orderbook['timestamp'] = 1;\n            client.resolve (orderbook, 'book');\n        }\n    }\n" +
+            "    handleOther (client: Client, message: any, symbol: string, type: string) {\n        const orderbook = this.orderbooks[symbol];\n        if (type === 'snapshot') {\n            const orderbook = this.orderbooks[symbol];\n            orderbook.reset (message);\n        }\n        client.resolve (orderbook, 'book');\n    }\n}\n",
+    };
+    let out: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-54h-book-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = transpiler.transpileRustByPath(path.join (root, 'ts/src/pro/venue.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test('if / else-if siblings: both are optional books', () => {
+        const body = out.slice (out.indexOf ('fn handleBook'), out.indexOf ('fn handleOther'));
+        expect(body.match(/let mut orderbook: Option<crate::pro::order_book::Book> = self\.orderbooks\.at\(/g)?.length).toBe(2);
+    });
+    test('negative: a nested binding (one block holds the other) keeps the outer local a Value', () => {
+        const body = out.slice (out.indexOf ('fn handleOther'));
+        expect(body).toMatch(/let mut orderbook: Value = /);
+    });
+});

@@ -25314,38 +25314,52 @@ export class RustTranspiler extends BaseTranspiler {
                 const forms = new Map<Node, 'bare' | 'box' | 'test' | 'field' | 'meta'>();
                 let reads = 0;
                 let sourced = !this.rustWsCacheUndefined(init);
-                const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
-                    const p: any = n.parent;
-                    if ((isPropertyAccessExpression(p) || p?.kind === SyntaxKind.PropertyAssignment) && p.name === n) return true;
-                    if (kind === 'opt' && isBinaryExpression(p) && this.isEqualityOp(p.operatorToken.kind) && this.rustWsCacheUndefined(p.left === n ? p.right : p.left)) { forms.set(n, 'test'); return true; }
-                    if (this.rustWsBookMethodReceiver(n) || (kind === 'opt' && this.rustWsBookLimitReturn(n))) { forms.set(n, 'bare'); reads++; return true; }
-                    const key = this.rustWsBookFieldKey(n);
-                    if (key !== undefined && RustTranspiler.RUST_BOOK_SIDE_FIELDS.has(key)) {
-                        const access: any = p;
-                        const write: any = access.parent;
-                        if (isBinaryExpression(write) && write.left === access && write.operatorToken.kind === SyntaxKind.EqualsToken) {
-                            if (!RustTranspiler.RUST_BOOK_META_WRITES.has(key) || write.parent?.kind !== SyntaxKind.ExpressionStatement) return false;
-                            forms.set(n, 'meta'); reads++; return true;
+                // ral-54h: a binding of the same name in a sibling block (`if (a) { const b = .. } else { const b = .. }`)
+                // prints its own `let` there: its reads are no use of this local
+                const shadowSkip = this.rustDisjointShadowSkip;
+                this.rustDisjointShadowSkip = true;
+                let ok: boolean;
+                try {
+                    ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+                        if (!this.rustIdentifierRefersToDeclaration(n, declaration)) {
+                            const other: any = this.rustDeclarationOfIdentifier(n);
+                            return other !== undefined && other !== declaration && this.rustDisjointBinding(other, declaration);
                         }
-                        if (this.isNativeWriteTargetBase(access) || isDeleteExpression(write) || (isCallExpression(write) && write.expression === access)) return false;
-                        // `x.cache.push (..)` / `x.cache.length = 0` keep the boxed receiver the ccxt field-append pass keys on
-                        let outer: any = access;
-                        while (isParenthesizedExpression(outer.parent) || isAsExpression(outer.parent)) outer = outer.parent;
-                        if (isPropertyAccessExpression(outer.parent) && outer.parent.expression === outer && (String(outer.parent.name.text) !== 'length' || this.isNativeWriteTargetBase(outer.parent))) return false;
-                        forms.set(n, 'field'); reads++; return true;
-                    }
-                    if (key !== undefined && isPropertyAccessExpression(p)) return false;
-                    if (isBinaryExpression(p) && p.left === n && p.operatorToken.kind === SyntaxKind.EqualsToken) {
-                        if (p.parent?.kind !== SyntaxKind.ExpressionStatement) return false;
-                        const ok = kind === 'opt' ? this.rustWsBookOptSource(p.right, true) : this.rustWsBookCtorLike(p.right);
-                        if (ok) forms.set(n, 'bare');
-                        if (ok && !this.rustWsCacheUndefined(p.right)) sourced = true;
-                        return ok;
-                    }
-                    if (this.rustWsBookMapWriteValue(n)) { forms.set(n, 'bare'); return true; }
-                    if (this.rustWsBookBoxUse(n)) { forms.set(n, 'box'); reads++; return true; }
-                    return false;
-                });
+                        const p: any = n.parent;
+                        if ((isPropertyAccessExpression(p) || p?.kind === SyntaxKind.PropertyAssignment) && p.name === n) return true;
+                        if (kind === 'opt' && isBinaryExpression(p) && this.isEqualityOp(p.operatorToken.kind) && this.rustWsCacheUndefined(p.left === n ? p.right : p.left)) { forms.set(n, 'test'); return true; }
+                        if (this.rustWsBookMethodReceiver(n) || (kind === 'opt' && this.rustWsBookLimitReturn(n))) { forms.set(n, 'bare'); reads++; return true; }
+                        const key = this.rustWsBookFieldKey(n);
+                        if (key !== undefined && RustTranspiler.RUST_BOOK_SIDE_FIELDS.has(key)) {
+                            const access: any = p;
+                            const write: any = access.parent;
+                            if (isBinaryExpression(write) && write.left === access && write.operatorToken.kind === SyntaxKind.EqualsToken) {
+                                if (!RustTranspiler.RUST_BOOK_META_WRITES.has(key) || write.parent?.kind !== SyntaxKind.ExpressionStatement) return false;
+                                forms.set(n, 'meta'); reads++; return true;
+                            }
+                            if (this.isNativeWriteTargetBase(access) || isDeleteExpression(write) || (isCallExpression(write) && write.expression === access)) return false;
+                            // `x.cache.push (..)` / `x.cache.length = 0` keep the boxed receiver the ccxt field-append pass keys on
+                            let outer: any = access;
+                            while (isParenthesizedExpression(outer.parent) || isAsExpression(outer.parent)) outer = outer.parent;
+                            if (isPropertyAccessExpression(outer.parent) && outer.parent.expression === outer && (String(outer.parent.name.text) !== 'length' || this.isNativeWriteTargetBase(outer.parent))) return false;
+                            forms.set(n, 'field'); reads++; return true;
+                        }
+                        if (key !== undefined && isPropertyAccessExpression(p)) return false;
+                        if (isBinaryExpression(p) && p.left === n && p.operatorToken.kind === SyntaxKind.EqualsToken) {
+                            if (p.parent?.kind !== SyntaxKind.ExpressionStatement) return false;
+                            const ok = kind === 'opt' ? this.rustWsBookOptSource(p.right, true) : this.rustWsBookCtorLike(p.right);
+                            if (ok) forms.set(n, 'bare');
+                            if (ok && !this.rustWsCacheUndefined(p.right)) sourced = true;
+                            return ok;
+                        }
+                        if (this.rustWsBookMapWriteValue(n)) { forms.set(n, 'bare'); return true; }
+                        if (this.rustWsBookBoxUse(n)) { forms.set(n, 'box'); reads++; return true; }
+                        return false;
+                    });
+                } finally {
+                    this.rustDisjointShadowSkip = shadowSkip;
+                    this.rustDisjointShadowSeen = false;
+                }
                 if (ok && sourced) {
                     known = kind;
                     for (const [n, form] of forms) this.rustWsBookUses.set(n, form);
