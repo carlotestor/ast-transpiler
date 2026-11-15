@@ -16440,3 +16440,26 @@ describe('ral-46f: a true-seeded bool local rewritten from a long handleOptionBo
         expect(output).toMatch(/let mut flag: Value/);
     });
 });
+
+describe('ral-46f: a `{}` reuse literal written `x = y as Dict` right after `y` took a declared Promise<Dict> endpoint answer', () => {
+    const run = (body: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-46f-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync(path.join(root, 'ts/src/abstract'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    extend (a: any, b: any): Dict { return a; }\n    METHODS_MARKER () {}\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    parseOrder (order: Dict, market: any = undefined): any { return order; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/abstract/venue.ts'), "import _Exchange from '../base/Exchange.js';\nimport type { Dict } from '../base/Exchange.js';\nexport default abstract class Exchange extends _Exchange {\n    privatePostA (params = {}): Promise<Dict> { return this.hold (params); }\n    privatePostB (params = {}): Promise<Dict> { return this.hold (params); }\n    privatePostC (params = {}): Promise<any> { return this.hold (params); }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './abstract/venue.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    override parseOrder (order: Dict, market: any = undefined): any { return order['id']; }\n" + body + "}\n");
+        const out = transpiler.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
+        fs.rmSync(root, { recursive: true, force: true });
+        return out;
+    };
+    test('the alias write moves the response map: Dict local lent to parseOrder', () => {
+        const out = run("    async m (c: boolean, params: Dict = {}): Promise<any> {\n        let response = undefined;\n        let data: Dict = {};\n        if (c) {\n            response = await this.privatePostC (params);\n            data = this.extend (params, {});\n        } else {\n            response = await this.privatePostA (params);\n            data = response as Dict;\n        }\n        return this.parseOrder (data);\n    }\n");
+        expect(out).toMatch(/data = response\.into_dict\(\);/);
+        expect(out).toMatch(/let mut data: crate::value::Dict = /);
+    });
+    test('the alias of an undeclared (Promise<any>) answer keeps the local Value', () => {
+        const out = run("    async m (params: Dict = {}): Promise<any> {\n        let response = undefined;\n        let data: Dict = {};\n        response = await this.privatePostC (params);\n        data = response as Dict;\n        return this.parseOrder (data);\n    }\n");
+        expect(out).toMatch(/let mut data: Value = /);
+    });
+});

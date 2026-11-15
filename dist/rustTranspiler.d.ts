@@ -2688,6 +2688,11 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  already prints `.await.into_dict()`, so the same write into a reuse literal replaces the owned map with the parsed
      *  response (parsed JSON carries no runtime tag). */
     rustReuseEndpointWrite(right: any): boolean;
+    /** ral-46f: `x = y as Dict` whose previous statement in the same block is `y = await this.<endpoint> (..)` of a REST endpoint
+     *  declared `Promise<Dict>` (`rustReuseEndpointWrite`): `y` definitely holds that parsed response, so the write prints
+     *  `x = y.clone().into_dict()` (the form a declared-endpoint write prints; a non-map answer is the empty map there too).
+     *  Answers the endpoint write. */
+    rustEndpointAliasWrite(write: any): any;
     /** The producer of a reuse write builds from untagged operands only: `extend` / `omit` operands proven plain
      *  (`rustUntaggedMapOperand`), `indexBy` / `groupBy` fresh maps, a REST `safeDict` read off a local (parsed JSON). */
     rustReuseProducerUntagged(n: any, rhs: any): boolean;
