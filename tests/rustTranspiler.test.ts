@@ -15382,4 +15382,12 @@ describe('42i: tuple slots eighth pass', () => {
         expect(out).toContain('let mut finalInterval: Option<String> = interval.clone();');
         expect(out).toContain('interval.map(Value::from).unwrap_or(Value::Null)]');
     });
+    test('42i: the 3-slot lighter signers and lighterGenerateApiKey type their slots from the hand-written slot table', () => {
+        const file = fx ('42i-signer3', "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    lighterSignChangePubkey (signer: any, request: any): any[] {\n        const res = (globalThis as any).SignChangePubKey (request['nonce']);\n        return [ res.txType, res.txInfo, res.messageToSign ];\n    }\n    lighterGenerateApiKey (signer: any): any[] {\n        const res = (globalThis as any).GenerateAPIKey ();\n        return [ res.privateKey, res.publicKey ];\n    }\n}\n", "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    changeIt (signer: any, signRaw: Dict) {\n        const [ privateKey, publicKey ] = this.lighterGenerateApiKey (signer);\n        const [ txType, txInfo, messageToSign ] = this.lighterSignChangePubkey (signer, signRaw);\n        const request: Dict = {\n            'tx_type': txType,\n            'tx_info': txInfo,\n            'msg': messageToSign,\n            'pub': publicKey,\n        };\n        return this.hold ([ request, privateKey ]);\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (file).content;
+        expect(out).toContain('let mut txType: Option<i64> = ');
+        expect(out).toContain('let mut txInfo: Option<String> = ');
+        expect(out).toContain('let mut messageToSign: Option<String> = ');
+        expect(out).toContain('let mut publicKey: Option<String> = ');
+    });
 });

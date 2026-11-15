@@ -81128,7 +81128,13 @@ _RustTranspiler.RUST_HANDWRITTEN_SLOT_KINDS = {
   lighterSignModifyOrder: ["number", "string"],
   lighterSignTransfer: ["number", "string"],
   lighterSignUpdateLeverage: ["number", "string"],
-  lighterSignUpdateMargin: ["number", "string"]
+  lighterSignUpdateMargin: ["number", "string"],
+  // 42i: TS `[ res.txType, res.txInfo, res.messageToSign ]`; Go appends GetTxType() (uint8), txInfoStr, GetL1SignatureBody
+  // (string); C# formatSignedLighterTx {TxType (int), TxInfo, MessageToSign (string)}; Python `[tx_type, tx_info, message_to_sign]`
+  lighterSignApproveIntegrator: ["number", "string", "string"],
+  lighterSignChangePubkey: ["number", "string", "string"],
+  // 42i: TS `[ res.privateKey, res.publicKey ]`; Go / C# / Python append the two key strings
+  lighterGenerateApiKey: ["string", "string"]
 };
 // ── pro-tier WS handler `message` shadow ─────────────────────────────────
 // `handle_x (client: Client, message: Dict)` is dispatched by NAME with
