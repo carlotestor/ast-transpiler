@@ -7162,6 +7162,17 @@ describe('ral-44h ws subscription presence flags', () => {
         const out = rs("        const messageHash = 'auth';\n        const authenticated = this.safeValue (client.subscriptions, messageHash);\n        if (authenticated !== undefined) { return authenticated; }\n        return undefined;");
         expect(out).not.toContain('authenticated: bool');
     });
+
+    test('ral-45h: a literal key, a comment naming the local and a Value client field read are presence flags too', () => {
+        const out = rs("        // connectSent gates the handshake\n        const connectSent = this.safeValue (client.subscriptions, 'connect');\n        if (connectSent === undefined) { this.a (); }");
+        expect(out).toMatch(/let connectSent: bool = self\.safeValue\(client\.subscriptions, [^;]*\) != Value::Null/);
+        expect(out).toContain('if (!connectSent)');
+    });
+
+    test('ral-45h: a literal-key lookup read any other way keeps Value', () => {
+        const out = rs("        const connectSent = this.safeValue (client.subscriptions, 'connect');\n        if (connectSent === undefined) { this.a (); }\n        return connectSent;");
+        expect(out).not.toContain('connectSent: bool');
+    });
 });
 
 describe('rust string member read off a class-typed parameter', () => {

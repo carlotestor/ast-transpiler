@@ -67719,14 +67719,11 @@ ${this.getIden(identation)}}`;
     const init = this.unwrapParens(_optionalChain([declaration, 'optionalAccess', _9597 => _9597.initializer]));
     if (!_is.isIdentifier.call(void 0, _optionalChain([declaration, 'optionalAccess', _9598 => _9598.name])) || !_is.isCallExpression.call(void 0, init) || !_is.isPropertyAccessExpression.call(void 0, init.expression) || init.expression.expression.kind !== _ast.SyntaxKind.ThisKeyword || init.expression.name.text !== "safeValue" || init.arguments.length !== 2)
       return false;
-    if (!/^self\.safe(?:_v|V)alue\((?:\(client\)|__ch|client)\.subscriptions\.clone\(\), [^;\n]*, &\[\]\)$/.test(parsedValue))
+    if (!/^self\.safe(?:_v|V)alue(?:_k)?\((?:(?:\(client\)|__ch|client)\.subscriptions\.clone\(\)|client\.subscriptions), [^;\n]*, &\[\]\)$/.test(parsedValue))
       return false;
     const fn = this.rustEnclosingFunction(declaration);
     const name = String(declaration.name.text);
-    if (_is.isStringLiteralLikeNode.call(void 0, init.arguments[1]) || fn === void 0)
-      return false;
-    const fnText = String(fn.getSourceFile().text).slice(fn.pos, fn.end);
-    if (new RegExp(`//[^\\n]*(?<![A-Za-z0-9_])${name}(?![A-Za-z0-9_])`).test(fnText))
+    if (fn === void 0)
       return false;
     let uses = 0;
     let ok = fn !== void 0;

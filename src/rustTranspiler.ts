@@ -16484,14 +16484,12 @@ export class RustTranspiler extends BaseTranspiler {
         const init: any = this.unwrapParens(declaration?.initializer);
         if (!isIdentifier(declaration?.name) || !isCallExpression(init) || !isPropertyAccessExpression(init.expression)
             || init.expression.expression.kind !== SyntaxKind.ThisKeyword || init.expression.name.text !== 'safeValue' || init.arguments.length !== 2) return false;
-        if (!/^self\.safe(?:_v|V)alue\((?:\(client\)|__ch|client)\.subscriptions\.clone\(\), [^;\n]*, &\[\]\)$/.test(parsedValue)) return false;
+        // ral-45h: also the literal-key reader (`safe_value_k`) and a `Value` client's field (nado; ccxt prints it via `get_value`)
+        if (!/^self\.safe(?:_v|V)alue(?:_k)?\((?:(?:\(client\)|__ch|client)\.subscriptions\.clone\(\)|client\.subscriptions), [^;\n]*, &\[\]\)$/.test(parsedValue)) return false;
         const fn: any = this.rustEnclosingFunction(declaration);
         const name = String(declaration.name.text);
-        // the byte-identical move of the old ccxt text pass: a literal key (printed `safe_value_k`) and a fn whose
-        // comments mention the name were outside it (both are sound, left for a separate gated lift)
-        if (isStringLiteralLikeNode(init.arguments[1]) || fn === undefined) return false;
-        const fnText = String(fn.getSourceFile().text).slice(fn.pos, fn.end);
-        if (new RegExp(`//[^\\n]*(?<![A-Za-z0-9_])${name}(?![A-Za-z0-9_])`).test(fnText)) return false;
+        // ral-45h: a literal key and a fn whose comments mention the name are taken too (uses are read from the AST)
+        if (fn === undefined) return false;
         let uses = 0;
         let ok = fn !== undefined;
         const visit = (n: any) => {

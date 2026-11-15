@@ -67720,14 +67720,11 @@ ${this.getIden(identation)}}`;
     const init = this.unwrapParens(declaration?.initializer);
     if (!isIdentifier3(declaration?.name) || !isCallExpression6(init) || !isPropertyAccessExpression3(init.expression) || init.expression.expression.kind !== SyntaxKind7.ThisKeyword || init.expression.name.text !== "safeValue" || init.arguments.length !== 2)
       return false;
-    if (!/^self\.safe(?:_v|V)alue\((?:\(client\)|__ch|client)\.subscriptions\.clone\(\), [^;\n]*, &\[\]\)$/.test(parsedValue))
+    if (!/^self\.safe(?:_v|V)alue(?:_k)?\((?:(?:\(client\)|__ch|client)\.subscriptions\.clone\(\)|client\.subscriptions), [^;\n]*, &\[\]\)$/.test(parsedValue))
       return false;
     const fn = this.rustEnclosingFunction(declaration);
     const name = String(declaration.name.text);
-    if (isStringLiteralLikeNode4(init.arguments[1]) || fn === void 0)
-      return false;
-    const fnText = String(fn.getSourceFile().text).slice(fn.pos, fn.end);
-    if (new RegExp(`//[^\\n]*(?<![A-Za-z0-9_])${name}(?![A-Za-z0-9_])`).test(fnText))
+    if (fn === void 0)
       return false;
     let uses = 0;
     let ok = fn !== void 0;
