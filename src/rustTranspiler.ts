@@ -20752,6 +20752,8 @@ export class RustTranspiler extends BaseTranspiler {
         let optAliasWrites = 0;
         // ral-48a: writes that rebuild the same never-null container kind (`x = this.extend (x, ..)` on a defaulted safeDict)
         let sameKindWrites = 0;
+        // ral-58a: `x = this.omit (x, k)` writes on a proven map local that the handed-map rule (ral-ra) does not take
+        let selfOmitWrites = 0;
         const boxedElementUses: any[] = [];
         const indexReadUses: any[] = [];
         const aeoWriteUses: any[] = [];
@@ -20797,6 +20799,8 @@ export class RustTranspiler extends BaseTranspiler {
                 if (nilDeclared && String(fn?.name?.text ?? '') !== 'sign' && this.rustHandedSelfOmit(rhs, declaration) && this.rustOmitLineFits(rhs) && String(rhs.getText()).split('\n')[0].length <= 240) return true;
                 // ral-yh: a `safeDict*` / `safeList*` local rewritten only with its own kind: a tag-free map literal / a list
                 // literal, or a base builder that answers that container on every path (`arrayConcat`, `filterBy`, `extend`, ..)
+                // ral-58a: `x = this.omit (x, k)` on a proven map local (sign query under the sign-params proof) keeps it a map
+                if (!nilDeclared && from === 'dict' && this.rustHandedSelfOmit(rhs, declaration) && this.rustOmitLineFits(rhs) && String(rhs.getText()).split('\n')[0].length <= 240) return reuseProducerWrites.push(up) > 0 && ++selfOmitWrites > 0 && ++sameKindWrites > 0;
                 if (!nilDeclared && (from === 'dict' || from === 'list') && this.rustSameKindRewrite(rhs, from)) return (this.rustSelfExtendWrite(n, declaration) ? ++sameKindWrites : 1) > 0 && String(rhs.getText()).split('\n')[0].length <= 240;
                 // ral-43f: `t = s` of a `const s = this.safeDict* (..)` / `safeList*` (nullable default) in the same function:
                 // the alias holds the same optional container (syntactic proof, no decision of `s` is read: fixed point in one pass)
@@ -20992,7 +20996,11 @@ export class RustTranspiler extends BaseTranspiler {
         const zgRow = this.rustZgSiblingRows.has(declaration) && boxedElementUses.length > 0;
         // ral-48a: a never-null `safeDict (o, k, {})` local rewritten only with its own kind (`extend` answers `Value::Map` on
         // every path) never holds Null: its writes keep the plain form
-        const neverNullRewrites = writes > 0 && writes === sameKindWrites && from === 'dict' && init !== undefined && this.rustContainerInitNeverNull(init, 'map');
+        // ral-58a: an omit of a proven map rewritten only by same-kind writes (self-omit / self-extend) is never null; the
+        // handed-map rule (ral-ra) keeps the locals it already owns and their print
+        const omitInitRewrites = writes > 0 && writes === sameKindWrites && from === 'dict' && init !== undefined && !this.rustContainerInitNeverNull(init, 'map') && this.rustOmitOfDict(init);
+        if ((selfOmitWrites > 0 || omitInitRewrites) && this.rustHandedDictLocal(declaration)) return undefined;
+        const neverNullRewrites = writes > 0 && writes === sameKindWrites && from === 'dict' && init !== undefined && (this.rustContainerInitNeverNull(init, 'map') || omitInitRewrites);
         const optional = nilDeclared || nullTests > 0 || (writes > 0 && !neverNullRewrites) || lentNullable > 0 || optionalBoxes > 0 || zgRow || elementKeyWrites > 0 || optMapInit;
         if (jwtLends > 0 && optional) return undefined;
         // ral-40h: an alias takes the plain container only (an optional one would copy at the box)

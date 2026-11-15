@@ -19653,3 +19653,37 @@ describe('ral-58a: the sign params proof follows safeDict defaults, handleParam*
         expect(out).toContain('let mut query: Value = self.omit(');
     });
 });
+
+describe('ral-58a: a proven-map local rewritten only by an omit of itself stays a never-null Dict', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    omit (x: any, k: any): any { return x; }\n    extend (...a: any[]): any { return a[0]; }\n    urlencode (x: any): string { return ''; }\n    json (x: any): string { return ''; }\n    extractParams (p: string): string[] { return []; }\n    implodeParams (p: string, x: any): string { return p; }\n}\n";
+    const api = "import Exchange from '../base/Exchange.js';\nexport default abstract class venueApi extends Exchange {\n    privatePostA (params = {}): Promise<any> { return this.omit (params, 'x'); }\n}\n";
+    const venue = (rewrite: string): string => "import venueApi from './abstract/venue.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends venueApi {\n    async fetchA (params: Dict = {}): Promise<any> {\n        return await this.privatePostA (params);\n    }\n    sign (path: string, api: string[] = [ 'public' ], method: string = 'GET', params: Dict = {}): Dict {\n        const url = '/' + this.implodeParams (path, params);\n        let query = this.omit (params, this.extractParams (path));\n        if (path === 'a') {\n            query = " + rewrite + ";\n        }\n        let body = undefined;\n        let suffix = '';\n        if (Object.keys (query).length > 0) {\n            if (method === 'GET') {\n                suffix = '?' + this.urlencode (query);\n            } else {\n                body = this.json (query);\n            }\n        }\n        return { 'url': url + suffix, 'body': body };\n    }\n}\n";
+    const mk = (name: string, src: string): string => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync (path.join (dir, 'ts/src/abstract'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/abstract/venue.ts'), api);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), src);
+        // ccxt transpiles the base class first on the same Transpiler
+        transpiler.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts'));
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('ndax sign: `query = this.omit (query, k)` keeps the Dict and takes the omit back with into_dict', () => {
+        const out = mk ('r58a-selfomit', venue ("this.omit (query, 'token')"));
+        expect(out).toContain('let mut query: crate::value::Dict = self.omit(');
+        expect(out).toContain('query = self.omit(&query, ');
+        expect(out).toMatch(/query = self\.omit\(&query, [^\n]*\)\.into_dict\(\);/);
+        expect(out).toContain('self.urlencode(&query');
+    });
+    test('p2b sign: `x = this.extend (x, { .. })` on the omit keeps the Dict too', () => {
+        const out = mk ('r58a-selfext', venue ("this.extend (query, { 'nonce': '1' })"));
+        expect(out).toContain('let mut query: crate::value::Dict = self.omit(');
+        expect(out).toMatch(/query = self\.extend\(query, [^\n]*/);
+        expect(out).toContain('self.urlencode(&query');
+    });
+    test('guard: a rewrite from an unproven source keeps Value', () => {
+        const out = mk ('r58a-selfomit-neg', venue ("this.omit (this.hold (query), 'token')").replace ("    sign (", "    hold (x: any): any { return x; }\n    sign ("));
+        expect(out).toContain('let mut query: Value = self.omit(');
+    });
+});
