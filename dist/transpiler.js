@@ -60708,7 +60708,7 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
     const left = this.unwrapParens(node.left);
     if (!isCallExpression6(left) || !isPropertyAccessExpression3(left.expression) || left.expression.name.text !== "indexOf" || left.arguments.length !== 1)
       return void 0;
-    const recv = left.expression.expression;
+    const recv = this.rustStrCastLocal(left.expression.expression) ?? left.expression.expression;
     const kind = this.rustScalarIdentifierKind(recv) ?? this.rustScalarParamRead(recv)?.kind;
     const needle = left.arguments[0];
     if (kind !== "str" && kind !== "ostr" || this.rustNativeStringLiteralArg(needle) === void 0 || needle.text === "")
@@ -60732,7 +60732,8 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
   }
   /** An operand printed by this rule: a scalar local, or a `.length` / string-method / `indexOf` of one. */
   rustScalarOwnsOperand(node) {
-    const inner = this.unwrapParens(node);
+    const cast = this.rustStrCastLocal(node);
+    const inner = cast ?? this.unwrapParens(node);
     if (inner === void 0)
       return false;
     if (isIdentifier3(inner))
@@ -61150,6 +61151,79 @@ ${ind}];`;
       return void 0;
     return hoisted + "\n" + rest;
   }
+  /** 42b: `format!("{}..{}", .., Value::Str(format!("{}..{}", a, b).into()), ..)` -> one `format!` with the inner arguments spliced in
+   *  place. Only all-`{}` format strings (no literal text, no `{:?}`); the inner box is exactly one balanced `format!` slot. */
+  rustFlattenConcatChain(line) {
+    const box = 'Value::Str(format!("';
+    let out = line;
+    for (let guard = 0; guard < 64; guard++) {
+      let changed = false;
+      for (let at = out.indexOf(box); at >= 0; at = out.indexOf(box, at + 1)) {
+        const fmtOpen = at + "Value::Str(format!(".length;
+        const fmtEnd = out.indexOf('"', fmtOpen + 1);
+        const fmt = out.slice(fmtOpen + 1, fmtEnd);
+        if (!/^(?:\{\})+$/.test(fmt))
+          continue;
+        const macroClose = this.rustCloseBracketAt(out, at + "Value::Str(format!".length);
+        if (macroClose < 0 || out.slice(macroClose + 1, macroClose + 9) !== ".into())")
+          continue;
+        const innerArgs = out.slice(fmtEnd + 1, macroClose);
+        if (!innerArgs.startsWith(", "))
+          continue;
+        const before = out.slice(0, at);
+        if (!/(?:\(|, )$/.test(before))
+          continue;
+        const outer = before.lastIndexOf('format!("');
+        if (outer < 0)
+          continue;
+        const outerOpen = outer + "format!".length;
+        const outerClose = this.rustCloseBracketAt(out, outerOpen);
+        if (outerClose < macroClose + 9)
+          continue;
+        const ofEnd = out.indexOf('"', outerOpen + 2);
+        const ofmt = out.slice(outerOpen + 2, ofEnd);
+        if (!/^(?:\{\})+$/.test(ofmt))
+          continue;
+        const args = out.slice(ofEnd + 1, outerClose);
+        let idx = -1, depth = 0, quoted = false, found = false;
+        for (let i = 0; i < args.length; i++) {
+          const c = args[i];
+          if (quoted) {
+            if (c === "\\")
+              i++;
+            else if (c === '"')
+              quoted = false;
+            continue;
+          }
+          if (c === '"')
+            quoted = true;
+          else if ("([{".includes(c))
+            depth++;
+          else if (")]}".includes(c))
+            depth--;
+          else if (c === "," && depth === 0) {
+            idx++;
+            if (ofEnd + 1 + i + 2 === at) {
+              found = true;
+              break;
+            }
+          }
+        }
+        if (!found)
+          continue;
+        const n = ofmt.length / 2, m = fmt.length / 2;
+        if (idx >= n)
+          continue;
+        const nfmt = "{}".repeat(n - 1 + m);
+        out = out.slice(0, outerOpen + 2) + nfmt + out.slice(ofEnd, at) + innerArgs.slice(2) + out.slice(macroClose + 9);
+        changed = true;
+        break;
+      }
+      if (!changed)
+        break;
+    }
+    return out;
+  }
   rustSplitLongLines(text, names) {
     if (!text.split("\n").some((l) => l.length > 400))
       return text;
@@ -61158,6 +61232,9 @@ ${ind}];`;
     return lines.map((l, k) => {
       if (l.length <= 400 || !names.some((n) => new RegExp(`\\b${n}\\b`).test(l)))
         return l;
+      const flat = this.rustFlattenConcatChain(l);
+      if (flat.length <= 400)
+        return flat;
       return this.rustSplitLongLine(l, nth++, lines.slice(k + 1).join("\n")) ?? l;
     }).join("\n");
   }
@@ -61682,7 +61759,14 @@ ${ind}];`;
     while (isParenthesizedExpression3(top.parent) || top.parent?.kind === SyntaxKind7.AsExpression)
       top = top.parent;
     const access = top.parent;
-    return isPropertyAccessExpression3(access) && access.expression === top && isCallExpression6(access.parent) && access.parent.expression === access && (this.rustStrLocalSplitText(access.parent) ?? this.rustStrLocalSliceText(access.parent)) !== void 0;
+    return isPropertyAccessExpression3(access) && access.expression === top && isCallExpression6(access.parent) && access.parent.expression === access && ((this.rustStrLocalSplitText(access.parent) ?? this.rustStrLocalSliceText(access.parent)) !== void 0 || this.rustStrCastLocal(top) !== void 0 && this.rustScalarStrMethod(access.parent) !== void 0 || this.rustStrCastLocal(top) !== void 0 && this.rust42bCastContainsTest(access.parent));
+  }
+  /** 42b: the `(x as string).indexOf("lit") >= 0` call of a scalar contains test. */
+  rust42bCastContainsTest(call) {
+    let top = call;
+    while (isParenthesizedExpression3(top.parent))
+      top = top.parent;
+    return isBinaryExpression5(top.parent) && top.parent.left === top && this.rustScalarContainsTest(top.parent, true) !== void 0;
   }
   /** An integer local as the size argument of `new ArrayCache*(limit)`: passed natively (`i64` / `Option<i64>` into `impl Into<Value>`). */
   rustCacheCtorLimitArg(n, kind) {
@@ -77274,7 +77358,8 @@ ${this.getIden(identation)}}`;
       return void 0;
     if (kind === "string" && this.primitiveKindOfType(this.typeOfNodeIfAny(receiver)) !== "string")
       return void 0;
-    if (isIdentifier3(receiver) && (this.rustStringLocalIdentifierIsTyped(receiver) || this.rustScalarLocalOf(receiver) !== void 0))
+    const bare2 = this.rustStrCastLocal(receiver) ?? receiver;
+    if (isIdentifier3(bare2) && (this.rustStringLocalIdentifierIsTyped(bare2) || this.rustScalarLocalOf(bare2) !== void 0))
       return void 0;
     const text = receiverText.trim();
     return /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$/.test(text) ? text : `(${text})`;
