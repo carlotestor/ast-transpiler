@@ -59027,11 +59027,13 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (!recvOk)
       return false;
     const keyed = isParameterDeclaration3(owner);
-    return this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+    return this.rustScalarUsesAll(declaration, String(declaration.name.text), (n) => {
       if (this.rustIdentifierIsPropertyName(n))
         return n.parent?.kind !== SyntaxKind7.ShorthandPropertyAssignment;
       const form = this.rustScalarUseForms.get(n);
       if (keyed && (form === "okey" || form === "kin" || form === "key" || form === "inbox"))
+        return false;
+      if (this.rustElemKeyFeedsPushedLocal(n))
         return false;
       if (form === "test" || form === "concat" || form === "okey" || form === "kin" || form === "key" || form === "inbox")
         return true;
@@ -59043,6 +59045,24 @@ ${binding(plan.indent)}` : ""), head: "" };
         return false;
       const up = n.parent;
       return isCallExpression6(up) && up.expression !== n || up.kind === SyntaxKind7.PropertyAssignment && up.initializer === n || isArrayLiteralExpression4(up) && !(isBinaryExpression5(up.parent) && up.parent.left === up) || this.rustDictWriteValue(n) || isBinaryExpression5(up) && up.operatorToken.kind === SyntaxKind7.PlusToken;
+    });
+  }
+  /** ral-41g: `const g = m[k]` (k the use `n`) where `g`, or a same-named local of the method, is the receiver of a `.push (..)`. */
+  rustElemKeyFeedsPushedLocal(n) {
+    const read = n.parent;
+    if (read === void 0 || !isElementAccessExpression4(read) || read.argumentExpression !== n)
+      return false;
+    let up = read.parent;
+    while (up !== void 0 && (isParenthesizedExpression3(up) || up.kind === SyntaxKind7.AsExpression || up.kind === SyntaxKind7.NonNullExpression))
+      up = up.parent;
+    if (up === void 0 || !isVariableDeclaration3(up) || !isIdentifier3(up.name))
+      return false;
+    const scope = this.rustEnclosingFunction(up);
+    if (scope === void 0)
+      return true;
+    return this.rustScopeNameNodes(scope, String(up.name.text)).some((u) => {
+      const acc = u.parent;
+      return isIdentifier3(u) && isPropertyAccessExpression3(acc) && acc.expression === u && String(acc.name.text) === "push" && isCallExpression6(acc.parent) && acc.parent.expression === acc;
     });
   }
   /** wg: a `string[]` / `Strings` parameter whose list holds only strings: declared so by the base tier (a unified method:
