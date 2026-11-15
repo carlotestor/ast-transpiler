@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -51607,6 +51607,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustBorrowedStrElems = /* @__PURE__ */ new WeakSet();
     /** wg: field-write keys whose write value also reads the key (admitted only for a borrowed element). */
     this.rustWgKeyReadInValue = /* @__PURE__ */ new WeakSet();
+    this.rust41bWsKeyMemo = /* @__PURE__ */ new WeakMap();
     this.rustScalarPending = /* @__PURE__ */ new Set();
     // ── native `Option<String>` returns (`: Str` methods) ─────────────────────
     //
@@ -58043,6 +58044,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "targ";
     if ((kind === "int" || kind === "oint") && isCallExpression6(parent) && parent.expression !== n && isElementAccessExpression4(parent.expression) && parent.expression.expression.kind === SyntaxKind7.ThisKeyword && isIdentifier3(parent.expression.argumentExpression))
       return "box";
+    if (this.rustStrMethodArgNative(n, kind))
+      return "native";
     if (isCallExpression6(parent) && parent.expression !== n && parent.arguments.some((a) => a === n)) {
       return this.rustNilBoxSlotOk(parent, parent.arguments.indexOf(n)) || this.rustWsClientCallArg(parent, kind) ? "box" : this.rustScalarExpressionUseForm(n, kind);
     }
@@ -59488,6 +59491,14 @@ ${binding(plan.indent)}` : ""), head: "" };
       shape = "pad";
     else if (method === "slice" && this.rustStrSliceBounds(args) !== void 0)
       shape = "slice";
+    else if (method === "slice" && args.length >= 1 && args.length <= 2)
+      shape = "vslice";
+    else if ((method === "startsWith" || method === "endsWith" || method === "includes") && args.length === 1)
+      shape = "vaffix";
+    else if (method === "indexOf" && args.length === 1 && this.rustNativeStringLiteralArg(args[0]) === void 0)
+      shape = "vfind";
+    else if ((method === "replace" || method === "replaceAll") && args.length === 2)
+      shape = "vreplace";
     if (shape === void 0)
       return void 0;
     if (syntactic)
@@ -59499,6 +59510,19 @@ ${binding(plan.indent)}` : ""), head: "" };
       return void 0;
     if (shape === "affix")
       return { recv, recvKind, method, kind: "bool" };
+    if (shape === "vslice" || shape === "vaffix" || shape === "vfind" || shape === "vreplace") {
+      if (this.rustScalarLocalOf(recv) === void 0 || this.rust41bWsKeyLocal(recv))
+        return void 0;
+      if (args.some((a) => isIdentifier3(this.unwrapParens(a)) && this.rust41bWsKeyLocal(this.unwrapParens(a))))
+        return void 0;
+      if (shape === "vslice")
+        return this.rustStrSliceVarBounds(args) === void 0 ? void 0 : { recv, recvKind, method, kind: recvKind };
+      if (shape === "vaffix")
+        return this.rustStrVarNeedle(args[0], method === "includes") === void 0 ? void 0 : { recv, recvKind, method, kind: "bool" };
+      if (shape === "vfind")
+        return this.rustStrFindNeedle(args[0], false) === void 0 ? void 0 : { recv, recvKind, method, kind: "int" };
+      return args.every((a) => this.rustStrReplaceOperand(a) !== void 0) ? { recv, recvKind, method, kind: recvKind } : void 0;
+    }
     if (shape === "find")
       return this.rustStrFindNeedle(args[0], false) === void 0 ? void 0 : { recv, recvKind, method, kind: "int" };
     if ((shape === "pad" || shape === "slice") && this.rustScalarIdentifierKind(recv) === void 0 && this.rustScalarParamRead(recv) === void 0)
@@ -59530,8 +59554,92 @@ ${binding(plan.indent)}` : ""), head: "" };
       return void 0;
     return { start, end };
   }
+  /** 41b: `slice(a)` / `slice(a, b)` whose bounds are not both literal, each an `i64` / `Option<i64>` operand (literal, typed
+   *  integer local, arithmetic or `.length` of typed operands): the start as `i64` (a `None` start is the helper's `0`) and the
+   *  end as `i64` or `Option<i64>` (`None` is the helper's missing end, the char length). */
+  rustStrSliceVarBounds(args) {
+    if (args.length === 0 || args.length > 2 || this.rustStrSliceBounds(args) !== void 0)
+      return void 0;
+    const kinds = args.map((a) => this.rustScalarNumericKind(a));
+    if (kinds.some((k) => k !== "int" && k !== "oint"))
+      return void 0;
+    if (args.some((a) => String(a.getText()).includes("\n")))
+      return void 0;
+    const text = (i) => this.rustScalarOperandText(kinds[i], args[i]);
+    const start = kinds[0] === "oint" ? `${text(0)}.unwrap_or(0)` : text(0);
+    return { start, end: args.length === 2 ? text(1) : void 0, endOpt: kinds[1] === "oint" };
+  }
+  /** 41b: the char slice of the `&str` `s` with `i64` bounds, clamped as the helper's `Str` arm (a negative bound counts from the
+   *  char length floored at 0, a bound past the end is the length, `b <= a` is empty). */
+  rustStrSliceVarText(s, b) {
+    const clamp = (v) => `(if ${v} < 0 { __l + ${v} } else { ${v} }).clamp(0, __l)`;
+    if (b.end === void 0)
+      return `({ let (__l, __b) = (${s}.chars().count() as i64, ${b.start}); ${s}.chars().skip(${clamp("__b")} as usize).collect::<String>() })`;
+    const j = b.endOpt ? `match __e { Some(__k) => ${clamp("__k")}, None => __l }` : clamp("__e");
+    return `({ let (__l, __b, __e) = (${s}.chars().count() as i64, ${b.start}, ${b.end}); let (__i, __j) = (${clamp("__b")}, ${j}); ${s}.chars().skip(__i as usize).take((__j - __i).max(0) as usize).collect::<String>() })`;
+  }
+  /** 41b: an affix / includes needle as `Option<&str>`: any string literal (an empty one included when `empty`), a typed string local
+   *  or a string-typed `Value` expression (`None` for `Null`: the helper answers `false`). */
+  rustStrVarNeedle(node, empty) {
+    const inner = this.unwrapParens(node);
+    const lit = this.rustNativeStringLiteralArg(inner);
+    if (lit !== void 0)
+      return inner.text === "" && !empty ? void 0 : `Some("${lit}")`;
+    return this.rustStrFindNeedle(inner, false);
+  }
+  /** 41b: a replace operand that is never `Null`: a string literal or a `String` local (`&str` text). */
+  rustStrReplaceOperand(node) {
+    const inner = this.unwrapParens(node);
+    const lit = this.rustNativeStringLiteralArg(inner);
+    if (lit !== void 0)
+      return `"${lit}"`;
+    return isIdentifier3(inner) && this.rustScalarLocalOf(inner)?.kind === "str" ? `${super.printIdentifier(inner)}.as_str()` : void 0;
+  }
+  /** 41b: a local some use of which is a ws subscription / future / cache key, a ws client call argument or a ws cache
+   *  write key: those keep their `Value` (the new string-method forms never decide them). */
+  rust41bWsKeyLocal(node) {
+    const declaration = this.rustDeclaredNode(node);
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name))
+      return false;
+    const memo = this.rust41bWsKeyMemo.get(declaration);
+    if (memo !== void 0)
+      return memo;
+    this.rust41bWsKeyMemo.set(declaration, true);
+    let hit = false;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      let up = n;
+      while (isParenthesizedExpression3(up.parent) || isAsExpression3(up.parent) || isNonNullExpression2(up.parent))
+        up = up.parent;
+      const p = up.parent;
+      if (this.rustWsKeyUse(up) || this.rustWsCacheMapKeyUse(n) || this.rustWsSubscriptionWriteValue(n))
+        hit = true;
+      else if (p !== void 0 && isCallExpression6(p) && p.expression !== up && (this.rustWsClientCallArg(p, "str") || this.rustWsWatchSlot(p, p.arguments.indexOf(up))))
+        hit = true;
+      else if (p !== void 0 && isElementAccessExpression4(p) && p.argumentExpression === up && this.rust40bProTier(n))
+        hit = true;
+      return true;
+    });
+    this.rust41bWsKeyMemo.set(declaration, hit);
+    return hit;
+  }
+  /** 41b: an argument (bound / needle / operand) of a string method its typed string local receiver prints natively. */
+  rustStrMethodArgNative(n, kind) {
+    const call = n.parent;
+    if (call === void 0 || !isCallExpression6(call) || call.expression === n || !isPropertyAccessExpression3(call.expression))
+      return false;
+    const name = String(call.expression.name.text);
+    const numeric = kind === "int" || kind === "oint";
+    if (name === "slice" ? !numeric : kind !== "str" && kind !== "ostr")
+      return false;
+    if (!["slice", "startsWith", "endsWith", "includes", "indexOf", "replace", "replaceAll"].includes(name))
+      return false;
+    const method = this.rustScalarStrMethod(call);
+    return method !== void 0 && method.recvKind !== "int" && this.rustScalarLocalOf(method.recv) !== void 0 && !this.rust41bWsKeyLocal(n) && !this.rust41bWsKeyLocal(method.recv);
+  }
   /** Native `String` text of a pad / slice over the `&str` `s`. */
   rustStrPadSliceText(method, args, s) {
+    if (method === "slice" && this.rustStrSliceBounds(args) === void 0)
+      return this.rustStrSliceVarText(s, this.rustStrSliceVarBounds(args));
     if (method === "slice") {
       const { start, end } = this.rustStrSliceBounds(args);
       const skip = start >= 0 ? `${start}` : `${s}.chars().count().saturating_sub(${-start})`;
@@ -59604,9 +59712,14 @@ ${binding(plan.indent)}` : ""), head: "" };
       return void 0;
     const start = this.rustSliceLiteralBound(args[0]);
     const end = args.length === 2 ? this.rustSliceLiteralBound(args[1]) : void 0;
+    const s = recvKind === "str" ? super.printIdentifier(recv) : "__s";
+    const vb = this.rustStrSliceVarBounds(args);
+    if (vb !== void 0) {
+      const vtext = `Value::from(${this.rustStrSliceVarText(s, vb)})`;
+      return recvKind === "str" ? vtext : `(if let Some(__s) = ${super.printIdentifier(recv)}.as_deref() { ${vtext} } else { Value::Null })`;
+    }
     if (start === void 0 || args.length === 2 && (end === void 0 || end < 0 || start < 0))
       return void 0;
-    const s = recvKind === "str" ? super.printIdentifier(recv) : "__s";
     const skip = start >= 0 ? `${start}` : `${s}.chars().count().saturating_sub(${-start})`;
     const take = end === void 0 ? "" : `.take(${Math.max(end - start, 0)})`;
     const text = `Value::from(${s}.chars().skip(${skip})${take}.collect::<String>())`;
@@ -60546,6 +60659,12 @@ ${binding(plan.indent)}` : ""), head: "" };
       const name = this.rustScalarRecvName(method.recv);
       const args = Array.from(node.arguments ?? []);
       const arg = (i) => this.rustNativeStringLiteralArg(args[i]);
+      const vneedle = (method.method === "startsWith" || method.method === "endsWith" || method.method === "includes") && !(method.method !== "includes" && this.rustNativeStringLiteralArg(args[0]) !== void 0 && args[0].text !== "");
+      if (vneedle) {
+        const hay = method.recvKind === "str" ? `Some(${name}.as_str())` : `${name}.as_deref()`;
+        const fn2 = method.method === "startsWith" ? "starts_with" : method.method === "endsWith" ? "ends_with" : "contains";
+        return wrap(`(if let (Some(__h), Some(__n)) = (${hay}, ${this.rustStrVarNeedle(args[0], true)}) { __h.${fn2}(__n) } else { false })`);
+      }
       if (method.method === "startsWith" || method.method === "endsWith") {
         const hay = method.recvKind === "str" ? name : `${name}.as_deref().unwrap_or_default()`;
         return wrap(`${hay}.${method.method === "startsWith" ? "starts_with" : "ends_with"}("${arg(0)}")`);
@@ -60556,6 +60675,12 @@ ${binding(plan.indent)}` : ""), head: "" };
         if (method.recvKind === "ostr")
           return wrap(`(if let Some(__s) = ${name}.as_deref() { Some(${this.rustStrPadSliceText(method.method, args, "__s")}) } else { None })`);
         return wrap(this.rustStrPadSliceText(method.method, args, name));
+      }
+      if ((method.method === "replace" || method.method === "replaceAll") && !args.every((a) => this.rustNativeStringLiteralArg(a) !== void 0)) {
+        const [from, to] = args.map((a) => this.rustStrReplaceOperand(a));
+        if (method.recvKind === "ostr")
+          return wrap(`(if let Some(__s) = ${name}.as_deref() { Some(__s.replace(${from}, ${to})) } else { None })`);
+        return wrap(`${name}.replace(${from}, ${to})`);
       }
       if (method.method === "replace" || method.method === "replaceAll") {
         if (method.recvKind === "ostr")
