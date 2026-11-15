@@ -2769,6 +2769,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** pb: the base `handleUntilOption (k, x, p)` of a statement `[ x, q ] = ..` writing slot 0 back into `x` (base
      *  `handleUntilOption` returns its own `request` argument as slot 0, so the map moves through it). */
     rustUntilSelfCall(n: any, declaration: any): any;
+    /** ral-50b: a statement `n = this.handleUntilOption (k, n, p)` (the two-slot list written whole into a reuse literal). */
+    rustUntilListWrite(n: any, declaration: any): boolean;
+    private static readonly RUST_UNTIL_LIST_WRITE;
+    /** ral-50b: after the list write the local is only an `extend` head (the empty-map equivalence holds nowhere else). */
+    rustUntilListUsesExtendOnly(n: any, declaration: any): boolean;
     rustUntilSelfWrite(n: any, declaration: any): boolean;
     /** pb: `x` as the `request` operand of such a write-back call. */
     rustUntilSelfArg(n: any, declaration: any): boolean;
