@@ -63198,6 +63198,13 @@ ${i1}}`;
     const def = call.arguments[2];
     return call.arguments.length === 3 && def !== void 0 && isStringLiteralLikeNode4(def) && String(def.text) === "";
   }
+  /** ral-49c: `m as any` (in parentheses or not) as a call argument: the same whole-value hand-off of `m`. */
+  rustMarketValueUseThroughCast(n) {
+    let top = n;
+    while (top.parent !== void 0 && (isAsExpression3(top.parent) || isParenthesizedExpression3(top.parent)))
+      top = top.parent;
+    return top !== n && isCallExpression6(top.parent) && top.parent.expression !== top && Array.from(top.parent.arguments).includes(top);
+  }
   /** A whole-value hand-off: a call argument, an array element, a dict value or a returned value. */
   rustMarketValueUse(n) {
     const parent = n.parent;
@@ -63351,7 +63358,7 @@ ${i1}}`;
       if (empty && this.rustMarketSlotUse(n))
         return true;
       if (empty)
-        return this.rustIsNullTestOf(n) || this.rustMarketValueUse(n);
+        return this.rustIsNullTestOf(n) || this.rustMarketValueUse(n) || this.rustMarketValueUseThroughCast(n);
       if (this.rustIsNullTestOf(n) && this.rustNullTestIsCondition(n))
         return true;
       const key = this.rustMarketReadKey(n);
@@ -64347,7 +64354,7 @@ ${i1}}`;
     if (this.rustCallLocalOf(node) !== void 0) {
       return this.rustMarketValueUse(node) ? `crate::types::IntoRaw::into_raw(${super.printIdentifier(node)}.clone())` : super.printIdentifier(node);
     }
-    if (this.rustOptMarketLocalOf(node) !== void 0 && this.rustMarketValueUse(node)) {
+    if (this.rustOptMarketLocalOf(node) !== void 0 && (this.rustMarketValueUse(node) || this.rustMarketValueUseThroughCast(node) && !this.rustMarketSlotUse(node))) {
       return `crate::Value::from(${super.printIdentifier(node)}.as_ref())`;
     }
     const declaration = this.rustTypedMarketLocalOf(node);
@@ -83165,9 +83172,11 @@ _RustTranspiler.RUST_OPT_MARKET_RETURNS = /* @__PURE__ */ new Set(["getMarketFro
 // ral-48c: the prediction outcome accessors hand back a market-shaped record (a cached outcome token, the fallback
 // market or an identity stub) or nothing: `Option<crate::types::Market>`, so callers lend `.as_ref()` without `from_raw`.
 _RustTranspiler.RUST_OPT_OUTCOME_RETURNS = {
-  "outcome": "PredictionOutcomeMarket",
-  "safeOutcome": "PredictionOutcomeHandle",
-  "loadOutcome": "PredictionOutcomeHandle"
+  // ral-49c: only `loadOutcome`. `outcome` / `safeOutcome` stay `Value`: their answers are handed back whole by the
+  // async-virtual `fetchOutcome` overrides (a `Value` return the dispatch preamble forwards), the kalshi `{}`
+  // ternaries and predictfun `outcomeForToken`, which would box the decoded record straight back.
+  "loadOutcome": "PredictionOutcomeHandle",
+  "outcome": "PredictionOutcomeMarket"
 };
 // `MarketInterface` keys typed `Bool`: a raw read of one holds a Bool or Null.
 _RustTranspiler.RUST_MARKET_FLAG_KEYS = /* @__PURE__ */ new Set(["spot", "margin", "swap", "future", "option", "index", "stock", "prediction", "contract", "linear", "inverse", "quanto"]);

@@ -1683,6 +1683,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustMarketSafeReadField(call: any): string | undefined;
     /** `this.safeString (m, 'k', '')`: three arguments, the last an empty string literal. */
     rustMarketEmptyDefaultRead(call: any): boolean;
+    /** ral-49c: `m as any` (in parentheses or not) as a call argument: the same whole-value hand-off of `m`. */
+    rustMarketValueUseThroughCast(n: any): boolean;
     /** A whole-value hand-off: a call argument, an array element, a dict value or a returned value. */
     rustMarketValueUse(n: any): boolean;
     rustMarketLocalKind(declaration: any): false | 'struct' | 'opt' | 'call' | 'smkt';
