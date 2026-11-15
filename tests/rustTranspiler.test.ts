@@ -14872,3 +14872,35 @@ describe('40i: tuple slots sixth pass', () => {
     });
 });
 
+
+describe('41i: tuple slots seventh pass', () => {
+    const fx = (name: string, base: string, venue: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), venue);
+        return path.join (dir, 'ts/src/venue.ts');
+    };
+    const b = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    extend (a: any, b: any): Dict { return a; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    lighterSignWithdraw (signer: any, request: any): any[] {\n        const res = (globalThis as any).SignWithdraw (request['nonce']);\n        return [ res.txType, res.txInfo ];\n    }\n    lighterSignOther (signer: any, request: any): any[] {\n        const res = (globalThis as any).SignOther (request['nonce']);\n        return [ res.txType, res.txInfo ];\n    }\n    handleNetworkCodeAndParams (params: any): any {\n        const networkCodeInParams = this.safeString (params, 'network');\n        return [ networkCodeInParams, params ];\n    }\n}\n";
+    test('41i: a hand-written signer pair from the slot table types txType Option<i64> / txInfo Option<String> (no clone); an unlisted signer stays Value', () => {
+        const file = fx ('41i-signer', b, "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    withdrawIt (signer: any, signRaw: Dict) {\n        const [ txType, txInfo ] = this.lighterSignWithdraw (signer, signRaw);\n        const request: Dict = {\n            'tx_type': txType,\n            'tx_info': txInfo,\n        };\n        return this.hold (request);\n    }\n    otherIt (signer: any, signRaw: Dict) {\n        const [ oType, oInfo ] = this.lighterSignOther (signer, signRaw);\n        const request: Dict = {\n            'tx_type': oType,\n            'tx_info': oInfo,\n        };\n        return this.hold (request);\n    }\n    signPair (signer: any, signRaw: Dict): any[] {\n        const [ pType, pInfo ] = this.lighterSignWithdraw (signer, signRaw);\n        return [ pType, pInfo ];\n    }\n    usePair (signer: any, signRaw: Dict) {\n        const [ uType, uInfo ] = this.signPair (signer, signRaw);\n        const request: Dict = {\n            'tx_type': uType,\n            'tx_info': uInfo,\n        };\n        return this.hold (request);\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (file).content;
+        const it = out.slice (out.indexOf ('fn withdrawIt'), out.indexOf ('fn otherIt'));
+        expect(it).toContain('let mut txType: Option<i64> = ');
+        expect(it).toContain('let mut txInfo: Option<String> = ');
+        expect(it).not.toContain('.clone()');
+        const other = out.slice (out.indexOf ('fn otherIt'), out.indexOf ('fn signPair'));
+        expect(other).toContain('let mut oType: Value = ');
+        expect(other).toContain('let mut oInfo: Value = ');
+        // a venue-local producer returning the proven slots passes the kinds on to its own callers
+        const use = out.slice (out.indexOf ('fn usePair'));
+        expect(use).toContain('let mut uType: Option<i64> = ');
+        expect(use).toContain('let mut uInfo: Option<String> = ');
+    });
+    test('41i: a venue producer whose returned slot is a nil-declared local held as the map types the caller slot as Dict', () => {
+        const file = fx ('41i-nil-map-slot', b, "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport type NullableDict = Dict | undefined;\nexport default class venue extends Exchange {\n    prepareThing (code: string, params: Dict = {}): any {\n        let networkCode: Str = undefined;\n        let query: NullableDict = undefined;\n        [ networkCode, query ] = this.handleNetworkCodeAndParams (params);\n        const request: Dict = {\n            'currency': networkCode,\n        };\n        return [ request, query ];\n    }\n    fetchThing (code: string, params: Dict = {}) {\n        const [ request, extraParams ] = this.prepareThing (code, params);\n        const paramsValue: Dict = extraParams;\n        return this.hold (this.extend (request, paramsValue));\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (file).content;
+        const fetch = out.slice (out.indexOf ('fn fetchThing'));
+        expect(fetch).toContain('let mut extraParams: crate::value::Dict = ');
+    });
+});

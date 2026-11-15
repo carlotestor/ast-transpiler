@@ -1789,6 +1789,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_EXACT_BOOL_PRODUCERS;
     rustExactSlotKind(element: any): string | undefined;
     private rustExactSlotKindUncached;
+    private static readonly RUST_HANDWRITTEN_SLOT_KINDS;
+    /** 41i: the primitive (`number` / `string`) slot `at` of `init` holds on every path when the checker only says `any`:
+     *  a hand-written base producer from the table above (no venue redeclares it), or a venue-local method whose every
+     *  return is an array literal with, at `at`, a `const` tuple slot of its own body proven the same way (depth-bounded). */
+    rustProducerSlotPrimitive(init: any, at: number, depth?: number): string | undefined;
+    /** The checker's primitive kind of a destructured slot, else the producer-side proof (41i). */
+    rustSlotPrimitiveKind(element: any): string | undefined;
     /** The callee builds slot `at` from an exact Int-or-null (`int`) / Bool-or-null (`bool`) producer on every return. */
     rustExactSlotCallee(init: any, at: number, want: string): boolean;
     /** An expression that is exactly Int-or-null / Bool-or-null in the `Value` form. */
