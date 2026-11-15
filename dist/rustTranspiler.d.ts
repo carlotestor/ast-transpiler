@@ -348,6 +348,19 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  (`get_value` takes `&Value`; a missing row is the same Null). The list must not be written anywhere in the
      *  method, so the borrow cannot conflict. */
     printRust56eBorrowedElement(declaration: any, parsedValue: string, indent: string, varName: string): string | undefined;
+    /** ral-57e: `const lvl = side[i]` off an order-book side handle (`Side::level` hands out the stored level, an `Arr` built
+     *  by `storeArray` / `store`, or `Null` out of range), read only as `const parts = lvl[K]` (numeric literal K) where
+     *  `parts` is itself read only at numeric literal keys. `lvl` holds the list (`into_list()`: the same `Arr`, an empty
+     *  list for `Null`), and `parts` borrows its element (`lvl.get(K).unwrap_or(&Value::Null)`): the same element
+     *  `get_value` cloned, `Null` where it answered `Null`. */
+    printRust57eSideLevel(declaration: any, parsedValue: string, indent: string, varName: string): string | undefined;
+    private rust57eSideLevels;
+    rust57eSideLevelLocal(declaration: any): boolean;
+    rust57eSideLevelLocalUncached(declaration: any): boolean;
+    /** `const e = x[k]` (one const declarator, identifier receiver, same function). */
+    rust57eConstElementOf(declaration: any): boolean;
+    /** Every use of the local is the receiver of an rvalue element read at a numeric literal key (no write-back bind). */
+    rust57eLiteralReadOnly(declaration: any): boolean;
     rust56eBorrowedElementLocal(declaration: any): boolean;
     private static readonly RUST_NIL_INT_HELPERS;
     private static readonly RUST_NIL_BOOL_HELPERS;
