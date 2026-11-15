@@ -23441,7 +23441,9 @@ export class RustTranspiler extends BaseTranspiler {
             || this.rustSafeMarketLocalOf(node) !== undefined || this.rustMarketSlotParamOf(node) !== undefined || this.rustTypedMarketLocalOf(node) !== undefined
             || this.rustCurrencySlotParamOf(node) !== undefined || this.rustCurrencyLocalOf(node) !== undefined) return `&${text}`;
         // ral-55a: a reassigned handed map (ral-ra) lent to the any-key reader its decision admitted
-        if (isVariableDeclaration(declaration) && !this.rustTestTierSource(call) && this.rustHandedDictLocal(declaration) && this.rustLocalIsReassigned(declaration, String((declaration.name as any).text))) return `&${text}`;
+        // ral-57a: and a never-reassigned omit of a proven map (rustOmitOfDictInit), admitted by the same decision arm
+        if (isVariableDeclaration(declaration) && !this.rustTestTierSource(call) && this.rustHandedDictLocal(declaration)
+            && (this.rustLocalIsReassigned(declaration, String((declaration.name as any).text)) || this.rustOmitOfDictInit(declaration))) return `&${text}`;
         // ral-50i: a literal-built dict bearer lent to the reader
         if (this.rustBearerReaderLend(node) && this.rustDictBearerDeclaration(node) !== undefined) return `&${text}`;
         if (this.rustMarketStoreElementOf(node) !== undefined) return `&*${text}`;

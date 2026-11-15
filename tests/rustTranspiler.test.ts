@@ -19223,6 +19223,7 @@ describe('ral-57a: a never-reassigned omit result read by a hand-written any-key
         const out = mk ('r57a-any', venue ('paramsGeneration'));
         expect(out).toContain('let mut paramsOmitted: crate::value::Dict = self.omit(&paramsGeneration, ');
         expect(out).toContain('self.omit(&paramsOmitted, ');
+        expect(out).toContain('self.safeString2(&paramsOmitted, ');
     });
     test('guard: an omit whose head is not a proven map (it may carry a list body) keeps Value', () => {
         const out = mk ('r57a-any-neg', venue ('this.other (paramsGeneration)'));
