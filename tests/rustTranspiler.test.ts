@@ -13277,7 +13277,8 @@ describe('ud: a reader number written whole into a two-level local map (missing 
         fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n    m (rows: any[]) {\n        const fees = {};\n        for (let i = 0; i < rows.length; i++) {\n            const code = this.safeString (rows[i], 'c');\n            const net = this.safeString (rows[i], 'n');\n            const fee = this.safeNumber (rows[i], 'f');\n            fees[code] = {};\n            fees[code][net] = fee;\n        }\n        return { 'withdraw': fees };\n    }\n}\n");
         const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
         expect(out).toContain('let mut fee: Option<f64> = ');
-        expect(out).toContain('.or_default().insert(crate::runtime::stringify_param(&net), Value::from(fee));');
+        // ral-53i: the string keys of the printer's own two-level insert now take the key form (was stringify_param of the box)
+        expect(out).toContain('.or_default().insert(net.as_deref().unwrap_or("null").to_string(), Value::from(fee));');
         expect(out).not.toContain('fee.clone()');
     });
 });
