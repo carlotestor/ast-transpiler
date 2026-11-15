@@ -25776,7 +25776,7 @@ export class RustTranspiler extends BaseTranspiler {
                 const up: any = n.parent;
                 if (isBinaryExpression(up) && up.left === n) {
                     return up.operatorToken.kind === SyntaxKind.EqualsToken && up.parent?.kind === SyntaxKind.ExpressionStatement
-                        && (this.rustBuiltListWriteSource(up.right) || this.rustDeclaredArrayCallWriteSource(up.right) || this.rustOverloadListCallWriteSource(up.right) || this.rustTypedCoreListCallWriteSource(up.right) || this.rustBuiltListSelfSort(up, name) || this.rustArrayGuardedMove(up) || this.rustOptListGuardedMove(up) !== undefined || this.rustDefaultedAliasMove(up) !== undefined) && String(up.parent.getText()).split('\n')[0].length <= 200;
+                        && (this.rustBuiltListWriteSource(up.right) || this.rustDeclaredArrayCallWriteSource(up.right) || this.rustOverloadListCallWriteSource(up.right) || this.rustTypedCoreListCallWriteSource(up.right) || this.rustBuiltHelperListWriteSource(up.right) || this.rustBuiltListSelfSort(up, name) || this.rustArrayGuardedMove(up) || this.rustOptListGuardedMove(up) !== undefined || this.rustDefaultedAliasMove(up) !== undefined) && String(up.parent.getText()).split('\n')[0].length <= 200;
                 }
                 if (isElementAccessExpression(up) && up.expression === n) {
                     natives++;
@@ -26081,6 +26081,18 @@ export class RustTranspiler extends BaseTranspiler {
         };
         impl.body.forEachChild(visit);
         return ok && returns > 0;
+    }
+
+    /** ral-55i: a whole reassignment from a producer the runtime answers as a fresh `Value::Arr` on every path:
+     *  `Object.keys (x)` (runtime object_keys: `Value::Array` for a map, `[]` otherwise; never a ws client handle's key list),
+     *  and `s.split (sep)` (native or runtime split, an array on every path). */
+    rustBuiltHelperListWriteSource(right: any): boolean {
+        const call: any = this.rustSkipWrappers(right);
+        if (call === undefined || !isCallExpression(call) || this.rustTestTierSource(call) || !isPropertyAccessExpression(call.expression)) return false;
+        const owner: any = call.expression.expression;
+        const method = String(call.expression.name.text);
+        if (isIdentifier(owner) && String(owner.text) === 'Object') return method === 'keys' && call.arguments.length === 1 && this.printClientHandleKeys(call) === undefined;
+        return owner.kind !== SyntaxKind.ThisKeyword && method === 'split' && call.arguments.length === 1;
     }
 
     /** ral-55i: an identifier argument that cannot be `undefined` at the call: it is a `const` local or an unwritten parameter,

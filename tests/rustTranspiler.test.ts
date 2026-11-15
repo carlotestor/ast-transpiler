@@ -18503,3 +18503,26 @@ describe('ral-55i: a list local reassigned whole from a bodiless base overload o
         expect(out).toContain('let mut rows: crate::value::List = ');
     });
 });
+
+describe('ral-55i: a list local reassigned whole from Object.keys or split', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: any = undefined): Str { return o; }\n    filterBy (x: any, k: string, v: any = undefined): any[] { return []; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    m (flag: boolean, d: Dict, s: Str) {\n        let rows: any[] = [];\n        if (flag) {\n" + body + "        }\n        const out = [];\n        for (let i = 0; i < rows.length; i++) {\n            out.push (this.safeString (rows, i));\n        }\n        return out;\n    }\n}\n");
+        return path.join (dir, 'ts/src/venue.ts');
+    };
+    test('`rows = Object.keys (d)` types the list', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-55i-keys', "            rows = Object.keys (d);\n")).content;
+        expect(out).toContain('let mut rows: crate::value::List = ');
+    });
+    test('`rows = s.split (\'-\')` types the list', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-55i-split', "            rows = (s as string).split ('-');\n")).content;
+        expect(out).toContain('let mut rows: crate::value::List = ');
+    });
+    test('a reader result cast to any is not one of them: the local stays Value', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-55i-values', "            rows = this.safeString (d, 'x') as any;\n")).content;
+        expect(out).not.toContain('let mut rows: crate::value::List');
+    });
+});
