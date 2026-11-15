@@ -22594,6 +22594,9 @@ export class RustTranspiler extends BaseTranspiler {
         });
         // A list that is only handed on would trade each box for a handle box.
         if (!safe || natives === 0 || (defaulted && indexed === 0 && boxes.some(([, form]) => form === 'clone'))) return false;
+        // ral-51e: a row-written list handed to a base call at its last use (outside any loop) moves its handle there,
+        // as the `Value` local moved its box (coinspot `arrayConcat (buyTrades, sellTrades)`)
+        if (rowWrites > 0) for (const box of boxes) if (box[1] === 'clone' && this.rustLocalLastUse(box[0], declaration)) box[1] = 'move';
         // ral-48e: a row-written list handed on by copy would trade the moved box for a cloned handle
         if (rowWrites > 0 && boxes.some(([, form]) => form === 'clone')) return false;
         for (const [n, form] of boxes) this.rustLentListBoxes.set(n, form);
