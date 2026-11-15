@@ -4839,7 +4839,10 @@ export class RustTranspiler extends BaseTranspiler {
         // a reader-default string re-boxed anywhere but a moving `return` would copy where the `Value` moved
         const readerTouched = this.rustReaderDefaultTouched(declaration);
         // a reader string copied at a box is lent there (`Value::from(x.as_deref())`: the copy the `Value` clone made)
-        const readerLent = readerTouched && strKind && boxed > 0 && copied > 0 && !this.rustStrNoLend && this.rustReaderLendBoxes(declaration);
+        // ral-56f: an `Option<String>` reader local in a non-test source also lends at native options-field insert keys
+        // (rustPlainFieldInsertKey: the printer owns the key text) and at copies into a jointly decided string local
+        const readerLent = readerTouched && strKind && boxed > 0 && copied > 0 && !this.rustStrNoLend
+            && (this.rustReaderLendBoxes(declaration) || (kind === 'ostr' && !this.rustTestTierSource(declaration) && this.rustReaderLendBoxes(declaration, true, false, true)));
         if (readerTouched && strKind && ((boxed > 0 && copied > 0 && !readerLent) || this.rustReaderStrHandedOn(declaration))) return undefined;
         if (readerLent) this.rustStrLentLocals.add(declaration);
         // ud: a local seeded from a venue override of a native-`Str` base method never copies where the `Value` moved
@@ -4860,7 +4863,7 @@ export class RustTranspiler extends BaseTranspiler {
             this.rustStrLentLocals.add(declaration);
         }
         // a keyed optional string whose copying boxes all sit where the `Value` cloned is lent there instead
-        const keyLent = !this.rustStrNoLend && this.rustScalarOptKeyCostly(declaration, kind) && this.rustReaderLendBoxes(declaration, true);
+        const keyLent = !this.rustStrNoLend && this.rustScalarOptKeyCostly(declaration, kind) && (this.rustReaderLendBoxes(declaration, true) || (readerLent && kind === 'ostr' && !this.rustTestTierSource(declaration) && this.rustReaderLendBoxes(declaration, true, false, true)));
         if (this.rustScalarOptKeyCostly(declaration, kind) && !keyLent) return undefined;
         if (keyLent) this.rustStrLentLocals.add(declaration);
         // a market-field string boxed before its last use copies the field where the `Value` was shared
@@ -4977,7 +4980,7 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** Every non-moving box of the string is a slot where the `Value` form cloned it (a `this.`/`super.` argument,
      *  an object-literal value, a dict write or an array element), so lending there adds no copy. */
-    rustReaderLendBoxes(declaration, nativeKeys = false, preciseSlots = false): boolean {
+    rustReaderLendBoxes(declaration, nativeKeys = false, preciseSlots = false, copyDecls = false): boolean {
         let ok = true;
         this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n: any) => {
             const form = this.rustScalarUseForms.get(n);
@@ -4991,7 +4994,10 @@ export class RustTranspiler extends BaseTranspiler {
                 && (up.expression.expression.kind === SyntaxKind.ThisKeyword || up.expression.expression.kind === SyntaxKind.SuperKeyword);
             const precise = preciseSlots && isCallExpression(up) && up.expression !== n && isPropertyAccessExpression(up.expression)
                 && isIdentifier(up.expression.expression) && String(up.expression.expression.text) === 'Precise';
-            const slot = selfArg || precise || (up.kind === SyntaxKind.PropertyAssignment && up.initializer === n) || this.rustDictWriteValue(n)
+            // ral-56f: `const y = x` into a string candidate of the same function decided with the local (rustStrHandOffDecided
+            // `solved`): the typed copy is the copy the `Value` clone made (binance pro keepAliveListenKey `urlType = type`)
+            const copyDecl = copyDecls && isVariableDeclaration(up) && up.initializer === n && this.rustStrHandOffDecided(n, n, declaration).solved;
+            const slot = selfArg || precise || copyDecl || (up.kind === SyntaxKind.PropertyAssignment && up.initializer === n) || this.rustDictWriteValue(n)
                 || (isArrayLiteralExpression(up) && !(isBinaryExpression(up.parent) && up.parent.left === up));
             if (!slot) ok = false;
             return true;
