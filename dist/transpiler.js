@@ -58903,12 +58903,17 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (isBinaryExpression5(parent) && parent.operatorToken.kind === SyntaxKind7.InKeyword && parent.left === n) {
       return this.rustFieldKeyReceiver(this.rustStripWrappers(parent.right)) !== void 0 ? "fin" : void 0;
     }
-    if (!isElementAccessExpression4(parent) || parent.argumentExpression !== n || this.rustFieldKeyReceiver(parent.expression) === void 0)
+    const wrapped = this.rustKeyWrapped(n);
+    const up = wrapped.parent;
+    if (wrapped !== n && isBinaryExpression5(up) && up.operatorToken.kind === SyntaxKind7.InKeyword && up.left === wrapped) {
+      return this.rustFieldKeyReceiver(this.rustStripWrappers(up.right)) !== void 0 ? "fin" : void 0;
+    }
+    if (!isElementAccessExpression4(up) || up.argumentExpression !== wrapped || this.rustFieldKeyReceiver(up.expression) === void 0)
       return void 0;
-    const write = parent.parent;
-    if (this.rustOkeyReadUse(n))
+    const write = up.parent;
+    if (this.rustOkeyReadUse(wrapped))
       return "frd";
-    if (!isBinaryExpression5(write) || write.left !== parent || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
+    if (!isBinaryExpression5(write) || write.left !== up || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
       return void 0;
     if (new RegExp(`\\b${String(n.text)}\\b`).test(String(write.right.getText()))) {
       if (!this.rustBorrowStrElemShape(this.rustDeclaredNode(n)))
@@ -58919,7 +58924,7 @@ ${binding(plan.indent)}` : ""), head: "" };
   }
   /** Element-access hook: `this.f[k]` read with a typed string key. */
   printFieldKeyRead(node) {
-    const key = node.argumentExpression;
+    const key = this.rustSkipWrappers(node.argumentExpression);
     if (!isIdentifier3(key) || this.rustScalarUseForms.get(key) !== "frd")
       return void 0;
     const kind = this.rustScalarLocalOf(key)?.kind;
@@ -58968,7 +58973,7 @@ ${binding(plan.indent)}` : ""), head: "" };
         return true;
       if (form === "fin" && isCallExpression6(this.rustWsBookKeyParent(n)) && this.rustWsCacheMapLookup(this.rustWsBookKeyParent(n)) && this.rustWsCacheMapField(this.rustWsBookKeyParent(n).arguments[0]))
         return true;
-      if (form === "fin" || form === "frd" || form === "key" && this.rustFieldKeyReceiver(n.parent?.expression) !== void 0)
+      if (form === "fin" || form === "frd" || form === "key" && this.rustFieldKeyReceiver(this.rustKeyWrapped(n).parent?.expression) !== void 0)
         field = true;
       else if (form === "key" && _RustTranspiler.RUST_PRO_TIER_FILE.test(String(n.getSourceFile().fileName)) && this.rustLiteralKeyReceiver(n) && this.rustScalarInsertKeyUse(n))
         return true;
@@ -61563,7 +61568,7 @@ ${ind}];`;
     const kind = isIdentifier3(key) && this.rustScalarUseForms.get(key) === "key" ? this.rustScalarLocalOf(key)?.kind : void 0;
     if (kind === "ostr")
       return this.rustScalarOptKeyText(key);
-    if (kind === "str" && this.rustFieldKeyReceiver(key.parent?.expression) !== void 0)
+    if (kind === "str" && this.rustFieldKeyReceiver(this.rustKeyWrapped(key).parent?.expression) !== void 0)
       return `${super.printIdentifier(key)}.to_string()`;
     return kind === "str" ? `${super.printIdentifier(key)}.clone()` : void 0;
   }
