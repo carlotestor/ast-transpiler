@@ -26112,7 +26112,7 @@ export class RustTranspiler extends BaseTranspiler {
                 const up: any = n.parent;
                 if (isBinaryExpression(up) && up.left === n) {
                     return up.operatorToken.kind === SyntaxKind.EqualsToken && up.parent?.kind === SyntaxKind.ExpressionStatement
-                        && (this.rustBuiltListWriteSource(up.right) || this.rustDeclaredArrayCallWriteSource(up.right) || this.rustOverloadListCallWriteSource(up.right) || this.rustTypedCoreListCallWriteSource(up.right) || this.rustBuiltHelperListWriteSource(up.right) || this.rustBuiltListSelfSort(up, name) || this.rustArrayGuardedMove(up) || this.rustOptListGuardedMove(up) !== undefined || this.rustDefaultedAliasMove(up) !== undefined) && String(up.parent.getText()).split('\n')[0].length <= 200;
+                        && (this.rustBuiltListSelfWrapWrite(up, declaration) || this.rustBuiltListWriteSource(up.right) || this.rustDeclaredArrayCallWriteSource(up.right) || this.rustOverloadListCallWriteSource(up.right) || this.rustTypedCoreListCallWriteSource(up.right) || this.rustBuiltHelperListWriteSource(up.right) || this.rustBuiltListSelfSort(up, name) || this.rustArrayGuardedMove(up) || this.rustOptListGuardedMove(up) !== undefined || this.rustDefaultedAliasMove(up) !== undefined) && String(up.parent.getText()).split('\n')[0].length <= 200;
                 }
                 if (isElementAccessExpression(up) && up.expression === n) {
                     natives++;
@@ -26197,6 +26197,12 @@ export class RustTranspiler extends BaseTranspiler {
                     handOffs++;
                     return true;
                 }
+                // ral-56i: `x = [ x ]` (statement) wraps the list in a fresh one-element list: the old list moves into its box
+                if (this.rustBuiltListSelfWrap(n, declaration)) {
+                    boxes.push([n, 'move']);
+                    handOffs++;
+                    return true;
+                }
                 if (isCallExpression(up) && up.expression !== n && up.arguments.some((a: any) => a === n)) {
                     const callee: any = up.expression;
                     if (!isPropertyAccessExpression(callee) || callee.expression.kind !== SyntaxKind.ThisKeyword || !short(n)
@@ -26221,6 +26227,23 @@ export class RustTranspiler extends BaseTranspiler {
         for (const [n, form] of boxes) this.rustLentListBoxes.set(n, form);
         this.rustBuiltLists.add(declaration);
         return true;
+    }
+
+    /** ral-56i: `x` as the only element of `x = [ x ]`, an expression statement writing the same list local. */
+    rustBuiltListSelfWrap(n: any, declaration: any): boolean {
+        const literal: any = n.parent;
+        if (literal?.kind !== SyntaxKind.ArrayLiteralExpression || literal.elements.length !== 1 || literal.elements[0] !== n) return false;
+        const write: any = literal.parent;
+        return isBinaryExpression(write) && write.right === literal && write.operatorToken.kind === SyntaxKind.EqualsToken
+            && write.parent?.kind === SyntaxKind.ExpressionStatement && isIdentifier(write.left) && this.rustIdentifierRefersToDeclaration(write.left, declaration)
+            && this.rustIdentifierRefersToDeclaration(n, declaration);
+    }
+
+    /** ral-56i: the whole write `x = [ x ]` of a built-list local (printed `x = Arc::new(vec![Value::Arr(x)])`). */
+    rustBuiltListSelfWrapWrite(write: any, declaration: any): boolean {
+        const literal: any = isBinaryExpression(write) ? write.right : undefined;
+        return literal?.kind === SyntaxKind.ArrayLiteralExpression && literal.elements.length === 1 && isIdentifier(literal.elements[0])
+            && this.rustIdentifierRefersToDeclaration(literal.elements[0], declaration) && this.rustBuiltListSelfWrap(literal.elements[0], declaration);
     }
 
     /** ral-tf: no later statement of the function pushes to or writes the list, and the use is in no loop or closure. */
@@ -26731,6 +26754,11 @@ export class RustTranspiler extends BaseTranspiler {
         if (guarded !== undefined) return `${this.printNode(left, 0).trim()} = ${rhs.text}.${this.rustDefaultedListValue(guarded, rhs) ? 'into_list' : 'unwrap_or_default'}()`;
         if (isIdentifier(rhs) && isBinaryExpression(rhs.parent) && this.rustDefaultedAliasMove(rhs.parent) !== undefined) return `${this.printNode(left, 0).trim()} = ${rhs.text}.into_list()`;
         if (isIdentifier(rhs) && isBinaryExpression(rhs.parent) && this.rustArrayGuardedCopies.has(rhs.parent)) return `${this.printNode(left, 0).trim()} = ${rhs.text}.clone().into_list()`;
+        const own = this.rustBuiltListOf(left);
+        if (isBinaryExpression(left.parent) && this.rustBuiltListSelfWrapWrite(left.parent, own)) {
+            const name = this.printNode(left, 0).trim();
+            return `${name} = std::sync::Arc::new(vec![Value::Arr(${name})])`;
+        }
         const value = isArrayLiteralExpression(rhs) ? this.printBuiltListLiteral(rhs) : `${this.printNode(right, 0).trim()}.into_list()`;
         return `${this.printNode(left, 0).trim()} = ${value}`;
     }
