@@ -15896,13 +15896,31 @@ export class RustTranspiler extends BaseTranspiler {
         return slots === 0 || others;
     }
 
-    /** The destructuring statement keeps the 400-char line budget with the slot's `== Some(true)` read. */
+    /** The destructuring statement keeps the 400-char line budget with the slot's bool read.
+     *  ral-46f: measured on the open print of the write with the bool slot read swapped in (was a length estimate that
+     *  refused every write over 380 chars although the printed block line is split after `; ` by build/ `splitLongRustLines`). */
+    private rustBoolSlotLineMemo = new WeakMap<any, boolean>();
     rustBoolSlotLineLong(n: any): boolean {
         const write: any = n.parent.parent;
-        let depth = 0;
-        for (let up: any = write.parent; up !== undefined; up = up.parent) if (isBlock(up)) depth++;
-        const slots = write.left.elements.reduce((sum: number, e: any) => sum + e.getText().length + 48, 0);
-        return depth * 4 + 72 + this.printNode(write.right, 0).trim().length + slots + 24 > 380;
+        const known = this.rustBoolSlotLineMemo.get(write);
+        if (known !== undefined) return known;
+        this.rustBoolSlotLineMemo.set(write, true);
+        let long = true;
+        try {
+            const column = write.getStart() - String(write.getSourceFile().text).lastIndexOf('\n', write.getStart()) - 1;
+            // the open print reads every slot as `Value`; a bool slot appends `.as_bool() == Some(true)` (24 chars) to its piece
+            const slots = new Set<string>(write.left.elements.filter((e: any) => isIdentifier(e) && this.rustScalarUseForms.get(e) === 'bslot').map((e: any) => String(e.text)));
+            const text = this.printNode(write, 0);
+            // the ccxt line splitter (build/ `splitLongRustLines`) breaks an over-long block line after `; ` (budget 360 + one indent):
+            // a slot statement keeps the budget when every `; `-separated piece fits there, as the parent's open line already does
+            const pieces = text.split('\n').flatMap((l: string) => l.trim().split('; '))
+                .map((p: string) => p.length + ([ ...slots ].some((name: string) => p.startsWith(`${name} = __destr_tmp`)) ? 24 : 0));
+            long = column + 4 + Math.max(...pieces) > 360;
+        } catch (e) {
+            long = true;
+        }
+        this.rustBoolSlotLineMemo.set(write, long);
+        return long;
     }
 
     // ── typed list index by an `i64` counter (rustI64IndexText) ──

@@ -16409,3 +16409,34 @@ describe('ral-45d: a string-literal-seeded local rewritten from a handleOptionSt
         expect(output).toMatch(/let mut accountMode: Value/);
     });
 });
+
+describe('ral-46f: a true-seeded bool local rewritten from a long handleOptionBoolAndParams slot line', () => {
+    const src = (body: string) =>
+        'class E {\n' +
+        '    handleOptionBoolAndParams(params: any, methodName: string, optionName: string, defaultValue?: boolean): [boolean, any] { return [defaultValue, params]; }\n' +
+        '    omit(x: any, k: any): any { return x; }\n' +
+        '    hold(x: any): any { return x; }\n' +
+        '    run(params: any, market: any) {\n' + body + '    }\n' +
+        '}';
+    test('is a bool read off the slot when the split block line fits', () => {
+        const output = transpiler.transpileRust(src(
+            "        let queryOmittedWithAVeryLongNameIndeed = this.omit (params, 'someVeryLongParameterNameToOmit');\n" +
+            "        if (market) {\n            if (market) {\n" +
+            '                let createMarketBuyOrderRequiresPrice = true;\n' +
+            "                [ createMarketBuyOrderRequiresPrice, queryOmittedWithAVeryLongNameIndeed ] = this.handleOptionBoolAndParams (queryOmittedWithAVeryLongNameIndeed, 'createOrder', 'createMarketBuyOrderRequiresPrice', true);\n" +
+            '                if (createMarketBuyOrderRequiresPrice) {\n                    return this.hold (queryOmittedWithAVeryLongNameIndeed);\n                }\n' +
+            '            }\n        }\n' +
+            '        return this.hold (params);\n')).content;
+        expect(output).not.toMatch(/let mut createMarketBuyOrderRequiresPrice: Value/);
+        expect(output).toMatch(/createMarketBuyOrderRequiresPrice = __destr_tmp\.get\(0\)[^;]*\.as_bool\(\) == Some\(true\);/);
+    });
+    test('a slot piece over the split budget keeps the local Value', () => {
+        const long = 'x'.repeat(300);
+        const output = transpiler.transpileRust(src(
+            '        let flag = true;\n' +
+            `        [ flag, params ] = this.handleOptionBoolAndParams (params, 'createOrder', '${long}', true);\n` +
+            '        if (flag) {\n            return this.hold (params);\n        }\n' +
+            '        return this.hold (params);\n')).content;
+        expect(output).toMatch(/let mut flag: Value/);
+    });
+});

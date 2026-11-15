@@ -2221,7 +2221,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  holds before the slot is read back, lent (`Value::from(&x)`, `From<&Option<String>>`: `None` is the Null, `Some` the Str). */
     rustStrSlotSelfDefault(n: any): boolean;
     rustBoolSlotUsesOk(declaration: any): boolean;
-    /** The destructuring statement keeps the 400-char line budget with the slot's `== Some(true)` read. */
+    /** The destructuring statement keeps the 400-char line budget with the slot's bool read.
+     *  ral-46f: measured on the open print of the write with the bool slot read swapped in (was a length estimate that
+     *  refused every write over 380 chars although the printed block line is split after `; ` by build/ `splitLongRustLines`). */
+    private rustBoolSlotLineMemo;
     rustBoolSlotLineLong(n: any): boolean;
     /** The `usize` index text of a `Value` list read: a registered `i64` counter indexes directly. */
     rustI64IndexText(keyNode: any, place: string): string;

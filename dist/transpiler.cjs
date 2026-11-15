@@ -51717,6 +51717,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustI64Counters = /* @__PURE__ */ new Map();
     /** The `__destr_tmp` line keeps the 400-char budget with the slot unwrap and the lent self default (`Value::from(&x)`). */
     this.rustStrSlotLineMemo = /* @__PURE__ */ new WeakMap();
+    /** The destructuring statement keeps the 400-char line budget with the slot's bool read.
+     *  ral-46f: measured on the open print of the write with the bool slot read swapped in (was a length estimate that
+     *  refused every write over 380 chars although the printed block line is split after `; ` by build/ `splitLongRustLines`). */
+    this.rustBoolSlotLineMemo = /* @__PURE__ */ new WeakMap();
     // counter identifiers printed as a `.get(i as usize)` key or a `Value::Int(i)` box while the body prints
     this.rustI64ClosedUses = /* @__PURE__ */ new WeakSet();
     // ── typed caught errors (ral-44h; was ccxt build/ rustTypedCaughtErrors) ──
@@ -67194,15 +67198,24 @@ ${idn}}`;
     }
     return slots === 0 || others;
   }
-  /** The destructuring statement keeps the 400-char line budget with the slot's `== Some(true)` read. */
   rustBoolSlotLineLong(n) {
     const write = n.parent.parent;
-    let depth = 0;
-    for (let up = write.parent; up !== void 0; up = up.parent)
-      if (_is.isBlock.call(void 0, up))
-        depth++;
-    const slots = write.left.elements.reduce((sum, e) => sum + e.getText().length + 48, 0);
-    return depth * 4 + 72 + this.printNode(write.right, 0).trim().length + slots + 24 > 380;
+    const known = this.rustBoolSlotLineMemo.get(write);
+    if (known !== void 0)
+      return known;
+    this.rustBoolSlotLineMemo.set(write, true);
+    let long = true;
+    try {
+      const column = write.getStart() - String(write.getSourceFile().text).lastIndexOf("\n", write.getStart()) - 1;
+      const slots = new Set(write.left.elements.filter((e) => _is.isIdentifier.call(void 0, e) && this.rustScalarUseForms.get(e) === "bslot").map((e) => String(e.text)));
+      const text = this.printNode(write, 0);
+      const pieces = text.split("\n").flatMap((l) => l.trim().split("; ")).map((p) => p.length + ([...slots].some((name) => p.startsWith(`${name} = __destr_tmp`)) ? 24 : 0));
+      long = column + 4 + Math.max(...pieces) > 360;
+    } catch (e) {
+      long = true;
+    }
+    this.rustBoolSlotLineMemo.set(write, long);
+    return long;
   }
   // ── typed list index by an `i64` counter (rustI64IndexText) ──
   /** The `usize` index text of a `Value` list read: a registered `i64` counter indexes directly. */
