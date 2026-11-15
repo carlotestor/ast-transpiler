@@ -74609,6 +74609,8 @@ ${iden}}`;
     if (declaration === void 0 || !isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name) || declaration.name === node)
       return false;
     const literal2 = this.rustSkipWrappers(declaration.initializer);
+    if (literal2 !== void 0 && isArrayLiteralExpression4(literal2))
+      return this.rustHandlerList(declaration, literal2);
     if (literal2 === void 0 || !isObjectLiteralExpression4(literal2) || literal2.properties.length === 0)
       return false;
     for (const p of literal2.properties) {
@@ -74635,6 +74637,27 @@ ${iden}}`;
         return false;
       const use = up.parent;
       return isVariableDeclaration3(use) && use.initializer === up || isBinaryExpression5(use) && use.right === up && use.operatorToken.kind === SyntaxKind7.EqualsToken;
+    });
+  }
+  /** ral-53h: a never-rebound const list literal of `this.<method>` references, only read by `xs[i]` (as a declaration
+   *  initializer) and `xs.length`: an element read is a handler name, or Null past the end. */
+  rustHandlerList(declaration, literal2) {
+    if (literal2.elements.length === 0 || !(declaration.parent?.flags & NodeFlags4.Const))
+      return false;
+    for (const v of literal2.elements) {
+      if (!isPropertyAccessExpression3(v) || v.expression.kind !== SyntaxKind7.ThisKeyword)
+        return false;
+      const member = symbolValueDeclaration(this.getChecker().getSymbolAtLocation(v.name));
+      if (member === void 0 || !isMethodDeclaration5(member))
+        return false;
+    }
+    return this.rustBlockLocalUsesAll(declaration, String(declaration.name.text), (n) => {
+      const up = n.parent;
+      if (isPropertyAccessExpression3(up) && up.expression === n && String(up.name.text) === "length" && !this.isNativeWriteTargetBase(up))
+        return true;
+      if (up?.kind !== SyntaxKind7.ElementAccessExpression || up.expression !== n || this.isNativeWriteTargetBase(up))
+        return false;
+      return isVariableDeclaration3(up.parent) && up.parent.initializer === up;
     });
   }
   rustHandlerTableLocalOf(node) {

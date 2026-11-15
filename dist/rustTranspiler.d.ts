@@ -3242,6 +3242,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     printHandlerTableLocalWrite(left: any, right: any): string | undefined;
     /** A local map literal whose every value is a `this.<method>` reference, only read by `this.safeValue (m, k)`. */
     rustHandlerTable(node: any): boolean;
+    /** ral-53h: a never-rebound const list literal of `this.<method>` references, only read by `xs[i]` (as a declaration
+     *  initializer) and `xs.length`: an element read is a handler name, or Null past the end. */
+    rustHandlerList(declaration: any, literal: any): boolean;
     rustHandlerTableLocalOf(node: any): boolean;
     printHandlerTableLocalDeclaration(declaration: any, varName: string, indent: string): string | undefined;
     printHandlerTableNullTest(left: any, right: any, op: any): string | undefined;
