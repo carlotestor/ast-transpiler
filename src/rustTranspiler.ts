@@ -25534,7 +25534,17 @@ export class RustTranspiler extends BaseTranspiler {
         if (isArrayLiteralExpression(rhs)) return (!rhs.elements.some((e: any) => e.kind === SyntaxKind.SpreadElement || (isIdentifier(this.rustSkipWrappers(e)) && !this.rustBuiltListMovedElement(e)))
             && (!rhs.elements.some((e: any) => isIdentifier(this.rustSkipWrappers(e))) || this.rustBuiltListMovedLiteral(rhs) !== undefined))
             || this.rustBuiltListBoxedLiteral(rhs) !== undefined;
-        return this.rustAlwaysListProducer(rhs) || this.rustDefaultedListRead(rhs) || this.rustDeclaredListProducer(rhs);
+        return this.rustAlwaysListProducer(rhs) || this.rustDefaultedListRead(rhs) || this.rustDeclaredListProducer(rhs) || this.rustVenueListWriteSource(rhs);
+    }
+
+    /** ral-53i: `[await] this.m (..)` whose venue declaration the printer's typed-return table (rustVenueContainerReturnKind)
+     *  proves a never-null list (`Dict[]` / `any[]` / `List` / `Record[]` / literal tuple, the same type in the whole venue
+     *  family, no override): the call prints `-> Value` holding a `Value::Arr`, so `.into_list()` moves exactly that list. */
+    rustVenueListWriteSource(rhs: any): boolean {
+        const call: any = rhs?.kind === SyntaxKind.AwaitExpression ? this.rustSkipWrappers(rhs.expression) : rhs;
+        if (call === undefined || !isCallExpression(call) || this.rustTestTierSource(call)) return false;
+        const kind = this.rustVenueContainerReturnKind(call);
+        return kind !== undefined && kind.kind === 'list' && !kind.nullable;
     }
 
     /** ral-yf: `await this.<endpoint> (..)` whose abstract declaration spells `Promise<List>` (a non-list answer reads as the

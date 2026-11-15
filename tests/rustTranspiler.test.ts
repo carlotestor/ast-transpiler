@@ -17967,3 +17967,24 @@ describe('ral-53i: string keys of a typed two-level local map insert', () => {
         expect(out).toMatch(/withdrawFees\.entry\([^;]*\)\.or_default\(\)\.insert\(/);
     });
 });
+
+describe('ral-53i: a list local reassigned whole from a venue call the typed-return table proves a list', () => {
+    const write = (dir: string, ret: string) => {
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    safeString (o: any, k: any, d: any = undefined): string { return o[k]; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    async fetchRows (params: Dict = {}): " + ret + " {\n        return [ params ];\n    }\n    async m (flag: boolean) {\n        let rows = [];\n        if (flag) {\n            rows = await this.fetchRows ();\n        }\n        const out = [];\n        for (let i = 0; i < rows.length; i++) {\n            out.push (this.safeString (rows[i], 'id'));\n        }\n        return out;\n    }\n}\n");
+    };
+    test('`rows = await this.fetchRows ()` with `Promise<Dict[]>` types the list and moves the answer out', () => {
+        const dir = path.join (rustFixtureRoot, 'ral-53i-list');
+        write (dir, 'Promise<Dict[]>');
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut rows: crate::value::List = ');
+        expect(out).toMatch(/rows = self\.fetchRows\([^;]*\)\.await\.into_list\(\);/);
+    });
+    test('a callee declared `Promise<any>` proves nothing: the local stays Value', () => {
+        const dir = path.join (rustFixtureRoot, 'ral-53i-list-any');
+        write (dir, 'Promise<any>');
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).not.toContain('let mut rows: crate::value::List');
+    });
+});
