@@ -15887,3 +15887,27 @@ describe('ral-43d: generated base-method parameters typed from their ts declarat
         expect(out).toMatch(/result = Value::Dict\(data\);/);
     });
 });
+
+describe('ral-44d: a `{}` reuse literal rewritten from declared Promise<Dict> endpoints holds the map', () => {
+    const run = (body: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-44d-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync(path.join(root, 'ts/src/abstract'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    extend (a: any, b: any): Dict { return a; }\n    METHODS_MARKER () {}\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    parseOrder (order: Dict, market: any = undefined): any { return order; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/abstract/venue.ts'), "import _Exchange from '../base/Exchange.js';\nimport type { Dict } from '../base/Exchange.js';\nexport default abstract class Exchange extends _Exchange {\n    privatePostA (params = {}): Promise<Dict> { return this.hold (params); }\n    privatePostB (params = {}): Promise<Dict> { return this.hold (params); }\n    privatePostC (params = {}): Promise<any> { return this.hold (params); }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './abstract/venue.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    override parseOrder (order: Dict, market: any = undefined): any { return order['id']; }\n" + body + "}\n");
+        const out = transpiler.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
+        fs.rmSync(root, { recursive: true, force: true });
+        return out;
+    };
+    test('every write a declared Promise<Dict> endpoint: Dict local, writes `.await.into_dict()`, lent to parseOrder', () => {
+        const out = run("    async m (c: boolean, params: Dict = {}): Promise<any> {\n        let response: Dict = {};\n        if (c) {\n            response = await this.privatePostA (params);\n        } else {\n            response = await this.privatePostB (params);\n        }\n        return this.parseOrder (response);\n    }\n");
+        expect(out).toMatch(/let mut response: crate::value::Dict = /);
+        expect(out).toMatch(/response = self\.private_post_a\(.*\)\.await\.into_dict\(\);/);
+        expect(out).toMatch(/self\.parseOrder\(&response/);
+    });
+    test('a write from an undeclared (Promise<any>) endpoint keeps the local Value', () => {
+        const out = run("    async m (c: boolean, params: Dict = {}): Promise<any> {\n        let response: Dict = {};\n        if (c) {\n            response = await this.privatePostA (params);\n        } else {\n            response = await this.privatePostC (params);\n        }\n        return this.parseOrder (response);\n    }\n");
+        expect(out).toMatch(/let mut response: Value = /);
+    });
+});

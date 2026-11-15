@@ -18776,10 +18776,12 @@ export class RustTranspiler extends BaseTranspiler {
     rustReuseMapProducerWrite(n: any): boolean {
         const up: any = n.parent;
         if (!isBinaryExpression(up) || up.left !== n || up.operatorToken.kind !== SyntaxKind.EqualsToken || up.parent?.kind !== SyntaxKind.ExpressionStatement) return false;
-        const rhs: any = this.rustSkipWrappers(up.right);
+        let rhs: any = this.rustSkipWrappers(up.right);
+        if (rhs?.kind === SyntaxKind.AwaitExpression) rhs = this.rustSkipWrappers(rhs.expression);
         if (rhs === undefined || !isCallExpression(rhs) || String(up.getText()).split('\n')[0].length > 240) return false;
         const names = (x: any): boolean => (isIdentifier(x) && x.text === n.text) || (x.forEachChild(names) ?? false);
         if (names(rhs)) return false;
+        if (this.rustSkipWrappers(up.right)?.kind === SyntaxKind.AwaitExpression) return this.rustReuseEndpointWrite(up.right);
         if (this.rustBaseCallNamed(rhs, RustTranspiler.RUST_ALWAYS_MAP_HELPERS)) return true;
         if (this.rustOmitOfDict(rhs) && this.rustOmitLineFits(rhs)) return true;
         if (this.rustBaseCallNamed(rhs, RustTranspiler.RUST_REUSE_SAFE_DICT) && this.rustContainerInitNeverNull(rhs, 'map')
@@ -18789,9 +18791,22 @@ export class RustTranspiler extends BaseTranspiler {
 
     private static readonly RUST_REUSE_SAFE_DICT = new Set([ 'safeDict' ]);
 
+    /** ral-44d: `await this.<endpoint> (..)` of a REST endpoint declared `Promise<Dict>`: the declared-endpoint initialiser
+     *  already prints `.await.into_dict()`, so the same write into a reuse literal replaces the owned map with the parsed
+     *  response (parsed JSON carries no runtime tag). */
+    rustReuseEndpointWrite(right: any): boolean {
+        const awaited: any = this.rustSkipWrappers(right);
+        if (awaited?.kind !== SyntaxKind.AwaitExpression) return false;
+        const call: any = this.rustSkipWrappers(awaited.expression);
+        return call !== undefined && isCallExpression(call) && !this.rustTestTierSource(call)
+            && /(?:^|[\\/])ts[\\/]src[\\/][^\\/]+\.ts$/.test(String(call.getSourceFile?.()?.fileName ?? ''))
+            && this.rustBorrowedSourceKind(call) === 'api' && this.rustDeclaredEndpointKind(call) === 'dict';
+    }
+
     /** The producer of a reuse write builds from untagged operands only: `extend` / `omit` operands proven plain
      *  (`rustUntaggedMapOperand`), `indexBy` / `groupBy` fresh maps, a REST `safeDict` read off a local (parsed JSON). */
     rustReuseProducerUntagged(n: any, rhs: any): boolean {
+        if (this.rustReuseEndpointWrite(n.parent.right)) return true;
         const method = String(rhs.expression?.name?.text ?? '');
         if (method === 'indexBy' || method === 'groupBy') return true;
         if (method === 'extend') return Array.from(rhs.arguments).every((a: any) => this.rustUntaggedMapOperand(a));
