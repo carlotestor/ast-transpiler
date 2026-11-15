@@ -2804,6 +2804,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `let x: crate::value::Dict = if c { a } else { b }` with each arm native: a base `extend`/`omit` result unboxed
      *  once, a moved handed slot as is. Only when an arm is such a slot; other ternaries keep the boxed if-expression. */
     printDictTernaryArms(init: any, identation: number): string | undefined;
+    /** ral-44g: `c ? a : b` where each arm is an empty map literal `{}` or a base map producer call (`safeDict` with a literal `{}`
+     *  default, extend / omit): every path answers a map, so the local is a map producer. An `undefined` arm keeps Value. */
+    rustMapTernaryInit(init: any): boolean;
     rustDictTernaryCall(call: any): boolean;
     private rustNilResponseLocals;
     /** The container kind of a write to a borrowed local; an endpoint write to an empty `let` counts as a map. */
