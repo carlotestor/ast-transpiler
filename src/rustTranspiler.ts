@@ -22567,6 +22567,9 @@ export class RustTranspiler extends BaseTranspiler {
         for (const p of literal.properties as any) {
             if (p.kind !== SyntaxKind.PropertyAssignment) return false;
             const v: any = p.initializer;
+            // ral-50h: a value read off another handler table (coinbaseinternational / deribit `'user': this.safeValue (userHandlers, k)`)
+            // is itself a handler name or Null
+            if (v.kind === SyntaxKind.CallExpression && this.rustHandlerTableRead(v)) continue;
             if (!isPropertyAccessExpression(v) || v.expression.kind !== SyntaxKind.ThisKeyword) return false;
             const member: any = symbolValueDeclaration(this.getChecker().getSymbolAtLocation(v.name));
             if (member === undefined || !isMethodDeclaration(member)) return false;
@@ -22580,6 +22583,8 @@ export class RustTranspiler extends BaseTranspiler {
             // pacifica fall back to a substring match over the keys); any write through the table fails
             if (isCallExpression(up) && up.arguments.length === 1 && up.arguments[0] === n && isPropertyAccessExpression(up.expression)
                 && isIdentifier(up.expression.expression) && String(up.expression.expression.text) === 'Object' && String(up.expression.name.text) === 'keys') return true;
+            // ral-50h: a key presence test `k in table` (gate handleSubscriptionStatus) only reads the key set
+            if (isBinaryExpression(up) && up.right === n && up.operatorToken.kind === SyntaxKind.InKeyword) return true;
             if (up?.kind !== SyntaxKind.ElementAccessExpression || up.expression !== n) return false;
             const use: any = up.parent;
             return (isVariableDeclaration(use) && use.initializer === up)

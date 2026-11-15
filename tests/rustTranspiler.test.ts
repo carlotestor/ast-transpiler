@@ -17304,3 +17304,28 @@ describe('ral-49h: a guarded handler-table read (aster / modetrade / xt ternary)
         expect(out).toMatch(/let mut loose: Value = /);
     });
 });
+
+describe('ral-50h: handler tables read by `k in table` and tables holding a read of another handler table', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeValue (o: any, k: any, d: any = undefined): any { return o[k]; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n}\n";
+    const client = "export default class Client {\n    resolve (v: any, h: string | undefined = undefined): void {}\n}\n";
+    const pro = "import Exchange from '../base/Exchange';\nimport type { Dict } from '../base/Exchange';\nimport Client from '../base/ws/Client';\nexport default class venue extends Exchange {\n    handleA (client: Client, message: Dict) {}\n    handleB (client: Client, message: Dict) {}\n    handleStatus (client: Client, message: Dict) {\n        const channel = this.safeString (message, 'channel') as string;\n        const methods: Dict = {\n            'a': this.handleA,\n            'b': this.handleB,\n        };\n        if (channel in methods) {\n            const inTable = methods[channel];\n            inTable.call (this, client, message);\n        }\n    }\n    handleMessage (client: Client, message: Dict) {\n        const channelId = this.safeString (message, 'channel');\n        const userHandlers: Dict = {\n            'a': this.handleA,\n        };\n        const handlers: Dict = {\n            'b': this.handleB,\n            'user': this.safeValue (userHandlers, this.safeString (message, 'u')),\n        };\n        const nested = this.safeValue (handlers, channelId);\n        if (nested !== undefined) {\n            nested.call (this, client, message);\n        }\n        const loose: Dict = {\n            'b': this.handleB,\n            'x': this.safeValue (message, 'x'),\n        };\n        const notTable = this.safeValue (loose, channelId);\n        if (notTable !== undefined) {\n            notTable.call (this, client, message);\n        }\n    }\n}\n";
+    let out = '';
+    beforeAll(() => {
+        const dir = path.join (rustFixtureRoot, 'ral50h-ws');
+        fs.mkdirSync (path.join (dir, 'ts/src/base/ws'), { recursive: true });
+        fs.mkdirSync (path.join (dir, 'ts/src/pro'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/base/ws/Client.ts'), client);
+        fs.writeFileSync (path.join (dir, 'ts/src/pro/venue.ts'), pro);
+        out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/pro/venue.ts')).content;
+    });
+    test('a table also tested by `k in table` stays a handler table', () => {
+        expect(out).toMatch(/let mut inTable: Option<String> = [^\n]*\.as_str\(\)\.map\(str::to_owned\);/);
+    });
+    test('a table value read off another handler table keeps the outer read Option<String>', () => {
+        expect(out).toMatch(/let mut nested: Option<String> = [^\n]*\.as_str\(\)\.map\(str::to_owned\);/);
+    });
+    test('a table value read off a plain map keeps the local a Value', () => {
+        expect(out).toMatch(/let mut notTable: Value = /);
+    });
+});
