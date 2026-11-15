@@ -70479,6 +70479,7 @@ ${iden}}`;
     let plainReads = 0;
     let aliasBoxes = 0;
     let optAliasWrites = 0;
+    let sameKindWrites = 0;
     const boxedElementUses = [];
     const indexReadUses = [];
     const accept = (n) => {
@@ -70517,7 +70518,7 @@ ${iden}}`;
         if (this.literalKindOfNode(rhs) === "null")
           return ++nullWrites > 0;
         if (!nilDeclared && (from === "dict" || from === "list") && this.rustSameKindRewrite(rhs, from))
-          return String(rhs.getText()).split("\n")[0].length <= 240;
+          return (this.rustSelfExtendWrite(n, declaration) ? ++sameKindWrites : 1) > 0 && String(rhs.getText()).split("\n")[0].length <= 240;
         const aliasKind = nilDeclared ? this.rustOptAliasSourceKind(rhs, fn) : void 0;
         if (aliasKind !== void 0) {
           if (from !== void 0 && from !== aliasKind)
@@ -70652,7 +70653,8 @@ ${iden}}`;
     if ((keyReads > 0 || init !== void 0 && isCallExpression6(init) && this.rustRecordLookupSource(init)) && !this.rustEcdsaCall(init) && !this.rustDictKeyReadLineOk(declaration, name))
       return void 0;
     const zgRow = this.rustZgSiblingRows.has(declaration) && boxedElementUses.length > 0;
-    const optional = nilDeclared || nullTests > 0 || writes > 0 || lentNullable > 0 || optionalBoxes > 0 || zgRow || elementKeyWrites > 0 || optMapInit;
+    const neverNullRewrites = writes > 0 && writes === sameKindWrites && from === "dict" && init !== void 0 && this.rustContainerInitNeverNull(init, "map");
+    const optional = nilDeclared || nullTests > 0 || writes > 0 && !neverNullRewrites || lentNullable > 0 || optionalBoxes > 0 || zgRow || elementKeyWrites > 0 || optMapInit;
     if (jwtLends > 0 && optional)
       return void 0;
     if (aliasBoxes > 0 && (optional || reads === 0 && aliasBoxes === boxedElementUses.length))
@@ -70696,7 +70698,7 @@ ${iden}}`;
     }
     for (const n of boxedElementUses)
       this.rustDictElementBoxes.set(n, this.rustLocalLastUse(n, declaration) || n.parent?.kind === SyntaxKind7.ConditionalExpression && this.rustOwnedLastUse(n, declaration) ? "move" : "share");
-    if (extendReuse)
+    if (extendReuse || neverNullRewrites)
       this.rustExtendReuseLocals.add(declaration);
     for (const w of reuseProducerWrites)
       this.rustReuseProducerWrites.add(w);
