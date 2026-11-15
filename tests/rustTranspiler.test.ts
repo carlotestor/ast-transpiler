@@ -13647,12 +13647,12 @@ describe('ral-wh: index and variable-key reads on a held safeList / safeDict loc
     test('a defaulted safeList read by a counter index holds the List and reads by reference', () => {
         const out = write ('wh-list', "    m (message: Dict) {\n        const data = this.safeList (message, 'data', []);\n        const n = data.length;\n        for (let i = 0; i < n; i++) {\n            const index = n - i - 1;\n            this.hold (data[index]);\n        }\n        return n;\n    }\n");
         expect(out).toContain('let mut data: crate::value::List = ');
-        expect(out).toContain('crate::value::KeyRead::read(&&data, &index)');
+        expect(out).toContain('crate::value::KeyRead::read(&&data, &Value::from(index))');
     });
     test('a list built by base toArray read at a computed Value index holds the List and reads by reference', () => {
         const out = write ('wh-filt', "    m (rows: any[], symbol: string) {\n        const reversed = [];\n        const raw = this.toArray (rows);\n        const n = raw.length;\n        for (let i = 0; i < n; i++) {\n            const index = n - i - 1;\n            const v = raw[index];\n            reversed.push (v);\n        }\n        return reversed;\n    }\n");
         expect(out).toContain('let mut raw: crate::value::List = ');
-        expect(out).toContain('crate::value::KeyRead::read(&&raw, &index)');
+        expect(out).toContain('crate::value::KeyRead::read(&&raw, &Value::from(index))');
     });
     test('negative: a nullable safeDict (no default) read by index stays a Value', () => {
         const out = write ('wh-nul', "    m (response: Dict, k: string) {\n        const byId = this.safeDict (response, 'data');\n        const kk = k + '';\n        if (byId === undefined) {\n            return undefined;\n        }\n        return byId[kk];\n    }\n");
@@ -17943,5 +17943,19 @@ describe('ral-53e: an int / Option<i64> local keying a plain element read boxes 
         const c = out.slice(out.indexOf('fn labelC'));
         expect(c).toContain('let mut iReversed: Option<i64> = ');
         expect(c).toContain('let mut data: crate::value::List = ');
+    });
+});
+
+describe('ral-53e: a reversed loop index read only as an element-read key is i64', () => {
+    test('index = length - i - 1 keying xs[index] is i64; one read outside a key stays Value', () => {
+        const dir = path.join (rustFixtureRoot, 'ral53e-rev-key');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type List = any[];\nexport default class Exchange {\n    safeList (o: any, k: any, d: any[] = undefined): any[] { return o; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, List } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    revA (raw: Dict): any[] {\n        const rows = this.safeList (raw, 'rows', []);\n        const length = rows.length;\n        const out = [];\n        for (let i = 0; i < length; i++) {\n            const index = length - i - 1;\n            out.push (rows[index]);\n        }\n        return out;\n    }\n    revB (raw: Dict): any[] {\n        const rows = this.safeList (raw, 'rows', []);\n        const length = rows.length;\n        const out = [];\n        for (let i = 0; i < length; i++) {\n            const index = length - i - 1;\n            out.push (index);\n        }\n        return out;\n    }\n}\n");
+        const out = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } }).transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        const a = out.slice(out.indexOf('fn revA'), out.indexOf('fn revB'));
+        expect(a).toContain('let mut index: i64 = ');
+        const b = out.slice(out.indexOf('fn revB'));
+        expect(b).toContain('let mut index: Value = ');
     });
 });

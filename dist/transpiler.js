@@ -59966,6 +59966,10 @@ ${binding(plan.indent)}` : ""), head: "" };
     const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
       if (this.rustElemInsertKey(n))
         return true;
+      if (this.rust53eElemReadKey(n)) {
+        keys++;
+        return true;
+      }
       if (!this.rustSafeDictKeyArg(n))
         return false;
       keys++;

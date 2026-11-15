@@ -8565,6 +8565,8 @@ export class RustTranspiler extends BaseTranspiler {
         let keys = 0;
         const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n: any) => {
             if (this.rustElemInsertKey(n)) return true;
+            // ral-53e: the whole key of a plain element read `xs[n]` boxes there as well (`Value::from(n)`)
+            if (this.rust53eElemReadKey(n)) { keys++; return true; }
             if (!this.rustSafeDictKeyArg(n)) return false;
             keys++;
             return true;
