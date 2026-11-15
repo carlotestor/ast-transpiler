@@ -8893,7 +8893,7 @@ export class RustTranspiler extends BaseTranspiler {
         const readerCase = kind === 'str' && this.rustDeclInitPosition(node) ? this.rustReaderCaseStrRecv(node) : undefined;
         if (readerCase !== undefined) {
             const recvText = this.rustScalarNativeText('str', readerCase);
-            const fn = String(node.expression.name.text) === 'toUpperCase' ? 'to_uppercase' : 'to_lowercase';
+            const fn = String((node.expression as any).name.text) === 'toUpperCase' ? 'to_uppercase' : 'to_lowercase';
             if (recvText !== undefined) return `${recvText.endsWith('.to_string()') ? recvText.slice(0, -'.to_string()'.length) : recvText}.${fn}()`;
         }
         const caseRecv = kind === 'ostr' ? this.rustValueCaseRecv(node) : undefined;
