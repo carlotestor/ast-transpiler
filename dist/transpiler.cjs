@@ -76676,9 +76676,23 @@ ${iden}}`;
         x = this.rustStripWrappers(x.expression.expression);
       if (x !== void 0 && _is.isIdentifier.call(void 0, x) && depth < 3) {
         const d = this.rustDeclarationOfIdentifier(x);
+        if (d !== void 0 && d.kind === _ast.SyntaxKind.Parameter && _is.isIdentifier.call(void 0, d.name) && d.initializer === void 0 && d.dotDotDotToken === void 0 && !this.rustLocalReassigned(d)) {
+          const cls = _chunkC7C726CWcjs.findAncestor.call(void 0, d, _is.isClassDeclaration);
+          const sites = cls === void 0 ? void 0 : this.rustWsHelperCallSites(cls, d, [d]);
+          if (sites === void 0 || sites.length === 0)
+            return false;
+          return sites.every((env) => {
+            const b = env.get(d);
+            return b !== void 0 && b.arg !== void 0 && idCall(b.arg, depth + 1);
+          });
+        }
         return d !== void 0 && _is.isVariableDeclaration.call(void 0, d) && !!(_optionalChain([d, 'access', _10345 => _10345.parent, 'optionalAccess', _10346 => _10346.flags]) & _ast.NodeFlags.Const) && idCall(d.initializer, depth + 1);
       }
-      if (x === void 0 || !_is.isCallExpression.call(void 0, x) || !_is.isPropertyAccessExpression.call(void 0, x.expression) || x.expression.expression.kind !== _ast.SyntaxKind.ThisKeyword || String(x.expression.name.text) !== "requestId")
+      if (x !== void 0 && _is.isCallExpression.call(void 0, x) && x.arguments.length === 1 && _is.isPropertyAccessExpression.call(void 0, x.expression) && x.expression.expression.kind === _ast.SyntaxKind.ThisKeyword && String(x.expression.name.text) === "numberToString")
+        return idCall(x.arguments[0], depth + 1);
+      if (x === void 0 || !_is.isCallExpression.call(void 0, x) || !_is.isPropertyAccessExpression.call(void 0, x.expression) || x.expression.expression.kind !== _ast.SyntaxKind.ThisKeyword || !["requestId", "incrementingNonce"].includes(String(x.expression.name.text)))
+        return false;
+      if (String(x.expression.name.text) === "incrementingNonce" && x.arguments.length !== 0)
         return false;
       const callee = this.rustScalarCallee(x);
       const ret = _optionalChain([callee, 'optionalAccess', _10347 => _10347.type]) !== void 0 ? String(_nullishCoalesce(_optionalChain([callee, 'access', _10348 => _10348.type, 'access', _10349 => _10349.getText, 'optionalCall', _10350 => _10350()]), () => ( ""))) : "";

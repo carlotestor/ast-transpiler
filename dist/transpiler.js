@@ -76677,9 +76677,23 @@ ${iden}}`;
         x = this.rustStripWrappers(x.expression.expression);
       if (x !== void 0 && isIdentifier3(x) && depth < 3) {
         const d = this.rustDeclarationOfIdentifier(x);
+        if (d !== void 0 && d.kind === SyntaxKind7.Parameter && isIdentifier3(d.name) && d.initializer === void 0 && d.dotDotDotToken === void 0 && !this.rustLocalReassigned(d)) {
+          const cls = findAncestor(d, isClassDeclaration4);
+          const sites = cls === void 0 ? void 0 : this.rustWsHelperCallSites(cls, d, [d]);
+          if (sites === void 0 || sites.length === 0)
+            return false;
+          return sites.every((env) => {
+            const b = env.get(d);
+            return b !== void 0 && b.arg !== void 0 && idCall(b.arg, depth + 1);
+          });
+        }
         return d !== void 0 && isVariableDeclaration3(d) && !!(d.parent?.flags & NodeFlags4.Const) && idCall(d.initializer, depth + 1);
       }
-      if (x === void 0 || !isCallExpression6(x) || !isPropertyAccessExpression3(x.expression) || x.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(x.expression.name.text) !== "requestId")
+      if (x !== void 0 && isCallExpression6(x) && x.arguments.length === 1 && isPropertyAccessExpression3(x.expression) && x.expression.expression.kind === SyntaxKind7.ThisKeyword && String(x.expression.name.text) === "numberToString")
+        return idCall(x.arguments[0], depth + 1);
+      if (x === void 0 || !isCallExpression6(x) || !isPropertyAccessExpression3(x.expression) || x.expression.expression.kind !== SyntaxKind7.ThisKeyword || !["requestId", "incrementingNonce"].includes(String(x.expression.name.text)))
+        return false;
+      if (String(x.expression.name.text) === "incrementingNonce" && x.arguments.length !== 0)
         return false;
       const callee = this.rustScalarCallee(x);
       const ret = callee?.type !== void 0 ? String(callee.type.getText?.() ?? "") : "";
