@@ -63816,6 +63816,13 @@ ${i1}}`;
         return void 0;
       return { kind: "ostr", text: `crate::value::KeyRead::key_read(&&${this.printNode(currency.name, 0)}, "code").as_str().map(str::to_owned)` };
     }
+    const optMarket = this.rustOptMarketLocalOf(node.expression);
+    if (optMarket !== void 0) {
+      const optKey = this.rustMarketReadKey(node.expression);
+      if (optKey === void 0 || !_RustTranspiler.RUST_MARKET_BOOL_FIELDS.has(optKey))
+        return void 0;
+      return { kind: "bool", text: `${this.printNode(optMarket.name, 0)}.as_ref().map_or(false, |__m| __m.${optKey})` };
+    }
     const declaration = this.rustTypedMarketLocalOf(node.expression);
     const localKind = declaration === void 0 ? false : this.rustMarketLocalKind(declaration);
     if (localKind !== "struct" && localKind !== "smkt")
