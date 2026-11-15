@@ -16414,3 +16414,20 @@ describe('ral-45e: a bool local handed to an OPTIONAL native-`bool` venue parame
         expect(text).toContain('Value::Bool(roundUp)');
     });
 });
+
+describe('ral-46e: a flag read off an Option<Market> local is a native bool', () => {
+    test('`isContract = firstMarket[\'contract\']` is bool (None reads false) and boxes once into the optional bool slot', () => {
+        const dir = path.join (rustFixtureRoot, 'opt-market-flag-46e');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Strings = string[] | undefined;\nexport interface MarketInterface { symbol: string; contract: boolean; type: string; [key: string]: any }\nexport type Market = MarketInterface | undefined;\nexport default class Exchange {\n    markets_by_id: Dict = undefined;\n    market (symbol: string): MarketInterface { return undefined; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    getMarketFromSymbols (symbols: Strings = undefined): Market {\n        if (symbols === undefined) {\n            return undefined;\n        }\n        const market = this.market (symbols[0]);\n        return market;\n    }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Market, Str, Strings } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    async subscribePublic (hashes: string[], isContract: boolean = false, params: Dict = {}): Promise<any> {\n        if (isContract) {\n            return hashes;\n        }\n        return params;\n    }\n    async watchTickers (symbols: Strings = undefined, params: Dict = {}): Promise<any> {\n        const firstMarket = this.getMarketFromSymbols (symbols);\n        const isContract = firstMarket['contract'];\n        return await this.subscribePublic ([ 'a' ], isContract, params);\n    }\n    async watchOther (symbols: Strings = undefined, params: Dict = {}): Promise<any> {\n        const firstMarket = this.getMarketFromSymbols (symbols);\n        const kind = firstMarket['type'];\n        return await this.subscribePublic ([ kind ], false, params);\n    }\n}\n");
+        const typed = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['market'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const out = typed.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut firstMarket: Option<crate::types::Market> = self.getMarketFromSymbols(');
+        expect(out).toMatch(/let (mut )?isContract: bool = firstMarket\.as_ref\(\)\.map_or\(false, \|__m\| __m\.contract\);/);
+        expect(out).toContain('Value::Bool(isContract), params');
+        expect(out).not.toContain('Value::Bool(Value::Bool(');
+        // negative: a non-flag key keeps the KeyRead box
+        expect(out).toMatch(/let mut kind: Value = crate::value::KeyRead::key_read\(&&firstMarket, "type"\)/);
+    });
+});

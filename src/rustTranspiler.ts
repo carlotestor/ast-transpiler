@@ -12450,6 +12450,15 @@ export class RustTranspiler extends BaseTranspiler {
             if (this.rustCurrencyLocalKind(currency) !== 'cstruct' || this.rustCurrencyKeyReadKey(node.expression) !== 'code') return undefined;
             return { kind: 'ostr', text: `crate::value::KeyRead::key_read(&&${this.printNode(currency.name, 0)}, "code").as_str().map(str::to_owned)` };
         }
+        // ral-46e: a flag read off an `Option<Market>` local (`getMarketFromSymbols`: undefined or a loaded market).
+        // The boxed `KeyRead` read was Null for `None` and the loaded market's own flag otherwise; every consumer of the
+        // old Value took its truthiness, so `None` reads `false` and a loaded market its `bool` field.
+        const optMarket = this.rustOptMarketLocalOf(node.expression);
+        if (optMarket !== undefined) {
+            const optKey = this.rustMarketReadKey(node.expression);
+            if (optKey === undefined || !RustTranspiler.RUST_MARKET_BOOL_FIELDS.has(optKey)) return undefined;
+            return { kind: 'bool', text: `${this.printNode(optMarket.name, 0)}.as_ref().map_or(false, |__m| __m.${optKey})` };
+        }
         const declaration = this.rustTypedMarketLocalOf(node.expression);
         const localKind = declaration === undefined ? false : this.rustMarketLocalKind(declaration);
         if (localKind !== 'struct' && localKind !== 'smkt') return undefined;
