@@ -3406,6 +3406,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustWsCacheFields;
     private rustWsCacheLocals;
     private rustWsCacheUses;
+    /** ral-56w: the one statement `x = this.filterBy* (x, ..)` of an optional cache local `x` (a watch result) whose
+     *  base filter answers a list on every path, at the declaration's own block level, `x` named once in the call:
+     *  it prints as a fresh `crate::value::List` local of the same name (a Rust shadow), so the cache local before it
+     *  and the list after it are two typed locals. Undefined when there is no such statement or a second write. */
+    rustWsCacheListSplit(declaration: any): any;
     /** `this.F` for a base field declared `ArrayCache | undefined`. */
     rustWsCacheField(node: any): boolean;
     /** `new ArrayCache*(..)` of a class declared in `base/ws/Cache.ts`. */
@@ -3582,6 +3587,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustWsWsParents;
     /** A pro venue that extends (through its abstract shim) another pro venue, or that another pro venue extends. */
     rustWsHasWsRelatives(file: string, at: number): boolean;
+    /** ral-56h: the resolve table across a ws class and its ws subclass (kucoin + kucoinfutures) equals the parent's
+     *  own table when the subclass adds no resolve and changes no ws path: every method of the subclass other than
+     *  `describe` / `describeData` is a REST-only method (no client, future, resolve, reject, spawn, delay, watch,
+     *  subscribe or handler token in its text, no field declaration) that the parent ws file never calls or names. */
+    rustWsRestOnlyChild(path: string, parentFile: string): boolean;
     /** A ws subclass whose only methods are `describe` / `describeData` adds no handler and no resolve. */
     rustWsDescribeOnly(path: string): boolean;
     /** The proven kind of an `await this.watch|watchMultiple (..)` initializer, else undefined. */

@@ -53579,6 +53579,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const { left, right } = node;
     const op = node.operatorToken.kind;
     const isAssign = op === SyntaxKind7.EqualsToken;
+    if (isAssign && isIdentifier3(left) && this.rustWsCacheUses.get(left) === "split") {
+      return `let mut ${super.printIdentifier(left)}: crate::value::List = ${this.printNode(right, 0).trim()}.into_list()`;
+    }
     if (isAssign && left.kind === SyntaxKind7.ArrayLiteralExpression) {
       const tmpName = "__destr_tmp";
       const rhs = this.printNode(right, 0);
@@ -75711,6 +75714,55 @@ ${iden}}`;
       return text;
     return `Value::from(${text})`;
   }
+  /** ral-56w: the one statement `x = this.filterBy* (x, ..)` of an optional cache local `x` (a watch result) whose
+   *  base filter answers a list on every path, at the declaration's own block level, `x` named once in the call:
+   *  it prints as a fresh `crate::value::List` local of the same name (a Rust shadow), so the cache local before it
+   *  and the list after it are two typed locals. Undefined when there is no such statement or a second write. */
+  rustWsCacheListSplit(declaration) {
+    if (!isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name))
+      return void 0;
+    const stmt = declaration.parent?.parent;
+    const block = stmt?.parent;
+    if (stmt?.kind !== SyntaxKind7.VariableStatement || block === void 0 || !isBlock4(block))
+      return void 0;
+    const fn = this.rustEnclosingFunction(declaration);
+    if (fn === void 0)
+      return void 0;
+    let split;
+    let writes = 0;
+    for (const r of this.rustScopeNameNodes(fn, String(declaration.name.text))) {
+      if (!isIdentifier3(r) || r === declaration.name || this.rustDeclarationOfIdentifier(r) !== declaration)
+        continue;
+      const p = r.parent;
+      if ((isPrefixUnaryExpression3(p) || p?.kind === SyntaxKind7.PostfixUnaryExpression) && p.operand === r)
+        return void 0;
+      if (!isBinaryExpression5(p) || p.left !== r || !rustIsAssignmentOperator(p.operatorToken.kind))
+        continue;
+      writes++;
+      const call = this.unwrapParens(p.right);
+      if (p.operatorToken.kind !== SyntaxKind7.EqualsToken || p.parent?.kind !== SyntaxKind7.ExpressionStatement || p.parent.parent !== block)
+        return void 0;
+      if (!isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+        return void 0;
+      const method = String(call.expression.name.text);
+      if (!method.startsWith("filterBy") || this.rustBaseFilterReturnKind(call, method) !== "list")
+        return void 0;
+      const first = this.unwrapParens(call.arguments[0]);
+      if (first === void 0 || !isIdentifier3(first) || this.rustDeclarationOfIdentifier(first) !== declaration)
+        return void 0;
+      let named = 0;
+      const visit = (x) => {
+        if (isIdentifier3(x) && this.rustDeclarationOfIdentifier(x) === declaration)
+          named++;
+        x.forEachChild?.(visit);
+      };
+      visit(call);
+      if (named !== 1)
+        return void 0;
+      split = p;
+    }
+    return writes === 1 ? split : void 0;
+  }
   /** `this.F` for a base field declared `ArrayCache | undefined`. */
   rustWsCacheField(node) {
     const n = this.unwrapParens(node);
@@ -75821,8 +75873,26 @@ ${iden}}`;
       const kind = slot ? this.rustWsTupleCacheSlot(declaration) ? "opt" : void 0 : init === void 0 ? void 0 : this.rustWsCacheField(init) || this.rustWsCacheOptSource(init, false) || this.rustWsWatchResultKind(init) === "cache" ? "opt" : this.rustWsCacheCtor(init) ? "cache" : void 0;
       if (kind !== void 0 && (slot || list?.kind === SyntaxKind7.VariableDeclarationList && list.declarations.length === 1)) {
         const forms = /* @__PURE__ */ new Map();
+        const split = kind === "opt" && !slot ? this.rustWsCacheListSplit(declaration) : void 0;
         const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
           const p = n.parent;
+          if (split !== void 0 && n === split.left) {
+            forms.set(n, "split");
+            return true;
+          }
+          if (split !== void 0 && n.pos >= split.parent.end) {
+            if (this.rustEnclosingFunction(n) !== this.rustEnclosingFunction(declaration))
+              return false;
+            if (isPropertyAccessExpression3(p) && p.expression === n && String(p.name.text) === "length" && !this.isNativeWriteTargetBase(p) && !(isBinaryExpression5(p.parent) && p.parent.left === p)) {
+              forms.set(n, "llen");
+              return true;
+            }
+            if (isReturnStatement4(p) && p.expression === n) {
+              forms.set(n, "lret");
+              return true;
+            }
+            return false;
+          }
           if ((isPropertyAccessExpression3(p) || p?.kind === SyntaxKind7.PropertyAssignment) && p.name === n)
             return true;
           if (kind === "opt" && isBinaryExpression5(p) && this.isEqualityOp(p.operatorToken.kind) && this.rustWsCacheUndefined(p.left === n ? p.right : p.left)) {
@@ -75937,6 +76007,8 @@ ${iden}}`;
   }
   printWsCacheLength(node) {
     const recv = node.expression;
+    if (isIdentifier3(recv) && this.rustWsCacheUses.get(recv) === "llen")
+      return this.printNativeLength(node, super.printIdentifier(recv));
     if (!isIdentifier3(recv) || this.rustWsCacheUses.get(recv) !== "len")
       return void 0;
     return `Value::Int(CacheSlot::size(&${super.printIdentifier(recv)}))`;
@@ -75960,9 +76032,11 @@ ${iden}}`;
   /** A use of a typed cache local: the handle itself, or boxed once at a `Value` hand-off. */
   printWsCacheLocalUse(node) {
     const form = this.rustWsCacheUses.get(node);
-    if (form === void 0 || form === "test" || form === "len")
+    if (form === void 0 || form === "test" || form === "len" || form === "split" || form === "llen")
       return void 0;
     const name = super.printIdentifier(node);
+    if (form === "lret")
+      return `Value::Arr(${name})`;
     if (form === "bare")
       return name;
     return `Value::from(&${name})`;
@@ -77169,9 +77243,41 @@ ${iden}}`;
     if (!parents.has(id) || parents.get(id) !== void 0)
       return true;
     for (const [child, p] of parents)
-      if (p === id && !this.rustWsDescribeOnly(`${root}/pro/${child}.ts`))
+      if (p === id && !this.rustWsDescribeOnly(`${root}/pro/${child}.ts`) && !this.rustWsRestOnlyChild(`${root}/pro/${child}.ts`, file))
         return true;
     return false;
+  }
+  /** ral-56h: the resolve table across a ws class and its ws subclass (kucoin + kucoinfutures) equals the parent's
+   *  own table when the subclass adds no resolve and changes no ws path: every method of the subclass other than
+   *  `describe` / `describeData` is a REST-only method (no client, future, resolve, reject, spawn, delay, watch,
+   *  subscribe or handler token in its text, no field declaration) that the parent ws file never calls or names. */
+  rustWsRestOnlyChild(path4, parentFile) {
+    let text;
+    let parent;
+    try {
+      text = fs3.readFileSync(path4, "utf8");
+      parent = fs3.readFileSync(parentFile, "utf8");
+    } catch (e) {
+      return false;
+    }
+    const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "").replace(/'(?:[^'\\\n]|\\.)*'/g, "''");
+    const body = text.slice(text.indexOf("export default class"));
+    if (/^ {4}(?:(?:public|private|protected|static|override|readonly) +)*[A-Za-z_$][\w$]* *[:=]/m.test(body))
+      return false;
+    const heads = [...body.matchAll(/^ {4}(?:(?:public|private|protected|static|override|async|get|set) +)*([A-Za-z_$][\w$]*) *[(<]/gm)];
+    if (heads.length === 0)
+      return false;
+    for (let i = 0; i < heads.length; i++) {
+      const name = heads[i][1];
+      if (name === "describe" || name === "describeData")
+        continue;
+      const seg = strip(body.slice(heads[i].index, i + 1 < heads.length ? heads[i + 1].index : void 0));
+      if (/\b(?:client|Client|futures?|reusableFuture|resolve|reject|spawn|delay|subscriptions|cleanUnsubscription|loadOrderBook|orderbooks?|watch\w*|unWatch\w*|subscribe\w*|handle(?!\w*AndParams)\w*|messageHash\w*)\b/.test(seg))
+        return false;
+      if (new RegExp(`\\b${name.replace(/\$/g, "\\$")}\\b`).test(strip(parent)))
+        return false;
+    }
+    return true;
   }
   /** A ws subclass whose only methods are `describe` / `describeData` adds no handler and no resolve. */
   rustWsDescribeOnly(path4) {
@@ -77391,6 +77497,8 @@ ${iden}}`;
       if (up?.kind === SyntaxKind7.PropertyAssignment && up.initializer === n)
         continue;
       if (isBinaryExpression5(up) && up.operatorToken.kind === SyntaxKind7.EqualsEqualsEqualsToken)
+        continue;
+      if (isCallExpression6(up) && up.arguments[0] === n && isPropertyAccessExpression3(up.expression) && up.expression.expression.kind === SyntaxKind7.ThisKeyword && String(up.expression.name.text) === "safeString")
         continue;
       if (isConditionalExpression4(up) && up.condition !== n && isVariableDeclaration3(up.parent) && up.parent.initializer === up && this.rustWsListParamReadOnly(up.parent, method))
         continue;
