@@ -18892,3 +18892,20 @@ describe('ral-56e: an element read out of a List element borrows the element (&V
         expect(b).toContain('let mut entry: Value = ');
     });
 });
+
+describe('ral-56e: a literal-index element of a venue number[] list built from int counters is Option<i64>', () => {
+    const run = (name: string, venue: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    id: string;\n    pick (x: any): any { return x; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), venue);
+        return new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } }).transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    const venue = (push: string) => "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n    first (channels: string[]): any {\n        const missing = this.missingOf (channels);\n        if (missing.length === 0) {\n            return undefined;\n        }\n        const index = missing[0];\n        return this.pick (channels[index]);\n    }\n\n    missingOf (channels: string[]): number[] {\n        const result: number[] = [];\n        for (let i = 0; i < channels.length; i++) {\n            if (channels[i] === 'x') {\n                result.push (" + push + ");\n            }\n        }\n        return result;\n    }\n}\n";
+    test('index = missing[0] is Option<i64>', () => {
+        expect(run ('ral56e-intlist-a', venue ('i'))).toContain('let mut index: Option<i64> = missing.get(0).and_then(Value::as_i64);');
+    });
+    test('a list that also pushes a non-counter keeps index Value', () => {
+        expect(run ('ral56e-intlist-b', venue ('channels.length'))).toContain('let mut index: Value = ');
+    });
+});

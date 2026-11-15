@@ -6070,8 +6070,43 @@ export class RustTranspiler extends BaseTranspiler {
         if (listType !== undefined && this.rustConstTupleStrSlotRead(node, owner, listType)) return 'ostr';
         if (listType === undefined || !this.getChecker().isArrayType(listType)) return undefined;
         if (this.primitiveKindOfType(this.typeOfNodeIfAny(node)) === 'string') return 'ostr';
+        if (this.rust56eIntListVenueElem(node, owner)) return 'oint';
         // xg: a declaration's `xs[i]` off an untyped / `any[]` local list whose every write is a push of a string proves a string
         return this.rustAnyStrPushElem(node) ? 'ostr' : undefined;
+    }
+
+    /** ral-56e: `const xs = this.m (..)` where `m` is a method of the same class declared `number[]` whose body builds
+     *  one `const r: number[] = []` filled only by `r.push (i)` of a plain int for-counter and answers `return r`; a
+     *  declaration's literal-index `xs[k]` is then an `Int` or (out of range) `Null`: `Option<i64>`. Non-test sources. */
+    rust56eIntListVenueElem(node: any, owner: any): boolean {
+        if (!isVariableDeclaration(owner) || (owner.parent?.flags & NodeFlags.Const) === 0 || this.rustTestTierSource(node)) return false;
+        if (!isNumericLiteral(this.unwrapParens(node.argumentExpression))) return false;
+        let top: any = node;
+        while (top.parent !== undefined && isParenthesizedExpression(top.parent)) top = top.parent;
+        if (!isVariableDeclaration(top.parent) || top.parent.initializer !== top) return false;
+        const call: any = this.unwrapParens(owner.initializer);
+        if (call === undefined || !isCallExpression(call) || !isPropertyAccessExpression(call.expression) || call.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
+        const method: any = symbolDeclarations(this.getChecker().getSymbolAtLocation(call.expression.name))[0];
+        if (method === undefined || !isMethodDeclaration(method) || method.getSourceFile() !== node.getSourceFile() || method.body === undefined) return false;
+        if (method.type === undefined || method.type.getText?.()?.replace(/\s+/g, '') !== 'number[]') return false;
+        const statements: any[] = Array.from(method.body.statements);
+        const last: any = statements[statements.length - 1];
+        if (last === undefined || !isReturnStatement(last) || last.expression === undefined || !isIdentifier(last.expression)) return false;
+        const result: any = this.rustDeclaredNode(last.expression);
+        if (result === undefined || !isVariableDeclaration(result) || !isIdentifier(result.name) || this.rustEnclosingFunction(result) !== method) return false;
+        const init: any = this.unwrapParens(result.initializer);
+        if (init === undefined || !isArrayLiteralExpression(init) || init.elements.length !== 0) return false;
+        let returns = 0;
+        const ok = this.rustLocalUsesAll(result, String(result.name.text), true, (n: any) => {
+            const up: any = n.parent;
+            if (isReturnStatement(up) && up === last) { returns++; return true; }
+            if (!isPropertyAccessExpression(up) || up.expression !== n || String(up.name.text) !== 'push') return false;
+            const c: any = up.parent;
+            if (!isCallExpression(c) || c.expression !== up || c.arguments.length !== 1) return false;
+            const arg: any = this.unwrapParens(c.arguments[0]);
+            return isIdentifier(arg) && this.rustValueIntCounter(arg);
+        });
+        return ok && returns === 1;
     }
 
     /** ral-53f: `const t = this.m (..); const x = t[0]` where `t` is a const tuple local (a declared `[string, Str, Dict]`
@@ -9112,6 +9147,12 @@ export class RustTranspiler extends BaseTranspiler {
             const read = this.printNode(node, 0).trim();
             const tail = '.cloned().unwrap_or(Value::Null)';
             return read.endsWith(tail) ? `${read.slice(0, -tail.length)}.and_then(Value::as_bool)` : undefined;
+        }
+        // ral-56e: the literal-index element of a venue int list (`Int` or `Null`)
+        if (kind === 'oint' && this.rustElementReadScalarKind(node) === 'oint') {
+            const read = this.printNode(node, 0).trim();
+            const tail = '.cloned().unwrap_or(Value::Null)';
+            return read.endsWith(tail) ? `${read.slice(0, -tail.length)}.and_then(Value::as_i64)` : undefined;
         }
         const cast = this.rustStrCastCall(node); if (cast !== undefined) return kind === 'ostr' ? this.rustScalarNativeText(kind, cast) : undefined;
         const venueTyped = this.rustVenueTypedText(kind, node); if (venueTyped !== undefined) return venueTyped;
