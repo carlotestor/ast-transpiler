@@ -56171,7 +56171,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if ((boxed > 0 && !this.rustNumParamBoxesOnly(declaration) || expressionUses && !this.rustCompareOnlyNumUses(declaration)) && this.rustReaderIntDefaultNum(declaration.initializer))
       return void 0;
     const readerTouched = this.rustReaderDefaultTouched(declaration);
-    const readerLent = readerTouched && strKind && boxed > 0 && copied > 0 && !this.rustStrNoLend && (this.rustReaderLendBoxes(declaration) || kind === "ostr" && !this.rustTestTierSource(declaration) && this.rustReaderLendBoxes(declaration, true, false, true));
+    const readerLent = readerTouched && strKind && boxed > 0 && copied > 0 && !this.rustStrNoLend && (this.rustReaderLendBoxes(declaration) || kind === "ostr" && !this.rustTestTierSource(declaration) && this.rustReaderLendBoxes(declaration, true, false, true) || kind === "ostr" && !this.rustTestTierSource(declaration) && this.rustSafeCurrencyCodeInit(declaration.initializer) && this.rustReaderLendBoxes(declaration, true));
     if (readerTouched && strKind && (boxed > 0 && copied > 0 && !readerLent || this.rustReaderStrHandedOn(declaration)))
       return void 0;
     if (readerLent)
@@ -61107,7 +61107,7 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
         return this.rustStrVarNeedle(args[0], method === "includes") === void 0 ? void 0 : { recv, recvKind, method, kind: "bool" };
       if (shape === "vfind")
         return this.rustStrFindNeedle(args[0], false) === void 0 ? void 0 : { recv, recvKind, method, kind: "int" };
-      return args.every((a) => this.rustStrReplaceOperand(a) !== void 0) ? { recv, recvKind, method, kind: recvKind } : void 0;
+      return args.every((a) => this.rustStrReplaceOperand(a) !== void 0) || this.rust58kOptReplaceArgs(args) !== void 0 ? { recv, recvKind, method, kind: recvKind } : void 0;
     }
     if (shape === "find")
       return this.rustStrFindNeedle(args[0], false) === void 0 ? void 0 : { recv, recvKind, method, kind: "int" };
@@ -61190,6 +61190,24 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
     if (lit !== void 0)
       return inner.text === "" && !empty ? void 0 : `Some("${lit}")`;
     return this.rustStrFindNeedle(inner, false);
+  }
+  /** ral-58k: `x.replace (o, to)` where exactly one operand `o` is an `Option<String>` local (decided from the AST: a typed
+   *  string identifier) and the other a never-`Null` operand. The boxed form answered the receiver itself when `o` was `Null`
+   *  (`recv.as_str().zip(o.as_deref()).map(..).unwrap_or_else(|| recv.clone())`): the native form keeps that arm. */
+  rust58kOptReplaceArgs(args) {
+    if (args.length !== 2)
+      return void 0;
+    const opt = (a) => {
+      const inner = this.unwrapParens(a);
+      return _is.isIdentifier.call(void 0, inner) && inner.text !== "undefined" && this.rustScalarIdentifierKind(inner) === "ostr" && !this.rust41bWsKeyLocal(inner) ? inner : void 0;
+    };
+    for (const index of [0, 1]) {
+      const o = opt(args[index]);
+      const other = this.rustStrReplaceOperand(args[1 - index]);
+      if (o !== void 0 && other !== void 0)
+        return { index, opt: `${super.printIdentifier(o)}.as_deref()`, other };
+    }
+    return void 0;
   }
   /** 41b: a replace operand that is never `Null`: a string literal or a `String` local (`&str` text). */
   rustStrReplaceOperand(node) {
@@ -62467,6 +62485,13 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
         return wrap(this.rustStrPadSliceText(method.method, args, name));
       }
       if ((method.method === "replace" || method.method === "replaceAll") && !args.every((a) => this.rustNativeStringLiteralArg(a) !== void 0)) {
+        const optArgs = args.every((a) => this.rustStrReplaceOperand(a) !== void 0) ? void 0 : this.rust58kOptReplaceArgs(args);
+        if (optArgs !== void 0) {
+          const [f, r] = optArgs.index === 0 ? ["__o", optArgs.other] : [optArgs.other, "__o"];
+          if (method.recvKind === "ostr")
+            return wrap(`(if let (Some(__s), Some(__o)) = (${name}.as_deref(), ${optArgs.opt}) { Some(__s.replace(${f}, ${r})) } else { ${name}.clone() })`);
+          return wrap(`(if let Some(__o) = ${optArgs.opt} { ${name}.replace(${f}, ${r}) } else { ${name}.clone() })`);
+        }
         const [from, to] = args.map((a) => this.rustStrReplaceOperand(a));
         if (method.recvKind === "ostr")
           return wrap(`(if let Some(__s) = ${name}.as_deref() { Some(__s.replace(${from}, ${to})) } else { None })`);

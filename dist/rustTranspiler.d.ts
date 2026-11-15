@@ -1415,6 +1415,14 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** 41b: an affix / includes needle as `Option<&str>`: any string literal (an empty one included when `empty`), a typed string local
      *  or a string-typed `Value` expression (`None` for `Null`: the helper answers `false`). */
     rustStrVarNeedle(node: any, empty: boolean): string | undefined;
+    /** ral-58k: `x.replace (o, to)` where exactly one operand `o` is an `Option<String>` local (decided from the AST: a typed
+     *  string identifier) and the other a never-`Null` operand. The boxed form answered the receiver itself when `o` was `Null`
+     *  (`recv.as_str().zip(o.as_deref()).map(..).unwrap_or_else(|| recv.clone())`): the native form keeps that arm. */
+    rust58kOptReplaceArgs(args: any[]): {
+        index: number;
+        opt: string;
+        other: string;
+    } | undefined;
     /** 41b: a replace operand that is never `Null`: a string literal or a `String` local (`&str` text). */
     rustStrReplaceOperand(node: any): string | undefined;
     /** ral-55x K1: `Value::Str(format!(..).into())` -> the `format!(..)` itself, when that macro call spans the whole box. */
