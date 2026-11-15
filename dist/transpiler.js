@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -70553,6 +70553,12 @@ ${iden}}`;
       return up.initializer === n;
     if (isReturnStatement4(up) && up.expression === n)
       return true;
+    if (isAsExpression3(up) && up.expression === n && isReturnStatement4(up.parent) && up.parent.expression === up)
+      return true;
+    if (isConditionalExpression4(up) && up.condition !== n && isVariableDeclaration3(up.parent) && up.parent.initializer === up && isIdentifier3(up.parent.name) && this.rustDictTernaryArmPlace(n, this.rustDeclarationOfIdentifier(n))) {
+      const target = up.parent;
+      return this.rustBorrowedLocalKind(target) === void 0 && this.rustScalarLocalKind(target) === void 0 && this.rustNilLocalKind(target) === void 0 && !this.rustDictLocalIsTyped(target) && !this.rustVecLocalIsTyped(target) && this.rustMarketLocalKind(target) === false;
+    }
     if (up.kind === SyntaxKind7.ArrayLiteralExpression)
       return !this.rustInDestructureWrite(n);
     if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && (isElementAccessExpression4(up.left) || isPropertyAccessExpression3(up.left)) && (this.rustThisRootedPlace(up.left) || this.rustLocalKeyPlace(up.left, n)))
