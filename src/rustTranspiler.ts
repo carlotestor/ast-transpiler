@@ -19409,6 +19409,9 @@ export class RustTranspiler extends BaseTranspiler {
         // ral-qc: `omit` drops keys from a proven map head (copy-on-write when the head is shared), so it answers a map;
         // its key list prints ~22 chars wider per literal, and the typed line must stay within the 400-char budget
         if (method === 'omit') return !this.rustTestTierSource(call) && this.rustOmitOfDict(call) && this.rustOmitLineFits(call) ? 'dict' : undefined;
+        // ral-41h: base `keysort` rebuilds a map input as a fresh sorted map (exchange_stubs.rs keysort: `Value::Dict(m)` ->
+        // `Value::Map(out)`) and hands any other input back as it came: a map only when its one operand is a proven map
+        if (method === 'keysort') return !this.rustTestTierSource(call) && call.arguments.length === 1 && this.rustCalleeIsRuntimeBase(call) && this.rustKeysortOfDict(call) && this.rustOmitLineFits(call) ? 'dict' : undefined;
         // `sortBy*` hands a non-list input back as it came: a list only when its input is one (the Arr-only proof)
         if (method === 'sortBy' || method === 'sortBy2') return !this.rustTestTierSource(call) && (this.extraArrSource(call) || this.rustSortOfTypedList(call)) ? 'list' : undefined;
         if (/^(?:safe|extend$|deepExtend$|omit$|keysort$|parseJson$|watch|subscribe|unsubscribe|market$|currency$)/.test(method)) return undefined;
@@ -19559,6 +19562,18 @@ export class RustTranspiler extends BaseTranspiler {
     /** A base `this.omit (x, keys)` whose head always holds a map: a literal, a built map (`extend`, ..) or a local that
      *  prints the shared map. A `Dict`-typed parameter is not enough: a list body (`Array.isArray (params)` in `sign`)
      *  passes `omit` unchanged, and `into_dict()` would turn it into an empty map. */
+    /** ral-41h: the one operand of `this.keysort (x)` is a proven map (the same head proof `omit` takes). */
+    rustKeysortOfDict(call: any): boolean {
+        const head: any = this.rustSkipWrappers(call.arguments[0]);
+        if (head === undefined) return false;
+        if (isObjectLiteralExpression(head)) return this.rustPlainDictLiteral(head);
+        if (isCallExpression(head)) return this.rustBuiltReturnSourceKind(head) === 'dict' || this.rustOmitOfDict(head);
+        if (!isIdentifier(head)) return false;
+        const d: any = this.rustDeclarationOfIdentifier(head);
+        if (d === undefined || d === head || d.name === head) return this.rustTypedParamsParam(d);
+        return this.rustTypedParamsParam(d) || this.rustHandedDictLocal(d) || (this.rustBorrowedLocalKind(d) === 'dict' && !this.rustOptContainerLocals.has(d));
+    }
+
     rustOmitOfDict(init: any): boolean {
         if (!this.rustBaseCallNamed(init, RustTranspiler.RUST_HANDED_DICT_OMIT) || init.arguments.length !== 2) return false;
         const head: any = this.rustSkipWrappers(init.arguments[0]);

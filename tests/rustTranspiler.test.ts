@@ -14973,3 +14973,22 @@ describe('ral-41h: index reads on a held container: chained element reads and pa
         expect(out).not.toContain('let mut objectsValue: crate::value::List = ');
     });
 });
+
+describe('ral-41h: keysort of a proven map is a built map', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    keysort (o: any): any { return o; }\n    omit (o: any, k: any): any { return o; }\n    rawencode (o: any): string { return ''; }\n    keep (p: any): any { return p; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n";
+    const run = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('keysort of an inline omit of a literal map holds the sorted Dict', () => {
+        const out = run ('r41h-keysort', "    a (id: string) {\n        const sorted = this.keysort (this.omit ({ 'b': 1, 'a': id }, 'c'));\n        return this.rawencode (sorted);\n    }\n");
+        expect(out).toContain('let mut sorted: crate::value::Dict = ');
+    });
+    test('negative: keysort of an untyped operand stays boxed (a non-map passes through)', () => {
+        const out = run ('r41h-keysort-any', "    b (x: any) {\n        const sorted = this.keysort (x);\n        return this.rawencode (sorted);\n    }\n");
+        expect(out).not.toContain('let mut sorted: crate::value::Dict = ');
+    });
+});

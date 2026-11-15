@@ -2730,6 +2730,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A base `this.omit (x, keys)` whose head always holds a map: a literal, a built map (`extend`, ..) or a local that
      *  prints the shared map. A `Dict`-typed parameter is not enough: a list body (`Array.isArray (params)` in `sign`)
      *  passes `omit` unchanged, and `into_dict()` would turn it into an empty map. */
+    /** ral-41h: the one operand of `this.keysort (x)` is a proven map (the same head proof `omit` takes). */
+    rustKeysortOfDict(call: any): boolean;
     rustOmitOfDict(init: any): boolean;
     /** `this.deepExtend (m, p, ..)` whose every operand is a proven map: a tag-free literal, a built map, an omit of a
      *  proven map, or the `params` of a typed unified method. The runtime then merges map into map on every path. */

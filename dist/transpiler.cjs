@@ -70612,6 +70612,8 @@ ${iden}}`;
       return this.rustDeepExtendOfMaps(call) ? "dict" : void 0;
     if (method === "omit")
       return !this.rustTestTierSource(call) && this.rustOmitOfDict(call) && this.rustOmitLineFits(call) ? "dict" : void 0;
+    if (method === "keysort")
+      return !this.rustTestTierSource(call) && call.arguments.length === 1 && this.rustCalleeIsRuntimeBase(call) && this.rustKeysortOfDict(call) && this.rustOmitLineFits(call) ? "dict" : void 0;
     if (method === "sortBy" || method === "sortBy2")
       return !this.rustTestTierSource(call) && (this.extraArrSource(call) || this.rustSortOfTypedList(call)) ? "list" : void 0;
     if (/^(?:safe|extend$|deepExtend$|omit$|keysort$|parseJson$|watch|subscribe|unsubscribe|market$|currency$)/.test(method))
@@ -70752,6 +70754,22 @@ ${iden}}`;
   /** A base `this.omit (x, keys)` whose head always holds a map: a literal, a built map (`extend`, ..) or a local that
    *  prints the shared map. A `Dict`-typed parameter is not enough: a list body (`Array.isArray (params)` in `sign`)
    *  passes `omit` unchanged, and `into_dict()` would turn it into an empty map. */
+  /** ral-41h: the one operand of `this.keysort (x)` is a proven map (the same head proof `omit` takes). */
+  rustKeysortOfDict(call) {
+    const head = this.rustSkipWrappers(call.arguments[0]);
+    if (head === void 0)
+      return false;
+    if (_is.isObjectLiteralExpression.call(void 0, head))
+      return this.rustPlainDictLiteral(head);
+    if (_is.isCallExpression.call(void 0, head))
+      return this.rustBuiltReturnSourceKind(head) === "dict" || this.rustOmitOfDict(head);
+    if (!_is.isIdentifier.call(void 0, head))
+      return false;
+    const d = this.rustDeclarationOfIdentifier(head);
+    if (d === void 0 || d === head || d.name === head)
+      return this.rustTypedParamsParam(d);
+    return this.rustTypedParamsParam(d) || this.rustHandedDictLocal(d) || this.rustBorrowedLocalKind(d) === "dict" && !this.rustOptContainerLocals.has(d);
+  }
   rustOmitOfDict(init) {
     if (!this.rustBaseCallNamed(init, _RustTranspiler.RUST_HANDED_DICT_OMIT) || init.arguments.length !== 2)
       return false;
