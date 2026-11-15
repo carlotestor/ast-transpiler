@@ -72058,6 +72058,7 @@ ${iden}}`;
     let aliasBoxes = 0;
     let optAliasWrites = 0;
     let sameKindWrites = 0;
+    let selfOmitWrites = 0;
     const boxedElementUses = [];
     const indexReadUses = [];
     const aeoWriteUses = [];
@@ -72117,6 +72118,8 @@ ${iden}}`;
           return ++nullWrites > 0;
         if (nilDeclared && String(_nullishCoalesce(_optionalChain([fn, 'optionalAccess', _9993 => _9993.name, 'optionalAccess', _9994 => _9994.text]), () => ( ""))) !== "sign" && this.rustHandedSelfOmit(rhs, declaration) && this.rustOmitLineFits(rhs) && String(rhs.getText()).split("\n")[0].length <= 240)
           return true;
+        if (!nilDeclared && from === "dict" && this.rustHandedSelfOmit(rhs, declaration) && this.rustOmitLineFits(rhs) && String(rhs.getText()).split("\n")[0].length <= 240)
+          return reuseProducerWrites.push(up) > 0 && ++selfOmitWrites > 0 && ++sameKindWrites > 0;
         if (!nilDeclared && (from === "dict" || from === "list") && this.rustSameKindRewrite(rhs, from))
           return (this.rustSelfExtendWrite(n, declaration) ? ++sameKindWrites : 1) > 0 && String(rhs.getText()).split("\n")[0].length <= 240;
         const aliasKind = nilDeclared ? this.rustOptAliasSourceKind(rhs, fn) : void 0;
@@ -72264,7 +72267,10 @@ ${iden}}`;
     if ((keyReads > 0 || init !== void 0 && _is.isCallExpression.call(void 0, init) && this.rustRecordLookupSource(init)) && !this.rustEcdsaCall(init) && !this.rustDictKeyReadLineOk(declaration, name))
       return void 0;
     const zgRow = this.rustZgSiblingRows.has(declaration) && boxedElementUses.length > 0;
-    const neverNullRewrites = writes > 0 && writes === sameKindWrites && from === "dict" && init !== void 0 && this.rustContainerInitNeverNull(init, "map");
+    const omitInitRewrites = writes > 0 && writes === sameKindWrites && from === "dict" && init !== void 0 && !this.rustContainerInitNeverNull(init, "map") && this.rustOmitOfDict(init);
+    if ((selfOmitWrites > 0 || omitInitRewrites) && this.rustHandedDictLocal(declaration))
+      return void 0;
+    const neverNullRewrites = writes > 0 && writes === sameKindWrites && from === "dict" && init !== void 0 && (this.rustContainerInitNeverNull(init, "map") || omitInitRewrites);
     const optional = nilDeclared || nullTests > 0 || writes > 0 && !neverNullRewrites || lentNullable > 0 || optionalBoxes > 0 || zgRow || elementKeyWrites > 0 || optMapInit;
     if (jwtLends > 0 && optional)
       return void 0;
