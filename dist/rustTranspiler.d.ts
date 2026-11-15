@@ -348,6 +348,16 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  list for `Null`), and `parts` borrows its element (`lvl.get(K).unwrap_or(&Value::Null)`): the same element
      *  `get_value` cloned, `Null` where it answered `Null`. */
     printRust57eSideLevel(declaration: any, parsedValue: string, indent: string, varName: string): string | undefined;
+    /** ral-58e: `const e = xs[k]` where `xs` is a typed `Vec<Value>` local of the same function (rustVecLocalDeclarationOf)
+     *  that no earlier container arm claims (read bearer, opt list, lent list, param shadow), so its element read is the
+     *  slice read `xs.get(K).cloned().unwrap_or(Value::Null)`. When `xs` is only read and every use of `e` is the receiver of
+     *  an rvalue element read at a numeric literal key, `e` borrows the element instead
+     *  (`xs.get(K).unwrap_or(&Value::Null)`): the same element, `Null` where the clone was `Null`. Decided on the AST and the
+     *  printer's own Vec decision; nothing is read back from printed text. */
+    printRust58eBorrowedElement(declaration: any, indent: string, varName: string): string | undefined;
+    rust58eBorrowedElementLocal(declaration: any): boolean;
+    /** Which arm of printNativeContainerAccess prints `xs[k]` as a slice read: a read-only list bearer, or a typed Vec local. */
+    rust58eBorrowedElementArm(declaration: any): 'bearer' | 'vec' | undefined;
     private rust57eSideLevels;
     rust57eSideLevelLocal(declaration: any): boolean;
     rust57eSideLevelLocalUncached(declaration: any): boolean;
