@@ -2205,6 +2205,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     printEndsWithCall(node: any, identation: any, name?: any, parsedArg?: any): string;
     printTrimCall(node: any, identation: any, name?: any): string;
     printJoinCall(node: any, identation: any, name?: any, parsedArg?: any): string;
+    /** ral-42f: `parts.join('-')` where `parts` is a never-reassigned local `this.arraySlice(<string[] local>, ..)`: every element is a
+     *  `Value::Str`, so the helper's stringify is the identity (the form ccxt rustStringNatives printed after the fact). */
+    printStrSliceJoin(node: any): string | undefined;
     printSplitCall(node: any, identation: any, name?: any, parsedArg?: any): string;
     printConcatCall(node: any, identation: any, name?: any, parsedArg?: any): string;
     printToFixedCall(node: any, identation: any, name?: any, parsedArg?: any): string;

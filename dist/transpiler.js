@@ -67057,7 +67057,28 @@ ${this.getIden(identation)}}`;
     return this.printTrim(node, name) ?? `trim(&${name})`;
   }
   printJoinCall(node, identation, name = void 0, parsedArg = void 0) {
-    return this.printOptListJoin(node) ?? this.printLentListJoin(node) ?? this.printStrVecParamJoin(node) ?? this.printVecJoin(node) ?? this.printNativeStringJoin(node, name) ?? `join(&${name}, &${parsedArg})`;
+    return this.printOptListJoin(node) ?? this.printLentListJoin(node) ?? this.printStrVecParamJoin(node) ?? this.printVecJoin(node) ?? this.printNativeStringJoin(node, name) ?? this.printStrSliceJoin(node) ?? `join(&${name}, &${parsedArg})`;
+  }
+  /** ral-42f: `parts.join('-')` where `parts` is a never-reassigned local `this.arraySlice(<string[] local>, ..)`: every element is a
+   *  `Value::Str`, so the helper's stringify is the identity (the form ccxt rustStringNatives printed after the fact). */
+  printStrSliceJoin(node) {
+    const access = node?.expression;
+    if (!isPropertyAccessExpression3(access) || !isIdentifier3(access.expression) || node.arguments?.length !== 1)
+      return void 0;
+    const literal2 = this.rustNativeStringLiteralArg(node.arguments[0]);
+    const declaration = this.rustDeclaredNode(access.expression);
+    if (literal2 === void 0 || declaration === void 0 || !isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name) || this.rustLocalReassigned(declaration))
+      return void 0;
+    const init = this.unwrapParens(declaration.initializer);
+    if (init === void 0 || !isCallExpression6(init) || !isPropertyAccessExpression3(init.expression) || init.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(init.expression.name.text) !== "arraySlice" || init.arguments.length < 1)
+      return void 0;
+    const source = this.unwrapParens(init.arguments[0]);
+    const checker = this.checkerOrUndefined();
+    const type = source !== void 0 && isIdentifier3(source) ? this.typeOfNodeIfAny(source) : void 0;
+    if (checker === void 0 || type === void 0 || !checker.isArrayType(type) || this.primitiveKindOfType(checker.getTypeArguments?.(type)?.[0]) !== "string")
+      return void 0;
+    const name = this.printNode(access.expression, 0).trim();
+    return `Value::str(${name}.as_array().cloned().unwrap_or_default().iter().filter_map(Value::as_str).collect::<Vec<_>>().join("${literal2}"))`;
   }
   printSplitCall(node, identation, name = void 0, parsedArg = void 0) {
     return this.rustStrLocalSplitText(node) ?? this.printNativeStringSplit(node, name) ?? this.printRustSplit(node, name) ?? `split(&${name}, &${parsedArg})`;

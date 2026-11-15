@@ -15353,3 +15353,14 @@ describe('ral-42f: a bool-literal-only local reads natively in a printer bool sl
         expect(out).not.toContain('stock.as_bool() == Some(true) ||');
     });
 });
+
+describe('ral-42f: join of an arraySlice of a string[] local prints natively (rustStringNatives moved into the printer)', () => {
+    test('`parts = this.arraySlice(split, 0, n - 1); parts.join(\'-\')` joins the Str elements without the helper', () => {
+        const out = transpiler.transpileRust("class X {\n    arraySlice (a: any, f: any, s: number = undefined) { return a; }\n    f (t: string) {\n        const eventParts = t.split ('-');\n        const n = eventParts.length;\n        const seriesParts = this.arraySlice (eventParts, 0, n - 1);\n        const s = seriesParts.join ('-');\n        return s;\n    }\n}").content;
+        expect(out).toContain('seriesParts.as_array().cloned().unwrap_or_default().iter().filter_map(Value::as_str).collect::<Vec<_>>().join(\"-\")');
+    });
+    test('negative: a slice of an any-typed list keeps the helper', () => {
+        const out = transpiler.transpileRust("class X {\n    arraySlice (a: any, f: any, s: number = undefined) { return a; }\n    f (t: any) {\n        const seriesParts = this.arraySlice (t, 0, 1);\n        const s = seriesParts.join ('-');\n        return s;\n    }\n}").content;
+        expect(out).toContain('join(&seriesParts');
+    });
+});

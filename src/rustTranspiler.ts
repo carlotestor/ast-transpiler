@@ -15877,7 +15877,27 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     printJoinCall(node, identation, name = undefined, parsedArg = undefined) {
-        return this.printOptListJoin(node) ?? this.printLentListJoin(node) ?? this.printStrVecParamJoin(node) ?? this.printVecJoin(node) ?? this.printNativeStringJoin(node, name) ?? `join(&${name}, &${parsedArg})`;
+        return this.printOptListJoin(node) ?? this.printLentListJoin(node) ?? this.printStrVecParamJoin(node) ?? this.printVecJoin(node) ?? this.printNativeStringJoin(node, name)
+            ?? this.printStrSliceJoin(node) ?? `join(&${name}, &${parsedArg})`;
+    }
+
+    /** ral-42f: `parts.join('-')` where `parts` is a never-reassigned local `this.arraySlice(<string[] local>, ..)`: every element is a
+     *  `Value::Str`, so the helper's stringify is the identity (the form ccxt rustStringNatives printed after the fact). */
+    printStrSliceJoin(node): string | undefined {
+        const access: any = node?.expression;
+        if (!isPropertyAccessExpression(access) || !isIdentifier(access.expression) || node.arguments?.length !== 1) return undefined;
+        const literal = this.rustNativeStringLiteralArg(node.arguments[0]);
+        const declaration: any = this.rustDeclaredNode(access.expression);
+        if (literal === undefined || declaration === undefined || !isVariableDeclaration(declaration) || !isIdentifier(declaration.name) || this.rustLocalReassigned(declaration)) return undefined;
+        const init: any = this.unwrapParens(declaration.initializer);
+        if (init === undefined || !isCallExpression(init) || !isPropertyAccessExpression(init.expression) || init.expression.expression.kind !== SyntaxKind.ThisKeyword
+            || String(init.expression.name.text) !== 'arraySlice' || init.arguments.length < 1) return undefined;
+        const source: any = this.unwrapParens(init.arguments[0]);
+        const checker: any = this.checkerOrUndefined();
+        const type: any = source !== undefined && isIdentifier(source) ? this.typeOfNodeIfAny(source) : undefined;
+        if (checker === undefined || type === undefined || !checker.isArrayType(type) || this.primitiveKindOfType(checker.getTypeArguments?.(type)?.[0]) !== 'string') return undefined;
+        const name = this.printNode(access.expression, 0).trim();
+        return `Value::str(${name}.as_array().cloned().unwrap_or_default().iter().filter_map(Value::as_str).collect::<Vec<_>>().join("${literal}"))`;
     }
 
     printSplitCall(node, identation, name = undefined, parsedArg = undefined) {
