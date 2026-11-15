@@ -3079,6 +3079,9 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  value, so the shared container is boxed there once (moved at its last use, else the Arc bump the `Value` paid). */
     rustLocalKeyPlace(place: any, n: any): boolean;
     rustOptReaderBoxUse(n: any, init: any): boolean;
+    /** ral-55h: `n` is a handler argument (not the `this` receiver slot) of `h.call (this, ..)` on an identifier `h` typed
+     *  `any` (the by-name ws dispatch the ccxt build turns into `self.dispatch_ws_handler(&h, &[..])`). */
+    rustWsDispatchCallArg(n: any): boolean;
     rustBorrowedKeySetUse(n: any): boolean;
     /** The key operand of `k in m`: a literal as `"k"`, else the boxed key text `bearerInOp` tests. */
     rustBorrowedInOpKey(key: any): {
@@ -3494,6 +3497,13 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  field takes the elements of its array literals. Any other write of the key is an unknown hash. */
     rustWsSubscriptionKeyPatterns(at: any, key: string, element: boolean, depth: number, seen: Set<Node>): Array<Array<string | null>>;
     static rustWsPatternNorm(p: Array<string | null>): Array<string | null>;
+    /** ral-55h: the hash text of a request-id echo (`rustWsRequestIdEcho`): some run of decimal digits. */
+    private static readonly RUST_WS_DIGITS_HASH;
+    /** ral-55h: `const h = this.safeString (message, 'K')` (never rewritten) where every write of key K in the venue file is
+     *  an object-literal property `'K': v` whose value is `this.requestId ()`, its `.toString ()`, or a never-rewritten const
+     *  local bound to one of those, and the venue's `requestId` is declared to return a number: the reply echoes the id the
+     *  request sent, so the hash is decimal digits (the 47h request-id marker, bybit reqId). */
+    rustWsRequestIdEcho(declaration: any): boolean;
     /** Whether some string matches both patterns (a sound over-approximation: prefix and suffix agree). */
     static rustWsPatternsMeet(a0: Array<string | null>, b0: Array<string | null>): boolean;
     /** The typed kind a resolved value passes as, or undefined. */
