@@ -57786,7 +57786,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (form === "concat" && (trial === "str" || trial === "ostr"))
         continue;
       const push = findAncestor(n, (m) => isStatement(m) || isCallExpression6(m) && isPropertyAccessExpression3(m.expression) && m.expression.name.text === "push");
-      if (push !== void 0 && isCallExpression6(push) && !this.rustCopyPushPairElement(n, push, trial))
+      if (push !== void 0 && isCallExpression6(push) && !this.rustCopyPushPairElement(n, push, trial) && !this.rustPushSelfCallArgUse(n, push, trial))
         return false;
       const write = findAncestor(n, (m) => isStatement(m) || isBinaryExpression5(m) && m.operatorToken.kind === SyntaxKind7.EqualsToken);
       if (write !== void 0 && isBinaryExpression5(write) && this.isNodeInsideNode(n, write.right) && !this.rustScalarBoxedField(n, write, declaration) && !this.rustScalarFeedsElementWrite(n, write) && !this.rustScalarPreciseFeed(n, write, declaration) && !this.rustScalarCacheFieldCtor(n, write))
@@ -57807,6 +57807,21 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const kind = this.rustScalarDecisions.get(this.rustDeclaredNode(n));
     const form = this.rustScalarUseForms.get(n);
     return this.rustCacheCtorLimitArg(n, kind) && (form === "targ" || form === "box");
+  }
+  /** ral-51x: an optional string boxed as a property value of a map literal handed to a `this.m(..)` call that is the one
+   *  argument of `xs.push (..)` (`result.push (this.safeMarketStructure ({ 'quote': quote }))`): the pushed source prints
+   *  `self.m(..)`, so ccxt's native-push pass reads that call's text and never this operand's box. */
+  rustPushSelfCallArgUse(n, push, kind) {
+    if (kind !== "ostr" && kind !== "str" || this.rustTestTierSource(n) || push.arguments.length !== 1)
+      return false;
+    const call = this.unwrapParens(push.arguments[0]);
+    if (!isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    const up = n.parent;
+    if (up?.kind !== SyntaxKind7.PropertyAssignment || up.initializer !== n || !isObjectLiteralExpression4(up.parent))
+      return false;
+    const form = this.rustScalarUseForms.get(n);
+    return (form === "box" || form === "xbox") && this.isNodeInsideNode(n, call) && call.arguments.some((a) => this.isNodeInsideNode(n, a));
   }
   /** 40d: a Copy number that is a direct element of the array literal pushed whole (`rows.push ([ price, amount ])`):
    *  the element prints `Value::from(x)` (the Int / Float / Null its box held, no copy) inside `Value::from(vec![..])`,
