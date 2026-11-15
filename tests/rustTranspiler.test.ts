@@ -16432,3 +16432,16 @@ describe('ral-46e: a flag read off an Option<Market> local is a native bool', ()
         expect(out).toMatch(/let mut kind: Value = crate::value::KeyRead::key_read\(&&firstMarket, "type"\)/);
     });
 });
+
+describe('ral-46e: a venue `string[]` parameter every caller fills with an Object.keys local is a lent list', () => {
+    test('the keys list is lent and the parameter takes impl Into<Value>', () => {
+        const dir = path.join (rustFixtureRoot, 'keys-list-param-46e');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    hold (x: any): any { return x; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    pickType (subscriptions: string[]): string {\n        let accountType = '';\n        for (let i = 0; i < subscriptions.length; i++) {\n            const subscription = subscriptions[i];\n            if ((subscription === 'spot') || (subscription === 'margin')) {\n                accountType = subscription;\n                break;\n            }\n        }\n        return accountType;\n    }\n    first (subscriptions: Dict): string {\n        const subscriptionsKeys = Object.keys (subscriptions);\n        const accountType = this.pickType (subscriptionsKeys);\n        return accountType;\n    }\n    second (subscriptions: Dict): string {\n        const keys = Object.keys (subscriptions);\n        return this.pickType (keys);\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toMatch(/let (mut )?subscriptionsKeys: (crate::value::List|Vec<Value>)/);
+        expect(out).toContain('self.pickType(&subscriptionsKeys)');
+        expect(out).toMatch(/pub fn pickType\(&self, subscriptions: impl Into<crate::Value>\)/);
+    });
+});

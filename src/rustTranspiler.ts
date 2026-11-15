@@ -25009,7 +25009,9 @@ export class RustTranspiler extends BaseTranspiler {
             || this.rustParamIsLentResponse(param) || this.rustParamPrintsMap(param) || this.rustParamPrintsStrVec(param) || this.rustParamReadsByReference(param)) return undefined;
         const type: any = param.type;
         const typeName = type?.kind === SyntaxKind.TypeReference && isIdentifier(type.typeName) && type.typeArguments === undefined ? String(type.typeName.text) : '';
-        const kind: 'dict' | 'list' | undefined = RustTranspiler.RUST_LENT_LIST_TYPES.has(typeName) || this.rustRowListTypeNode(type) || (RustTranspiler.RUST_LENT_HASH_LIST_METHODS.has(name) && this.rustScalarListTypeNode(type)) ? 'list' : (this.rustLentRecordTypeNode(type) ? 'dict' : undefined);
+        // ral-46e: a `string[]` slot every caller fills with an `Object.keys (..)` local (a list of strings, read-only here)
+        const keysList = !RustTranspiler.RUST_LENT_HASH_LIST_METHODS.has(name) && type?.kind === SyntaxKind.ArrayType && type.elementType?.kind === SyntaxKind.StringKeyword;
+        const kind: 'dict' | 'list' | undefined = RustTranspiler.RUST_LENT_LIST_TYPES.has(typeName) || this.rustRowListTypeNode(type) || (RustTranspiler.RUST_LENT_HASH_LIST_METHODS.has(name) && this.rustScalarListTypeNode(type)) || keysList ? 'list' : (this.rustLentRecordTypeNode(type) ? 'dict' : undefined);
         if (kind === undefined) return undefined;
         // read-only in the body: a written / re-bound parameter belongs to the owned-map rules
         const pname = String(param.name.text);
@@ -25041,6 +25043,15 @@ export class RustTranspiler extends BaseTranspiler {
         // (a list named twice in one call is boxed at its other slot anyway)
         const lends = (call: any, arg: any): boolean => lendable(arg) && !(hashList && (this.rustVecLocalIsTyped(this.rustDeclaredNode(arg))
             || Array.from(call.arguments ?? []).some((a: any) => a !== arg && isIdentifier(a) && a.text === arg.text)));
+        if (keysList) {
+            const sites: any[] = this.rustVenueStrCallSites(method);
+            const keysLocal = (arg: any): boolean => {
+                const decl: any = arg !== undefined && isIdentifier(arg) ? this.rustDeclaredNode(arg) : undefined;
+                return decl !== undefined && isVariableDeclaration(decl) && decl.initializer !== undefined && this.rustExactStrListInit(decl.initializer)
+                    && !isArrayLiteralExpression(this.unwrapParens(decl.initializer));
+            };
+            return sites.length > 0 && sites.every((call: any) => keysLocal(call.arguments?.[at])) ? kind : undefined;
+        }
         return this.rustVenueStrCallSites(method).some((call: any) => lends(call, call.arguments?.[at])) ? kind : undefined;
     }
 
