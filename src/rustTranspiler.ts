@@ -2532,7 +2532,9 @@ export class RustTranspiler extends BaseTranspiler {
             const up: any = n.parent;
             if (!isElementAccessExpression(up) || up.expression !== n || !readOnly(up)) return false;
             const key: any = this.rustSkipWrappers(up.argumentExpression);
-            if (key === undefined || !(isNumericLiteral(key) || isStringLiteralLikeNode(key))) return false;
+            // a numeric literal key prints `get_value(&e, &Value::Int(k))`, whose concrete `&Value` slot deref-coerces `&&Value`;
+            // a string key prints through the generic `KeyRead`, which does not (krakenfutures E0277)
+            if (key === undefined || !isNumericLiteral(key)) return false;
             if (isElementAccessExpression(up.parent) && up.parent.expression === up && !readOnly(up.parent)) return false;
             // ccxt's writeBackIndexedMutations writes a mutated bind back into its container: keep that container owned
             if (this.isWriteBackBindRead(up)) return false;

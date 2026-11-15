@@ -18909,3 +18909,14 @@ describe('ral-56e: a literal-index element of a venue number[] list built from i
         expect(run ('ral56e-intlist-b', venue ('channels.length'))).toContain('let mut index: Value = ');
     });
 });
+
+describe('ral-56e: a borrowed element is read only at numeric literal keys', () => {
+    test('a string-key read keeps the element Value (generic KeyRead takes no &&Value)', () => {
+        const dir = path.join (rustFixtureRoot, 'ral56e-elem-c');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type List = any[];\nexport default class Exchange {\n    id: string;\n    safeList (o: any, k: any, d: any = undefined): any[] { return d; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, List } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    costOf (config: Dict): any {\n        const trades: List = this.safeList (config, 'trades', []);\n        let total = 0;\n        for (let i = 0; i < trades.length; i++) {\n            const currentTrade = trades[i];\n            total = total + currentTrade['cost'];\n        }\n        return total;\n    }\n}\n");
+        const c = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } }).transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(c).not.toContain('let currentTrade: &Value');
+    });
+});
