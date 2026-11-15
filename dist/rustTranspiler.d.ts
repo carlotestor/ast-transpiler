@@ -3301,6 +3301,9 @@ export declare class RustTranspiler extends BaseTranspiler {
         access: any;
         key: any;
     } | undefined;
+    /** ral-54h: a never-written method parameter declared `string`: printed as a `Value`, it is lent to a key slot as
+     *  `&Value` (`Option<&str>` via `as_str`, the same text the runtime map key reads). */
+    rustWsStrParamKey(key: any): boolean;
     /** `x === undefined` / `x !== undefined` on a flight local read through `safeValue`: whether it is the `!==` form. */
     rustWsFlightNullTestOf(n: any): boolean | undefined;
     /** The null test of a flight local read through `safeValue`: an absent entry reads as the empty `Flight::default()`. */
@@ -3446,7 +3449,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustWsFoundRefine;
     /** ral-53h: the literal of a never-rebound `const xs = this.findMessageHashes (client, 'lit')` local that is only read
      *  (`xs[i]`, `xs.length`); the base method keeps the futures keys whose text contains 'lit'. */
-    rustWsFoundHashesLiteral(list: any): string | undefined;
+    /** ral-54h: the element argument may be any hash expression (`accountType + ':positions::'`): an element contains
+     *  one text the argument's patterns match, so each pattern p gives [any, ...p, any]. */
+    rustWsFoundHashesLiteral(list: any, depth?: number, seen?: Set<Node>): Array<Array<string | null>> | undefined;
     rustWsRefinedHashPatterns(hash: any): Array<Array<string | null>>;
     /** Every resolve of the ws class with its hash patterns and kind; null when the class has ws relatives. */
     rustWsResolveTable(cls: any): Array<{
@@ -3477,6 +3482,14 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `this.m (.., list, ..)` of a sync method of the same class whose parameter at `at` is never reassigned, pushed to,
      *  element-written or handed on: only read (`p[i]`, `p.length`) or stored as an object literal value. */
     rustWsReadOnlyListArg(call: any, at: number): boolean;
+    /** ral-54h: the patterns of a method parameter as the union over every caller's argument (each read in the caller's
+     *  scope); undefined when the method is referenced other than by a call, never called, or the parameter is written. */
+    rustWsParamCallerPatterns(param: any, read: (arg: any) => Array<Array<string | null>> | undefined, seen: Set<Node>): Array<Array<string | null>> | undefined;
+    /** ral-54h: a list parameter never written in its method: each use is `p.length`, `p[i]` read, an object literal
+     *  value, an `===` operand or a hash-list argument of `this.watch|watchMultiple`. */
+    rustWsListParamReadOnly(param: any, within?: any): boolean;
+    /** ral-54h: `this.m (.., list, ..)` of a method of the same class whose parameter at `at` is only read. */
+    rustWsListArgParamReadOnly(call: any, at: number): boolean;
     /** The patterns of a watchMultiple hash list: an array literal, a wrapper parameter bound to one, or a list local
      *  initialised from a literal that only grows by `x.push (h)` statements and is read only as a watch argument. */
     rustWsHashListPatterns(harg: any, depth: number): Array<Array<string | null>> | undefined;
