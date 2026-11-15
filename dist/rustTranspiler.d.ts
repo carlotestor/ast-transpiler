@@ -3082,6 +3082,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  argument is a proven map (a typed / helper-proven params parameter, a handed slot map or a settled Dict local): the
      *  base answers `[x, m]` or `[x, omit (m, k)]`, a map on every path. */
     rustHandleTupleMapSlotRead(rhs: any): boolean;
+    /** ral-51a: `this.handleRouteAndParams (m, params)` typed by name: a venue member of the enclosing class declared
+     *  `handleRouteAndParams (methodName: string, params: Dict = {}): Dict` answers the (route-omitted) params map. */
+    rustRouteParamsDictCall(init: any): boolean;
+    private static readonly RUST_ROUTE_PARAMS_DICT;
     /** ral-50a: a destructured `handle*AndParams` slot already handed as a map (`requestParams = paramsIsMargin`). */
     rustHandedSlotIdentifier(rhs: any): boolean;
     rustOmitOfDict(init: any): boolean;
