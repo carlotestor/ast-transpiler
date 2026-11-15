@@ -3439,6 +3439,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustShortDestrHeads: WeakSet<any>;
     /** A nil-declared slot local typed as the map. */
     rustNilSlotDictLocal(declaration: any): boolean;
+    /** ral-46g: the reassigned handed map written at slot 1 of `[ a, x ] = this.handle*AndParams (..)`, else undefined. */
+    rustHandedSlotWriteOf(node: any): any;
     rustNilSlotDictOf(node: any): any;
     /** `[a, b] = this.m (.., n)`: printed as one `__destr_tmp` block line, kept within the line budget by the bare box. */
     rustInDestructureWrite(n: any): boolean;

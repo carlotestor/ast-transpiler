@@ -54606,7 +54606,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   /** Slot hook: an `Option<String>` local takes the slot's string. */
   printRustNilSlotWrite(element, read, strRead, boolRead) {
-    if (this.rustNilSlotDictOf(element) !== void 0)
+    if (this.rustNilSlotDictOf(element) !== void 0 || this.rustHandedSlotWriteOf(element) !== void 0)
       return `${super.printIdentifier(element)} = ${read}.into_dict()`;
     if (isIdentifier3(element)) {
       const reuse = this.rustDeclarationOfIdentifier(element);
@@ -76149,6 +76149,7 @@ ${iden}}`;
       return false;
     let uses = 0;
     let boxes = 0;
+    let slotWrites = 0;
     let longBox = false;
     const walk = declaration.kind === SyntaxKind7.BindingElement ? this.rustSlotUsesAll.bind(this) : this.rustLocalUsesAll.bind(this);
     const safe = walk(declaration, name, false, (n) => {
@@ -76161,6 +76162,12 @@ ${iden}}`;
         return this.rustHandedMapWrite(n, declaration);
       if (nilSlot && (this.rustNilSlotWrite(n) || isBinaryExpression5(call) && call.left === n)) {
         if (this.rustNilSlotWrite(n) && !this.rustNilSlotLineOk(n))
+          longBox = true;
+        return true;
+      }
+      if (!nilSlot && isVariableDeclaration3(declaration) && this.rustNilSlotWrite(n) && this.rustDictSlotOfWrite(n)) {
+        slotWrites++;
+        if (!this.rustNilSlotLineOk(n))
           longBox = true;
         return true;
       }
@@ -76188,6 +76195,8 @@ ${iden}}`;
     });
     if (nilSlot)
       return safe && !longBox && (uses > 0 || boxes > 0);
+    if (slotWrites > 0 && (longBox || !this.rustHandedMapInit(declaration)))
+      return false;
     return safe && (uses > 0 || (declaration.kind === SyntaxKind7.BindingElement || this.rustHandedTernaryLocal(declaration)) && boxes > 0 && !longBox);
   }
   /** The initialiser of a reassigned handed local answers a map on every path. */
@@ -76353,6 +76362,15 @@ ${iden}}`;
   /** A nil-declared slot local typed as the map. */
   rustNilSlotDictLocal(declaration) {
     return this.rustNilSlotDictCandidate(declaration) && this.rustHandedDictLocal(declaration);
+  }
+  /** ral-46g: the reassigned handed map written at slot 1 of `[ a, x ] = this.handle*AndParams (..)`, else undefined. */
+  rustHandedSlotWriteOf(node) {
+    if (!isIdentifier3(node) || !this.rustNilSlotWrite(node) || !this.rustDictSlotOfWrite(node))
+      return void 0;
+    const declaration = this.rustDeclarationOfIdentifier(node);
+    if (declaration === void 0 || declaration.name === node || !isVariableDeclaration3(declaration) || this.rustNilSlotDictCandidate(declaration))
+      return void 0;
+    return this.rustHandedDictLocal(declaration) ? declaration : void 0;
   }
   rustNilSlotDictOf(node) {
     if (!isIdentifier3(node))
