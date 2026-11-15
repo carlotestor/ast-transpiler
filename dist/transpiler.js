@@ -58730,7 +58730,37 @@ ${binding(plan.indent)}` : ""), head: "" };
       return false;
     if (boxUse === true && (this.rustBalanceOptionsPlace(write.left) || this.rustPrintedSlotNestedWrite(write.left)))
       return false;
-    return true;
+    return !this.rustNestedWriteFreeLocal(n);
+  }
+  /** ral-41f: a local whose kind the nested-write text passes never decide: declared with an initializer that is
+   *  not a safe* reader call, not `undefined` / another identifier (nil-declared and alias locals keep their own
+   *  rules) and not returned by its function (binance pro `stream`: its safeString local written whole into
+   *  `this.options[..][..]` and returned would move the method's return type to `Value` and add a dispatch arm). */
+  rustNestedWriteFreeLocal(n) {
+    if (!isIdentifier3(n))
+      return false;
+    const decl = this.rustDeclaredNode(n);
+    if (decl === void 0 || !isVariableDeclaration3(decl) || decl.initializer === void 0 || !isIdentifier3(decl.name))
+      return false;
+    const init = this.rustSkipWrappers(decl.initializer);
+    if (init === void 0 || isIdentifier3(init))
+      return false;
+    if (isCallExpression6(init) && isPropertyAccessExpression3(init.expression) && /^safe/.test(String(init.expression.name.text)))
+      return false;
+    const fn = findAncestor(n, (x) => isFunctionLike(x));
+    let returned = false;
+    const visit = (x) => {
+      if (returned || x === void 0)
+        return;
+      if (isReturnStatement4(x) && x.expression !== void 0 && isIdentifier3(x.expression) && this.rustDeclaredNode(x.expression) === decl) {
+        returned = true;
+        return;
+      }
+      x.forEachChild?.(visit);
+    };
+    if (fn?.body !== void 0)
+      visit(fn.body);
+    return !returned;
   }
   // ── nested plain-field writes (rustNestedFieldKeyUse / printNestedFieldKeyWrite) ──
   // `this.balance[t][code] = v` prints `add_element_to_object(get_value_mut(&mut self.balance, &t), &code, v)`,

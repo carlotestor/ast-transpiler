@@ -7452,7 +7452,29 @@ export class RustTranspiler extends BaseTranspiler {
         // `this.balance|options[..]` stores (the r05 insert copies the value text verbatim; zf measured it type-agnostic)
         // and the typed params-slot insert the printer itself prints (printSlotNestedInsert; nativeInserts never sees it)
         if (boxUse === true && (this.rustBalanceOptionsPlace(write.left) || this.rustPrintedSlotNestedWrite(write.left))) return false;
-        return true;
+        return !this.rustNestedWriteFreeLocal(n);
+    }
+
+    /** ral-41f: a local whose kind the nested-write text passes never decide: declared with an initializer that is
+     *  not a safe* reader call, not `undefined` / another identifier (nil-declared and alias locals keep their own
+     *  rules) and not returned by its function (binance pro `stream`: its safeString local written whole into
+     *  `this.options[..][..]` and returned would move the method's return type to `Value` and add a dispatch arm). */
+    rustNestedWriteFreeLocal(n: any): boolean {
+        if (!isIdentifier(n)) return false;
+        const decl: any = this.rustDeclaredNode(n);
+        if (decl === undefined || !isVariableDeclaration(decl) || decl.initializer === undefined || !isIdentifier(decl.name)) return false;
+        const init: any = this.rustSkipWrappers(decl.initializer);
+        if (init === undefined || isIdentifier(init)) return false;
+        if (isCallExpression(init) && isPropertyAccessExpression(init.expression) && /^safe/.test(String(init.expression.name.text))) return false;
+        const fn: any = findAncestor(n, (x: any) => isFunctionLike(x));
+        let returned = false;
+        const visit = (x: any) => {
+            if (returned || x === undefined) return;
+            if (isReturnStatement(x) && x.expression !== undefined && isIdentifier(x.expression) && this.rustDeclaredNode(x.expression) === decl) { returned = true; return; }
+            x.forEachChild?.(visit);
+        };
+        if (fn?.body !== undefined) visit(fn.body);
+        return !returned;
     }
 
     // ── nested plain-field writes (rustNestedFieldKeyUse / printNestedFieldKeyWrite) ──
