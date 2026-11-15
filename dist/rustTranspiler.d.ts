@@ -1394,6 +1394,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** zb: an arithmetic side's kind: a typed scalar shape, else a typed-signature numeric parameter read
      *  (`now - limit * duration`: `limit` holds only `Int` or `Null`, so the Option arm equals the helper's). */
     rustArithSideKind(node: any): string | undefined;
+    /** ral-55e: `this.parseToInt (..)` (a base method of the typed-return table, no venue override) as an arithmetic side:
+     *  the runtime answers `Option<i64>` (`Int` or `Null`), exactly what the boxed helper operand held. */
+    rustArithTypedIntCall(node: any): string | undefined;
+    /** ral-55e: a binary initializer with a typed parseToInt side (`time * this.parseToInt (x)`). */
+    rustArithTypedIntSide(node: any): boolean;
     /** zb: the numeric kind of an unwritten typed-signature parameter read (`oint` / `onum` / `int` / `num`), else undefined. */
     rustArithParamKind(node: any): string | undefined;
     /** A combinator over a typed operand prints native and boxes its result once. */
@@ -1592,6 +1597,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ub: a compare partner that is not another group's local: a literal, call, element / property read, parameter,
      *  `for` counter or another parseToInt local (reader, ternary and nil-declared locals keep their own decisions). */
     rustUbPartnerInBucket(node: any): boolean;
+    /** ral-55e: a parseToInt local whose every partner is one the 55e arms admit (a typed parseToInt-product const, a
+     *  `Math.ceil` division const) or a for counter / literal: checked by the ub partner walk itself. */
+    rust55ePtiTypedPartners(d: any): boolean;
+    /** ral-55e: `Math.ceil (<x> / <y>)` as a declaration's whole initializer. */
+    rust55eCeilDivInit(d: any): boolean;
     /** ub: a parseToInt local whose partner uses are all ordered / equality tests the solver prints with both operands
      *  decided (`rustScalarCompareText`): its plain reads box like any other typed base call result. */
     rustUbPtiPartnersDecided(declaration: any): boolean;
