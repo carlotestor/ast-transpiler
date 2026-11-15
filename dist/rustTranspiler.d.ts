@@ -1479,6 +1479,12 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  typed-container rule holds: the boxed read is `get_value(&m, &k)`; the typed key is handed to `get_value` as is
      *  (`impl ValueKey` boxes it inside, so the lookup is the same `Str` / `Null` key the boxed read took). */
     rustAnyGetValueKeyUse(n: any): boolean;
+    /** ral-49e: the read's checker type is a declared record (`Dictionary<Dict>` receiver): its bind prints as the held
+     *  `Option<Dict>` form, which ccxt's `Value`-bind write-back pass never matched, so the borrowed key changes no write-back. */
+    rustOwnKeysTypedRowRead(read: any): boolean;
+    /** ral-49e: `k` is `const k = keys[i]` where `keys` is `const keys = Object.keys (m)` and `m` is the receiver's own
+     *  declaration (a local of the same function): every key the list holds is a key `m` had when listed. */
+    rustOwnKeysElementKey(recv: any, key: any): boolean;
     /** ral-yg: `this.urls['<lit>'][k]` read only (no write, chain link, delete or update) where `this.urls['<lit>']` is the
      *  base-declared string-keyed map (`rustUrlsMapEntry`): the native read takes the borrowed key off the map the boxed
      *  read reached (a non-map entry or a `None` key reads Null, as `get_value` did on a non-map or a `Null` key). */
