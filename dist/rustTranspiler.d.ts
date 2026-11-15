@@ -470,6 +470,12 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  `let p: bool = get_arg(optional_args, i, ..).is_truthy()`: a native bool local re-boxes as `Value::Bool(x)` there,
      *  and the callee applies the same truthiness the old `Value` box got. */
     rustOptionalBoolArgumentSlot(call: any, params: any, at: number): boolean;
+    /** The argument is a local the PRINTER declares `bool` from a bool expression (comparison / logical); literal and
+     *  alias locals are narrowed later by ccxt narrowBoolLocals, which boxes their uses itself. */
+    rustOptionalBoolArgLocal(a: any): boolean;
+    /** An argument in an optional native-`bool` slice slot: a bool local the printer still prints bare is boxed once
+     *  (a scalar bool local already prints its own `Value::Bool(x)`). */
+    rustOptionalBoolSlotArgText(call: any, params: any, at: number, a: any): string;
     /** Parameter declarations of a call's resolved callee, when the checker has them. */
     rustCalleeParams(call: any): any[] | undefined;
     /** `bool` text for an argument in a native-`bool` parameter slot. */
