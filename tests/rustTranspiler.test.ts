@@ -15382,3 +15382,19 @@ describe('ral-42b item 1: `(x as string)` cast receivers take the typed local\'s
         });
     }
 });
+
+describe('ral-42b item 2: a nested all-`{}` concat chain on a guarded long line prints as one flat format!', () => {
+    const t42 = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+    test('flattens nested boxed format! slots in argument order', () => {
+        const rt: any = (t42 as any).rustTranspiler;
+        const line = '        x = format!("{}{}", Value::Str(format!("{}{}", Value::Str(format!("{}{}", a, "/").into()), b).into()), c);';
+        expect(rt.rustFlattenConcatChain(line)).toBe('        x = format!("{}{}{}{}", a, "/", b, c);');
+    });
+    test('negative: a format string with literal text or a debug slot is left alone', () => {
+        const rt: any = (t42 as any).rustTranspiler;
+        const lit = '        x = format!("{}{}", Value::Str(format!("a{}", b).into()), c);';
+        const dbg = '        x = format!("{:?}{}", Value::Str(format!("{}{}", a, b).into()), c);';
+        expect(rt.rustFlattenConcatChain(lit)).toBe(lit);
+        expect(rt.rustFlattenConcatChain(dbg)).toBe(dbg);
+    });
+});

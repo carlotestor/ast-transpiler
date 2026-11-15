@@ -9511,12 +9511,66 @@ export class RustTranspiler extends BaseTranspiler {
         return hoisted + '\n' + rest;
     }
 
+    /** 42b: `format!("{}..{}", .., Value::Str(format!("{}..{}", a, b).into()), ..)` -> one `format!` with the inner arguments spliced in
+     *  place. Only all-`{}` format strings (no literal text, no `{:?}`); the inner box is exactly one balanced `format!` slot. */
+    rustFlattenConcatChain(line: string): string {
+        const box = 'Value::Str(format!("';
+        let out = line;
+        for (let guard = 0; guard < 64; guard++) {
+            let changed = false;
+            for (let at = out.indexOf(box); at >= 0; at = out.indexOf(box, at + 1)) {
+                const fmtOpen = at + 'Value::Str(format!('.length;
+                const fmtEnd = out.indexOf('"', fmtOpen + 1);
+                const fmt = out.slice(fmtOpen + 1, fmtEnd);
+                if (!/^(?:\{\})+$/.test(fmt)) continue;
+                const macroClose = this.rustCloseBracketAt(out, at + 'Value::Str(format!'.length);
+                if (macroClose < 0 || out.slice(macroClose + 1, macroClose + 9) !== '.into())') continue;
+                const innerArgs = out.slice(fmtEnd + 1, macroClose);
+                if (!innerArgs.startsWith(', ')) continue;
+                // the box must be a whole argument slot of an enclosing all-`{}` format!
+                const before = out.slice(0, at);
+                if (!/(?:\(|, )$/.test(before)) continue;
+                const outer = before.lastIndexOf('format!("');
+                if (outer < 0) continue;
+                const outerOpen = outer + 'format!'.length;
+                const outerClose = this.rustCloseBracketAt(out, outerOpen);
+                if (outerClose < macroClose + 9) continue;
+                const ofEnd = out.indexOf('"', outerOpen + 2);
+                const ofmt = out.slice(outerOpen + 2, ofEnd);
+                if (!/^(?:\{\})+$/.test(ofmt)) continue;
+                // top-level argument index of the box inside the outer call
+                const args = out.slice(ofEnd + 1, outerClose);
+                let idx = -1, depth = 0, quoted = false, found = false;
+                for (let i = 0; i < args.length; i++) {
+                    const c = args[i];
+                    if (quoted) { if (c === '\\') i++; else if (c === '"') quoted = false; continue; }
+                    if (c === '"') quoted = true;
+                    else if ('([{'.includes(c)) depth++;
+                    else if (')]}'.includes(c)) depth--;
+                    else if (c === ',' && depth === 0) { idx++; if (ofEnd + 1 + i + 2 === at) { found = true; break; } }
+                }
+                if (!found) continue;
+                const n = ofmt.length / 2, m = fmt.length / 2;
+                if (idx >= n) continue;
+                const nfmt = '{}'.repeat(n - 1 + m);
+                out = out.slice(0, outerOpen + 2) + nfmt + out.slice(ofEnd, at) + innerArgs.slice(2) + out.slice(macroClose + 9);
+                changed = true;
+                break;
+            }
+            if (!changed) break;
+        }
+        return out;
+    }
+
     rustSplitLongLines(text: string, names: string[]): string {
         if (!text.split('\n').some((l) => l.length > 400)) return text;
         let nth = 0;
         const lines = text.split('\n');
         return lines.map((l, k) => {
             if (l.length <= 400 || !names.some((n) => new RegExp(`\\b${n}\\b`).test(l))) return l;
+            // 42b: a nested concat chain prints flat first (`Display` of `Value::Str(s)` is `s`: same text, same argument order)
+            const flat = this.rustFlattenConcatChain(l);
+            if (flat.length <= 400) return flat;
             return this.rustSplitLongLine(l, nth++, lines.slice(k + 1).join('\n')) ?? l;
         }).join('\n');
     }
