@@ -3225,6 +3225,15 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_WS_NIL_HASH;
     /** The hash patterns of `n`: segments are literal text or `null` (any text). */
     rustWsHashPatterns(n: any, depth: number, seen: Set<Node>): Array<Array<string | null>>;
+    /** ral-47h: the dispatch keys a handler local `const x = this.safeString (message, 'f')` can hold, or undefined.
+     *  Proof: x is never reassigned; `message` is the handler's unwritten second parameter; the handler is a method of a
+     *  ws venue class whose every `this.<handler>` mention is a value of the one `const methods = { 'k': this.h, .. }`
+     *  literal of `handleMessage (client, message)`; that literal is read only by `this.safeValue (methods, K)` with
+     *  K an unwritten `const K = this.safeString (message, 'f')` (same field, handleMessage's unwritten `message`),
+     *  and the result is an unwritten local used only as `m.call (this, client, message)`. */
+    rustWsDispatchKeyPatterns(declaration: any): Array<Array<string | null>> | undefined;
+    /** Whether a parameter is written in its function (assignment, ++/--, destructuring target). */
+    rustWsParamWritten(fn: any, param: any): boolean;
     /** `this.safeString (sub, 'k')` reads field k; `this.safeString (list, i)` / `list[i]` over `const list = this.safeList (sub, 'k', ..)`
      *  reads an element of field k. Undefined for any other shape. */
     rustWsSubscriptionKeyRead(init: any): {
