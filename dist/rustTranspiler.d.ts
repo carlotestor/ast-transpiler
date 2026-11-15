@@ -3374,6 +3374,7 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  `keysort`, `ordered`, `omit` of a proven map), a `Dict` parameter, a `handle*AndParams` params slot, a method
      *  declared `Dict`, or a local whose every write is one of these. Any list literal, any dynamic `this[name] (..)`
      *  / `callDynamically` call, or anything else unproven fails the venue (fail closed). */
+    private static readonly RUST_SIGN_PARAM_HANDLERS;
     rustSignParamsProvenMap(fn: any): boolean;
     rustSignParamsProofUncached(root: string, venue: string, target?: {
         name: string;
