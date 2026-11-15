@@ -51564,6 +51564,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // payload out (`x = y.take()`): no copy, and the dead source is left `None`.
     this.rustNilAliasMoves = /* @__PURE__ */ new WeakSet();
     this.rustOwnNameSkip = false;
+    /** ral-52i: set only while the built-list rule walks its uses. */
+    this.rustDisjointShadowSkip = false;
+    this.rustDisjointShadowSeen = false;
+    this.rustBuiltListCopiedElement = false;
     // ── native `bool` parameters ──────────────────────────────────────────────
     //
     // A `boolean` parameter of a venue-local generated method prints `bool`
@@ -51879,6 +51883,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // A local built from an array literal, reassigned only from list producers (array literals, base `toArray` /
     // `arrayConcat`, a `[]`-defaulted `safeList*`) holds the shared list: pushes, length and index reads are native.
     this.rustBuiltLists = /* @__PURE__ */ new WeakSet();
+    this.rustArrayGuardedCopies = /* @__PURE__ */ new WeakSet();
     this.rustOptListDecisions = /* @__PURE__ */ new WeakMap();
     this.rustOptListBoxes = /* @__PURE__ */ new WeakMap();
     this.rustHandedDictDecisions = /* @__PURE__ */ new WeakMap();
@@ -54903,6 +54908,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if ((skipScopeName || this.rustOwnMethodName(n, scope)) && n === scope.name)
         continue;
       if (n !== declaration && this.rustBindsName(n, name)) {
+        if (this.rustDisjointShadowSkip && this.rustDisjointBinding(n, declaration)) {
+          this.rustDisjointShadowSeen = true;
+          continue;
+        }
         safe = false;
         break;
       }
@@ -54917,6 +54926,24 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
    *  asked while the shared-container rule walks its uses (the copying `IndexMap` bearer rules keep the old walk). */
   rustOwnMethodName(n, scope) {
     return this.rustOwnNameSkip && _optionalChain([scope, 'optionalAccess', _8662 => _8662.kind]) === _ast.SyntaxKind.MethodDeclaration && n === scope.name && _optionalChain([n, 'optionalAccess', _8663 => _8663.kind]) === _ast.SyntaxKind.Identifier;
+  }
+  /** ral-52i: `other` (a variable declaration) and `declaration` sit in two blocks of one function, neither inside the other. */
+  rustDisjointBinding(other, declaration) {
+    if (!_is.isVariableDeclaration.call(void 0, other) || !_is.isVariableDeclaration.call(void 0, declaration))
+      return false;
+    const block = (d) => {
+      let up = d.parent;
+      while (up !== void 0 && !_is.isBlock.call(void 0, up) && !_chunkC7C726CWcjs.isFunctionLike.call(void 0, up))
+        up = up.parent;
+      return up;
+    };
+    const a = block(declaration);
+    const b = block(other);
+    if (a === void 0 || b === void 0 || !_is.isBlock.call(void 0, a) || !_is.isBlock.call(void 0, b) || a === b)
+      return false;
+    if (this.rustEnclosingFunction(a) !== this.rustEnclosingFunction(b))
+      return false;
+    return a.end <= b.pos || b.end <= a.pos;
   }
   rustLocalUsesAcceptBool(declaration, sourceName) {
     return this.rustLocalUsesAll(declaration, sourceName, false, (n) => this.rustIdentifierUseIsCondition(n) || this.rustBoolParamUseAccepted(n));
@@ -76608,6 +76635,7 @@ ${iden}}`;
       return false;
     if (this.rustReadBearerKindOfDeclaration(declaration) !== false || this.rustDictLocalIsTyped(declaration) || this.rustVecLocalIsTyped(declaration) || this.rustNestedDictLocalIsTyped(declaration) || this.rustMarketLocalKind(declaration) !== false || this.rustBorrowedDictLocal(declaration) || this.rustNilLocalKind(declaration) !== void 0 || this.rustScalarLocalKind(declaration) !== void 0)
       return false;
+    this.rustBuiltListCopiedElement = false;
     if (String(init.getText()).split("\n")[0].length > (read ? 240 : 120) || !this.rustBuiltListWriteSource(init))
       return false;
     const boxes = [];
@@ -76620,12 +76648,20 @@ ${iden}}`;
       return st !== void 0 && String(st.getText()).split("\n")[0].length <= 160;
     };
     const ownNameSkip = this.rustOwnNameSkip;
+    const shadowSkip = this.rustDisjointShadowSkip;
     this.rustOwnNameSkip = true;
+    this.rustDisjointShadowSkip = true;
+    this.rustDisjointShadowSeen = false;
     let safe;
     try {
       safe = this.rustLocalUsesAll(declaration, name, false, (n) => {
         if (this.rustIdentifierIsPropertyName(n))
           return !(_optionalChain([n, 'access', _10298 => _10298.parent, 'optionalAccess', _10299 => _10299.kind]) === _ast.SyntaxKind.ShorthandPropertyAssignment && n.parent.name === n);
+        if (!this.rustIdentifierRefersToDeclaration(n, declaration)) {
+          const other = this.rustDeclarationOfIdentifier(n);
+          if (other !== void 0 && other !== declaration && this.rustDisjointBinding(other, declaration))
+            return true;
+        }
         if (!this.rustIdentifierRefersToDeclaration(n, declaration) || this.rustEnclosingFunction(n) !== fn)
           return false;
         const up = n.parent;
@@ -76711,7 +76747,12 @@ ${iden}}`;
       });
     } finally {
       this.rustOwnNameSkip = ownNameSkip;
+      this.rustDisjointShadowSkip = shadowSkip;
     }
+    if ((this.rustDisjointShadowSeen || this.rustBuiltListCopiedElement) && natives === 0)
+      safe = false;
+    this.rustBuiltListCopiedElement = false;
+    this.rustDisjointShadowSeen = false;
     if (!safe || natives === 0 && (handOffs === 0 || handOffs + boxes.filter(([b]) => _is.isReturnStatement.call(void 0, b.parent) || _optionalChain([b, 'access', _10309 => _10309.parent, 'optionalAccess', _10310 => _10310.kind]) === _ast.SyntaxKind.AsExpression && _is.isReturnStatement.call(void 0, b.parent.parent)).length !== boxes.length || boxes.some(([, form]) => form === "clone")))
       return false;
     for (const [n, form] of boxes)
@@ -76866,7 +76907,22 @@ ${iden}}`;
     const printedY = this.printNode(y, 0).trim();
     if ((printedY.startsWith("") ? printedY.slice(1) : printedY) !== String(y.text))
       return false;
-    return this.rustLocalLastUse(y, declaration) || this.rustGuardedBranchLastUse(y, declaration, guard);
+    if (this.rustLocalLastUse(y, declaration) || this.rustGuardedBranchLastUse(y, declaration, guard))
+      return true;
+    this.rustArrayGuardedCopies.add(write);
+    this.rustBuiltListCopiedElement = true;
+    return true;
+  }
+  /** ral-52i: `id` names a plain `Value` local or parameter of its own function (no typed local form). */
+  rustPlainValueBinding(id) {
+    const declaration = this.rustDeclarationOfIdentifier(id);
+    if (declaration === void 0 || declaration.name === id || !(_is.isVariableDeclaration.call(void 0, declaration) || _is.isParameterDeclaration.call(void 0, declaration)))
+      return false;
+    if (this.rustEnclosingFunction(declaration) !== this.rustEnclosingFunction(id))
+      return false;
+    if (_is.isParameterDeclaration.call(void 0, declaration))
+      return false;
+    return !(this.rustLentListLocal(declaration) || this.rustBorrowedLocalKind(declaration) !== void 0 || this.rustScalarLocalKind(declaration) !== void 0 || this.rustNilLocalKind(declaration) !== void 0 || this.rustDictLocalIsTyped(declaration) || this.rustVecLocalIsTyped(declaration) || this.rustMarketLocalKind(declaration) !== false || this.rustReadBearerKindOfDeclaration(declaration) !== false);
   }
   /** ral-uf: every later read of `node`'s local lies in the else branch of `guard` (a path disjoint from the move) and
    *  nothing reads it after the if statement; no loop or closure sits between the move and the declaration. */
@@ -76981,14 +77037,19 @@ ${iden}}`;
       return void 0;
     for (let i = 0; i < elements.length; i++) {
       const id = this.rustSkipWrappers(elements[i]);
-      if (_is.isIdentifier.call(void 0, id) && !this.rustBuiltListMovedElement(elements[i]) && /^[A-Za-z_][A-Za-z0-9_]*$/.test(parts[i]))
-        return void 0;
+      if (_is.isIdentifier.call(void 0, id) && !this.rustBuiltListMovedElement(elements[i]) && /^[A-Za-z_][A-Za-z0-9_]*$/.test(parts[i])) {
+        if (id !== elements[i] || parts[i] !== String(id.text) || !this.rustPlainValueBinding(id))
+          return void 0;
+        parts[i] = `${parts[i]}.clone()`;
+        this.rustBuiltListCopiedElement = true;
+      }
     }
-    return `vec![${m[1]}]`;
+    return `vec![${parts.join(", ")}]`;
   }
   printBuiltListLiteral(node) {
     if (_optionalChain([node, 'access', _10334 => _10334.elements, 'optionalAccess', _10335 => _10335.some, 'call', _10336 => _10336((e) => _is.isIdentifier.call(void 0, this.rustSkipWrappers(e)))])) {
-      const moved = _nullishCoalesce(this.rustBuiltListMovedLiteral(node), () => ( this.rustBuiltListBoxedLiteral(node)));
+      const allMoved = node.elements.every((e) => !_is.isIdentifier.call(void 0, this.rustSkipWrappers(e)) || this.rustBuiltListMovedElement(e));
+      const moved = _nullishCoalesce((allMoved ? this.rustBuiltListMovedLiteral(node) : void 0), () => ( this.rustBuiltListBoxedLiteral(node)));
       if (moved !== void 0)
         return `std::sync::Arc::new(${moved})`;
     }
@@ -77061,6 +77122,8 @@ ${iden}}`;
       return `${this.printNode(left, 0).trim()} = ${rhs.text}.${this.rustDefaultedListValue(guarded, rhs) ? "into_list" : "unwrap_or_default"}()`;
     if (_is.isIdentifier.call(void 0, rhs) && _is.isBinaryExpression.call(void 0, rhs.parent) && this.rustDefaultedAliasMove(rhs.parent) !== void 0)
       return `${this.printNode(left, 0).trim()} = ${rhs.text}.into_list()`;
+    if (_is.isIdentifier.call(void 0, rhs) && _is.isBinaryExpression.call(void 0, rhs.parent) && this.rustArrayGuardedCopies.has(rhs.parent))
+      return `${this.printNode(left, 0).trim()} = ${rhs.text}.clone().into_list()`;
     const value = _is.isArrayLiteralExpression.call(void 0, rhs) ? this.printBuiltListLiteral(rhs) : `${this.printNode(right, 0).trim()}.into_list()`;
     return `${this.printNode(left, 0).trim()} = ${value}`;
   }
