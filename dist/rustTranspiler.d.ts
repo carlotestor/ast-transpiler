@@ -3697,6 +3697,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  items of the `Value::Arr` it is handed and answers a new `Value::Arr` (exchange_stubs.rs sort_by / sort_by2: any
      *  other variant is handed back as it came, and the moved-in box is always an Arr), so `.into_list()` takes exactly it. */
     rustBuiltListSelfSort(write: any, name: string): boolean;
+    /** ral-57i: the target of `y = x`: a `let` local of the same function that is never a built list itself, still printed as the plain
+     *  `Value` binding (no typed local, scalar, nil or borrowed decision). */
+    rustBuiltListAliasTarget(left: any): boolean;
+    private rustBuiltListAliasGuard;
     /** ral-57i: `this.arraySlice (..)` resolved to the base declaration and redeclared by no venue. */
     rustBaseArraySliceCall(call: any): boolean;
     /** `x = this.m(.., x, ..)` naming `x` only there and on the left: the old list moves into the call before the write. */

@@ -51890,6 +51890,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // A local built from an array literal, reassigned only from list producers (array literals, base `toArray` /
     // `arrayConcat`, a `[]`-defaulted `safeList*`) holds the shared list: pushes, length and index reads are native.
     this.rustBuiltLists = /* @__PURE__ */ new WeakSet();
+    this.rustBuiltListAliasGuard = /* @__PURE__ */ new Set();
     /** ral-54i: `[await] this.m (..)` whose declaration spells an array return (`T[]`, or `Promise<T[]>` awaited here) and whose
      *  printed body answers a list on every path (rustCallBuildsContainer over its returns; a venue `Promise<Market[]>` by the zf
      *  table). The callee must not be dispatched virtually, carry a typed signature or be redeclared: a base method no venue
@@ -78115,6 +78116,11 @@ ${iden}}`;
           handOffs++;
           return true;
         }
+        if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && isIdentifier3(up.left) && up.left.text !== name && this.rustLocalLastUse(n, declaration) && short(n) && this.rustBuiltListAliasTarget(up.left)) {
+          boxes.push([n, "move"]);
+          handOffs++;
+          return true;
+        }
         if (this.rustBuiltListSelfWrap(n, declaration)) {
           boxes.push([n, "move"]);
           handOffs++;
@@ -78227,6 +78233,21 @@ ${iden}}`;
       return false;
     const first = this.rustSkipWrappers(call.arguments[0]);
     return first !== void 0 && isIdentifier3(first) && String(first.text) === name && this.rustBuiltListSelfWriteArg(call.arguments[0], name);
+  }
+  /** ral-57i: the target of `y = x`: a `let` local of the same function that is never a built list itself, still printed as the plain
+   *  `Value` binding (no typed local, scalar, nil or borrowed decision). */
+  rustBuiltListAliasTarget(left) {
+    const target = this.rustDeclarationOfIdentifier(left);
+    if (target === void 0 || target.name === left || !isVariableDeclaration3(target) || this.rustBuiltLists.has(target))
+      return false;
+    if (this.rustBuiltListAliasGuard.has(target))
+      return false;
+    this.rustBuiltListAliasGuard.add(target);
+    try {
+      return this.rustPlainValueBinding(left);
+    } finally {
+      this.rustBuiltListAliasGuard.delete(target);
+    }
   }
   /** ral-57i: `this.arraySlice (..)` resolved to the base declaration and redeclared by no venue. */
   rustBaseArraySliceCall(call) {
