@@ -59443,14 +59443,22 @@ ${binding(plan.indent)}` : ""), head: "" };
   /** A local keyed on a field and re-boxed anywhere but a moving use would copy where the `Value` moved. */
   rustFieldKeyCostly(declaration) {
     let field = false;
+    let bookField = false;
+    let keyUse = false;
     let boxed = false;
     let lendable = true;
     this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
       const form = this.rustScalarUseForms.get(n);
       if (form === "fin" && this.rustWsBookKeyOf(n) && _is.isCallExpression.call(void 0, this.rustWsBookKeyParent(n)))
         return true;
+      if (form === "fin" && this.rustWsBookKeyOf(n) && _RustTranspiler.RUST_PRO_TIER_FILE.test(String(n.getSourceFile().fileName))) {
+        bookField = true;
+        return true;
+      }
       if (form === "fin" && _is.isCallExpression.call(void 0, this.rustWsBookKeyParent(n)) && this.rustWsCacheMapLookup(this.rustWsBookKeyParent(n)) && this.rustWsCacheMapField(this.rustWsBookKeyParent(n).arguments[0]))
         return true;
+      if (form === "key")
+        keyUse = true;
       if (form === "fin" || form === "frd" || form === "key" && this.rustFieldKeyReceiver(_optionalChain([this, 'access', _9027 => _9027.rustKeyWrapped, 'call', _9028 => _9028(n), 'access', _9029 => _9029.parent, 'optionalAccess', _9030 => _9030.expression])) !== void 0)
         field = true;
       else if (form === "key" && _RustTranspiler.RUST_PRO_TIER_FILE.test(String(n.getSourceFile().fileName)) && this.rustLiteralKeyReceiver(n) && this.rustScalarInsertKeyUse(n))
@@ -59462,7 +59470,9 @@ ${binding(plan.indent)}` : ""), head: "" };
       }
       return true;
     });
-    if (field && boxed && lendable && !this.rustStrNoLend) {
+    if (bookField && keyUse)
+      field = true;
+    if ((field || bookField) && boxed && lendable && !this.rustStrNoLend) {
       this.rustStrLentLocals.add(declaration);
       return false;
     }
