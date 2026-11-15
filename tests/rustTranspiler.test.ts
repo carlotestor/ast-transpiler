@@ -18920,3 +18920,24 @@ describe('ral-56n: number vetoes (counter arithmetic slice bound, decided Option
         expect(out).toContain('get_value(&tokenIds, &Value::Int(i))');
     });
 });
+
+describe('ral-56n: a ternary of two i64 locals bounding its own for counter', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type int = number;\nexport default class Exchange {\n    parseToInt (x: any): number { return x; }\n}\n";
+    const run = (body: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-56n-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { int } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        try { return t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+    };
+    test('prediction hyperliquid cappedDecimals: `zi < capped` keeps the ternary i64', () => {
+        const out = run("    b (x: number, y: number): string {\n        const m = this.parseToInt (x);\n        const d = this.parseToInt (y);\n        const maxDecimals = 8 - m;\n        let digitsLeft: int = 0;\n        if (d <= 5) {\n            digitsLeft = 5 - d;\n        }\n        const capped = (maxDecimals < digitsLeft) ? maxDecimals : digitsLeft;\n        let zeros = '';\n        for (let zi = 1; zi < capped; zi++) {\n            zeros = zeros + '0';\n        }\n        return zeros;\n    }\n");
+        expect(out).toContain('let mut capped: i64 = (if (maxDecimals < digitsLeft) { maxDecimals } else { digitsLeft });');
+        expect(out).toContain('zi < capped }');
+    });
+    test('guard: an arm that is a number parameter (not an i64 local) keeps the ternary Value', () => {
+        const out = run("    b (x: number, y: any): string {\n        const m = this.parseToInt (x);\n        const maxDecimals = 8 - m;\n        const capped = (maxDecimals < y) ? maxDecimals : y;\n        let zeros = '';\n        for (let zi = 1; zi < capped; zi++) {\n            zeros = zeros + '0';\n        }\n        return zeros;\n    }\n");
+        expect(out).toContain('let mut capped: Value = ');
+    });
+});

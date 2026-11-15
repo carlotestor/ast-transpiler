@@ -6790,6 +6790,22 @@ export class RustTranspiler extends BaseTranspiler {
         return d !== undefined && isVariableDeclaration(d) && loop?.kind === SyntaxKind.ForStatement && loop.condition === cond && this.rustValueIntCounter(counter);
     }
 
+    /** ral-56n: `cond` is `i OP n` of `for (let i = <int>; ..; i++)` (a `Value::Int` counter) and `n` a const whose initializer is
+     *  a ternary of two identifiers (each arm an `i64` local by its own decision). */
+    rust56nTernaryCounterBound(cond: any, n: any): boolean {
+        if (!isBinaryExpression(cond) || this.isEqualityOp(cond.operatorToken.kind) || RustTranspiler.NATIVE_COMPARISON_OPERATORS[cond.operatorToken.kind] === undefined) return false;
+        if (this.unwrapParens(cond.right) !== n || !isIdentifier(n) || !isIdentifier(cond.left)) return false;
+        const d: any = this.rustDeclaredNode(n);
+        if (d === undefined || !isVariableDeclaration(d) || (d.parent?.flags & NodeFlags.Const) === 0 || d.initializer === undefined) return false;
+        const init: any = this.unwrapParens(d.initializer);
+        if (!isConditionalExpression(init)) return false;
+        const arm = (a: any) => { const x: any = this.unwrapParens(a); return isIdentifier(x) && this.rustScalarLocalOf(x)?.kind === 'int'; };
+        if (!arm(init.whenTrue) || !arm(init.whenFalse)) return false;
+        const cd: any = this.rustDeclaredNode(cond.left);
+        const loop: any = cd?.parent?.parent;
+        return cd !== undefined && isVariableDeclaration(cd) && loop?.kind === SyntaxKind.ForStatement && loop.condition === cond && this.rustValueIntCounter(cond.left);
+    }
+
     /** ral-56n: `const b = Math.ceil (x / y)` (whole initializer). */
     rust56nCeilDivConst(d: any): boolean {
         if (d === undefined || !isVariableDeclaration(d) || (d.parent?.flags & NodeFlags.Const) === 0 || d.initializer === undefined) return false;
@@ -11431,6 +11447,9 @@ export class RustTranspiler extends BaseTranspiler {
             if ((RustTranspiler.RUST_SCALAR_ARITH_OPS.has(op) || op === SyntaxKind.PercentToken) && this.rustScalarExpressionKind(parent) !== undefined) return 'native';
             // tb: the bound of its own `for` counter's ordered test prints with the counter, unboxed (`printTbCounterBound`)
             if (this.rustTbCounterBound(parent, n, kind) !== undefined) return 'native';
+            // ral-56n: a ternary of two `i64` locals as the right bound of its own `for` counter's ordered test (prediction
+            // hyperliquid `zi < cappedDecimals`): rustScalarCounterCond prints `zi < capped`, the `Int` payloads ordered as i64
+            if (kind === 'int' && this.rust56nTernaryCounterBound(parent, n)) return 'native';
             // ral-56n: a `Math.ceil (a / b)` `Option<f64>` const ordered against a `for` counter (print56nCeilCompare)
             if (kind === 'onum' && this.rust56nCeilCounterCompare(parent) !== undefined) return 'native';
             // the other operand is still a `Value`: the runtime arithmetic reads this one boxed
