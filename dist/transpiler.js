@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-DSH7DNKY.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -56452,6 +56452,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     if (fresh && this.rustListLengthInit(node))
       return "int";
+    if (fresh && this.rustTernaryArm(node) && this.rustBaseStrFieldRead(node))
+      return "ostr";
     if (!isCallExpression6(node))
       return void 0;
     if (isIdentifier3(node.expression) && this.rustStrRuntimeCall(node))
@@ -56533,6 +56535,19 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return true;
     const kind = isIdentifier3(arg) ? this.rustScalarLocalOf(arg)?.kind : this.rustScalarValueKind(arg, true);
     return kind === "str" || kind === "ostr";
+  }
+  /** ral-52k: `this.<field>` of the table whose declaration is the base-tier `string` property (no venue redeclares it). */
+  rustBaseStrFieldRead(node) {
+    if (node === void 0 || !isPropertyAccessExpression3(node) || node.expression.kind !== SyntaxKind7.ThisKeyword || !_RustTranspiler.RUST_BASE_STR_FIELDS.has(String(node.name.text)))
+      return false;
+    let member;
+    try {
+      member = this.getChecker().getSymbolAtLocation(node.name)?.valueDeclaration;
+    } catch (e) {
+      return false;
+    }
+    member = member?.resolve?.() ?? member;
+    return member !== void 0 && member.kind === SyntaxKind7.PropertyDeclaration && member.type?.kind === SyntaxKind7.StringKeyword && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(member.getSourceFile?.()?.fileName ?? ""));
   }
   /** True when `node` (through parens) is the `whenTrue`/`whenFalse` arm of a ternary that initialises a declaration. */
   rustTernaryArm(node) {
@@ -60165,6 +60180,8 @@ ${binding(plan.indent)}` : ""), head: "" };
     }
     if (kind === "int" && this.rustListLengthInit(node))
       return this.rustListLengthText(node);
+    if (kind === "ostr" && this.rustTernaryArm(node) && this.rustBaseStrFieldRead(node))
+      return `${this.printNode(node, 0).trim()}.as_str().map(str::to_owned)`;
     if (kind === "ostr") {
       const row = this.rustRowFieldStrText(node);
       if (row !== void 0)
@@ -62858,7 +62875,7 @@ ${ind}];`;
     }
     if (this.rustVenueStrReturnLocal(inner) !== void 0 && this.rustVenueStrParamLocal(inner))
       return true;
-    if (isIdentifier3(inner) && this.rustBaseNativeStrMethod(findAncestor(inner, isFunctionLike)) && ((this.getCheckedTypeOf(inner)?.flags ?? 0) & ~(TypeFlags6.Undefined | TypeFlags6.Null)) === 0)
+    if (isIdentifier3(inner) && (this.rustBaseNativeStrMethod(findAncestor(inner, isFunctionLike)) || this.rustVenueKeptStrArm(findAncestor(inner, isFunctionLike))) && ((this.getCheckedTypeOf(inner)?.flags ?? 0) & ~(TypeFlags6.Undefined | TypeFlags6.Null)) === 0)
       return true;
     return this.printsValueExpression(inner) && this.primitiveKindOfType(this.getCheckedTypeOf(inner)) === "string";
   }
@@ -83496,6 +83513,8 @@ _RustTranspiler.RUST_BASE_SCALAR_RETURNS = {
   milliseconds: "oint",
   seconds: "oint"
 };
+// ral-52k: credential fields of the base class, declared `string` (each holds a `Str` or `Null` in the runtime struct)
+_RustTranspiler.RUST_BASE_STR_FIELDS = /* @__PURE__ */ new Set(["apiKey", "secret", "uid", "password", "privateKey", "walletAddress"]);
 // ── hand-written `-> String` runtime methods (rustStrRuntimeCall / printRustStrRuntimeCall) ──
 // Base methods the runtime implements by hand with the TS `string` return as a Rust `String`.
 _RustTranspiler.RUST_STR_RUNTIME_METHODS = /* @__PURE__ */ new Set([
@@ -83680,7 +83699,9 @@ _RustTranspiler.RUST_VENUE_KEPT_STR_ARMS = {
   "modetrade.ts#modetrade": ["hashMessage"],
   "polymarket.ts#polymarket": ["hashMessage", "signMessage", "signHash"],
   // yd: pro phemex fromEn joins venue phemex fromEn's `-> Option<String>` group; its by-name `from_en` arm stays
-  "pro/phemex.ts#phemex": ["fromEn"]
+  "pro/phemex.ts#phemex": ["fromEn"],
+  // ral-52k: typed by name (no ts/src declaration change); its by-name arm boxes the `Option<String>` once
+  "hyperliquid.ts#hyperliquid": ["updateSpotCurrencyCode"]
 };
 _RustTranspiler.RUST_DISPATCH_PARAM_KINDS = {
   "Value": "value",
