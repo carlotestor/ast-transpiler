@@ -59765,12 +59765,22 @@ ${binding(plan.indent)}` : ""), head: "" };
     const optional = kind.startsWith("o");
     if (isIdentifier3(node) && node.text !== "undefined") {
       const source = this.rustScalarLocalOf(node)?.kind;
+      if (kind === "int" && depth === 0 && source === void 0 && this.rust54eCounterWrite(node))
+        return true;
       return source === kind || optional && source === kind.slice(1) || kind === "ostr" && source === void 0 && depth === 0 && this.rustNilValueStrAlias(node);
     }
     const value = this.rustScalarValueKind(node, true);
     if (value === kind || optional && (value === "null" || value === kind.slice(1)))
       return true;
     return kind === "ostr" && value === void 0 && this.rustVenueStrCall(node);
+  }
+  /** ral-54e: `x = i` (statement write) where `i` is the counter of an enclosing `for (let i = <int>; ..; i++)` that only the
+   *  step writes (rustValueIntCounter: always an `Int`) and the write sits in that loop's body: the `i64` the counter holds. */
+  rust54eCounterWrite(node) {
+    if (!isIdentifier3(node) || this.rustTestTierSource(node) || !this.rustValueIntCounter(node))
+      return false;
+    const up = this.rustSkipWrappersUp(node.parent);
+    return isBinaryExpression5(up) && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && this.unwrapParens(up.right) === node && isIdentifier3(this.unwrapParens(up.left));
   }
   /** Plain `Value` argument slots: `this.`/`super.` methods without a native-typed slot, and `Precise.*`. */
   rustNilBoxSlotOk(call, at) {
@@ -60442,6 +60452,10 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       return `${super.printIdentifier(left)} = ${super.printIdentifier(alias)}.take()`;
     if (local?.kind === "ostr" && isIdentifier3(alias) && this.rustScalarIdentifierKind(alias) === void 0 && this.rustNilValueStrAlias(alias))
       return `${super.printIdentifier(left)} = ${super.printIdentifier(alias)}.into_opt_string()`;
+    if (local?.kind === "int" && isIdentifier3(alias) && this.rustScalarLocalOf(alias) === void 0 && this.rust54eCounterWrite(alias)) {
+      const name = super.transformIdentifier(alias, this.ReservedKeywordsReplacements[alias.text] ?? alias.text);
+      return `${super.printIdentifier(left)} = ${this.rustI64CounterUse(alias) ? name : `${name}.as_i64().unwrap_or_default()`}`;
+    }
     const text = local === void 0 ? void 0 : this.rustScalarNativeText(local.kind, right);
     const owned = text !== void 0 && isIdentifier3(alias) && text === super.printIdentifier(alias) && _RustTranspiler.RUST_COPY_SCALAR_KINDS.has(local.kind) && !(local.kind === "obool" && text === "None");
     const ownedNone = local?.kind === "obool" && text === "None";
