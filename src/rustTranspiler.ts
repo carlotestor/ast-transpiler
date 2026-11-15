@@ -8554,7 +8554,7 @@ export class RustTranspiler extends BaseTranspiler {
         const uname = super.printIdentifier(upper);
         const field = String(upperAccess.expression.name.text);
         if ((ukind !== 'str' && ukind !== 'ostr') || acc !== `get_value_mut(&mut self.${field}, &${uname})`) return undefined;
-        const upperText = ukind === 'str' ? `${uname}.clone()` : `${uname}.as_deref().unwrap_or("null").to_string()`;
+        const upperText = ukind === 'str' ? `${uname}.to_string()` : `${uname}.as_deref().unwrap_or("null").to_string()`;
         const last: any = this.rustSkipWrappers(left.argumentExpression);
         const lkind = isIdentifier(last) ? this.rustScalarLocalOf(last)?.kind : undefined;
         const lname = isIdentifier(last) ? super.printIdentifier(last) : '';
@@ -8565,7 +8565,8 @@ export class RustTranspiler extends BaseTranspiler {
         const chain = `if let Value::Dict(__bf03d0) = &mut self.${field} { let __bf03e1 = std::sync::Arc::make_mut(__bf03d0).entry(${upperText}).or_insert(Value::Null); `
             + `if let Value::Dict(__r05d) = __bf03e1 { std::sync::Arc::make_mut(__r05d).insert(${lastText}, ${bound ? '__be_tmp' : value}); } }`;
         const insert = bound ? `{ let __be_tmp = ${value}; ${chain} }` : chain;
-        if (insert.split('\n').some((l) => l.length + 40 > 400)) {
+        // the entry form is shorter than the ccxt bf03 text it replaces (`stringify_param(&k)`); 10 chars of headroom for renames
+        if (insert.split('\n').some((l) => l.length + 10 > 400)) {
             const lastKey = isStringLiteral(last) ? `Value::Str(${JSON.stringify(String(last.text))}.into())` : `Value::from(${lname}${lkind === 'str' ? '.as_str()' : '.as_deref()'})`;
             return `add_element_to_object(get_value_mut(&mut self.${field}, &Value::from(${uname}${ukind === 'str' ? '.as_str()' : '.as_deref()'})), &${lastKey}, ${value})`;
         }
