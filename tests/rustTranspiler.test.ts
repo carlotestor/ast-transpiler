@@ -18873,3 +18873,22 @@ describe('ral-55e: a parseToInt product (step = time * this.parseToInt (x)) is O
         expect(b).toContain('let mut step: Value = ');
     });
 });
+
+describe('ral-56e: an element read out of a List element borrows the element (&Value)', () => {
+    const run = (name: string, venue: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type List = any[];\nexport default class Exchange {\n    id: string;\n    safeList (o: any, k: any, d: any = undefined): any[] { return d; }\n    safeString (o: any, k: any, d: any = undefined): string { return d; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), venue);
+        return new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } }).transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    const venue = (body: string) => "import Exchange from './base/Exchange.js';\nimport type { Dict, List } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    costOf (config: Dict, params: Dict): any {\n        const limit = params['limit'];\n        const byLimit: List = this.safeList (config, 'byLimit', []);\n        for (let i = 0; i < byLimit.length; i++) {\n" + body + "        }\n        return 1;\n    }\n}\n";
+    test('an element read only as an element-read receiver is a borrowed &Value', () => {
+        const a = run ('ral56e-elem-a', venue ("            const entry = byLimit[i];\n            if (limit <= entry[0]) {\n                return entry[1];\n            }\n"));
+        expect(a).toContain('let entry: &Value = ');
+    });
+    test('an element handed on whole stays Value', () => {
+        const b = run ('ral56e-elem-b', venue ("            const entry = byLimit[i];\n            if (limit <= entry[0]) {\n                return entry;\n            }\n"));
+        expect(b).toContain('let mut entry: Value = ');
+    });
+});
