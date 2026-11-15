@@ -2427,6 +2427,8 @@ export class RustTranspiler extends BaseTranspiler {
         const scalarDecl = node.declarations.length === 1 ? this.printRustScalarLocalDeclaration(declaration, varName, indent) ?? this.printHandlerTableLocalDeclaration(declaration, varName, indent) ?? this.printWsUrlLocalDeclaration(declaration, varName, indent) ?? this.printWsFlightLocalDeclaration(declaration, varName, indent) ?? this.printWsCacheLocalDeclaration(declaration, varName, indent) : undefined;
         if (scalarDecl !== undefined) return scalarDecl;
         const parsedValue = this.printNode(declaration.initializer, identation).trim();
+        const sideLevel = node.declarations.length === 1 ? this.printRust57eSideLevel(declaration, parsedValue, indent, varName) : undefined;
+        if (sideLevel !== undefined) return sideLevel;
         const borrowedElem = node.declarations.length === 1 ? this.printRust56eBorrowedElement(declaration, parsedValue, indent, varName) : undefined;
         if (borrowedElem !== undefined) return borrowedElem;
         if (node.declarations.length === 1 && this.rustSubscriptionPresenceFlag(declaration, parsedValue)) return `${indent}let ${varName}: bool = ${parsedValue} != Value::Null`;
@@ -2502,6 +2504,88 @@ export class RustTranspiler extends BaseTranspiler {
         const m = /^([A-Za-z_][A-Za-z0-9_]*)\.get\((.+)\)\.cloned\(\)\.unwrap_or\(Value::Null\)$/.exec(parsedValue);
         if (m === null || !this.rust56eBorrowedElementLocal(declaration)) return undefined;
         return `${indent}let ${varName}: &Value = ${m[1]}.get(${m[2]}).unwrap_or(&Value::Null)`;
+    }
+
+    /** ral-57e: `const lvl = side[i]` off an order-book side handle (`Side::level` hands out the stored level, an `Arr` built
+     *  by `storeArray` / `store`, or `Null` out of range), read only as `const parts = lvl[K]` (numeric literal K) where
+     *  `parts` is itself read only at numeric literal keys. `lvl` holds the list (`into_list()`: the same `Arr`, an empty
+     *  list for `Null`), and `parts` borrows its element (`lvl.get(K).unwrap_or(&Value::Null)`): the same element
+     *  `get_value` cloned, `Null` where it answered `Null`. */
+    printRust57eSideLevel(declaration: any, parsedValue: string, indent: string, varName: string): string | undefined {
+        if (this.rust57eSideLevelLocal(declaration)) return `${indent}let ${varName}: crate::value::List = ${parsedValue}.into_list()`;
+        const init: any = this.rustSkipWrappers(declaration?.initializer);
+        if (init === undefined || !isElementAccessExpression(init) || !isIdentifier(init.expression)) return undefined;
+        const owner: any = this.rustDeclarationOfIdentifier(init.expression);
+        if (owner === undefined || owner.name === init.expression || !this.rust57eSideLevelLocal(owner)) return undefined;
+        const key: any = this.rustSkipWrappers(init.argumentExpression);
+        return `${indent}let ${varName}: &Value = ${super.printIdentifier(init.expression)}.get(${Number(key.text)}).unwrap_or(&Value::Null)`;
+    }
+
+    private rust57eSideLevels = new WeakMap<any, boolean>();
+
+    rust57eSideLevelLocal(declaration: any): boolean {
+        if (declaration?.kind !== SyntaxKind.VariableDeclaration) return false;
+        let decision = this.rust57eSideLevels.get(declaration);
+        if (decision === undefined) {
+            this.rust57eSideLevels.set(declaration, false); // re-entrancy guard
+            try {
+                decision = this.rust57eSideLevelLocalUncached(declaration);
+            } catch (e) {
+                decision = false;
+            }
+            this.rust57eSideLevels.set(declaration, decision);
+        }
+        return decision;
+    }
+
+    rust57eSideLevelLocalUncached(declaration: any): boolean {
+        if (!this.rust57eConstElementOf(declaration) || this.rustTestTierSource(declaration)) return false;
+        const init: any = this.rustSkipWrappers(declaration.initializer);
+        if (!this.rustBookSideLocalOf(init.expression)) return false;
+        let uses = 0;
+        const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n: any) => {
+            const up: any = n.parent;
+            if (!isElementAccessExpression(up) || up.expression !== n) return false;
+            const key: any = this.rustSkipWrappers(up.argumentExpression);
+            if (key === undefined || !isNumericLiteral(key) || !Number.isInteger(Number(key.text)) || Number(key.text) < 0) return false;
+            let top: any = up;
+            while (top.parent !== undefined && isParenthesizedExpression(top.parent)) top = top.parent;
+            const child: any = top.parent;
+            if (!isVariableDeclaration(child) || child.initializer !== top || !this.rust57eConstElementOf(child) || !this.rust57eLiteralReadOnly(child)) return false;
+            uses++;
+            return true;
+        });
+        return ok && uses > 0;
+    }
+
+    /** `const e = x[k]` (one const declarator, identifier receiver, same function). */
+    rust57eConstElementOf(declaration: any): boolean {
+        if (declaration?.kind !== SyntaxKind.VariableDeclaration || !isIdentifier(declaration.name)) return false;
+        const list: any = declaration.parent;
+        if (list?.kind !== SyntaxKind.VariableDeclarationList || list.declarations.length !== 1 || (list.flags & NodeFlags.Const) === 0) return false;
+        const init: any = this.rustSkipWrappers(declaration.initializer);
+        return init !== undefined && isElementAccessExpression(init) && isIdentifier(init.expression);
+    }
+
+    /** Every use of the local is the receiver of an rvalue element read at a numeric literal key (no write-back bind). */
+    rust57eLiteralReadOnly(declaration: any): boolean {
+        const written = (n: any): boolean => {
+            const up: any = n.parent;
+            if (isBinaryExpression(up) && up.left === n && up.operatorToken.kind >= SyntaxKind.FirstAssignment && up.operatorToken.kind <= SyntaxKind.LastAssignment) return true;
+            return isPrefixUnaryExpression(up) || isPostfixUnaryExpression(up) || isDeleteExpression(up);
+        };
+        let uses = 0;
+        const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n: any) => {
+            const up: any = n.parent;
+            if (!isElementAccessExpression(up) || up.expression !== n || written(up)) return false;
+            const key: any = this.rustSkipWrappers(up.argumentExpression);
+            if (key === undefined || !isNumericLiteral(key)) return false;
+            if (isElementAccessExpression(up.parent) && up.parent.expression === up && written(up.parent)) return false;
+            if (this.isWriteBackBindRead(up)) return false;
+            uses++;
+            return true;
+        });
+        return ok && uses > 0;
     }
 
     rust56eBorrowedElementLocal(declaration: any): boolean {
