@@ -19699,3 +19699,23 @@ describe('ral-58k: the key of a safeDict whose result is written into a Dict-dec
         expect(out).toContain('let mut code: Value = ');
     });
 });
+
+describe('ral-58k: a typed string value of a this.field[identifier] write boxes once there (kraken parseCurrency code)', () => {
+    const write = (name: string, venue: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface Dictionary<T> { [key: string]: T }\nexport default class Exchange {\n    commonCurrencies!: Dictionary<string>;\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeCurrencyCode (currencyId: Str, currency: any = undefined): Str { return currencyId; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), venue);
+        return new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } }).transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    const body = (key: string) => "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parseCurrency (rawCurrency: Dict): Dict {\n        const id = this.safeString (rawCurrency, '_coin_id');\n        let code = this.safeCurrencyCode (id);\n        if (id.indexOf ('.') < 0) {\n            const altName = this.safeString (rawCurrency, 'altname');\n            if (id !== altName && (id.startsWith ('X') || id.startsWith ('Z'))) {\n                code = this.safeCurrencyCode (altName);\n                if ((id !== undefined) && (code !== undefined)) {\n                    this.commonCurrencies[" + key + "] = code;\n                }\n            } else {\n                code = this.safeCurrencyCode (id);\n            }\n        }\n        const isFiat = code.indexOf ('.HOLD') >= 0;\n        return { 'id': id, 'code': code, 'type': isFiat ? 'fiat' : 'crypto' };\n    }\n}\n";
+    test('`this.commonCurrencies[id] = code` keeps code Option<String>', () => {
+        const out = write ('58k-this-ident-key', body ('id'));
+        expect(out).toContain('let mut code: Option<String> = ');
+        expect(out).toMatch(/insert\(crate::runtime::stringify_param\(&id\), (Value::from\(code\.as_deref\(\)\)|code\.clone\(\)\.map\(Value::from\)\.unwrap_or\(Value::Null\))\)/);
+    });
+    test('negative: the local as its own key keeps it Value', () => {
+        const out = write ('58k-this-ident-key-neg', body ('code'));
+        expect(out).not.toContain('let mut code: Option<String> = ');
+    });
+});

@@ -7628,6 +7628,9 @@ export class RustTranspiler extends BaseTranspiler {
         // (a string only where the write moves it: an earlier box would copy where the `Value` was shared)
         if ((kind === 'int' || kind === 'num' || kind === 'oint' || kind === 'onum') && this.rustThisFieldLiteralWrite(n)) return 'box';
         if ((kind === 'str' || kind === 'ostr') && this.rustThisFieldLiteralWrite(n) && this.rustLocalLastUse(n, this.rustDeclaredNode(n))) return 'box';
+        // ral-58k: `this.f[k] = n` keyed by a typed string identifier (kraken `this.commonCurrencies[id] = code`): the value
+        // boxes once into the printer's own insert, as the `Value` local was cloned there
+        if ((kind === 'str' || kind === 'ostr') && this.rust58kThisFieldIdentKeyWrite(n)) return 'box';
         // the last key of a nested `this.balance|options[..][k] = v` write: printed as the ccxt r05 insert itself
         if ((kind === 'str' || kind === 'ostr') && this.rustNestedFieldKeyUse(n)) return 'nkey';
         // a Copy number written into a nested `this.balance|options[..]['k'] = n`: the r05 insert takes the box
@@ -8501,6 +8504,16 @@ export class RustTranspiler extends BaseTranspiler {
         // a typed map bearer looks the borrowed key up itself; a `None` key is never contained (the `Null` key was not)
         if (this.rustDictBearerDeclaration(recvNode) !== undefined) return `Value::Bool(matches!(${super.printIdentifier(inner)}.as_deref(), Some(__k) if ${String(recvNode.text)}.contains_key(__k)))`;
         return `Value::Bool(matches!((&${recv}, ${super.printIdentifier(inner)}.as_deref()), (Value::Dict(__d), Some(__k)) if __d.contains_key(__k)))`;
+    }
+
+    /** ral-58k: `n` is the whole right side of a statement `this.f[k] = n`, `k` another identifier (decided from the AST). */
+    rust58kThisFieldIdentKeyWrite(n): boolean {
+        const write: any = n.parent;
+        if (!isBinaryExpression(write) || write.right !== n || write.operatorToken.kind !== SyntaxKind.EqualsToken || write.parent?.kind !== SyntaxKind.ExpressionStatement) return false;
+        const left: any = write.left;
+        if (!isElementAccessExpression(left) || !isPropertyAccessExpression(left.expression) || left.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
+        const key: any = this.rustSkipWrappers(left.argumentExpression);
+        return key !== undefined && isIdentifier(key) && key.text !== n.text && key.text !== 'undefined';
     }
 
     rustThisFieldLiteralWrite(n): boolean {
