@@ -73629,7 +73629,7 @@ ${iden}}`;
       return false;
     if (!_RustTranspiler.RUST_PRO_TIER_FILE.test(String(declaration.getSourceFile().fileName)))
       return false;
-    if (!this.rustHandlerTableRead(declaration.initializer))
+    if (!this.rustHandlerTableValue(declaration.initializer, false))
       return false;
     const fn = this.rustEnclosingFunction(declaration);
     if (fn === void 0 || isSourceFile5(fn))
@@ -73644,10 +73644,41 @@ ${iden}}`;
       if (isPropertyAccessExpression3(up) && up.expression === n && String(up.name.text) === "call" && isCallExpression6(up.parent) && up.parent.expression === up)
         return ++calls > 0;
       if (isBinaryExpression5(up) && up.left === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement)
-        return this.rustHandlerTableRead(up.right);
+        return this.rustHandlerTableValue(up.right, true);
       return false;
     });
     return ok && calls > 0;
+  }
+  // ral-49h: a handler value is a handler-table read, `c ? undefined : <read>` / `c ? <read> : undefined` (aster /
+  // modetrade / xt guard the key first) or, for a rewrite only, a `this.<method>` reference (xt `method = this.handleTrade`,
+  // which lowers to its name string). The declaration must be a table read, so a reference alone never starts a local.
+  rustHandlerTableValue(expr, write) {
+    const e = this.rustSkipWrappers(expr);
+    if (e === void 0)
+      return false;
+    if (e.kind === SyntaxKind7.ConditionalExpression) {
+      const whenTrueNull = this.literalKindOfNode(this.unwrapParens(e.whenTrue)) === "null";
+      const whenFalseNull = this.literalKindOfNode(this.unwrapParens(e.whenFalse)) === "null";
+      if (whenTrueNull === whenFalseNull)
+        return false;
+      return this.rustHandlerTableRead(whenTrueNull ? e.whenFalse : e.whenTrue);
+    }
+    if (write && isPropertyAccessExpression3(e) && e.expression.kind === SyntaxKind7.ThisKeyword) {
+      const member = symbolValueDeclaration(this.getChecker().getSymbolAtLocation(e.name));
+      return member !== void 0 && isMethodDeclaration5(member);
+    }
+    return this.rustHandlerTableRead(e);
+  }
+  /** The `Option<String>` text of a handler value accepted by `rustHandlerTableValue`. */
+  printHandlerTableValue(expr) {
+    const e = this.rustSkipWrappers(expr);
+    if (e?.kind === SyntaxKind7.ConditionalExpression) {
+      const whenTrueNull = this.literalKindOfNode(this.unwrapParens(e.whenTrue)) === "null";
+      const cond = this.printCondition(e.condition, 0).trim();
+      const read = `${this.printNode(whenTrueNull ? e.whenFalse : e.whenTrue, 0).trim()}.as_str().map(str::to_owned)`;
+      return whenTrueNull ? `(if ${cond} { None } else { ${read} })` : `(if ${cond} { ${read} } else { None })`;
+    }
+    return `${this.printNode(expr, 0).trim()}.as_str().map(str::to_owned)`;
   }
   /** `this.safeValue (table, k)` of a base-tier `safeValue` over a handler table. */
   rustHandlerTableRead(expr) {
@@ -73782,7 +73813,7 @@ ${iden}}`;
   printHandlerTableLocalWrite(left, right) {
     if (!this.rustHandlerTableLocalOf(left))
       return void 0;
-    return `${String(left.text)} = ${this.printNode(right, 0).trim()}.as_str().map(str::to_owned)`;
+    return `${String(left.text)} = ${this.printHandlerTableValue(right)}`;
   }
   /** A local map literal whose every value is a `this.<method>` reference, only read by `this.safeValue (m, k)`. */
   rustHandlerTable(node) {
@@ -73818,7 +73849,7 @@ ${iden}}`;
   printHandlerTableLocalDeclaration(declaration, varName, indent) {
     if (!this.rustHandlerTableLocal(declaration))
       return void 0;
-    return `${indent}let mut ${varName}: Option<String> = ${this.printNode(declaration.initializer, 0).trim()}.as_str().map(str::to_owned)`;
+    return `${indent}let mut ${varName}: Option<String> = ${this.printHandlerTableValue(declaration.initializer)}`;
   }
   printHandlerTableNullTest(left, right, op) {
     const leftNull = this.literalKindOfNode(this.unwrapParens(left)) === "null";
