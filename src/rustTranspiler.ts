@@ -12188,7 +12188,8 @@ export class RustTranspiler extends BaseTranspiler {
 
     rustReturnsOptMarket(node: any): boolean {
         if (node === undefined || node.kind !== SyntaxKind.MethodDeclaration || node.body === undefined || !isIdentifier(node.name)) return false;
-        if (!RustTranspiler.RUST_OPT_MARKET_RETURNS.has(String(node.name.text)) || !isClassDeclaration(node.parent)) return false;
+        if (!isClassDeclaration(node.parent)) return false;
+        if (!RustTranspiler.RUST_OPT_MARKET_RETURNS.has(String(node.name.text))) return this.rustVenueReturnsOptMarket(node);
         if (!RustTranspiler.RUST_BASE_TIER_FILE.test(String(node.getSourceFile?.()?.fileName ?? ''))) return false;
         const ret: any = node.type;
         if (ret?.kind !== SyntaxKind.TypeReference || !isIdentifier(ret.typeName) || String(ret.typeName.text) !== 'Market') return false;
@@ -12209,11 +12210,55 @@ export class RustTranspiler extends BaseTranspiler {
         return ok;
     }
 
-    /** `this.getMarketFromSymbols (..)` resolving to the typed base method. */
+    private rustVenueOptMarketDecisions = new WeakMap<any, boolean>();
+
+    /** ral-46e: a venue (not base-tier) method declared `Market`, not async, no override, never referenced by name as a
+     *  value, whose every return is `undefined` or a `safeMarket` record and that returns at least one of each
+     *  (bitstamp `getMarketFromTrade`): `Option<crate::types::Market>`, `None` for the `undefined` return. Its by-name
+     *  arm boxes with `IntoRaw` (`Null` for `None`, the record's `raw` otherwise), the value the `-> Value` method gave. */
+    rustVenueReturnsOptMarket(node: any): boolean {
+        const file = String(node.getSourceFile?.()?.fileName ?? '').replace(/\\/g, '/');
+        if (RustTranspiler.RUST_BASE_TIER_FILE.test(file) || !/ts[/]src[/]/.test(file) || /ts[/]src[/](?:pro[/])?test[/]/.test(file)) return false;
+        const ret: any = node.type;
+        if (ret?.kind !== SyntaxKind.TypeReference || !isIdentifier(ret.typeName) || String(ret.typeName.text) !== 'Market') return false;
+        if ((node.modifiers ?? []).some((m: any) => m.kind === SyntaxKind.AsyncKeyword || m.kind === SyntaxKind.OverrideKeyword || m.kind === SyntaxKind.StaticKeyword)) return false;
+        let decision = this.rustVenueOptMarketDecisions.get(node);
+        if (decision !== undefined) return decision;
+        this.rustVenueOptMarketDecisions.set(node, false); // re-entrancy guard
+        let ok = true;
+        let nones = 0;
+        let records = 0;
+        const visit = (n: any): void => {
+            if (!ok || n === undefined) return;
+            if (n !== node && isFunctionLike(n)) return;
+            if (isReturnStatement(n)) {
+                const inner: any = n.expression === undefined ? undefined : this.unwrapParens(n.expression);
+                if (inner !== undefined && this.literalKindOfNode(inner) === 'null') { nones++; return; }
+                if (inner !== undefined && isCallExpression(inner) && isPropertyAccessExpression(inner.expression)
+                    && String(inner.expression.name.text) === 'safeMarket' && this.rustIsSafeMarketCall(inner)) { records++; return; }
+                ok = false;
+                return;
+            }
+            n.forEachChild(visit);
+        };
+        try {
+            node.body.forEachChild(visit);
+            decision = ok && nones > 0 && records > 0 && this.rustVenueOnlyMethod(node, String(node.name.text)) && !this.rustMethodReferencedAsValue(node);
+        } catch (e) {
+            decision = false;
+        }
+        this.rustVenueOptMarketDecisions.set(node, decision);
+        return decision;
+    }
+
+    /** `this.getMarketFromSymbols (..)` resolving to the typed base method (or a venue `rustVenueReturnsOptMarket` one). */
     rustIsOptMarketCall(init: any): boolean {
         const call: any = this.rustSkipWrappers(init);
         if (call === undefined || !isCallExpression(call) || !isPropertyAccessExpression(call.expression) || call.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
-        if (!RustTranspiler.RUST_OPT_MARKET_RETURNS.has(String(call.expression.name.text))) return false;
+        if (!RustTranspiler.RUST_OPT_MARKET_RETURNS.has(String(call.expression.name.text))) {
+            const venue: any = this.rustScalarCallee(call);
+            return venue !== undefined && isMethodDeclaration(venue) && venue.body !== undefined && this.rustVenueReturnsOptMarket(venue);
+        }
         let declaration: any = this.rustScalarCallee(call);
         if (declaration !== undefined && isMethodDeclaration(declaration) && declaration.body === undefined && isClassDeclaration(declaration.parent)) {
             const name = String(call.expression.name.text);
@@ -12249,6 +12294,11 @@ export class RustTranspiler extends BaseTranspiler {
         const inner: any = this.unwrapParens(exp);
         if (this.literalKindOfNode(inner) === 'null') return 'None';
         if (this.rustIsTypedMarketCall(inner)) return `Some(${this.printTypedMarketValue(inner)})`;
+        // ral-46e: a `safeMarket` record (venue `Option<Market>` producer) is never Null
+        if (this.rustIsSafeMarketCall(inner)) {
+            const boxed = this.printNode(exp, 0).trim();
+            return `Some(${this.peelValueBox(boxed, 'crate::types::IntoRaw::into_raw(') ?? boxed})`;
+        }
         // a struct local moves out; a boxed one (no struct decision) decodes once
         if (isIdentifier(inner) && this.rustTypedMarketLocalOf(inner) !== undefined) return `Some(${super.printIdentifier(inner)})`;
         return `<Option<crate::types::Market> as crate::types::FromRaw>::from_raw(${this.printNode(exp, 0).trim()})`;

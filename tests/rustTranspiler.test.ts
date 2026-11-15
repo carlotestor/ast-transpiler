@@ -16445,3 +16445,20 @@ describe('ral-46e: a venue `string[]` parameter every caller fills with an Objec
         expect(out).toMatch(/pub fn pickType\(&self, subscriptions: impl Into<crate::Value>\)/);
     });
 });
+
+describe('ral-46e: a venue Market producer returning undefined or a safeMarket record prints Option<crate::types::Market>', () => {
+    test('producer -> Option<Market>, caller local Option<Market>, arm boxes with IntoRaw', () => {
+        const dir = path.join (rustFixtureRoot, 'venue-opt-market-46e');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface MarketInterface { symbol: string; [key: string]: any }\nexport type Market = MarketInterface | undefined;\nexport default class Exchange {\n    markets_by_id: Dict = undefined;\n    market (symbol: string): MarketInterface { return undefined; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    safeMarket (marketId: Str = undefined, market: Market = undefined, delimiter: Str = undefined): MarketInterface {\n        if (market !== undefined) {\n            return market;\n        }\n        return this.market (marketId);\n    }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Market, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    getMarketFromTrade (trade: Dict): Market {\n        const id = this.safeString (trade, 'pair');\n        if (id !== undefined) {\n            return this.safeMarket (id);\n        }\n        return undefined;\n    }\n    getMarketCast (trade: Dict): Market {\n        if (trade['x'] !== undefined) {\n            return this.safeMarket (trade['x']);\n        }\n        return trade['m'] as Market;\n    }\n    parseIt (trade: Dict, market: Market = undefined): Dict {\n        let marketResolved: Market = undefined;\n        if (marketResolved === undefined) {\n            marketResolved = this.getMarketFromTrade (trade);\n        }\n        return { 'symbol': this.safeString (marketResolved, 'symbol') };\n    }\n}\n");
+        const typed = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['market'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const out = typed.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toMatch(/fn getMarketFromTrade\(&self, [^)]*\) -> Option<crate::types::Market>/);
+        expect(out).toContain('return None;');
+        expect(out).not.toContain('Some(crate::types::IntoRaw::into_raw(');
+        expect(out).toContain('let mut marketResolved: Option<crate::types::Market> = None');
+        // negative: a cast return keeps the boxed producer
+        expect(out).toMatch(/fn getMarketCast\(&self, [^)]*\) -> Value/);
+    });
+});
