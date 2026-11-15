@@ -1182,6 +1182,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustThisFieldLiteralWrite(n: any): boolean;
     /** ud: `n` is the whole right side of `x[k1][k2] = n` with `x` a typed two-level local map (`rustNestedBearerInsert`). */
     rustUdNestedBearerValue(n: any): boolean;
+    /** ral-55k: `n` is the whole right side of a statement `x['a']['b'] = n` with `x` a typed one-level map bearer and both keys
+     *  plain string literals (rustBearerChainedWrite prints the two-level guarded native insert). */
+    rustBearerLitChainValue(n: any): boolean;
     /** ral-53i: `n` is k1 or k2 of a statement `x[k1][k2] = v` with `x` a typed two-level local map (`rustNestedBearerInsert`). */
     rustUdNestedBearerKey(n: any): boolean;
     /** ral-53i: `key` is k1 of a statement bucket seed `x[k1] = {}` or k1 / k2 of a statement write `x[k1][k2] = v` with `x`
@@ -1524,8 +1527,6 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  place. Only all-`{}` format strings (no literal text, no `{:?}`); the inner box is exactly one balanced `format!` slot. */
     rustFlattenConcatChain(line: string): string;
     rustSplitLongLines(text: string, names: string[]): string;
-    /** ral-54k: map local `name` is read (not written) by the key local `key` somewhere (`m[key]` outside an assignment target). */
-    rustMapReadByLocal(declaration: any, name: string, key: any): boolean;
     /** ral-54k: `this.safeCurrencyCode (..)` (base reader, `string` return). */
     rustSafeCurrencyCodeInit(init: any): boolean;
     /** `m[k] = v` with `k` a `String` local whose single-key write prints a native insert. */
@@ -4160,6 +4161,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     arrLength(node: any, receiver: string): string | undefined;
     /** `x.push(v)` statement on an Arr-only local: `append_to_array`'s cache-push arm needs a Dict. */
     arrPush(node: any, name: string | undefined, parsedArg: string | undefined): string | undefined;
+    /** ral-55k: a never-reassigned `Value` local initialised `f['lit']` (string-literal key), where `f` is itself a never-reassigned
+     *  bearerReadLocal (an element read of a typed plain map local). ccxt's write-back pass binds identifier keys only. */
+    rustLitKeyBearerReadLocal(ident: any): boolean;
     /** A `Value` local whose single declaration is an element read of a local typed as a
      *  plain `IndexMap<String, Value>`: plain data all the way down, never a book handle. */
     bearerReadLocal(ident: any): boolean;

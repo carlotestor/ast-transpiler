@@ -58858,6 +58858,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "box";
     if (this.rustUdNestedBearerValue(n) && (kind === "int" || kind === "num" || kind === "oint" || kind === "onum" || (kind === "str" || kind === "ostr") && this.rustLocalLastUse(n, this.rustDeclaredNode(n))))
       return "box";
+    if (this.rustBearerLitChainValue(n) && (kind === "int" || kind === "num" || kind === "oint" || kind === "onum" || (kind === "str" || kind === "ostr") && this.rustLocalLastUse(n, this.rustDeclaredNode(n))))
+      return "box";
     if ((kind === "str" || kind === "ostr") && this.rustUdNestedBearerKey(n))
       return "key";
     if (this.rustScalarInNestedWrite(n))
@@ -59731,6 +59733,25 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (!isElementAccessExpression4(outer) || !isElementAccessExpression4(outer.expression))
       return false;
     return this.rustNestedDictBearerDeclaration(outer.expression.expression) !== void 0;
+  }
+  /** ral-55k: `n` is the whole right side of a statement `x['a']['b'] = n` with `x` a typed one-level map bearer and both keys
+   *  plain string literals (rustBearerChainedWrite prints the two-level guarded native insert). */
+  rustBearerLitChainValue(n) {
+    const write = n.parent;
+    if (!isBinaryExpression5(write) || write.right !== n || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const outer = write.left;
+    if (!isElementAccessExpression4(outer) || !isElementAccessExpression4(outer.expression))
+      return false;
+    const hop = outer.expression;
+    const lit = (k) => {
+      const t = this.rustSkipWrappers(k);
+      return t !== void 0 && isStringLiteral3(t) && !(String(t.text) in this.StringLiteralReplacements);
+    };
+    if (!lit(outer.argumentExpression) || !lit(hop.argumentExpression))
+      return false;
+    const base = this.rustStripWrappers(hop.expression);
+    return base !== void 0 && isIdentifier3(base) && this.rustDictBearerDeclaration(base) !== void 0;
   }
   /** ral-53i: `n` is k1 or k2 of a statement `x[k1][k2] = v` with `x` a typed two-level local map (`rustNestedBearerInsert`). */
   rustUdNestedBearerKey(n) {
@@ -62355,20 +62376,6 @@ ${ind}];`;
       return this.rustSplitLongLine(l, nth++, lines.slice(k + 1).join("\n")) ?? l;
     }).join("\n");
   }
-  /** ral-54k: map local `name` is read (not written) by the key local `key` somewhere (`m[key]` outside an assignment target). */
-  rustMapReadByLocal(declaration, name, key) {
-    let read = false;
-    this.rustLocalUsesAll(declaration, name, false, (u) => {
-      const access = u.parent;
-      if (isElementAccessExpression4(access) && access.expression === u && !(isBinaryExpression5(access.parent) && access.parent.left === access)) {
-        const k = this.rustSkipWrappers(access.argumentExpression);
-        if (isIdentifier3(k) && this.rustDeclaredNode(k) === key)
-          read = true;
-      }
-      return true;
-    });
-    return read;
-  }
   /** ral-54k: `this.safeCurrencyCode (..)` (base reader, `string` return). */
   rustSafeCurrencyCodeInit(init) {
     const call = this.rustSkipWrappers(init);
@@ -62497,7 +62504,7 @@ ${ind}];`;
           keyRead = true;
         return true;
       });
-      if (enumerated && keyRead && this.rustSafeCurrencyCodeInit(local.initializer) && !this.rustMapReadByLocal(declaration, name, local))
+      if (enumerated && keyRead && this.rustSafeCurrencyCodeInit(local.initializer))
         return this.rustScalarInsertKeyUse(n);
       if (enumerated)
         return !keyRead && (isElementAccessExpression4(this.rustSkipWrappers(local.initializer)) || this.rustTbNetworkCodeInit(local.initializer)) && this.rustScalarInsertKeyUse(n);
@@ -81867,6 +81874,9 @@ ${this.getIden(identation)}}`;
       const bareValue = _RustTranspiler.cloneIfBareLocal(bareArg);
       return `if let Value::Arr(__a) = &mut ${name} { std::sync::Arc::make_mut(__a).push(${bareValue}); }`;
     }
+    if (name !== void 0 && parsedArg !== void 0 && this.rustLitKeyBearerReadLocal(recv) && node?.arguments?.length === 1 && node.arguments[0].kind !== SyntaxKind7.SpreadElement && node.parent?.kind === SyntaxKind7.ExpressionStatement && name.trim() === this.printNode(recv, 0).trim() && this.rustVecPushShape(node, String(recv.text))) {
+      return `if let Value::Arr(__a) = &mut ${name} { std::sync::Arc::make_mut(__a).push(${_RustTranspiler.cloneIfBareLocal(parsedArg.trim())}); }`;
+    }
     if (name === void 0 || parsedArg === void 0 || node?.arguments?.length !== 1 || node.arguments[0].kind === SyntaxKind7.SpreadElement || node.parent?.kind !== SyntaxKind7.ExpressionStatement || !this.arrLocal(recv, false) || name.trim() !== this.printNode(recv, 0).trim())
       return void 0;
     if (!this.rustVecPushShape(node, String(recv.text)))
@@ -81874,6 +81884,23 @@ ${this.getIden(identation)}}`;
     const arg = parsedArg.trim();
     const value = _RustTranspiler.cloneIfBareLocal(arg);
     return `if let Value::Arr(__a) = &mut ${name} { std::sync::Arc::make_mut(__a).push(${value}); }`;
+  }
+  /** ral-55k: a never-reassigned `Value` local initialised `f['lit']` (string-literal key), where `f` is itself a never-reassigned
+   *  bearerReadLocal (an element read of a typed plain map local). ccxt's write-back pass binds identifier keys only. */
+  rustLitKeyBearerReadLocal(ident) {
+    if (ident === void 0 || !isIdentifier3(ident))
+      return false;
+    const declaration = this.rustSingleLocalDeclaration(ident);
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name))
+      return false;
+    const init = this.rustSkipWrappers(declaration.initializer);
+    if (init === void 0 || !isElementAccessExpression4(init) || !isStringLiteral3(init.argumentExpression))
+      return false;
+    const base = this.rustStripWrappers(init.expression);
+    if (base === void 0 || !isIdentifier3(base) || !this.bearerReadLocal(base))
+      return false;
+    const baseDecl = this.rustSingleLocalDeclaration(base);
+    return baseDecl !== void 0 && isVariableDeclaration3(baseDecl) && !this.rustLocalReassigned(baseDecl) && !this.rustLocalReassigned(declaration);
   }
   /** A `Value` local whose single declaration is an element read of a local typed as a
    *  plain `IndexMap<String, Value>`: plain data all the way down, never a book handle. */
