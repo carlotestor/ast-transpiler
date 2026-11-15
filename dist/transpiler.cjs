@@ -79080,7 +79080,7 @@ ${iden}}`;
           return false;
         const form = plus ? "concat" : this.rustScalarUseForm(n, "ostr");
         this.rustScalarUseForms.set(n, form);
-        if (form === void 0 || form === "err" || form === "key" || form === "okey" || form === "targ" || form === "kin")
+        if (form === void 0 || form === "err" || form === "key" || form === "okey" || form === "targ" && !this.rustWsKeyUse(n) || form === "kin")
           return false;
         const push = _chunkC7C726CWcjs.findAncestor.call(void 0, n, (m) => _is.isStatement.call(void 0, m) || _is.isCallExpression.call(void 0, m) && _is.isPropertyAccessExpression.call(void 0, m.expression) && m.expression.name.text === "push");
         if (push !== void 0 && _is.isCallExpression.call(void 0, push))
@@ -79100,7 +79100,7 @@ ${iden}}`;
           return true;
         }
         const feeds = _chunkC7C726CWcjs.findAncestor.call(void 0, n, (m) => _is.isStatement.call(void 0, m) || _is.isBinaryExpression.call(void 0, m) && m.operatorToken.kind === _ast.SyntaxKind.EqualsToken && _is.isIdentifier.call(void 0, m.left) || _is.isVariableDeclaration.call(void 0, m));
-        if (feeds !== void 0 && !_is.isStatement.call(void 0, feeds) && (form === "box" || form === "xbox") && !this.rustStrSlotListElement(n))
+        if (feeds !== void 0 && !_is.isStatement.call(void 0, feeds) && (form === "box" || form === "xbox") && !this.rustStrSlotListElement(n) && !this.rustStrSlotBoxIsNotValueOf(n, feeds))
           return false;
         if (_RustTranspiler.RUST_NIL_SCALAR_NATIVE_FORMS.has(form) || form === "write")
           nativeUses++;
@@ -79162,6 +79162,24 @@ ${iden}}`;
       return false;
     const kind = this.rustScalarDecisions.get(declaration);
     return (kind === "str" || kind === "ostr") && this.rustLocalLastUse(other, declaration) && this.rustSlotUseOutsideLoop(other, declaration);
+  }
+  /** ral-53f: a box that is a call argument or an object-literal value below another local's initializer / write
+   *  (`safeDict (this.options, type, {})`, `extend ({ 'type': type }, ..)`), never that local's value itself (not reached
+   *  through parentheses, ternary arms or `||` / `&&` / `??` operands only): the target's typing does not read the slot. */
+  rustStrSlotBoxIsNotValueOf(n, feeds) {
+    let top = n;
+    for (; ; ) {
+      const up = top.parent;
+      if (up === void 0 || up === feeds)
+        return false;
+      if (_is.isParenthesizedExpression.call(void 0, up) || _is.isConditionalExpression.call(void 0, up) && up.condition !== top || _is.isBinaryExpression.call(void 0, up) && [_ast.SyntaxKind.BarBarToken, _ast.SyntaxKind.AmpersandAmpersandToken, _ast.SyntaxKind.QuestionQuestionToken].includes(up.operatorToken.kind)) {
+        top = up;
+        continue;
+      }
+      if (_is.isBinaryExpression.call(void 0, up) && up.operatorToken.kind === _ast.SyntaxKind.EqualsToken)
+        return false;
+      return _is.isCallExpression.call(void 0, up) && up.arguments.includes(top) || up.kind === _ast.SyntaxKind.PropertyAssignment && up.initializer === top;
+    }
   }
   /** pb: a checker-string slot of a native tuple in a method, read whole as the initializer or the statement write of
    *  another local of the same function: the slot and that local are decided together by `rustScalarSolveScope`. */

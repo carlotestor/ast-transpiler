@@ -3823,6 +3823,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** 40i: the other arm is a typed string local of the same function read here for the last time (bybit withdraw
      *  `defaultAccountType`): the arm moves it into the target, so typing the target adds no copy. */
     rustStrTernaryOtherArmMoves(other: any, ternary: any): boolean;
+    /** ral-53f: a box that is a call argument or an object-literal value below another local's initializer / write
+     *  (`safeDict (this.options, type, {})`, `extend ({ 'type': type }, ..)`), never that local's value itself (not reached
+     *  through parentheses, ternary arms or `||` / `&&` / `??` operands only): the target's typing does not read the slot. */
+    rustStrSlotBoxIsNotValueOf(n: any, feeds: any): boolean;
     /** pb: a checker-string slot of a native tuple in a method, read whole as the initializer or the statement write of
      *  another local of the same function: the slot and that local are decided together by `rustScalarSolveScope`. */
     rustSlotJoinsSolve(element: any): boolean;
