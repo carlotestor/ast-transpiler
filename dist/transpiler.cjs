@@ -57443,6 +57443,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const form = this.rustScalarUseForms.get(n);
       if ((trial === "str" || trial === "ostr") && (form === "box" || form === "xbox" || form === "err" || form === "key") && !this.rustScalarBoxMoves(n, form, declaration) && !(form === "key" && trial === "ostr") && !(form === "box" && this.rustElementReadScalarKind(this.unwrapParens(declaration.initializer)) !== void 0 && this.rustScalarSelfArgBox(n)) && !(form === "box" && trial === "str" && !this.rustStrNoLend && this.rustScalarSelfArgBox(n) && this.rustFormatLendLocal(declaration)) && !(form === "box" && trial === "str" && !this.rustStrNoLend && this.rustClockString(this.unwrapParens(declaration.initializer)) && this.rustLendSlot(n)) && !(form === "box" && !this.rustStrNoLend && this.rustUdReaderStr(declaration.initializer) && this.rustLendSlot(n) && this.rustUdLent.add(declaration)))
         return false;
+      if (form === "concat" && (trial === "str" || trial === "ostr"))
+        continue;
       const push = _chunkQYYT7MP4cjs.findAncestor.call(void 0, n, (m) => _is.isStatement.call(void 0, m) || _is.isCallExpression.call(void 0, m) && _is.isPropertyAccessExpression.call(void 0, m.expression) && m.expression.name.text === "push");
       if (push !== void 0 && _is.isCallExpression.call(void 0, push) && !this.rustCopyPushPairElement(n, push, trial))
         return false;
@@ -58245,6 +58247,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if ((kind === "int" || kind === "oint") && _is.isCallExpression.call(void 0, parent) && parent.expression !== n && _is.isElementAccessExpression.call(void 0, parent.expression) && parent.expression.expression.kind === _ast.SyntaxKind.ThisKeyword && _is.isIdentifier.call(void 0, parent.expression.argumentExpression))
       return "box";
     if (this.rustStrMethodArgNative(n, kind))
+      return "native";
+    if (this.rust43bValueRecvFindNeedle(n, kind))
       return "native";
     if (_is.isCallExpression.call(void 0, parent) && parent.expression !== n && parent.arguments.some((a) => a === n)) {
       return this.rustNilBoxSlotOk(parent, parent.arguments.indexOf(n)) || this.rustWsClientCallArg(parent, kind) ? "box" : this.rustScalarExpressionUseForm(n, kind);
@@ -59760,6 +59764,8 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
     const recvKind = _nullishCoalesce(this.rustScalarIdentifierKind(recv), () => ( (params ? _optionalChain([this, 'access', _9043 => _9043.rustScalarParamRead, 'call', _9044 => _9044(recv), 'optionalAccess', _9045 => _9045.kind]) : void 0)));
     if (recvKind === "int" && method === "toString")
       return { recv, recvKind, method, kind: "str" };
+    if (recvKind === "oint" && method === "toString" && this.rustScalarLocalOf(recv) !== void 0 && !this.rust43bInPlusEquals(call))
+      return { recv, recvKind, method, kind: "str" };
     if (recvKind !== "str" && recvKind !== "ostr")
       return void 0;
     if (shape === "affix")
@@ -60949,6 +60955,8 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
         return wrap(`${name}.trim().to_string()`);
       if (method.method === "toString" && method.recvKind === "int")
         return wrap(`format!("{}", ${name})`);
+      if (method.method === "toString" && method.recvKind === "oint")
+        return wrap(`format!("{}", Value::from(${name}))`);
       if (method.method === "toString") {
         const local = this.rustScalarLocalOf(method.recv);
         let up = node.parent;
@@ -77631,12 +77639,40 @@ ${this.getIden(identation)}}`;
       return void 0;
     return `Value::str(format!("{:.*}", ${digits}, ${receiver}.as_f64().unwrap_or(0.0)))`;
   }
+  /** ral-43b: `call` sits in the right side of a `+=` (the typed `String` target's push_str join keys on the old operand
+   *  text, bitget / bybit `channel += limit.toString ()` went back to `Value` in gate 14163): keep the old path there. */
+  rust43bInPlusEquals(call) {
+    const top = _chunkQYYT7MP4cjs.findAncestor.call(void 0, call, (m) => _is.isStatement.call(void 0, m) || _is.isBinaryExpression.call(void 0, m) && m.operatorToken.kind === _ast.SyntaxKind.PlusEqualsToken);
+    return top !== void 0 && _is.isBinaryExpression.call(void 0, top) && this.isNodeInsideNode(call, top.right);
+  }
+  /** ral-43b: `n` is the only argument of `recv.indexOf(n)`, a typed string local (not a ws key), and `recv` is a string-typed
+   *  `Value` place (a plain identifier / property chain that is no typed local): the needle reads as `Option<&str>` in the
+   *  `zip` find, `-1` when either side is not a string, exactly the helper's answer for the `Str` / `Null` the box held. */
+  rust43bValueRecvFindNeedle(n, kind) {
+    if (kind !== "str" && kind !== "ostr")
+      return false;
+    const call = n.parent;
+    if (call === void 0 || !_is.isCallExpression.call(void 0, call) || call.arguments.length !== 1 || call.arguments[0] !== n || !_is.isPropertyAccessExpression.call(void 0, call.expression) || call.expression.name.text !== "indexOf")
+      return false;
+    const recv = call.expression.expression;
+    const plain = (x) => _is.isIdentifier.call(void 0, x) || _is.isPropertyAccessExpression.call(void 0, x) && _is.isIdentifier.call(void 0, x.name) && plain(x.expression);
+    if (!plain(recv) || this.primitiveKindOfType(this.typeOfNodeIfAny(recv)) !== "string")
+      return false;
+    if (_is.isIdentifier.call(void 0, recv) && (this.rustStringLocalIdentifierIsTyped(recv) || this.rustScalarLocalOf(recv) !== void 0 || this.rustScalarIdentifierKind(recv) !== void 0))
+      return false;
+    return !this.rust41bWsKeyLocal(n);
+  }
   // `x.indexOf(y)` with a proven-string needle: `-1` when either side is not a `Str` (byte index).
   printNativeStringIndexOfString(node, receiverText) {
     const receiver = this.rustNativeStringReceiver(node, receiverText);
     if (receiver === void 0 || _optionalChain([node, 'access', _10442 => _10442.arguments, 'optionalAccess', _10443 => _10443.length]) !== 1)
       return void 0;
     const needle = node.arguments[0];
+    const typed = _is.isIdentifier.call(void 0, needle) ? this.rustScalarLocalOf(needle) : void 0;
+    if (typed !== void 0 && this.rustScalarUseForms.get(needle) === "native" && this.rust43bValueRecvFindNeedle(needle, typed.kind)) {
+      const name = super.printIdentifier(needle);
+      return `Value::Int(${receiver}.as_str().zip(${typed.kind === "str" ? `Some(${name}.as_str())` : `${name}.as_deref()`}).and_then(|(__s, __n)| __s.find(__n)).map(|__i| __i as i64).unwrap_or(-1))`;
+    }
     if (!_is.isIdentifier.call(void 0, needle) || this.primitiveKindOfType(this.typeOfNodeIfAny(needle)) !== "string")
       return void 0;
     if (!this.isDeclaredValueIdentifier(needle) || this.rustStringLocalIdentifierIsTyped(needle))
