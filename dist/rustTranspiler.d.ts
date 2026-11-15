@@ -753,6 +753,8 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  declares `k` a string (a unified `Ticker` / `Trade` / `Order` row): the `Option<String>` the boxed read held
      *  (a non-string slot reads as `None`, like the lf / md market-field rule), only as a `const`/`let` initializer. */
     rustRowFieldStrText(node: any): string | undefined;
+    /** ral-42g: `xs[i]` whose list is a `string[]` / `Strings` parameter rustStrListParam proves (base-declared or every call site). */
+    rustStrListParamElement(init: any): boolean;
     /** `xs[i]` over a typed list parameter (the source the element-read rule admits from a parameter). */
     rustListParamElement(init: any): boolean;
     /** The local's last use is the whole right side of a statement `y = x;`: the boxed local moves there,

@@ -4603,7 +4603,10 @@ export class RustTranspiler extends BaseTranspiler {
         }
         // an element of a typed list parameter keeps the 400-char guard and never copies at a box
         // and never feeds another local's write (typing it flips that local's own decision and its method's return)
-        if (this.rustListParamElement(declaration.initializer) && (copied > 0 || (boxed > 0 && typedUses === 0) || this.rustScalarFeedsWrite(declaration))) return undefined;
+        // ral-42g: an element of a `string[]` / `Strings` parameter proven a string list (rustStrListParam) is a string or Null in
+        // every row: its copying boxes copy exactly what the `Value` clone copied; it still never feeds another local's write
+        const strParamElem = this.rustListParamElement(declaration.initializer) && this.rustStrListParamElement(declaration.initializer);
+        if (this.rustListParamElement(declaration.initializer) && (strParamElem ? this.rustScalarFeedsWrite(declaration) : (copied > 0 || (boxed > 0 && typedUses === 0) || this.rustScalarFeedsWrite(declaration)))) return undefined;
         if (this.rustListParamElement(declaration.initializer) && boxed > 0) this.rustScalarGuarded.add(declaration);
         // a non-element local admitted by a map-key read or `in` test must not copy where the `Value` moved
         if (copied > 0 && kind === 'ostr' && !this.rustElementReadScalarKind(this.unwrapParens(declaration.initializer)) && this.rustScalarKeyedLocal(declaration)) return undefined;
@@ -5677,6 +5680,13 @@ export class RustTranspiler extends BaseTranspiler {
             return `${this.rustTestTierSource(node) ? 'ccxt' : 'crate'}::value::KeyRead::key_read(&&${super.printIdentifier(node.expression)}, "${this.escapeRustStringLiteral(String(node.argumentExpression.text))}").as_str().map(str::to_owned)`;
         }
         return undefined;
+    }
+
+    /** ral-42g: `xs[i]` whose list is a `string[]` / `Strings` parameter rustStrListParam proves (base-declared or every call site). */
+    rustStrListParamElement(init: any): boolean {
+        const node: any = this.unwrapParens(init);
+        const owner: any = node !== undefined && isElementAccessExpression(node) && isIdentifier(node.expression) ? this.rustDeclaredNode(node.expression) : undefined;
+        return owner !== undefined && isParameterDeclaration(owner) && this.rustStrListParam(owner, 0);
     }
 
     /** `xs[i]` over a typed list parameter (the source the element-read rule admits from a parameter). */

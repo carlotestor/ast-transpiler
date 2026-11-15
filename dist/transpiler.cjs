@@ -55807,7 +55807,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         return void 0;
       this.rustStrLentLocals.add(declaration);
     }
-    if (this.rustListParamElement(declaration.initializer) && (copied > 0 || boxed > 0 && typedUses === 0 || this.rustScalarFeedsWrite(declaration)))
+    const strParamElem = this.rustListParamElement(declaration.initializer) && this.rustStrListParamElement(declaration.initializer);
+    if (this.rustListParamElement(declaration.initializer) && (strParamElem ? this.rustScalarFeedsWrite(declaration) : copied > 0 || boxed > 0 && typedUses === 0 || this.rustScalarFeedsWrite(declaration)))
       return void 0;
     if (this.rustListParamElement(declaration.initializer) && boxed > 0)
       this.rustScalarGuarded.add(declaration);
@@ -56912,6 +56913,12 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return `${this.rustTestTierSource(node) ? "ccxt" : "crate"}::value::KeyRead::key_read(&&${super.printIdentifier(node.expression)}, "${this.escapeRustStringLiteral(String(node.argumentExpression.text))}").as_str().map(str::to_owned)`;
     }
     return void 0;
+  }
+  /** ral-42g: `xs[i]` whose list is a `string[]` / `Strings` parameter rustStrListParam proves (base-declared or every call site). */
+  rustStrListParamElement(init) {
+    const node = this.unwrapParens(init);
+    const owner = node !== void 0 && _is.isElementAccessExpression.call(void 0, node) && _is.isIdentifier.call(void 0, node.expression) ? this.rustDeclaredNode(node.expression) : void 0;
+    return owner !== void 0 && _is.isParameterDeclaration.call(void 0, owner) && this.rustStrListParam(owner, 0);
   }
   /** `xs[i]` over a typed list parameter (the source the element-read rule admits from a parameter). */
   rustListParamElement(init) {

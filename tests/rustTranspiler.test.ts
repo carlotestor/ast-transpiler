@@ -15374,3 +15374,26 @@ describe('ral-42g: a counter-loop row of a checker list read only at literal str
         expect(out).toMatch(/let mut order: Value = /);
     });
 });
+
+describe('ral-42g: an element of a proven string[] / Strings parameter types even where its box copies (the list-parameter element veto lifted for string lists)', () => {
+    const mk = (body: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-42g-lpe-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    urls: Dict = {};\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    safeDict (o: any, k: any, d: any = undefined): any { return o[k]; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n"
+            + "    pick (names: string[]) {\n        const r = [];\n        for (let i = 0; i < names.length; i++) {\n            const name = names[i];\n" + body + "\n        }\n        return r;\n    }\n    run () {\n        const ks = Object.keys (this.urls);\n        return [ this.pick ([ 'a', 'b' ]), this.pick (ks) ];\n    }\n}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
+        fs.rmSync(root, { recursive: true, force: true });
+        return out;
+    };
+    test('an element of a handed-on list boxed at a reader default after a lent box (a copying box) prints Option<String>', () => {
+        // the list itself is handed on (pushed whole), so the element cannot borrow off it: it owns its string
+        const out = mk("            const o = this.safeDict (this.urls, name);\n            r.push (this.safeString (o, 'x', name));\n            r.push (names);");
+        expect(out).toMatch(/let mut name: Option<String> = names\.[^;]*\.get\(i as usize\)\.and_then\(Value::as_str\)\.map\(str::to_owned\);/);
+    });
+    test('negative: an element feeding another local\'s write keeps Value', () => {
+        const out = mk("            let last = undefined;\n            last = name;\n            const o = this.safeDict (this.urls, name);\n            r.push (this.safeString (o, 'x', last));\n            r.push (names);");
+        expect(out).not.toMatch(/let mut name: Option<String>/);
+    });
+});
