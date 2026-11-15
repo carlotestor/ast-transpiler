@@ -69390,6 +69390,10 @@ ${iden}}`;
         escapes.push(n);
         return true;
       }
+      if (!produced && this.rustBearerReaderLend(n)) {
+        elementUses++;
+        return true;
+      }
       if (isCallExpression6(parent) && parent.arguments.some((a) => a === n) && isPropertyAccessExpression3(parent.expression) && (parent.expression.expression.kind === SyntaxKind7.ThisKeyword || parent.expression.expression.kind === SyntaxKind7.SuperKeyword)) {
         escapes.push(n);
         return true;
@@ -72658,6 +72662,11 @@ ${iden}}`;
     const declaration = isIdentifier3(node) ? this.rustDeclarationOfIdentifier(node) : void 0;
     return declaration !== void 0 && declaration !== node && declaration.name !== node && this.rustBorrowedLocalKind(declaration) === "list";
   }
+  /** ral-50i: `n` is arg 0 of a base any-key reader call in a non-test source (the dict-bearer lend). */
+  rustBearerReaderLend(n) {
+    const call = n?.parent;
+    return call !== void 0 && isCallExpression6(call) && call.arguments[0] === n && !this.rustTestTierSource(call) && this.rustBorrowedAnyKeyReader(call);
+  }
   /** A base hand-written reader (`safeString`, `safeValue2`, `safeIntegerN`, ..) with any key. */
   rustBorrowedAnyKeyReader(call) {
     const callee = call.expression;
@@ -73661,6 +73670,8 @@ ${iden}}`;
     if (declaration === void 0 || declaration === node || declaration.name === node)
       return void 0;
     if (this.rustBorrowedLocalKind(declaration) !== void 0 || this.rustLentListLocal(declaration) || this.rustReaderTables.has(declaration) || this.rustSafeMarketLocalOf(node) !== void 0 || this.rustMarketSlotParamOf(node) !== void 0 || this.rustTypedMarketLocalOf(node) !== void 0 || this.rustCurrencySlotParamOf(node) !== void 0 || this.rustCurrencyLocalOf(node) !== void 0)
+      return `&${text}`;
+    if (this.rustBearerReaderLend(node) && this.rustDictBearerDeclaration(node) !== void 0)
       return `&${text}`;
     if (this.rustMarketStoreElementOf(node) !== void 0)
       return `&*${text}`;
