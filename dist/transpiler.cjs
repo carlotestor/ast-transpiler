@@ -64452,7 +64452,12 @@ ${classMethods}
       return methodDef + body.slice(0, open) + preamble + body.slice(open);
     const nonVirtual = `${sig.name}_non_virtual`;
     this.rustSignatureTable.set({ shimOf: node }, { ...sig, name: nonVirtual });
-    const forward = `${body.slice(0, open)}${preamble}        self.${nonVirtual}(${sig.params.map((p) => p.name).join(", ")})
+    const forward = sig.ret === "typed" ? `${body.slice(0, open)}
+        // virtual-dispatch (static: DerivedExchange::${sig.name}(self, ...))
+        crate::exchange::DerivedExchange::${sig.name}(self, ${sig.params.map((p) => p.name).join(", ")})
+    }
+
+` : `${body.slice(0, open)}${preamble}        self.${nonVirtual}(${sig.params.map((p) => p.name).join(", ")})
     }
 
 `;
