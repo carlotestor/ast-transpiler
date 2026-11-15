@@ -63045,7 +63045,7 @@ ${i1}}`;
       return ok2 && (valueUses2 === 0 || elemUses === 0) ? "call" : false;
     }
     const fromSlot = this.rustMarketSlotParamOf(this.rustSkipWrappers(declaration.initializer)) !== void 0 && (declaration.parent.flags & NodeFlags4.Const) === 0;
-    const fromOpt = this.rustIsOptMarketCall(declaration.initializer) || this.rustOptMarketTernary(declaration.initializer) !== void 0 || fromSlot;
+    const fromOpt = this.rustIsOptMarketCall(declaration.initializer) || this.rustOptMarketTernary(declaration.initializer) !== void 0 || fromSlot || this.rustOptSafeMarketTernary(declaration.initializer) !== void 0;
     const empty = declaration.initializer === void 0 || this.literalKindOfNode(declaration.initializer) === "null" || fromOpt;
     if (!empty && !this.rustIsTypedMarketCall(declaration.initializer))
       return false;
@@ -63572,6 +63572,40 @@ ${i1}}`;
       return t;
     return void 0;
   }
+  /** ral-45c: `c ? this.safeMarket (..) : market` (a lent market slot) or `c ? this.safeMarket (..) : undefined` (either arm
+   *  order): the `safeMarket` arm and the other one. `safeMarket` never answers Null, the slot is `Option<&Market>`. */
+  rustOptSafeMarketTernary(init) {
+    const cond = init === void 0 ? void 0 : this.unwrapParens(init);
+    if (cond === void 0 || cond.kind !== SyntaxKind7.ConditionalExpression)
+      return void 0;
+    const t = this.unwrapParens(cond.whenTrue);
+    const f = this.unwrapParens(cond.whenFalse);
+    const otherOk = (o) => this.literalKindOfNode(o) === "null" || this.rustMarketSlotParamOf(this.rustSkipWrappers(o)) !== void 0;
+    const smkt = (a) => isCallExpression6(this.rustSkipWrappers(a)) && this.rustIsSafeMarketCall(a);
+    if (smkt(t) && otherOk(f))
+      return { arm: t, other: f };
+    if (smkt(f) && otherOk(t))
+      return { arm: f, other: t };
+    return void 0;
+  }
+  /** `(if c { Some(self.safe_market(..)) } else { market.cloned() })` for the ternary above. */
+  printOptSafeMarketTernary(init) {
+    const tern = this.rustOptSafeMarketTernary(init);
+    if (tern === void 0)
+      return void 0;
+    const cond = this.unwrapParens(init);
+    const call = this.rustSkipWrappers(tern.arm);
+    this.rustSafeMarketBoxing.add(call);
+    let some;
+    try {
+      some = `Some(${this.printCallExpression(call, 0).trim()})`;
+    } finally {
+      this.rustSafeMarketBoxing.delete(call);
+    }
+    const other = this.literalKindOfNode(tern.other) === "null" ? "None" : `${super.printIdentifier(this.rustSkipWrappers(tern.other))}.cloned()`;
+    const armTrue = this.unwrapParens(cond.whenTrue) === tern.arm;
+    return `(if ${this.printCondition(cond.condition, 0)} { ${armTrue ? some : other} } else { ${armTrue ? other : some} })`;
+  }
   /** `(if c { None } else { Some(market) })` for an `Option<Market>` ternary initializer. */
   printOptMarketTernary(init) {
     const arm = this.rustOptMarketTernary(init);
@@ -63749,7 +63783,7 @@ ${i1}}`;
     const kind = this.rustMarketLocalKind(declaration);
     if (kind === "opt") {
       const slot = this.rustSkipWrappers(declaration.initializer);
-      const init = this.rustIsOptMarketCall(declaration.initializer) ? this.printNode(declaration.initializer, 0).trim() : this.rustMarketSlotParamOf(slot) !== void 0 ? `${super.printIdentifier(slot)}.cloned()` : this.printOptMarketTernary(declaration.initializer) ?? "None";
+      const init = this.rustIsOptMarketCall(declaration.initializer) ? this.printNode(declaration.initializer, 0).trim() : this.rustMarketSlotParamOf(slot) !== void 0 ? `${super.printIdentifier(slot)}.cloned()` : this.printOptMarketTernary(declaration.initializer) ?? this.printOptSafeMarketTernary(declaration.initializer) ?? "None";
       return `${indent}let mut ${varName}: Option<crate::types::Market> = ${init}`;
     }
     if (kind === "call") {
@@ -70967,8 +71001,10 @@ ${iden}}`;
     const key = this.rustUntilHeadKeyWrite(n);
     if (key === void 0 || key.startsWith("__") || init === void 0 || !isElementAccessExpression4(init) || this.rustUrlsMapEntry(init))
       return false;
-    if (!this.rustDictElementSource(init) || !this.getChecker().isArrayType(this.typeOfNodeIfAny(init.expression)))
+    if (!this.rustDictElementSource(init))
       return false;
+    if (!this.getChecker().isArrayType(this.typeOfNodeIfAny(init.expression)))
+      return this.rustDictRowKeyWriteBackOk(n, init);
     if (!/(?:^|[\\/])ts[\\/]src[\\/](?:prediction[\\/])?[^\\/]+\.ts$/.test(String(n.getSourceFile?.()?.fileName ?? "")))
       return false;
     const list = this.rustDeclarationOfIdentifier(init.expression);
@@ -70978,6 +71014,38 @@ ${iden}}`;
     if (source === void 0 || this.rustInitReadsTaggedStore(source))
       return false;
     return isNumericLiteral4(this.rustSkipWrappers(init.argumentExpression)) || this.rustReadBearerKindOfDeclaration(list) === "list" || this.rustBorrowedLocalKind(list) === "list" || this.rustVecLocalIsTyped(list);
+  }
+  /** ral-45c: `row['k'] = v` on `const row = d[k]` of a `Dictionary<Dict>` local `d` read from an untagged REST map, in a REST
+   *  or prediction venue file. Write-back proof: `d` is never read again after the row is taken (its only other uses are its
+   *  declaration and an `Object.keys (d)` ahead of the row's loop), so the map the boxed `add_element_to_object` left unchanged
+   *  in `d` is never observed; the row's copy-on-write insert is exactly the boxed one (an untagged map, no store route). */
+  rustDictRowKeyWriteBackOk(n, init) {
+    if (!isIdentifier3(init.expression) || !this.rustDictOfDictsLocal(init.expression))
+      return false;
+    if (!/(?:^|[\\/])ts[\\/]src[\\/](?:prediction[\\/])?[^\\/]+\.ts$/.test(String(n.getSourceFile?.()?.fileName ?? "")))
+      return false;
+    const owner = this.rustDeclaredNode(init.expression);
+    if (owner === void 0 || !isVariableDeclaration3(owner) || (owner.parent.flags & NodeFlags4.Const) === 0)
+      return false;
+    const source = this.rustSkipWrappers(owner.initializer);
+    if (source === void 0 || !isCallExpression6(source) || this.rustInitReadsTaggedStore(source) || !this.rustBorrowedDictSource(source))
+      return false;
+    const rowDecl = init.parent;
+    if (!isVariableDeclaration3(rowDecl) || rowDecl.initializer === void 0 || this.rustSkipWrappers(rowDecl.initializer) !== init)
+      return false;
+    const fn = this.rustEnclosingFunction(owner);
+    if (fn === void 0 || this.rustEnclosingFunction(rowDecl) !== fn)
+      return false;
+    const loop = findAncestor(rowDecl, (a) => a === fn || a.kind === SyntaxKind7.ForStatement || a.kind === SyntaxKind7.ForOfStatement || a.kind === SyntaxKind7.ForInStatement || a.kind === SyntaxKind7.WhileStatement);
+    const loopStart = loop === void 0 || loop === fn ? rowDecl.getStart() : loop.getStart();
+    return this.rustLocalUsesAll(owner, String(init.expression.text), true, (u) => {
+      if (u === init.expression)
+        return true;
+      if (this.rustEnclosingFunction(u) !== fn)
+        return false;
+      const call = u.parent;
+      return u.getStart() < loopStart && isCallExpression6(call) && call.arguments.length === 1 && call.arguments[0] === u && isPropertyAccessExpression3(call.expression) && isIdentifier3(call.expression.expression) && String(call.expression.expression.text) === "Object" && String(call.expression.name.text) === "keys";
+    });
   }
   rustBuiltKeyWriteLineOk(n, extra = 0) {
     const write = n.parent.parent;

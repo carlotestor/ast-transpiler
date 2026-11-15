@@ -1712,6 +1712,14 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustIsOptMarketCall(init: any): boolean;
     /** `c ? undefined : this.market (s)` (either arm order): the `this.market` arm. */
     rustOptMarketTernary(init: any): any;
+    /** ral-45c: `c ? this.safeMarket (..) : market` (a lent market slot) or `c ? this.safeMarket (..) : undefined` (either arm
+     *  order): the `safeMarket` arm and the other one. `safeMarket` never answers Null, the slot is `Option<&Market>`. */
+    rustOptSafeMarketTernary(init: any): {
+        arm: any;
+        other: any;
+    } | undefined;
+    /** `(if c { Some(self.safe_market(..)) } else { market.cloned() })` for the ternary above. */
+    printOptSafeMarketTernary(init: any): string | undefined;
     /** `(if c { None } else { Some(market) })` for an `Option<Market>` ternary initializer. */
     printOptMarketTernary(init: any): string | undefined;
     /** `return x` in an `Option<Market>` method. */
@@ -2775,6 +2783,11 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  proves a map element) in a REST or prediction venue file: the list comes from a parsed response (no ws subscription,
      *  cache or book tag), and the row's copy is written exactly as the boxed copy was (the list is never written back). */
     rustElementKeyWriteOk(n: any, init: any): boolean;
+    /** ral-45c: `row['k'] = v` on `const row = d[k]` of a `Dictionary<Dict>` local `d` read from an untagged REST map, in a REST
+     *  or prediction venue file. Write-back proof: `d` is never read again after the row is taken (its only other uses are its
+     *  declaration and an `Object.keys (d)` ahead of the row's loop), so the map the boxed `add_element_to_object` left unchanged
+     *  in `d` is never observed; the row's copy-on-write insert is exactly the boxed one (an untagged map, no store route). */
+    rustDictRowKeyWriteBackOk(n: any, init: any): boolean;
     rustBuiltKeyWriteLineOk(n: any, extra?: number): boolean;
     rustNullTestedDictLocal(init: any, nullTests: number, writes: number): boolean;
     rustDictElementSource(init: any): boolean;
