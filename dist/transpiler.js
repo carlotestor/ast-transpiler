@@ -58651,6 +58651,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "parg";
     if (kind === "int" && this.rustElemInsertKey(n) && this.rustSafeDictKeyOnlyLocal(this.rustDeclaredNode(n)))
       return "box";
+    if ((kind === "int" || kind === "oint") && this.rust53eElemReadKey(n))
+      return "box";
     if ((kind === "str" || kind === "ostr") && this.rustWsCacheMapKeyUse(n))
       return "fin";
     if (kind === "bool" && this.rustScalarBoolLogicalText(this.rustClimbLogicalWrappers(n)) !== void 0)
@@ -60055,6 +60057,20 @@ ${binding(plan.indent)}` : ""), head: "" };
   rustIso8601Arg(n) {
     const call = n?.parent;
     return !this.rustTestTierSource(n) && isCallExpression6(call) && call.arguments.length === 1 && call.arguments[0] === n && isPropertyAccessExpression3(call.expression) && call.expression.expression.kind === SyntaxKind7.ThisKeyword && String(call.expression.name.text) === "iso8601";
+  }
+  /** ral-53e: `n` is the whole key of an rvalue element read `xs[n]` on a plain local receiver (not a write target, not `delete`, non-test sources). */
+  rust53eElemReadKey(n) {
+    const access = n?.parent;
+    if (!isElementAccessExpression4(access) || access.argumentExpression !== n || !isIdentifier3(access.expression) || this.rustTestTierSource(n))
+      return false;
+    const up = this.rustSkipWrappersUp(access.parent);
+    if (isDeleteExpression2(access.parent) || isBinaryExpression5(up) && up.left === access && up.operatorToken.kind >= SyntaxKind7.FirstAssignment && up.operatorToken.kind <= SyntaxKind7.LastAssignment)
+      return false;
+    if (isElementAccessExpression4(up) && up.expression === access)
+      return false;
+    if (isPrefixUnaryExpression3(up) || isPostfixUnaryExpression3(up))
+      return false;
+    return true;
   }
   /** Identifier hook: a `box` use converts with the standard `From` impls (scalars are `Copy`). */
   printRustScalarLocalRead(node) {

@@ -1235,6 +1235,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustSafeDictKeyArg(n: any): boolean;
     /** xd: `n` is the only argument of `this.iso8601 (n)` outside the test crate (hand-written `iso8601(ts: impl Into<Value>)`). */
     rustIso8601Arg(n: any): boolean;
+    /** ral-53e: `n` is the whole key of an rvalue element read `xs[n]` on a plain local receiver (not a write target, not `delete`, non-test sources). */
+    rust53eElemReadKey(n: any): boolean;
     /** Identifier hook: a `box` use converts with the standard `From` impls (scalars are `Copy`). */
     printRustScalarLocalRead(node: any): string | undefined;
     /** The native value of a scalar expression for a local of `kind` (`Some(..)` for optional kinds). */

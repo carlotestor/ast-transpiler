@@ -17927,3 +17927,18 @@ describe('ral-52e: list index write at an i64 expression key (kraken addPaginati
         expect(out.slice(out.indexOf('fn cursorE'), out.indexOf('fn cursorB'))).toContain('let mut data: Value');
     });
 });
+
+describe('ral-53e: an int / Option<i64> local keying a plain element read boxes there', () => {
+    test('index = parseToInt(..) read as xs[index - 1] / xs[index] is Option<i64>; a written-through key stays Value', () => {
+        const dir = path.join (rustFixtureRoot, 'ral53e-elem-key');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type List = any[];\nexport default class Exchange {\n    safeString (o: any, k: any, d: string = undefined): string { return o; }\n    parseToInt (n: any): number { return n; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, List } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    labelA (desc: Dict, thresholds: string[]): string {\n        const index = this.parseToInt (this.safeString (desc, 'index'));\n        if (index <= 0) {\n            return 'BELOW_' + thresholds[0];\n        }\n        return 'BETWEEN_' + thresholds[index - 1] + '_' + thresholds[index];\n    }\n    labelB (desc: Dict, rows: any[]): void {\n        const index = this.parseToInt (this.safeString (desc, 'index'));\n        rows[index] = 1;\n        rows[index]['x'] = 2;\n    }\n}\n");
+        const out = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } }).transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        const a = out.slice(out.indexOf('fn labelA'), out.indexOf('fn labelB'));
+        expect(a).toContain('let mut index: Option<i64> = ');
+        expect(a).toContain('Value::from(index)');
+        const b = out.slice(out.indexOf('fn labelB'));
+        expect(b).toContain('let mut index: Value = ');
+    });
+});
