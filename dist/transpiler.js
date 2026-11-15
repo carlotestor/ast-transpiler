@@ -53957,7 +53957,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (!isElementAccessExpression4(up) || up.expression !== n || !readOnly(up))
         return false;
       const key = this.rustSkipWrappers(up.argumentExpression);
-      if (key === void 0 || !(isNumericLiteral4(key) || isStringLiteralLikeNode4(key)))
+      if (key === void 0 || !isNumericLiteral4(key))
         return false;
       if (isElementAccessExpression4(up.parent) && up.parent.expression === up && !readOnly(up.parent))
         return false;
