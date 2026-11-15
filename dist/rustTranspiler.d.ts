@@ -3552,6 +3552,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustWsWsParents;
     /** A pro venue that extends (through its abstract shim) another pro venue, or that another pro venue extends. */
     rustWsHasWsRelatives(file: string, at: number): boolean;
+    /** ral-56h: the resolve table across a ws class and its ws subclass (kucoin + kucoinfutures) equals the parent's
+     *  own table when the subclass adds no resolve and changes no ws path: every method of the subclass other than
+     *  `describe` / `describeData` is a REST-only method (no client, future, resolve, reject, spawn, delay, watch,
+     *  subscribe or handler token in its text, no field declaration) that the parent ws file never calls or names. */
+    rustWsRestOnlyChild(path: string, parentFile: string): boolean;
     /** A ws subclass whose only methods are `describe` / `describeData` adds no handler and no resolve. */
     rustWsDescribeOnly(path: string): boolean;
     /** The proven kind of an `await this.watch|watchMultiple (..)` initializer, else undefined. */

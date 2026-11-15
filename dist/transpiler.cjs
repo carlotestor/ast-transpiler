@@ -77005,9 +77005,41 @@ ${iden}}`;
     if (!parents.has(id) || parents.get(id) !== void 0)
       return true;
     for (const [child, p] of parents)
-      if (p === id && !this.rustWsDescribeOnly(`${root}/pro/${child}.ts`))
+      if (p === id && !this.rustWsDescribeOnly(`${root}/pro/${child}.ts`) && !this.rustWsRestOnlyChild(`${root}/pro/${child}.ts`, file))
         return true;
     return false;
+  }
+  /** ral-56h: the resolve table across a ws class and its ws subclass (kucoin + kucoinfutures) equals the parent's
+   *  own table when the subclass adds no resolve and changes no ws path: every method of the subclass other than
+   *  `describe` / `describeData` is a REST-only method (no client, future, resolve, reject, spawn, delay, watch,
+   *  subscribe or handler token in its text, no field declaration) that the parent ws file never calls or names. */
+  rustWsRestOnlyChild(path4, parentFile) {
+    let text;
+    let parent;
+    try {
+      text = fs3.readFileSync(path4, "utf8");
+      parent = fs3.readFileSync(parentFile, "utf8");
+    } catch (e) {
+      return false;
+    }
+    const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "").replace(/'(?:[^'\\\n]|\\.)*'/g, "''");
+    const body = text.slice(text.indexOf("export default class"));
+    if (/^ {4}(?:(?:public|private|protected|static|override|readonly) +)*[A-Za-z_$][\w$]* *[:=]/m.test(body))
+      return false;
+    const heads = [...body.matchAll(/^ {4}(?:(?:public|private|protected|static|override|async|get|set) +)*([A-Za-z_$][\w$]*) *[(<]/gm)];
+    if (heads.length === 0)
+      return false;
+    for (let i = 0; i < heads.length; i++) {
+      const name = heads[i][1];
+      if (name === "describe" || name === "describeData")
+        continue;
+      const seg = strip(body.slice(heads[i].index, i + 1 < heads.length ? heads[i + 1].index : void 0));
+      if (/\b(?:client|Client|futures?|reusableFuture|resolve|reject|spawn|delay|subscriptions|cleanUnsubscription|loadOrderBook|orderbooks?|watch\w*|unWatch\w*|subscribe\w*|handle(?!\w*AndParams)\w*|messageHash\w*)\b/.test(seg))
+        return false;
+      if (new RegExp(`\\b${name.replace(/\$/g, "\\$")}\\b`).test(strip(parent)))
+        return false;
+    }
+    return true;
   }
   /** A ws subclass whose only methods are `describe` / `describeData` adds no handler and no resolve. */
   rustWsDescribeOnly(path4) {
@@ -77227,6 +77259,8 @@ ${iden}}`;
       if (_optionalChain([up, 'optionalAccess', _10379 => _10379.kind]) === _ast.SyntaxKind.PropertyAssignment && up.initializer === n)
         continue;
       if (_is.isBinaryExpression.call(void 0, up) && up.operatorToken.kind === _ast.SyntaxKind.EqualsEqualsEqualsToken)
+        continue;
+      if (_is.isCallExpression.call(void 0, up) && up.arguments[0] === n && _is.isPropertyAccessExpression.call(void 0, up.expression) && up.expression.expression.kind === _ast.SyntaxKind.ThisKeyword && String(up.expression.name.text) === "safeString")
         continue;
       if (_is.isConditionalExpression.call(void 0, up) && up.condition !== n && _is.isVariableDeclaration.call(void 0, up.parent) && up.parent.initializer === up && this.rustWsListParamReadOnly(up.parent, method))
         continue;
