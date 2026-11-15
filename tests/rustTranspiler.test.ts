@@ -18563,3 +18563,30 @@ describe('ral-54h: book locals of one name in sibling blocks are proven each on 
         expect(body).toMatch(/let mut orderbook: Value = /);
     });
 });
+
+describe('ral-55h: a nullable safeDict local handed to a by-name ws dispatch `method.call (this, ..)` is Option<Dict>', () => {
+    const files: Record<string, string> = {
+        'ts/src/base/ws/Client.ts': 'export default class Client {\n    subscriptions: any;\n    resolve (result: any, messageHash: string): any { return result; }\n}\n',
+        'ts/src/base/Exchange.ts': "export default class Exchange {\n    safeDict (obj: any, key: any, d: any = undefined): any { return obj[key] ?? d; }\n    safeValue (obj: any, key: any, d: any = undefined): any { return obj[key] ?? d; }\n    safeString (obj: any, key: any, d: any = undefined): any { return obj[key] ?? d; }\n    indexBy (obj: any, key: any): any { return {}; }\n}\n",
+        'ts/src/pro/venue.ts': "import Exchange from '../base/Exchange.js';\nimport Client from '../base/ws/Client.js';\nexport default class venue extends Exchange {\n" +
+            "    handleSubscriptionStatus (client: Client, message: any) {\n        const id = this.safeString (message, 'id');\n        const subscriptionsById = this.indexBy (client.subscriptions, 'id');\n        const subscription = this.safeDict (subscriptionsById, id);\n        if (subscription !== undefined) {\n            const method = this.safeValue (subscription, 'method');\n            if (method !== undefined) {\n                method.call (this, client, message, subscription);\n            }\n        }\n    }\n" +
+            "    handleOtherStatus (client: Client, message: any) {\n        const id = this.safeString (message, 'id');\n        const byId = this.indexBy (client.subscriptions, 'id');\n        const other = this.safeDict (byId, id);\n        if (other !== undefined) {\n            const method = this.safeValue (other, 'method');\n            if (method !== undefined) {\n                method.call (client, message, other);\n            }\n        }\n    }\n}\n",
+    };
+    let out: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-55h-dispatch-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = transpiler.transpileRustByPath(path.join (root, 'ts/src/pro/venue.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test('the local is Option<Dict> and boxes back to the reader answer at the dispatch slot', () => {
+        expect(out).toMatch(/let mut subscription: Option<crate::value::Dict> = [^\n]*\.into_opt_dict\(\);/);
+        expect(out).toMatch(/method\.call\(&\[self, client\.clone\(\), message\.clone\(\), subscription(?:\.clone\(\))?\.map_or\(Value::Null, Value::Dict\)\]\)/);
+    });
+    test('negative: a .call whose first argument is not this keeps the local a Value', () => {
+        expect(out).toMatch(/let mut other: Value = /);
+    });
+});

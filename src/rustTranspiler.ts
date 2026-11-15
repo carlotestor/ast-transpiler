@@ -21723,11 +21723,26 @@ export class RustTranspiler extends BaseTranspiler {
         if (isAsExpression(up) && up.expression === n && isReturnStatement(up.parent)) return true;
         // qe: pushed / stored whole into a local container: `None` boxes to exactly the `Null` the reader answered
         if (this.rustLocalStoreHandOff(n)) return true;
+        // ral-55h: a handler argument of a by-name dispatch `method.call (this, .., x)` (an `any` handle routed to
+        // `dispatch_ws_handler(&method, &[..])`): the slice takes `Value`s, so `None` boxes to the `Null` the reader answered
+        if (this.rustWsDispatchCallArg(n)) return true;
         if (!isCallExpression(up) || up.expression === n || !isPropertyAccessExpression(up.expression) || up.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
         const callee = String(up.expression.name.text);
         if (RustTranspiler.RUST_HANDED_DICT_EXTEND.has(callee) || RustTranspiler.RUST_HANDED_DICT_OMIT.has(callee)) return false;
         const at = Array.from(up.arguments).indexOf(n);
         return !this.rustLentResponseSlot(up, n) && !this.rustLentListSlot(up, n) && !this.rustLentHelperSlot(up, n, 'dict') && this.rustNilBoxSlotOk(up, at);
+    }
+
+    /** ral-55h: `n` is a handler argument (not the `this` receiver slot) of `h.call (this, ..)` on an identifier `h` typed
+     *  `any` (the by-name ws dispatch the ccxt build turns into `self.dispatch_ws_handler(&h, &[..])`). */
+    rustWsDispatchCallArg(n: any): boolean {
+        const up: any = n.parent;
+        if (up === undefined || !isCallExpression(up) || up.expression === n || !isPropertyAccessExpression(up.expression)) return false;
+        const callee: any = up.expression;
+        if (String(callee.name.text) !== 'call' || !isIdentifier(callee.expression) || !this.rust40bProTier(up)) return false;
+        const args = Array.from(up.arguments);
+        if (args.length < 2 || args[0].kind !== SyntaxKind.ThisKeyword || args.indexOf(n) < 1) return false;
+        return (this.getChecker().getTypeAtLocation(callee.expression).flags & TypeFlags.Any) !== 0;
     }
 
     // ── rustBorrowedKeySetUse / printBorrowedKeys / printBorrowedInOp: key sets of a shared dict local ──
