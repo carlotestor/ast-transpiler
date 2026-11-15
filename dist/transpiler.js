@@ -73060,6 +73060,8 @@ ${iden}}`;
       return true;
     if (this.rustLocalStoreHandOff(n))
       return true;
+    if (this.rustWsDispatchCallArg(n))
+      return true;
     if (!isCallExpression6(up) || up.expression === n || !isPropertyAccessExpression3(up.expression) || up.expression.expression.kind !== SyntaxKind7.ThisKeyword)
       return false;
     const callee = String(up.expression.name.text);
@@ -73067,6 +73069,20 @@ ${iden}}`;
       return false;
     const at = Array.from(up.arguments).indexOf(n);
     return !this.rustLentResponseSlot(up, n) && !this.rustLentListSlot(up, n) && !this.rustLentHelperSlot(up, n, "dict") && this.rustNilBoxSlotOk(up, at);
+  }
+  /** ral-55h: `n` is a handler argument (not the `this` receiver slot) of `h.call (this, ..)` on an identifier `h` typed
+   *  `any` (the by-name ws dispatch the ccxt build turns into `self.dispatch_ws_handler(&h, &[..])`). */
+  rustWsDispatchCallArg(n) {
+    const up = n.parent;
+    if (up === void 0 || !isCallExpression6(up) || up.expression === n || !isPropertyAccessExpression3(up.expression))
+      return false;
+    const callee = up.expression;
+    if (String(callee.name.text) !== "call" || !isIdentifier3(callee.expression) || !this.rust40bProTier(up))
+      return false;
+    const args = Array.from(up.arguments);
+    if (args.length < 2 || args[0].kind !== SyntaxKind7.ThisKeyword || args.indexOf(n) < 1)
+      return false;
+    return (this.getChecker().getTypeAtLocation(callee.expression).flags & TypeFlags6.Any) !== 0;
   }
   // ── rustBorrowedKeySetUse / printBorrowedKeys / printBorrowedInOp: key sets of a shared dict local ──
   // `Object.keys/values(m)` lists the map's own entries (`Value::from` per key, no closure) and `k in m` is
@@ -76019,6 +76035,8 @@ ${iden}}`;
     const dispatched = this.rustWsDispatchKeyPatterns(declaration);
     if (dispatched !== void 0)
       return dispatched;
+    if (this.rustWsFoundRefine && depth === 0 && this.rustWsRequestIdEcho(declaration))
+      return [[_RustTranspiler.RUST_WS_DIGITS_HASH]];
     const keyed = declaration.initializer === void 0 ? void 0 : this.rustWsSubscriptionKeyRead(declaration.initializer);
     if (keyed !== void 0 && !this.rustLocalReassigned(declaration)) {
       seen.add(declaration);
@@ -76250,8 +76268,67 @@ ${iden}}`;
     }
     return o;
   }
+  /** ral-55h: `const h = this.safeString (message, 'K')` (never rewritten) where every write of key K in the venue file is
+   *  an object-literal property `'K': v` whose value is `this.requestId ()`, its `.toString ()`, or a never-rewritten const
+   *  local bound to one of those, and the venue's `requestId` is declared to return a number: the reply echoes the id the
+   *  request sent, so the hash is decimal digits (the 47h request-id marker, bybit reqId). */
+  rustWsRequestIdEcho(declaration) {
+    if (!isVariableDeclaration3(declaration) || this.rustLocalReassigned(declaration))
+      return false;
+    const init = this.rustStripWrappers(declaration.initializer);
+    if (init === void 0 || !isCallExpression6(init) || !isPropertyAccessExpression3(init.expression) || init.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(init.expression.name.text) !== "safeString" || init.arguments.length !== 2 || !isStringLiteralLikeNode4(init.arguments[1]))
+      return false;
+    const key = String(init.arguments[1].text);
+    const file = declaration.getSourceFile();
+    if (!/ts[\\/]src[\\/]pro[\\/]/.test(String(file.fileName)))
+      return false;
+    const idCall = (e) => {
+      let x = this.rustStripWrappers(e);
+      if (x !== void 0 && isCallExpression6(x) && x.arguments.length === 0 && isPropertyAccessExpression3(x.expression) && String(x.expression.name.text) === "toString")
+        x = this.rustStripWrappers(x.expression.expression);
+      if (x === void 0 || !isCallExpression6(x) || x.arguments.length !== 0 || !isPropertyAccessExpression3(x.expression) || x.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(x.expression.name.text) !== "requestId")
+        return false;
+      const callee = this.rustScalarCallee(x);
+      const ret = callee?.type !== void 0 ? String(callee.type.getText?.() ?? "") : "";
+      return ret === "int" || ret === "number" || ret === "Int";
+    };
+    const value = (e) => {
+      if (idCall(e))
+        return true;
+      const v = this.rustStripWrappers(e);
+      if (v === void 0 || !isIdentifier3(v))
+        return false;
+      const d = this.rustDeclarationOfIdentifier(v);
+      return d !== void 0 && isVariableDeclaration3(d) && !!(d.parent?.flags & NodeFlags4.Const) && idCall(d.initializer);
+    };
+    let writes = 0;
+    let ok = true;
+    this.rustWalkScope(file, (n) => {
+      if (!ok)
+        return;
+      if (n.kind === SyntaxKind7.PropertyAssignment && (isStringLiteralLikeNode4(n.name) || isIdentifier3(n.name)) && String(n.name.text) === key) {
+        if (value(n.initializer))
+          writes++;
+        else
+          ok = false;
+        return;
+      }
+      if (isBinaryExpression5(n) && rustIsAssignmentOperator(n.operatorToken.kind)) {
+        const l = n.left;
+        if (isElementAccessExpression4(l) && isStringLiteralLikeNode4(l.argumentExpression) && String(l.argumentExpression.text) === key || isPropertyAccessExpression3(l) && String(l.name.text) === key)
+          ok = false;
+      }
+      if (n.kind === SyntaxKind7.ComputedPropertyName)
+        ok = false;
+    });
+    return ok && writes > 0;
+  }
   /** Whether some string matches both patterns (a sound over-approximation: prefix and suffix agree). */
   static rustWsPatternsMeet(a0, b0) {
+    const digits = (p) => p.length === 1 && p[0] === _RustTranspiler.RUST_WS_DIGITS_HASH;
+    const digitOnly = (p) => digits(p) || p.every((s) => s === null || /^[0-9]*$/.test(s));
+    if (digits(a0) || digits(b0))
+      return digitOnly(a0) && digitOnly(b0);
     const a = _RustTranspiler.rustWsPatternNorm(a0);
     const b = _RustTranspiler.rustWsPatternNorm(b0);
     const exact = (p) => p.every((s) => s !== null);
@@ -85296,6 +85373,8 @@ _RustTranspiler.RUST_CACHE_MAP_TYPE = "pro::cache::CacheMap";
 _RustTranspiler.RUST_CACHE_SHELF_TYPE = "pro::cache::CacheShelf";
 /** The hash text of a Null hash (`stringify_param(Null)`): a literal no watch spells. */
 _RustTranspiler.RUST_WS_NIL_HASH = "null";
+/** ral-55h: the hash text of a request-id echo (`rustWsRequestIdEcho`): some run of decimal digits. */
+_RustTranspiler.RUST_WS_DIGITS_HASH = "digits";
 // ral-we: base record builders that answer `this.extend (..)` (a fresh map) on every path
 _RustTranspiler.RUST_WS_MAP_RECORD_BUILDERS = /* @__PURE__ */ new Set(["safeTicker"]);
 // ── ws order books (rustWsBookMapField / rustWsBookLocal / printWsBook*) ──
