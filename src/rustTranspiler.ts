@@ -4877,7 +4877,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (this.rustListParamElement(declaration.initializer) && (strParamElem ? this.rustScalarFeedsWrite(declaration) : (copied > 0 || (boxed > 0 && typedUses === 0) || this.rustScalarFeedsWrite(declaration)))) return undefined;
         if (this.rustListParamElement(declaration.initializer) && boxed > 0) this.rustScalarGuarded.add(declaration);
         // a non-element local admitted by a map-key read or `in` test must not copy where the `Value` moved
-        if (copied > 0 && kind === 'ostr' && !this.rustElementReadScalarKind(this.unwrapParens(declaration.initializer)) && this.rustScalarKeyedLocal(declaration)) return undefined;
+        // ral-52i: unless the key-admitted local is lent at every copying box (keyLent: the one copy the `Value` clone made)
+        if (copied > 0 && kind === 'ostr' && !keyLent && !this.rustElementReadScalarKind(this.unwrapParens(declaration.initializer)) && this.rustScalarKeyedLocal(declaration)) return undefined;
         // a key-admitted local converts once at its declaration: that line keeps the 400-char budget
         if (this.rustScalarOptKeyCostly(declaration, kind) === false && kind === 'ostr' && this.rustScalarOptKeyCount(declaration) > 0) this.rustScalarGuarded.add(declaration);
         if (guarded || handOff || this.rustStrMethodRecvLocal(declaration) || (strKind && this.rustPrecisionWritten(declaration))) this.rustScalarGuarded.add(declaration);
@@ -8028,10 +8029,24 @@ export class RustTranspiler extends BaseTranspiler {
             const argCopy = isCallExpression(up) && up.expression !== n && (form === 'box' || form === 'xbox');
             // an insert key prints its own key text (`as_deref().unwrap_or("null").to_string()`), the one
             // allocation the boxed key's `stringify_param` made: lent, not copied
-            if (form === 'err' || (form === 'key' && !this.rustElemInsertKey(this.rustKeyWrapped(n))) || ((form === 'box' || form === 'xbox') && !argCopy && !this.rustScalarBoxMoves(n, form, declaration))) copied = true;
+            // ral-52i: an object-literal value of the `in`-guarded insert itself (`m[k] = { .., 'f': k }`) copied the `Value` too
+            const insertValue = form === 'box' && up?.kind === SyntaxKind.PropertyAssignment && up.initializer === n && this.rustElemKeyInsertLiteralValue(n, declaration);
+            if (form === 'err' || (form === 'key' && !this.rustElemInsertKey(this.rustKeyWrapped(n))) || ((form === 'box' || form === 'xbox') && !argCopy && !insertValue && !this.rustScalarBoxMoves(n, form, declaration))) copied = true;
             return true;
         });
         return keyed && copied;
+    }
+
+    /** ral-52i: `n` is a top-level value of the object literal written by `m[k] = { .. }` keyed by the same local `k`. */
+    rustElemKeyInsertLiteralValue(n: any, declaration: any): boolean {
+        const literal: any = n.parent?.parent;
+        if (!isObjectLiteralExpression(literal)) return false;
+        const write: any = literal.parent;
+        if (!isBinaryExpression(write) || write.right !== literal || write.operatorToken.kind !== SyntaxKind.EqualsToken || write.parent?.kind !== SyntaxKind.ExpressionStatement) return false;
+        const access: any = write.left;
+        if (!isElementAccessExpression(access)) return false;
+        const key: any = this.rustSkipWrappers(access.argumentExpression);
+        return key !== undefined && isIdentifier(key) && this.rustDeclarationOfIdentifier(key) === declaration && this.rustElemInsertKey(key);
     }
 
     /** `m[k] = v` as a statement: the element key of a native insert. */

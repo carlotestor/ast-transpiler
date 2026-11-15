@@ -17642,3 +17642,16 @@ describe('ral-52i: a list local reassigned whole from an endpoint answer or a `[
         expect(t).toContain('let mut kept: Value = ');
     });
 });
+
+describe('ral-52i: an `in`-tested insert key also stored as a literal value of the insert', () => {
+    test('`if (k !== undefined && !(k in m)) { m[k] = { .., \'network\': k } }` types k Option<String>, lent at the value', () => {
+        const dir = path.join (rustFixtureRoot, 'ral-52i-key');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    networkIdToCode (networkId: Str = undefined, currencyCode: Str = undefined): string { return networkId; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    safeList (o: any, k: any, d: any[] = undefined): any[] { return o[k]; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    nets (currency: Dict, code: string) {\n        const bindings: Dict[] = this.safeList (currency, 'bindings', []);\n        const networks: Dict = {};\n        for (let i = 0; i < bindings.length; i++) {\n            const binding = bindings[i];\n            const networkId = this.safeString (binding, 'providerName');\n            const networkCode = this.networkIdToCode (networkId, code);\n            if ((networkCode !== undefined) && !(networkCode in networks)) {\n                networks[networkCode] = {\n                    'info': binding,\n                    'network': networkCode,\n                };\n            }\n        }\n        return networks;\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut networkCode: Option<String> = ');
+        expect(out).toContain('Value::from(networkCode.as_deref())');
+        expect(out).not.toContain('let mut networkCode: Value');
+    });
+});
