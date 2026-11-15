@@ -58716,7 +58716,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     }
     if (source !== void 0 && source.kind === SyntaxKind7.Parameter)
-      return this.rustTypedParamsParam(source);
+      return this.rustProvenMapParam(source);
     if (source !== void 0 && isVariableDeclaration3(source) && this.rustBorrowedPending.has(source)) {
       if (isVariableDeclaration3(init.parent) && init.parent.initializer === init)
         this.rustSbAliasDeferred.add(init.parent);
@@ -71414,6 +71414,10 @@ ${iden}}`;
           this.rustSbAliasWrites.add(up);
           return ++sbMapWrites > 0;
         }
+        if (sbAlias && isIdentifier3(rhs) && this.rustDeclaredNode(rhs)?.kind === SyntaxKind7.BindingElement && this.rustHandedPending.has(this.rustDeclaredNode(rhs))) {
+          this.rustSbAliasDeferred.add(declaration);
+          return false;
+        }
         if (nnAlias !== void 0 && isIdentifier3(rhs) && String(rhs.getText()).length <= 240) {
           this.rustSbAliasWrites.add(up);
           return true;
@@ -78306,7 +78310,7 @@ ${iden}}`;
       const boxed = this.rustOptionalParamsSlot(call, n) || this.rustHandedSlotBoxUse(n, declaration);
       if (boxed)
         boxes++;
-      if (boxed && this.rustInDestructureWrite(n) && (nilSlot ? !this.rustNilSlotLineOk(n) : uses === 0))
+      if (boxed && this.rustInDestructureWrite(n) && (nilSlot ? !this.rustNilSlotLineOk(n) : uses === 0 && !this.rustNilSlotLineOk(n)))
         longBox = true;
       return ok || boxed;
     });
