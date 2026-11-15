@@ -1761,7 +1761,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_OPT_MARKET_RETURNS;
     rustReturnsOptMarket(node: any): boolean;
     private static readonly RUST_OPT_OUTCOME_RETURNS;
-    /** ral-50c: prediction venue methods declared with the outcome record (overrides of `fetchOutcome`, predictfun `outcomeForToken`). */
+    private static readonly RUST_OPT_OUTCOME_BY_NAME;
+    /** ral-50c: prediction venue methods that answer the outcome record (overrides of `fetchOutcome`, predictfun `outcomeForToken`). */
     private static readonly RUST_OPT_OUTCOME_VENUE_RETURNS;
     /** ral-48c: `outcome` / `safeOutcome` / `loadOutcome` of the prediction base class, declared with the outcome record. */
     rustReturnsOptOutcome(node: any): boolean;

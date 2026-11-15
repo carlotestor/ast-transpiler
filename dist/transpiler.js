@@ -63906,6 +63906,8 @@ ${i1}}`;
     const want = /ts[/]src[/]base[/]PredictionExchange\.ts$/.test(file) ? _RustTranspiler.RUST_OPT_OUTCOME_RETURNS[name] : /ts[/]src[/]prediction[/][^/]+\.ts$/.test(file) ? _RustTranspiler.RUST_OPT_OUTCOME_VENUE_RETURNS[name] : void 0;
     if (want === void 0 || !isClassDeclaration4(node.parent))
       return false;
+    if (_RustTranspiler.RUST_OPT_OUTCOME_BY_NAME.has(name))
+      return true;
     let ret = node.type;
     if (ret?.kind === SyntaxKind7.TypeReference && isIdentifier3(ret.typeName) && String(ret.typeName.text) === "Promise" && ret.typeArguments?.length === 1)
       ret = ret.typeArguments[0];
@@ -83471,7 +83473,8 @@ _RustTranspiler.RUST_OPT_OUTCOME_RETURNS = {
   // ral-50c: the async-virtual `fetchOutcome` hands the same record on (declared in ts/src)
   "fetchOutcome": "PredictionOutcomeHandle"
 };
-/** ral-50c: prediction venue methods declared with the outcome record (overrides of `fetchOutcome`, predictfun `outcomeForToken`). */
+_RustTranspiler.RUST_OPT_OUTCOME_BY_NAME = /* @__PURE__ */ new Set(["fetchOutcome", "outcomeForToken"]);
+/** ral-50c: prediction venue methods that answer the outcome record (overrides of `fetchOutcome`, predictfun `outcomeForToken`). */
 _RustTranspiler.RUST_OPT_OUTCOME_VENUE_RETURNS = {
   "fetchOutcome": "PredictionOutcomeHandle",
   "outcomeForToken": "PredictionOutcomeHandle"
