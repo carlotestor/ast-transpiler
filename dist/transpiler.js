@@ -76551,7 +76551,8 @@ ${iden}}`;
       return void 0;
     const type = param.type;
     const typeName = type?.kind === SyntaxKind7.TypeReference && isIdentifier3(type.typeName) && type.typeArguments === void 0 ? String(type.typeName.text) : "";
-    const kind = _RustTranspiler.RUST_LENT_LIST_TYPES.has(typeName) || this.rustRowListTypeNode(type) || _RustTranspiler.RUST_LENT_HASH_LIST_METHODS.has(name) && this.rustScalarListTypeNode(type) ? "list" : this.rustLentRecordTypeNode(type) ? "dict" : void 0;
+    const keysList = !_RustTranspiler.RUST_LENT_HASH_LIST_METHODS.has(name) && type?.kind === SyntaxKind7.ArrayType && type.elementType?.kind === SyntaxKind7.StringKeyword;
+    const kind = _RustTranspiler.RUST_LENT_LIST_TYPES.has(typeName) || this.rustRowListTypeNode(type) || _RustTranspiler.RUST_LENT_HASH_LIST_METHODS.has(name) && this.rustScalarListTypeNode(type) || keysList ? "list" : this.rustLentRecordTypeNode(type) ? "dict" : void 0;
     if (kind === void 0)
       return void 0;
     const pname = String(param.name.text);
@@ -76586,6 +76587,14 @@ ${iden}}`;
     };
     const hashList = _RustTranspiler.RUST_LENT_HASH_LIST_METHODS.has(name) && this.rustScalarListTypeNode(type);
     const lends = (call, arg) => lendable(arg) && !(hashList && (this.rustVecLocalIsTyped(this.rustDeclaredNode(arg)) || Array.from(call.arguments ?? []).some((a) => a !== arg && isIdentifier3(a) && a.text === arg.text)));
+    if (keysList) {
+      const sites = this.rustVenueStrCallSites(method);
+      const keysLocal = (arg) => {
+        const decl = arg !== void 0 && isIdentifier3(arg) ? this.rustDeclaredNode(arg) : void 0;
+        return decl !== void 0 && isVariableDeclaration3(decl) && decl.initializer !== void 0 && this.rustExactStrListInit(decl.initializer) && !isArrayLiteralExpression4(this.unwrapParens(decl.initializer));
+      };
+      return sites.length > 0 && sites.every((call) => keysLocal(call.arguments?.[at])) ? kind : void 0;
+    }
     return this.rustVenueStrCallSites(method).some((call) => lends(call, call.arguments?.[at])) ? kind : void 0;
   }
   /** A method of a venue source (REST, pro or prediction) whose name the base tier never declares: each venue's
