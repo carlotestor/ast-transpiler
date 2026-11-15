@@ -8112,9 +8112,9 @@ export class RustTranspiler extends BaseTranspiler {
      *  char length floored at 0, a bound past the end is the length, `b <= a` is empty). */
     rustStrSliceVarText(s: string, b: { start: string, end: string | undefined, endOpt: boolean }): string {
         const clamp = (v: string) => `(if ${v} < 0 { __l + ${v} } else { ${v} }).clamp(0, __l)`;
-        if (b.end === undefined) return `{ let (__l, __b) = (${s}.chars().count() as i64, ${b.start}); ${s}.chars().skip(${clamp('__b')} as usize).collect::<String>() }`;
+        if (b.end === undefined) return `({ let (__l, __b) = (${s}.chars().count() as i64, ${b.start}); ${s}.chars().skip(${clamp('__b')} as usize).collect::<String>() })`;
         const j = b.endOpt ? `match __e { Some(__k) => ${clamp('__k')}, None => __l }` : clamp('__e');
-        return `{ let (__l, __b, __e) = (${s}.chars().count() as i64, ${b.start}, ${b.end}); let (__i, __j) = (${clamp('__b')}, ${j}); ${s}.chars().skip(__i as usize).take((__j - __i).max(0) as usize).collect::<String>() }`;
+        return `({ let (__l, __b, __e) = (${s}.chars().count() as i64, ${b.start}, ${b.end}); let (__i, __j) = (${clamp('__b')}, ${j}); ${s}.chars().skip(__i as usize).take((__j - __i).max(0) as usize).collect::<String>() })`;
     }
 
     /** 41b: an affix / includes needle as `Option<&str>`: any string literal (an empty one included when `empty`), a typed string local
@@ -9018,8 +9018,7 @@ export class RustTranspiler extends BaseTranspiler {
     rustScalarContainsTest(node, dry: boolean): string | undefined {
         const left: any = this.unwrapParens(node.left);
         if (!isCallExpression(left) || !isPropertyAccessExpression(left.expression) || left.expression.name.text !== 'indexOf' || left.arguments.length !== 1) return undefined;
-        // 41b: `(x as string).indexOf(..)` tests the local itself (the cast prints nothing)
-        const recv: any = this.rustStripWrappers(left.expression.expression);
+        const recv: any = left.expression.expression;
         const kind = this.rustScalarIdentifierKind(recv) ?? this.rustScalarParamRead(recv)?.kind;
         const needle: any = left.arguments[0];
         if ((kind !== 'str' && kind !== 'ostr') || this.rustNativeStringLiteralArg(needle) === undefined || needle.text === '') return undefined;
@@ -9873,9 +9872,7 @@ export class RustTranspiler extends BaseTranspiler {
         while (isParenthesizedExpression(top.parent) || top.parent?.kind === SyntaxKind.AsExpression) top = top.parent;
         const access: any = top.parent;
         return isPropertyAccessExpression(access) && access.expression === top && isCallExpression(access.parent) && access.parent.expression === access
-            && ((this.rustStrLocalSplitText(access.parent) ?? this.rustStrLocalSliceText(access.parent)) !== undefined
-                // 41b: any native string method of the local reads it through the cast (`(x as string).m(..)` prints `x`)
-                || (this.rustScalarStrMethod(access.parent) !== undefined && this.rustScalarLocalOf(this.rustStripWrappers(top)) !== undefined));
+            && (this.rustStrLocalSplitText(access.parent) ?? this.rustStrLocalSliceText(access.parent)) !== undefined;
     }
 
     /** The ws cache classes whose hand-written `::new` takes `impl Into<Value>`. */

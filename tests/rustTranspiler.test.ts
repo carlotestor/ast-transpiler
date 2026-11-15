@@ -14945,10 +14945,10 @@ describe('ral-41b item 1: string-method forms with variable / negative bounds an
     const cases: [string, string, string[], string[]][] = [
         [ 'slice with a variable end (indexOf of a typed local) keeps both locals typed',
             "    parseThing (d: Dict) {\n        const s = this.safeString (d, 't', 'a_b');\n        const end = s.indexOf ('_');\n        const id = s.slice (0, end);\n        return this.hold ({ 'id': id });\n    }\n",
-            [ 'let mut end: i64 = ', 'let mut id: String = { let (__l, __b, __e) = (s.chars().count() as i64, 0, end);', '.clamp(0, __l)' ], [ 'let mut id: Value', 'let mut end: Value' ] ],
+            [ 'let mut end: i64 = ', 'let mut id: String = ({ let (__l, __b, __e) = (s.chars().count() as i64, 0, end);', '.clamp(0, __l)' ], [ 'let mut id: Value', 'let mut end: Value' ] ],
         [ 'slice with a negative literal end on an Option<String> local',
             "    parseThing (d: Dict) {\n        const sym = this.safeString (d, 's');\n        const head = sym.slice (0, -3);\n        return this.hold ({ 'h': head });\n    }\n",
-            [ 'let mut head: Option<String> = (if let Some(__s) = sym.as_deref() { Some({ let (__l, __b, __e) = (__s.chars().count() as i64, 0, -3);' ], [ 'let mut head: Value' ] ],
+            [ 'let mut head: Option<String> = (if let Some(__s) = sym.as_deref() { Some(({ let (__l, __b, __e) = (__s.chars().count() as i64, 0, -3);' ], [ 'let mut head: Value' ] ],
         [ 'endsWith with a variable needle: false unless both sides are strings',
             "    parseThing (d: Dict) {\n        const id = this.safeString (d, 'i');\n        const quote = this.safeString (d, 'q', 'USD');\n        if (id.endsWith (quote)) {\n            return this.hold ({ 'q': quote });\n        }\n        return this.hold ({ 'i': id });\n    }\n",
             [ '(if let (Some(__h), Some(__n)) = (id.as_deref(), Some(quote.as_str())) { __h.ends_with(__n) } else { false })', 'let mut id: Option<String>', 'let mut quote: String' ], [ 'let mut quote: Value', 'let mut id: Value' ] ],

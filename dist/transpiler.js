@@ -59461,9 +59461,9 @@ ${binding(plan.indent)}` : ""), head: "" };
   rustStrSliceVarText(s, b) {
     const clamp = (v) => `(if ${v} < 0 { __l + ${v} } else { ${v} }).clamp(0, __l)`;
     if (b.end === void 0)
-      return `{ let (__l, __b) = (${s}.chars().count() as i64, ${b.start}); ${s}.chars().skip(${clamp("__b")} as usize).collect::<String>() }`;
+      return `({ let (__l, __b) = (${s}.chars().count() as i64, ${b.start}); ${s}.chars().skip(${clamp("__b")} as usize).collect::<String>() })`;
     const j = b.endOpt ? `match __e { Some(__k) => ${clamp("__k")}, None => __l }` : clamp("__e");
-    return `{ let (__l, __b, __e) = (${s}.chars().count() as i64, ${b.start}, ${b.end}); let (__i, __j) = (${clamp("__b")}, ${j}); ${s}.chars().skip(__i as usize).take((__j - __i).max(0) as usize).collect::<String>() }`;
+    return `({ let (__l, __b, __e) = (${s}.chars().count() as i64, ${b.start}, ${b.end}); let (__i, __j) = (${clamp("__b")}, ${j}); ${s}.chars().skip(__i as usize).take((__j - __i).max(0) as usize).collect::<String>() })`;
   }
   /** 41b: an affix / includes needle as `Option<&str>`: any string literal (an empty one included when `empty`), a typed string local
    *  or a string-typed `Value` expression (`None` for `Null`: the helper answers `false`). */
@@ -60442,7 +60442,7 @@ ${binding(plan.indent)}` : ""), head: "" };
     const left = this.unwrapParens(node.left);
     if (!isCallExpression6(left) || !isPropertyAccessExpression3(left.expression) || left.expression.name.text !== "indexOf" || left.arguments.length !== 1)
       return void 0;
-    const recv = this.rustStripWrappers(left.expression.expression);
+    const recv = left.expression.expression;
     const kind = this.rustScalarIdentifierKind(recv) ?? this.rustScalarParamRead(recv)?.kind;
     const needle = left.arguments[0];
     if (kind !== "str" && kind !== "ostr" || this.rustNativeStringLiteralArg(needle) === void 0 || needle.text === "")
@@ -61390,7 +61390,7 @@ ${ind}];`;
     while (isParenthesizedExpression3(top.parent) || top.parent?.kind === SyntaxKind7.AsExpression)
       top = top.parent;
     const access = top.parent;
-    return isPropertyAccessExpression3(access) && access.expression === top && isCallExpression6(access.parent) && access.parent.expression === access && ((this.rustStrLocalSplitText(access.parent) ?? this.rustStrLocalSliceText(access.parent)) !== void 0 || this.rustScalarStrMethod(access.parent) !== void 0 && this.rustScalarLocalOf(this.rustStripWrappers(top)) !== void 0);
+    return isPropertyAccessExpression3(access) && access.expression === top && isCallExpression6(access.parent) && access.parent.expression === access && (this.rustStrLocalSplitText(access.parent) ?? this.rustStrLocalSliceText(access.parent)) !== void 0;
   }
   /** An integer local as the size argument of `new ArrayCache*(limit)`: passed natively (`i64` / `Option<i64>` into `impl Into<Value>`). */
   rustCacheCtorLimitArg(n, kind) {

@@ -59460,9 +59460,9 @@ ${binding(plan.indent)}` : ""), head: "" };
   rustStrSliceVarText(s, b) {
     const clamp = (v) => `(if ${v} < 0 { __l + ${v} } else { ${v} }).clamp(0, __l)`;
     if (b.end === void 0)
-      return `{ let (__l, __b) = (${s}.chars().count() as i64, ${b.start}); ${s}.chars().skip(${clamp("__b")} as usize).collect::<String>() }`;
+      return `({ let (__l, __b) = (${s}.chars().count() as i64, ${b.start}); ${s}.chars().skip(${clamp("__b")} as usize).collect::<String>() })`;
     const j = b.endOpt ? `match __e { Some(__k) => ${clamp("__k")}, None => __l }` : clamp("__e");
-    return `{ let (__l, __b, __e) = (${s}.chars().count() as i64, ${b.start}, ${b.end}); let (__i, __j) = (${clamp("__b")}, ${j}); ${s}.chars().skip(__i as usize).take((__j - __i).max(0) as usize).collect::<String>() }`;
+    return `({ let (__l, __b, __e) = (${s}.chars().count() as i64, ${b.start}, ${b.end}); let (__i, __j) = (${clamp("__b")}, ${j}); ${s}.chars().skip(__i as usize).take((__j - __i).max(0) as usize).collect::<String>() })`;
   }
   /** 41b: an affix / includes needle as `Option<&str>`: any string literal (an empty one included when `empty`), a typed string local
    *  or a string-typed `Value` expression (`None` for `Null`: the helper answers `false`). */
@@ -60441,7 +60441,7 @@ ${binding(plan.indent)}` : ""), head: "" };
     const left = this.unwrapParens(node.left);
     if (!_is.isCallExpression.call(void 0, left) || !_is.isPropertyAccessExpression.call(void 0, left.expression) || left.expression.name.text !== "indexOf" || left.arguments.length !== 1)
       return void 0;
-    const recv = this.rustStripWrappers(left.expression.expression);
+    const recv = left.expression.expression;
     const kind = _nullishCoalesce(this.rustScalarIdentifierKind(recv), () => ( _optionalChain([this, 'access', _9078 => _9078.rustScalarParamRead, 'call', _9079 => _9079(recv), 'optionalAccess', _9080 => _9080.kind])));
     const needle = left.arguments[0];
     if (kind !== "str" && kind !== "ostr" || this.rustNativeStringLiteralArg(needle) === void 0 || needle.text === "")
@@ -61389,7 +61389,7 @@ ${ind}];`;
     while (_is.isParenthesizedExpression.call(void 0, top.parent) || _optionalChain([top, 'access', _9173 => _9173.parent, 'optionalAccess', _9174 => _9174.kind]) === _ast.SyntaxKind.AsExpression)
       top = top.parent;
     const access = top.parent;
-    return _is.isPropertyAccessExpression.call(void 0, access) && access.expression === top && _is.isCallExpression.call(void 0, access.parent) && access.parent.expression === access && ((_nullishCoalesce(this.rustStrLocalSplitText(access.parent), () => ( this.rustStrLocalSliceText(access.parent)))) !== void 0 || this.rustScalarStrMethod(access.parent) !== void 0 && this.rustScalarLocalOf(this.rustStripWrappers(top)) !== void 0);
+    return _is.isPropertyAccessExpression.call(void 0, access) && access.expression === top && _is.isCallExpression.call(void 0, access.parent) && access.parent.expression === access && (_nullishCoalesce(this.rustStrLocalSplitText(access.parent), () => ( this.rustStrLocalSliceText(access.parent)))) !== void 0;
   }
   /** An integer local as the size argument of `new ArrayCache*(limit)`: passed natively (`i64` / `Option<i64>` into `impl Into<Value>`). */
   rustCacheCtorLimitArg(n, kind) {
