@@ -885,6 +885,11 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  local: only uses bound to its own symbol are walked. Any other second binding keeps the plain walk. */
     rustBlockLocalUsesAll(declaration: any, name: string, acceptUse: (n: any) => boolean, scalar?: boolean, skipPropertyNames?: boolean): boolean;
     rustBindingUsesWalk(declaration: any, nodes: any[], own: any, home: any, skip: any[], skipPropertyNames: boolean, acceptUse: (n: any) => boolean, scalar: boolean): boolean;
+    /** ral-53s: a direct operand of a base `this.sum (a, b)` that is the whole source of a write to another local
+     *  (`endTime = this.sum (startTime, oneWeek)`): with this operand typed the call keeps its own combinator kind
+     *  (`rustArithCallKind`), so the write prints the same native combinator text the other operands decide, and the
+     *  written local's own rules read that call, never this operand's box. */
+    rustScalarSumOperandWrite(n: any, write: any): boolean;
     /** zd: the size argument of `this.<field> = new ArrayCache*(limit)`: the written place is a ws cache field, not a
      *  local, and the hand-written `::new(impl Into<Value>)` boxes an `i64` / `Option<i64>` into the `Value` the boxed
      *  local held (`Value::Int` / `Value::Null`), so no other local's decision reads this one's type. */
