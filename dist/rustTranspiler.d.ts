@@ -3582,6 +3582,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustWsWsParents;
     /** A pro venue that extends (through its abstract shim) another pro venue, or that another pro venue extends. */
     rustWsHasWsRelatives(file: string, at: number): boolean;
+    /** ral-56h: the resolve table across a ws class and its ws subclass (kucoin + kucoinfutures) equals the parent's
+     *  own table when the subclass adds no resolve and changes no ws path: every method of the subclass other than
+     *  `describe` / `describeData` is a REST-only method (no client, future, resolve, reject, spawn, delay, watch,
+     *  subscribe or handler token in its text, no field declaration) that the parent ws file never calls or names. */
+    rustWsRestOnlyChild(path: string, parentFile: string): boolean;
     /** A ws subclass whose only methods are `describe` / `describeData` adds no handler and no resolve. */
     rustWsDescribeOnly(path: string): boolean;
     /** The proven kind of an `await this.watch|watchMultiple (..)` initializer, else undefined. */
@@ -3603,6 +3608,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** The patterns of a watchMultiple hash list: an array literal, a wrapper parameter bound to one, or a list local
      *  initialised from a literal that only grows by `x.push (h)` statements and is read only as a watch argument. */
     rustWsHashListPatterns(harg: any, depth: number): Array<Array<string | null>> | undefined;
+    /** ral-56h: `x = r` / `let x = r` in `scope` where x is a local of that method whose every other use is a rebinding
+     *  (`x = ..`), a hash-list argument of `this.watch|watchMultiple`, `x.length`, a plain element read or another such copy:
+     *  the copy never grows or rewrites the list r names. */
+    rustWsListAliasReadOnly(r: any, scope: any, depth: number): boolean;
     private static readonly RUST_BOOK_TYPE;
     private static readonly RUST_BOOK_MAP_TYPE;
     private static readonly RUST_BOOK_CTORS;
