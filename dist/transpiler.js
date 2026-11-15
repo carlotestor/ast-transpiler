@@ -56263,7 +56263,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
           copied++;
       } else if (form !== void 0 && !this.rustIdentifierIsPropertyName(n))
         nativeUses++;
-      if (form === "test" || form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "lwrite" || form === "okey" || form === "fin" || form === "frd" || form === "kin" || form === "nkey" || form === "ukey" || form === "parg" || form === "key" && this.rustOkeyLocal(n) && this.rustElemInsertKey(n))
+      if (form === "test" || form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "lwrite" || form === "okey" || form === "fin" || form === "frd" || form === "kin" || form === "nkey" || form === "ukey" || form === "parg" || form === "dkey" || form === "key" && this.rustOkeyLocal(n) && this.rustElemInsertKey(n))
         typedUses++;
       if (form === "xbox" || form === "native" || form === "targ" || form === "err")
         expressionUses = true;
@@ -56289,7 +56289,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (nativeUses === 0 && kind === "str" && this.rustReaderCaseStrRecv(this.unwrapParens(declaration.initializer)) !== void 0)
       return void 0;
-    if (!ok || unused || storeOnly || clientOnce || guarded && scope.kind !== SyntaxKind7.MethodDeclaration || this.rustOkeyBoxed(declaration, boxed) || this.rustElemKeyInCostly(declaration))
+    if (!ok || unused || storeOnly || clientOnce || guarded && scope.kind !== SyntaxKind7.MethodDeclaration || this.rustOkeyBoxed(declaration, boxed) || this.rustElemKeyInCostly(declaration) || this.rust59pDeleteKeyInboxed(declaration))
       return void 0;
     if (strKind && this.rustScalarHasPairEquality(declaration) && this.rustScalarBorrowedBox(declaration))
       return void 0;
@@ -59223,6 +59223,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "okey";
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustElemKeyInUse(n))
       return "kin";
+    if ((kind === "str" || kind === "ostr") && this.rustInitKeyLocal(n) && !this.rustTestTierSource(n) && this.rust59pDeleteKeyUse(n))
+      return "dkey";
     if ((kind === "str" || kind === "ostr") && this.rustInKeyTop(n) !== void 0 && !this.rustTestTierSource(n) && this.rustInKeyInitialised(n))
       return "inbox";
     if (isCallExpression6(parent) && parent.expression !== n && this.rustArithCombinator(parent) && this.rustArithCallKind(parent) !== void 0)
@@ -60046,6 +60048,33 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (!isCallExpression6(up) || up.expression === top || !up.arguments.some((a) => a === top))
       return false;
     return this.rustDictLocalProof(access.expression) === "plain";
+  }
+  /** ral-59p: `n` is the whole key of `delete X[n]` as an expression statement. The delete prints the key either into
+   *  provenDictFieldDelete's native `shift_remove` (borrowing the `&str`: a `None` key removes nothing, as the `Null` key
+   *  matched no `Value::Str` arm) or into the `remove` helper as `&Value::from(..)` (the `Str` / `Null` the box held). */
+  rust59pDeleteKeyUse(n) {
+    const access = n?.parent;
+    if (access === void 0 || !isElementAccessExpression4(access) || access.argumentExpression !== n)
+      return false;
+    const del = access.parent;
+    return del !== void 0 && isDeleteExpression2(del) && del.expression === access && del.parent?.kind === SyntaxKind7.ExpressionStatement;
+  }
+  /** ral-59p: a local typed for a `delete` key (`dkey`) that is also an `in` key boxed into `in_op` (`inbox`) stays `Value`:
+   *  its `Value` print took the borrowed `in` test, the typed one would box into the helper. */
+  rust59pDeleteKeyInboxed(declaration) {
+    if (!isIdentifier3(declaration.name))
+      return false;
+    let dkey = false;
+    let inbox = false;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      const form = this.rustScalarUseForms.get(n);
+      if (form === "dkey")
+        dkey = true;
+      if (form === "inbox")
+        inbox = true;
+      return true;
+    });
+    return dkey && inbox;
   }
   /** `m[k] = v` as a statement: the element key of a native insert. */
   rustElemInsertKey(n) {
@@ -60940,6 +60969,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       return `Value::from(${super.printIdentifier(node)}.as_deref())`;
     if (form === "key" && local.kind === "ostr")
       return `${super.printIdentifier(node)}${this.rustLocalLastUse(node, local.declaration) ? "" : ".clone()"}.map(Value::from).unwrap_or(Value::Null)`;
+    if (form === "dkey")
+      return local.kind === "ostr" ? `Value::from(${super.printIdentifier(node)}.as_deref())` : `Value::from(${super.printIdentifier(node)}.as_str())`;
     if (form === "cond" && local.kind === "obool")
       return `(${super.printIdentifier(node)} == Some(true))`;
     if (form === "concat" && local.kind === "ostr")
@@ -82214,12 +82245,30 @@ ${this.getIden(identation)}}`;
     if (literal2 !== void 0) {
       return `if let Value::Dict(__d) = &mut ${recv} { std::sync::Arc::make_mut(__d).shift_remove(${literal2}); }`;
     }
+    const dkey = this.rust59pDeleteKeyText(keyNode);
+    let root = base;
+    while (root !== void 0 && (isPropertyAccessExpression3(root) || isElementAccessExpression4(root) || isParenthesizedExpression3(root)))
+      root = root.expression;
+    if (dkey !== void 0 && !(isIdentifier3(root) && this.rustDeclaredNode(root) === this.rustDeclaredNode(keyNode))) {
+      const borrowed = `if let (Value::Dict(__d), Some(__k)) = (&mut ${recv}, ${dkey}) { std::sync::Arc::make_mut(__d).shift_remove(__k); }`;
+      return borrowed.length > 380 ? void 0 : borrowed;
+    }
     const keyExpr = this.printNode(keyNode, 0).trim();
     if (!this.rustDeleteKeyBorrowable(keyExpr, recv)) {
       return void 0;
     }
     const emitted = `if let (Value::Dict(__d), Value::Str(__k)) = (&mut ${recv}, &${keyExpr}) { std::sync::Arc::make_mut(__d).shift_remove(__k.as_ref()); }`;
     return emitted.length > 380 ? void 0 : emitted;
+  }
+  /** ral-59p: the borrowed `Option<&str>` text of a `dkey` string local key, else undefined. */
+  rust59pDeleteKeyText(keyNode) {
+    if (keyNode === void 0 || !isIdentifier3(keyNode) || this.rustScalarUseForms.get(keyNode) !== "dkey")
+      return void 0;
+    const kind = this.rustScalarLocalOf(keyNode)?.kind;
+    if (kind !== "str" && kind !== "ostr")
+      return void 0;
+    const name = super.printIdentifier(keyNode);
+    return kind === "str" ? `Some(${name}.as_str())` : `${name}.as_deref()`;
   }
   /** A key the native `if let` can borrow beside `&mut RECV`: one expression
    *  (no statement), naming neither the receiver nor its owner — the tuple

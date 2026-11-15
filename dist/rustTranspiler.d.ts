@@ -1238,6 +1238,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustElemKeyInsertLiteralValue(n: any, declaration: any): boolean;
     /** ral-53k: `m[k]` handed as a call argument off a plain map-literal local: the lookup borrows the key's `&str`, no copy. */
     rustElemPlainMapReadKey(n: any): boolean;
+    /** ral-59p: `n` is the whole key of `delete X[n]` as an expression statement. The delete prints the key either into
+     *  provenDictFieldDelete's native `shift_remove` (borrowing the `&str`: a `None` key removes nothing, as the `Null` key
+     *  matched no `Value::Str` arm) or into the `remove` helper as `&Value::from(..)` (the `Str` / `Null` the box held). */
+    rust59pDeleteKeyUse(n: any): boolean;
+    /** ral-59p: a local typed for a `delete` key (`dkey`) that is also an `in` key boxed into `in_op` (`inbox`) stays `Value`:
+     *  its `Value` print took the borrowed `in` test, the typed one would box into the helper. */
+    rust59pDeleteKeyInboxed(declaration: any): boolean;
     /** `m[k] = v` as a statement: the element key of a native insert. */
     rustElemInsertKey(n: any): boolean;
     printElemKeyInOp(key: any, obj: any): string | undefined;
@@ -4261,6 +4268,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `delete X[k]` on a receiver the native-insert proof admits (never a ws
      *  subscriptions snapshot, so `try_ws_subs_remove` is dead): `shift_remove`. */
     provenDictFieldDelete(node: any): string | undefined;
+    /** ral-59p: the borrowed `Option<&str>` text of a `dkey` string local key, else undefined. */
+    rust59pDeleteKeyText(keyNode: any): string | undefined;
     /** A key the native `if let` can borrow beside `&mut RECV`: one expression
      *  (no statement), naming neither the receiver nor its owner — the tuple
      *  would borrow `self` twice — and never a bare `self`. */
