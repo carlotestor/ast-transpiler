@@ -83174,8 +83174,7 @@ _RustTranspiler.RUST_OPT_OUTCOME_RETURNS = {
   // ral-49c: only `loadOutcome`. `outcome` / `safeOutcome` stay `Value`: their answers are handed back whole by the
   // async-virtual `fetchOutcome` overrides (a `Value` return the dispatch preamble forwards), the kalshi `{}`
   // ternaries and predictfun `outcomeForToken`, which would box the decoded record straight back.
-  "loadOutcome": "PredictionOutcomeHandle",
-  "outcome": "PredictionOutcomeMarket"
+  "loadOutcome": "PredictionOutcomeHandle"
 };
 // `MarketInterface` keys typed `Bool`: a raw read of one holds a Bool or Null.
 _RustTranspiler.RUST_MARKET_FLAG_KEYS = /* @__PURE__ */ new Set(["spot", "margin", "swap", "future", "option", "index", "stock", "prediction", "contract", "linear", "inverse", "quanto"]);
