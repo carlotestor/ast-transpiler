@@ -18495,6 +18495,11 @@ describe('ral-55n: postfix counters ordered against a number Value or used as an
         expect(out).toContain('let mut i: i64 = 0;');
         expect(out).toContain('(i as f64) >= start.as_f64().unwrap_or(f64::NAN)');
     });
+    test('bybit: `data[i] = this.extend (data[i], code)` writes at the Int key', () => {
+        const out = run("    b (codes: any[], data: any[]) {\n        for (let i = 0; i < codes.length; i++) {\n            const code = codes[i];\n            data[i] = this.extend (data[i], code);\n        }\n        return data;\n    }\n");
+        expect(out).toContain('let mut i: i64 = 0;');
+        expect(out).toContain('add_element_to_object(&mut data, &Value::Int(i), ');
+    });
     test('guard: an equality against a number Value keeps the Value counter', () => {
         const out = run("    c (channels: string[], start: number) {\n        let n = 0;\n        for (let i = 0; i < channels.length; i++) {\n            if (i === start) {\n                n = n + 1;\n            }\n        }\n        return n;\n    }\n");
         expect(out).toMatch(/let mut i: Value = Value::Int\(0\);/);

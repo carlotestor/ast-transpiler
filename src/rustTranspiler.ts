@@ -2262,10 +2262,14 @@ export class RustTranspiler extends BaseTranspiler {
             const untilWrite = keyStrs.length === 1 ? this.printUntilHeadKeyWrite(left, right, rhs) ?? this.printReuseDynamicKeyWrite(left, right, rhs) ?? this.printNilMapKeyWrite(left, right, rhs) : undefined; if (untilWrite !== undefined) return untilWrite;
             const slotNested = keyStrs.length > 1 ? this.printSlotNestedInsert(left, right, this.rustOwnedArgText(right, rhs.trim())) : undefined; if (slotNested !== undefined) return slotNested;
             // the helper takes the value by move: an owned bare local (`Copy`, last use) is marked, the rest cloned on the file text
-            const helperCall = `add_element_to_object(${acc}, &${keyStrs[keyStrs.length - 1]}, ${this.rustOwnedArgText(right, rhs.trim())})`;
+            // ral-55n: a registered `i64` counter as the written key is the `Int` the boxed counter held (marked closed only below,
+            // when this helper write is what prints)
+            const counterKey: any = keyStrs.length === 1 ? this.rustSkipWrappers(keys[0]) : undefined;
+            const counterKeyText = counterKey !== undefined && this.rustI64CounterOperand(counterKey) ? `Value::Int(${String(counterKey.text)})` : undefined;
+            const helperCall = `add_element_to_object(${acc}, &${counterKeyText ?? keyStrs[keyStrs.length - 1]}, ${this.rustOwnedArgText(right, rhs.trim())})`;
             // a nested helper write whose value was read natively binds the value first, like the ccxt hoist did
             const helperWrite = this.rustDictHoistHosts.has(node)
-                ? `{ let __be_tmp = ${rhs}; add_element_to_object(${acc}, &${keyStrs[keyStrs.length - 1]}, __be_tmp); }` : helperCall;
+                ? `{ let __be_tmp = ${rhs}; add_element_to_object(${acc}, &${counterKeyText ?? keyStrs[keyStrs.length - 1]}, __be_tmp); }` : helperCall;
             const nestedInsert = keyStrs.length === 2
                 ? (this.rustNestedBearerInsert(baseExpr, keys[0], keyStrs[0], keys[1], keyStrs[1], rhs)
                     ?? this.nestedDictWrite(baseExpr, keys, keyStrs, rhs, helperWrite))
@@ -2280,6 +2284,7 @@ export class RustTranspiler extends BaseTranspiler {
                 ? this.rustBearerChainedWrite(baseExpr, keys, keyStrs, rhs) : undefined;
             if (bearerChain !== undefined) return bearerChain;
             const nativeInsert = keyStrs.length === 1 ? (this.rustBearerDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.rustMapParamDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.printNativeBookMetaWrite(baseExpr, keys[0], keyStrs[0], rhs) ?? this.printNativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.rustNativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs)) : undefined;
+            if (nativeInsert === undefined && counterKeyText !== undefined) this.rustI64CounterUse(counterKey);
             return nativeInsert ?? helperWrite;
         }
         // Rebuilding a typed dict bearer from a plain literal (`x = { .. }`)
