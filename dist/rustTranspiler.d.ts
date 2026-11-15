@@ -1683,9 +1683,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustTypedCallResultType(init: any): string | undefined;
     private static readonly RUST_RAW_RECORD_TYPES;
     /** `'vec'` for a `Vec<record>` typed result, `'map'` for `Tickers` (`HashMap<String, Ticker>`). */
-    rustTypedResultElemKind(init: any): 'vec' | 'map' | undefined;
+    rustTypedResultElemKind(init: any): 'vec' | 'map' | 'map2' | undefined;
     /** `xs.length`, `xs[i]` (int literal / int-literal counter) on a Vec result, `xs[k]` (a `Value` key) on a map result. */
-    rustTypedResultElemUse(n: any, elem: 'vec' | 'map'): boolean;
+    rustTypedResultElemUse(n: any, elem: 'vec' | 'map' | 'map2'): boolean;
+    /** `x` is read only: not written, deleted, updated or called. */
+    rustTypedResultReadOnlyAt(x: any): boolean;
     /** Element-access hook: the native read of a typed result element, boxed through its shared record handle. */
     printTypedResultElemRead(node: any): string | undefined;
     printTypedResultIndex(key: any): string;
