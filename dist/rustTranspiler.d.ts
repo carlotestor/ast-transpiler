@@ -1691,6 +1691,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustMarketSafeReadField(call: any): string | undefined;
     /** `this.safeString (m, 'k', '')`: three arguments, the last an empty string literal. */
     rustMarketEmptyDefaultRead(call: any): boolean;
+    /** ral-49c: `m as any` (in parentheses or not) as a call argument: the same whole-value hand-off of `m`. */
+    rustMarketValueUseThroughCast(n: any): boolean;
     /** A whole-value hand-off: a call argument, an array element, a dict value or a returned value. */
     rustMarketValueUse(n: any): boolean;
     rustMarketLocalKind(declaration: any): false | 'struct' | 'opt' | 'call' | 'smkt';
@@ -1756,6 +1758,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustIsOptMarketWriteOf(n: any): boolean;
     private static readonly RUST_OPT_MARKET_RETURNS;
     rustReturnsOptMarket(node: any): boolean;
+    private static readonly RUST_OPT_OUTCOME_RETURNS;
+    /** ral-48c: `outcome` / `safeOutcome` / `loadOutcome` of the prediction base class, declared with the outcome record. */
+    rustReturnsOptOutcome(node: any): boolean;
+    /** ral-48c: `await this.loadOutcome (..)` is the call itself for the `Option<Market>` proofs. */
+    rustSkipOutcomeAwait(node: any): any;
     private rustVenueOptMarketDecisions;
     /** ral-46e: a venue (not base-tier) method declared `Market`, not async, no override, never referenced by name as a
      *  value, whose every return is `undefined` or a `safeMarket` record and that returns at least one of each
@@ -1776,6 +1783,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     printOptSafeMarketTernary(init: any): string | undefined;
     /** `(if c { None } else { Some(market) })` for an `Option<Market>` ternary initializer. */
     printOptMarketTernary(init: any): string | undefined;
+    /** ral-48c: `await this.loadOutcome (..)` in a `Value` place: the answer boxed once after the `.await`. */
+    printOptOutcomeAwaitBox(node: any, identation: number): string | undefined;
     /** `return x` in an `Option<Market>` method. */
     printOptMarketReturnValue(exp: any): string;
     private rustOptMarketBoxing;
@@ -2020,6 +2029,8 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  `i64`/`f64`, which the `Value` match would not compile against. */
     isRustValueIndexKey(node: Node): boolean;
     /** Strips `( )`, `as T` and `!` wrappers. */
+    /** The first ancestor of `node` that is not a parenthesis / `as` / non-null wrapper. */
+    rustSkipWrappersUp(node: any): any;
     rustSkipWrappers(node: any): any;
     /** The parameter declaration behind a receiver when its *annotation* proves
      *  a plain dict; undefined otherwise (no proof → keep the helper). */
