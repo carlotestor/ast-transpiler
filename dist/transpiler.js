@@ -54674,6 +54674,23 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     return this.rustOptStrConcatFits(n);
   }
+  /** ral-56x K1: `return x` of a literal-seeded string local (never a parameter alias) in a `-> Option<String>` method. */
+  rust56xStrReturnLocal(n, fn) {
+    if (!isIdentifier3(n) || !isReturnStatement4(n.parent) || findAncestor(n.parent.parent, isFunctionLike) !== fn)
+      return false;
+    const declaration = this.rustDeclaredNode(n);
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.initializer === void 0)
+      return false;
+    return this.literalKindOfNode(this.unwrapParens(declaration.initializer)) === "string" && this.rustEnclosingFunction(declaration) === fn;
+  }
+  rust56xStrReturnText(exp, fn) {
+    if (exp === void 0 || !isIdentifier3(exp) || !this.rust56xStrReturnLocal(exp, fn))
+      return void 0;
+    const kind = this.rustScalarLocalOf(exp)?.kind;
+    if (kind === "str")
+      return `Some(${super.printIdentifier(exp)})`;
+    return kind === "ostr" ? super.printIdentifier(exp) : void 0;
+  }
   /** ral-56x K1: a `+` partner that is itself a concat (or a `.toString()`) the printer already prints as a boxed `Value::Str(format!(..))`
    *  (always a `Str`, never `Null`), so the optional string joins the same `format!` with its `as_deref().unwrap_or("null")` text. */
   rust56xFormatPartner(other) {
@@ -59010,6 +59027,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const typedReturn = this.rustMethodTypedReturnKind(fn);
       if (typedReturn !== void 0)
         return typedReturn === kind || typedReturn === `o${kind}` ? "native" : void 0;
+      if ((kind === "str" || kind === "ostr") && this.rust56xStrReturnLocal(n, fn) && this.rustStrReturnSignature(fn, n) && this.rust57xStrReturnMethod(fn))
+        return "native";
       return this.rustNativeStrReturnKind(fn) === "str" || this.rustStrReturnSignature(fn, n) ? void 0 : "box";
     }
     if ((kind === "str" || kind === "ostr") && this.rustPlusEqualsJoinOperand(n))
@@ -63359,7 +63378,38 @@ ${ind}];`;
     this.rustMethodOverrides.set(node, method ?? null);
     return method;
   }
+  /** ral-57x: the method prints `-> Option<String>` whatever its literal-seeded string locals become: the signature head
+   *  admits it and every return converts, a returned own literal-seeded local (checker `string`) counted as converting
+   *  (as a `String` it is `Some(x)`; as a `Value` it is a checker-string `Value`: rustStrReturnValueConverts either way). */
+  rust57xStrReturnMethod(fn) {
+    if (fn === void 0 || fn.kind !== SyntaxKind7.MethodDeclaration || !this.rustNativeStrReturnHead(fn))
+      return false;
+    const body = fn.body;
+    const last = body?.statements[body.statements.length - 1];
+    if (last === void 0 || !isReturnStatement4(last))
+      return false;
+    let ok = true;
+    const visit = (n) => {
+      if (!ok || n !== body && isFunctionLike(n))
+        return;
+      if (isReturnStatement4(n)) {
+        const inner = this.unwrapParensNode(n.expression);
+        const own = inner !== void 0 && isIdentifier3(inner) && this.rust56xStrReturnLocal(inner, fn) && this.rustStrReturnSignature(fn, inner) && this.primitiveKindOfType(this.getCheckedTypeOf(inner)) === "string";
+        if (!own && !this.rustStrReturnValueConverts(n.expression)) {
+          ok = false;
+          return;
+        }
+      }
+      n.forEachChild(visit);
+    };
+    body.forEachChild(visit);
+    return ok;
+  }
   rustNativeStrReturnDecisionUncached(node) {
+    return this.rust57xStrReturnMethod(node);
+  }
+  /** The signature half of the native-`Str` return decision: a sync `string` method outside the base tier / override groups. */
+  rustNativeStrReturnHead(node) {
     if (node.type === void 0 || this.isAsyncFunction(node))
       return false;
     const hidden = this.getMethodOverride(node);
@@ -63373,7 +63423,7 @@ ${ind}];`;
     } catch (e) {
       return false;
     }
-    return this.primitiveKindOfType(type) === "string" && this.rustStrReturnPathsConvert(node.body);
+    return this.primitiveKindOfType(type) === "string";
   }
   /** A call resolving to a `-> Option<String>` base method of the table (or an override of one). */
   rustBaseNativeStrCall(node) {
@@ -69633,6 +69683,11 @@ ${iden}}`;
       return `${idn}return ${this.printOptMarketReturnValue(exp)};`;
     if (this.rustReturnsCurrency(fn))
       return `${idn}return ${this.printCurrencyReturnValue(exp)};`;
+    if (this.rustNativeStrReturnKind(fn) === "str") {
+      const own = this.rust56xStrReturnText(this.unwrapParensNode(exp), fn);
+      if (own !== void 0)
+        return `${idn}return ${own};`;
+    }
     if (this.rustNativeStrReturnKind(fn) === "str" && this.rustStrReturnValueConverts(exp)) {
       if (this.literalKindOfNode(this.unwrapParensNode(exp)) === "null")
         return `${idn}return None;`;

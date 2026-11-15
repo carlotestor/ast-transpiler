@@ -445,6 +445,9 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  those displays as the JS concat does (Str text, Null `null`). */
     rustNilConcatPartner(other: any): boolean;
     rustNilOptStrConcatUse(n: any): boolean;
+    /** ral-56x K1: `return x` of a literal-seeded string local (never a parameter alias) in a `-> Option<String>` method. */
+    rust56xStrReturnLocal(n: any, fn: any): boolean;
+    rust56xStrReturnText(exp: any, fn: any): string | undefined;
     /** ral-56x K1: a `+` partner that is itself a concat (or a `.toString()`) the printer already prints as a boxed `Value::Str(format!(..))`
      *  (always a `Str`, never `Null`), so the optional string joins the same `format!` with its `as_deref().unwrap_or("null")` text. */
     rust56xFormatPartner(other: any): boolean;
@@ -1691,7 +1694,13 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  parent class does not resolve. */
     private rustAncestorMethodTables;
     getMethodOverride(node: Node): Node;
+    /** ral-57x: the method prints `-> Option<String>` whatever its literal-seeded string locals become: the signature head
+     *  admits it and every return converts, a returned own literal-seeded local (checker `string`) counted as converting
+     *  (as a `String` it is `Some(x)`; as a `Value` it is a checker-string `Value`: rustStrReturnValueConverts either way). */
+    rust57xStrReturnMethod(fn: any): boolean;
     private rustNativeStrReturnDecisionUncached;
+    /** The signature half of the native-`Str` return decision: a sync `string` method outside the base tier / override groups. */
+    private rustNativeStrReturnHead;
     private static readonly RUST_BASE_NATIVE_STR_METHODS;
     private rustBaseNativeStrBare;
     /** A call resolving to a `-> Option<String>` base method of the table (or an override of one). */
