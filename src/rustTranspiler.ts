@@ -2444,7 +2444,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (node.declarations.length === 1 && this.rustLentListLocal(declaration) && this.rustTypedListField(declaration.initializer)) return `${indent}let mut ${varName}: crate::value::List = self.${String(this.rustSkipWrappers(declaration.initializer).name.text)}.clone()`;
         if (node.declarations.length === 1 && this.rustLentListLocal(declaration)) return this.printBuiltListDeclaration(declaration, indent, varName) ?? `${indent}let mut ${varName}: crate::value::List = ${this.rustWsFieldGetText(this.rustSkipWrappers(declaration.initializer), false) ?? parsedValue}.into_list()`;
         if (node.declarations.length === 1 && this.rustBorrowedDictLocal(declaration) && this.rustEcdsaCall(this.rustSkipWrappers(declaration.initializer))) { this.rustPrintedBorrowed.add(declaration); return `${indent}let mut ${varName}: crate::value::Dict = ${this.rustBytesBareText(this.rustSkipWrappers(declaration.initializer), identation)}`; }
-        if (node.declarations.length === 1 && this.rustBorrowedDictLocal(declaration)) { this.rustPrintedBorrowed.add(declaration); const read = this.rustWsFieldGetText(this.rustSkipWrappers(declaration.initializer), false) ?? (this.rustSbDictAliasDecl(declaration) ? `Value::from(&${parsedValue.trim()})` : parsedValue); return this.rustBorrowedLocalKind(declaration) === 'list' ? `${indent}let mut ${varName}: crate::value::List = ${read}.into_list()` : `${indent}let mut ${varName}: crate::value::Dict = ${read}.into_dict()`; }
+        if (node.declarations.length === 1 && this.rustBorrowedDictLocal(declaration)) { this.rustPrintedBorrowed.add(declaration); const read = this.rustWsFieldGetText(this.rustSkipWrappers(declaration.initializer), false) ?? (this.rustSbDictAliasDecl(declaration) ? `Value::from(&${parsedValue.trim()})` : this.rustParamsAliasDecl(declaration) ? `${parsedValue.trim().replace(/\.clone\(\)$/, '')}.clone()` : parsedValue); return this.rustBorrowedLocalKind(declaration) === 'list' ? `${indent}let mut ${varName}: crate::value::List = ${read}.into_list()` : `${indent}let mut ${varName}: crate::value::Dict = ${read}.into_dict()`; }
         if (node.declarations.length === 1 && this.rustHandedDictLocal(declaration)) { const arms = this.printDictTernaryArms(declaration.initializer, identation); return `${indent}let mut ${varName}: crate::value::Dict = ${arms ?? parsedValue + '.into_dict()'}`; }
         const boolValue = this.getRustBoolLocalInitializer(declaration, parsedValue);
         if (boolValue !== undefined) {
@@ -6815,6 +6815,8 @@ export class RustTranspiler extends BaseTranspiler {
         }
         // ral-40h: a container alias asked from inside its source's open decision is re-asked once the source settles
         if (source !== undefined && isVariableDeclaration(source) && this.rustBorrowedPending.has(source) && this.rustContainerAliasAsking.has(init)) { this.rustSbAliasDeferred.add(init.parent); return false; }
+        // ral-44c: `let y = params` of a typed unified method's never-rebound `params` (a map on every path, `Into<Params>`)
+        if (source !== undefined && source.kind === SyntaxKind.Parameter) return this.rustTypedParamsParam(source);
         if (source === undefined || !isVariableDeclaration(source) || this.rustBorrowedPending.has(source)) return false;
         return this.rustBorrowedLocalKind(source) === 'dict';
     }
@@ -6824,9 +6826,16 @@ export class RustTranspiler extends BaseTranspiler {
     /** sb: the alias declaration shares its source's Arc (`Value::from(&x).into_dict()`, the bump the `Value` alias made). */
     rustSbDictAliasDecl(declaration: any): boolean {
         const init: any = this.rustSkipWrappers(declaration?.initializer);
-        return init !== undefined && isIdentifier(init) && this.rustBorrowedLocalKind(declaration) === 'dict' && this.rustSbDictAliasSource(init);
+        return init !== undefined && isIdentifier(init) && this.rustDeclaredNode(init)?.kind !== SyntaxKind.Parameter && this.rustBorrowedLocalKind(declaration) === 'dict' && this.rustSbDictAliasSource(init);
     }
     private rustSbAliasDeferred = new WeakSet<any>();
+
+    /** ral-44c: `let y = params` of a typed unified method's `params`: the alias takes the map behind the boxed parameter
+     *  (`params.clone().into_dict()`, the same Arc bump the boxed alias paid); the parameter itself stays readable. */
+    rustParamsAliasDecl(declaration: any): boolean {
+        const init: any = this.rustSkipWrappers(declaration?.initializer);
+        return init !== undefined && isIdentifier(init) && this.rustDeclaredNode(init)?.kind === SyntaxKind.Parameter && this.rustBorrowedLocalKind(declaration) === 'dict' && this.rustSbDictAliasSource(init);
+    }
 
     rustAssignmentOpKind(op): boolean {
         return op >= SyntaxKind.FirstAssignment && op <= SyntaxKind.LastAssignment;

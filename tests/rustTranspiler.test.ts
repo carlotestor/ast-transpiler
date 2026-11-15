@@ -15901,3 +15901,25 @@ describe('ral-43c: a typed string key into an any receiver hands the key to get_
         expect(w).not.toContain('get_value(&store, sym.as_deref())');
     });
 });
+
+describe('ral-44c: a params alias held as the map through an omit rewrite', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Int = number | undefined;\nexport default class Exchange {\n    extend (...args: any[]): any { return Object.assign ({}, ...args); }\n    omit (x: any, ...args: any[]): any { return x; }\n    hold (x: any): any { return x; }\n    async privateGetX (p: any = {}): Promise<any> { return p; }\n}\n";
+    const venue = "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n    async fetchTrades (symbol: string, since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<any[]> {\n        const request: Dict = { 'a': 1 };\n        let paramsOmitted = params;\n        if (request['a'] === 1) {\n            paramsOmitted = this.omit (params, 'network');\n        }\n        return await this.privateGetX (this.extend (request, paramsOmitted));\n    }\n    rebound (x: any) {\n        let y = x;\n        y = this.omit (x, 'k');\n        return this.hold (this.extend ({}, y));\n    }\n}\n";
+    const out = () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-44c-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), venue.replace("import Exchange from './base/Exchange.js';\n", "import Exchange from './base/Exchange.js';\nimport type { Dict, Int } from './base/Exchange.js';\n"));
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['fetchTrades'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        try { return t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+    };
+    test('`let y = params` of a typed unified method is a Dict alias; the omit write takes the map back; a plain any parameter alias keeps the box', () => {
+        const text = out();
+        const t1 = text.slice(text.indexOf('fn fetchTrades'), text.indexOf('fn rebound'));
+        expect(t1).toContain('let mut paramsOmitted: crate::value::Dict = params.clone().into_dict();');
+        expect(t1).toMatch(/paramsOmitted = self\.omit\(params, [^\n]*\)\.into_dict\(\);/);
+        expect(t1).toContain('&[&paramsOmitted]');
+        const t2 = text.slice(text.indexOf('fn rebound'));
+        expect(t2).toContain('let mut y: Value =');
+    });
+});

@@ -53800,7 +53800,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     if (node.declarations.length === 1 && this.rustBorrowedDictLocal(declaration)) {
       this.rustPrintedBorrowed.add(declaration);
-      const read = this.rustWsFieldGetText(this.rustSkipWrappers(declaration.initializer), false) ?? (this.rustSbDictAliasDecl(declaration) ? `Value::from(&${parsedValue.trim()})` : parsedValue);
+      const read = this.rustWsFieldGetText(this.rustSkipWrappers(declaration.initializer), false) ?? (this.rustSbDictAliasDecl(declaration) ? `Value::from(&${parsedValue.trim()})` : this.rustParamsAliasDecl(declaration) ? `${parsedValue.trim().replace(/\.clone\(\)$/, "")}.clone()` : parsedValue);
       return this.rustBorrowedLocalKind(declaration) === "list" ? `${indent}let mut ${varName}: crate::value::List = ${read}.into_list()` : `${indent}let mut ${varName}: crate::value::Dict = ${read}.into_dict()`;
     }
     if (node.declarations.length === 1 && this.rustHandedDictLocal(declaration)) {
@@ -58132,6 +58132,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       this.rustSbAliasDeferred.add(init.parent);
       return false;
     }
+    if (source !== void 0 && source.kind === SyntaxKind7.Parameter)
+      return this.rustTypedParamsParam(source);
     if (source === void 0 || !isVariableDeclaration3(source) || this.rustBorrowedPending.has(source))
       return false;
     return this.rustBorrowedLocalKind(source) === "dict";
@@ -58139,7 +58141,13 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   /** sb: the alias declaration shares its source's Arc (`Value::from(&x).into_dict()`, the bump the `Value` alias made). */
   rustSbDictAliasDecl(declaration) {
     const init = this.rustSkipWrappers(declaration?.initializer);
-    return init !== void 0 && isIdentifier3(init) && this.rustBorrowedLocalKind(declaration) === "dict" && this.rustSbDictAliasSource(init);
+    return init !== void 0 && isIdentifier3(init) && this.rustDeclaredNode(init)?.kind !== SyntaxKind7.Parameter && this.rustBorrowedLocalKind(declaration) === "dict" && this.rustSbDictAliasSource(init);
+  }
+  /** ral-44c: `let y = params` of a typed unified method's `params`: the alias takes the map behind the boxed parameter
+   *  (`params.clone().into_dict()`, the same Arc bump the boxed alias paid); the parameter itself stays readable. */
+  rustParamsAliasDecl(declaration) {
+    const init = this.rustSkipWrappers(declaration?.initializer);
+    return init !== void 0 && isIdentifier3(init) && this.rustDeclaredNode(init)?.kind === SyntaxKind7.Parameter && this.rustBorrowedLocalKind(declaration) === "dict" && this.rustSbDictAliasSource(init);
   }
   rustAssignmentOpKind(op) {
     return op >= SyntaxKind7.FirstAssignment && op <= SyntaxKind7.LastAssignment;

@@ -962,6 +962,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** sb: the alias declaration shares its source's Arc (`Value::from(&x).into_dict()`, the bump the `Value` alias made). */
     rustSbDictAliasDecl(declaration: any): boolean;
     private rustSbAliasDeferred;
+    /** ral-44c: `let y = params` of a typed unified method's `params`: the alias takes the map behind the boxed parameter
+     *  (`params.clone().into_dict()`, the same Arc bump the boxed alias paid); the parameter itself stays readable. */
+    rustParamsAliasDecl(declaration: any): boolean;
     rustAssignmentOpKind(op: any): boolean;
     /** ral-ua: `acc += x` (statement) with `acc` a checker-string local the solve leaves boxed (its decision is not taken
      *  during seeding: the join is assumed, then re-checked) and `x` a `string | undefined`, within the 400-char line. */
