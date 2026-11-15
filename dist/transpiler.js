@@ -56297,7 +56297,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     let ok = true;
     this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
       const form = this.rustScalarUseForms.get(n);
-      if (form === "err" || form === "key" && !(nativeKeys && (this.rustScalarInsertKeyUse(n) || this.rustNestedBearerKeySlot(n))))
+      if (form === "err" || form === "key" && !(nativeKeys && (this.rustScalarInsertKeyUse(n) || this.rustNestedBearerKeySlot(n) || this.rustPlainFieldInsertKey(n))))
         ok = false;
       if (form !== "box" && form !== "xbox")
         return true;
@@ -62617,6 +62617,35 @@ ${ind}];`;
       return true;
     });
     return keys > 0 && boxed > 0;
+  }
+  /** ral-55f: `this.F[k] = v` (statement) on a plain untagged field the printer inserts natively (printNativeDictInsert's
+   *  field receiver, e.g. `options`): the printer prints the key text itself (`k.as_deref().unwrap_or("null").to_string()`, the
+   *  one allocation `stringify_param(&k)` made), so the ccxt build/ key pass never sees a boxed key there. The value must
+   *  not rewrite the key (binance pro authenticate `this.options[type] = this.extend (options, ..)`). Non-test sources. */
+  rustPlainFieldInsertKey(n) {
+    if (this.rustTestTierSource(n))
+      return false;
+    const keyNode = this.rustKeyWrapped(n);
+    const access = keyNode.parent;
+    if (!isElementAccessExpression4(access) || access.argumentExpression !== keyNode)
+      return false;
+    const receiver = this.rustNativeInsertReceiver(access.expression);
+    if (receiver === void 0 || !receiver.isField || !this.rustReceiverStaysDict(access.expression, receiver))
+      return false;
+    const write = access.parent;
+    if (!isBinaryExpression5(write) || write.left !== access || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const key = String(n.text);
+    let rewrites = false;
+    const visit = (m) => {
+      if (rewrites)
+        return;
+      if (isIdentifier3(m) && String(m.text) === key && (isBinaryExpression5(m.parent) && m.parent.left === m && m.parent.operatorToken.kind >= SyntaxKind7.FirstAssignment && m.parent.operatorToken.kind <= SyntaxKind7.LastAssignment || (isPrefixUnaryExpression3(m.parent) || isPostfixUnaryExpression3(m.parent)) && (m.parent.operator === SyntaxKind7.PlusPlusToken || m.parent.operator === SyntaxKind7.MinusMinusToken)))
+        rewrites = true;
+      m.forEachChild?.(visit);
+    };
+    visit(write.right);
+    return !rewrites;
   }
   rustScalarOptKeyText(key) {
     return `${super.printIdentifier(key)}.as_deref().unwrap_or("null").to_string()`;
@@ -71716,7 +71745,8 @@ ${iden}}`;
     if ((keyReadOnly || elemKeyReadOnly) && (!safe || plainReads === 0 || plainReads !== reads || nullTests + writes + lengths + indexLikeReads + boxedElementUses.length + lentResponses + lentNullable + keySets + keyWrites + extendHeads + jwtLends > 0))
       return void 0;
     const optAliasBoxOnly = optAliasInit && optionalBoxes > 0 && optionalBoxes === boxedElementUses.length;
-    if (!safe || reads === 0 && !builtBoxOnly && !boxOnly && !endpointBoxOnly && !optAliasBoxOnly && !this.rustNullTestedDictLocal(init, nullTests, writes) || mixed || from === void 0 || (this.rustNilResponseLocals.has(declaration) || from === "api" || this.rustDictElementSource(init)) && (nullTests > 0 || lengths > 0 || indexLikeReads > 0 && !this.rustUrlsMapEntry(init)) || this.rustListElementSource(init) && (nullTests > 0 || lengths > 0))
+    const sbSlotParamsBoxOnly = sbAlias && sbMapWrites > 0 && reads === 0 && writes === 0 && nullTests === 0 && paramsBoxes > 0 && paramsBoxes === boxedElementUses.length && this.rustSbSlotAliasNonTest(declaration) && boxedElementUses.every((u) => this.rustBoxLineOk(u));
+    if (!safe || reads === 0 && !builtBoxOnly && !boxOnly && !endpointBoxOnly && !optAliasBoxOnly && !sbSlotParamsBoxOnly && !this.rustNullTestedDictLocal(init, nullTests, writes) || mixed || from === void 0 || (this.rustNilResponseLocals.has(declaration) || from === "api" || this.rustDictElementSource(init)) && (nullTests > 0 || lengths > 0 || indexLikeReads > 0 && !this.rustUrlsMapEntry(init)) || this.rustListElementSource(init) && (nullTests > 0 || lengths > 0))
       return void 0;
     if (declaredEndpointWrites > 0 && nullTests > 0 && !declaredDictOnly && !declaredListTested)
       return void 0;
@@ -72163,6 +72193,11 @@ ${iden}}`;
     while (up !== void 0 && (isParenthesizedExpression3(up) || isAsExpression3(up)))
       up = up.parent;
     return isCallExpression6(call) && call.arguments[0] === node && isBinaryExpression5(up) && isIdentifier3(up.left) && this.rustSelfExtendWrite(up.left, declaration);
+  }
+  /** ral-55f: the alias sits outside ts/src/test (the slot rules apply to non-test sources only). */
+  rustSbSlotAliasNonTest(declaration) {
+    const source = declaration?.getSourceFile?.()?.fileName;
+    return typeof source === "string" && !/[\\/]test[\\/]/.test(source);
   }
   /** ral-54f: a slot write accepted by the shared-map alias rule, printed typed only when the alias printed as the map. */
   rustSbAliasSlotWriteOf(element) {
