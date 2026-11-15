@@ -76225,7 +76225,7 @@ ${iden}}`;
       if (decl === void 0 || !isVariableDeclaration3(decl) || !isIdentifier3(decl.name))
         return false;
       const init = decl.initializer === void 0 ? void 0 : this.rustSkipWrappers(decl.initializer);
-      return init === void 0 || isCallExpression6(init) || isArrayLiteralExpression4(init) || isObjectLiteralExpression4(init) || this.literalKindOfNode(init) === "null" || init.kind === SyntaxKind7.AwaitExpression && isCallExpression6(this.rustSkipWrappers(init.expression)) && this.rustVenueContainerReturnKind(this.rustSkipWrappers(init.expression)) !== void 0;
+      return init === void 0 || isCallExpression6(init) || isArrayLiteralExpression4(init) || isObjectLiteralExpression4(init) || this.literalKindOfNode(init) === "null" || init.kind === SyntaxKind7.AwaitExpression && isCallExpression6(this.rustSkipWrappers(init.expression)) && this.rustVenueContainerReturnKind(this.rustSkipWrappers(init.expression)) !== void 0 || init.kind === SyntaxKind7.AwaitExpression && isCallExpression6(this.rustSkipWrappers(init.expression)) && this.rustDeclaredEndpointKind(this.rustSkipWrappers(init.expression)) === kind;
     };
     const hashList = _RustTranspiler.RUST_LENT_HASH_LIST_METHODS.has(name) && this.rustScalarListTypeNode(type);
     const lends = (call, arg) => lendable(arg) && !(hashList && (this.rustVecLocalIsTyped(this.rustDeclaredNode(arg)) || Array.from(call.arguments ?? []).some((a) => a !== arg && isIdentifier3(a) && a.text === arg.text)));

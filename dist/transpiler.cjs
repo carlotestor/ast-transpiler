@@ -76224,7 +76224,7 @@ ${iden}}`;
       if (decl === void 0 || !_is.isVariableDeclaration.call(void 0, decl) || !_is.isIdentifier.call(void 0, decl.name))
         return false;
       const init = decl.initializer === void 0 ? void 0 : this.rustSkipWrappers(decl.initializer);
-      return init === void 0 || _is.isCallExpression.call(void 0, init) || _is.isArrayLiteralExpression.call(void 0, init) || _is.isObjectLiteralExpression.call(void 0, init) || this.literalKindOfNode(init) === "null" || init.kind === _ast.SyntaxKind.AwaitExpression && _is.isCallExpression.call(void 0, this.rustSkipWrappers(init.expression)) && this.rustVenueContainerReturnKind(this.rustSkipWrappers(init.expression)) !== void 0;
+      return init === void 0 || _is.isCallExpression.call(void 0, init) || _is.isArrayLiteralExpression.call(void 0, init) || _is.isObjectLiteralExpression.call(void 0, init) || this.literalKindOfNode(init) === "null" || init.kind === _ast.SyntaxKind.AwaitExpression && _is.isCallExpression.call(void 0, this.rustSkipWrappers(init.expression)) && this.rustVenueContainerReturnKind(this.rustSkipWrappers(init.expression)) !== void 0 || init.kind === _ast.SyntaxKind.AwaitExpression && _is.isCallExpression.call(void 0, this.rustSkipWrappers(init.expression)) && this.rustDeclaredEndpointKind(this.rustSkipWrappers(init.expression)) === kind;
     };
     const hashList = _RustTranspiler.RUST_LENT_HASH_LIST_METHODS.has(name) && this.rustScalarListTypeNode(type);
     const lends = (call, arg) => lendable(arg) && !(hashList && (this.rustVecLocalIsTyped(this.rustDeclaredNode(arg)) || Array.from(_nullishCoalesce(call.arguments, () => ( []))).some((a) => a !== arg && _is.isIdentifier.call(void 0, a) && a.text === arg.text)));
