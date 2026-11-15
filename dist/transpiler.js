@@ -60016,14 +60016,14 @@ ${binding(plan.indent)}` : ""), head: "" };
     const last = this.rustSkipWrappers(left.argumentExpression);
     const lkind = isIdentifier3(last) ? this.rustScalarLocalOf(last)?.kind : void 0;
     const lname = isIdentifier3(last) ? super.printIdentifier(last) : "";
-    const lastText = isStringLiteral3(last) ? `${JSON.stringify(String(last.text))}.to_string()` : this.rustScalarUseForms.get(last) !== "nkey" ? void 0 : lkind === "str" ? `${lname}.to_string()` : lkind === "ostr" ? `${lname}.as_deref().unwrap_or("null").to_string()` : void 0;
+    const lastText = isStringLiteral3(last) ? `${JSON.stringify(String(last.text))}.to_string()` : this.rustScalarUseForms.get(last) !== "nkey" ? lkind === void 0 && isIdentifier3(last) && /^[A-Za-z_]\w*$/.test(lname) ? `crate::runtime::stringify_param(&${lname})` : void 0 : lkind === "str" ? `${lname}.to_string()` : lkind === "ostr" ? `${lname}.as_deref().unwrap_or("null").to_string()` : void 0;
     if (lastText === void 0)
       return void 0;
     const bound = /\bself\b/.test(value);
     const chain = `if let Value::Dict(__bf03d0) = &mut self.${field} { let __bf03e1 = std::sync::Arc::make_mut(__bf03d0).entry(${upperText}).or_insert(Value::Null); if let Value::Dict(__r05d) = __bf03e1 { std::sync::Arc::make_mut(__r05d).insert(${lastText}, ${bound ? "__be_tmp" : value}); } }`;
     const insert = bound ? `{ let __be_tmp = ${value}; ${chain} }` : chain;
     if (insert.split("\n").some((l) => l.length + 10 > 400)) {
-      const lastKey = isStringLiteral3(last) ? `Value::Str(${JSON.stringify(String(last.text))}.into())` : `Value::from(${lname}${lkind === "str" ? ".as_str()" : ".as_deref()"})`;
+      const lastKey = isStringLiteral3(last) ? `Value::Str(${JSON.stringify(String(last.text))}.into())` : lkind === void 0 ? lname : `Value::from(${lname}${lkind === "str" ? ".as_str()" : ".as_deref()"})`;
       return `add_element_to_object(get_value_mut(&mut self.${field}, &Value::from(${uname}${ukind === "str" ? ".as_str()" : ".as_deref()"})), &${lastKey}, ${value})`;
     }
     return insert;

@@ -60015,14 +60015,14 @@ ${binding(plan.indent)}` : ""), head: "" };
     const last = this.rustSkipWrappers(left.argumentExpression);
     const lkind = _is.isIdentifier.call(void 0, last) ? _optionalChain([this, 'access', _9083 => _9083.rustScalarLocalOf, 'call', _9084 => _9084(last), 'optionalAccess', _9085 => _9085.kind]) : void 0;
     const lname = _is.isIdentifier.call(void 0, last) ? super.printIdentifier(last) : "";
-    const lastText = _is.isStringLiteral.call(void 0, last) ? `${JSON.stringify(String(last.text))}.to_string()` : this.rustScalarUseForms.get(last) !== "nkey" ? void 0 : lkind === "str" ? `${lname}.to_string()` : lkind === "ostr" ? `${lname}.as_deref().unwrap_or("null").to_string()` : void 0;
+    const lastText = _is.isStringLiteral.call(void 0, last) ? `${JSON.stringify(String(last.text))}.to_string()` : this.rustScalarUseForms.get(last) !== "nkey" ? lkind === void 0 && _is.isIdentifier.call(void 0, last) && /^[A-Za-z_]\w*$/.test(lname) ? `crate::runtime::stringify_param(&${lname})` : void 0 : lkind === "str" ? `${lname}.to_string()` : lkind === "ostr" ? `${lname}.as_deref().unwrap_or("null").to_string()` : void 0;
     if (lastText === void 0)
       return void 0;
     const bound = /\bself\b/.test(value);
     const chain = `if let Value::Dict(__bf03d0) = &mut self.${field} { let __bf03e1 = std::sync::Arc::make_mut(__bf03d0).entry(${upperText}).or_insert(Value::Null); if let Value::Dict(__r05d) = __bf03e1 { std::sync::Arc::make_mut(__r05d).insert(${lastText}, ${bound ? "__be_tmp" : value}); } }`;
     const insert = bound ? `{ let __be_tmp = ${value}; ${chain} }` : chain;
     if (insert.split("\n").some((l) => l.length + 10 > 400)) {
-      const lastKey = _is.isStringLiteral.call(void 0, last) ? `Value::Str(${JSON.stringify(String(last.text))}.into())` : `Value::from(${lname}${lkind === "str" ? ".as_str()" : ".as_deref()"})`;
+      const lastKey = _is.isStringLiteral.call(void 0, last) ? `Value::Str(${JSON.stringify(String(last.text))}.into())` : lkind === void 0 ? lname : `Value::from(${lname}${lkind === "str" ? ".as_str()" : ".as_deref()"})`;
       return `add_element_to_object(get_value_mut(&mut self.${field}, &Value::from(${uname}${ukind === "str" ? ".as_str()" : ".as_deref()"})), &${lastKey}, ${value})`;
     }
     return insert;
