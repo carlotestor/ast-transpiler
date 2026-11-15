@@ -8948,6 +8948,13 @@ export class RustTranspiler extends BaseTranspiler {
                 return d !== undefined && isVariableDeclaration(d) && d.name !== inner && this.rustEnclosingFunction(d) === this.rustEnclosingFunction(node);
             }
             if (isPrefixUnaryExpression(inner)) return inner.operator === SyntaxKind.ExclamationToken && leaf(inner.operand);
+            // `x === 'lit'` / `x !== undefined` over such a local: the comparison's native text decides (rustBoolNativeText)
+            if (isBinaryExpression(inner) && this.isEqualityOp(inner.operatorToken.kind)) {
+                const l: any = this.unwrapParens(inner.left);
+                const r: any = this.unwrapParens(inner.right);
+                const lit = (n: any) => this.literalKindOfNode(n) === 'string' || this.literalKindOfNode(n) === 'null';
+                return (leaf(l) && lit(r)) || (lit(l) && leaf(r));
+            }
             return isBinaryExpression(inner) && this.isLogicalOp(inner.operatorToken.kind) && leaf(inner.left) && leaf(inner.right);
         };
         if (isPrefixUnaryExpression(node)) return node.operator === SyntaxKind.ExclamationToken && leaf(node.operand);

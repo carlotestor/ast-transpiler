@@ -60396,6 +60396,12 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       }
       if (isPrefixUnaryExpression3(inner))
         return inner.operator === SyntaxKind7.ExclamationToken && leaf(inner.operand);
+      if (isBinaryExpression5(inner) && this.isEqualityOp(inner.operatorToken.kind)) {
+        const l = this.unwrapParens(inner.left);
+        const r = this.unwrapParens(inner.right);
+        const lit = (n2) => this.literalKindOfNode(n2) === "string" || this.literalKindOfNode(n2) === "null";
+        return leaf(l) && lit(r) || lit(l) && leaf(r);
+      }
       return isBinaryExpression5(inner) && this.isLogicalOp(inner.operatorToken.kind) && leaf(inner.left) && leaf(inner.right);
     };
     if (isPrefixUnaryExpression3(node))

@@ -15640,3 +15640,15 @@ describe('ral-43a: a logical over bool scalar locals is a bool local boxed once 
         expect(out).toContain('Value::Bool(contract)');
     });
 });
+
+describe('ral-43a: a logical over literal comparisons of a typed local is a bool local', () => {
+    test('`(t === "a") || (t === "b")` over a string reader local prints bool and boxes at the literal value', () => {
+        const dir = path.join (rustFixtureRoot, 'r43a-bool-compare-logical');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    a (market: Dict) {\n        const t = this.safeString (market, 'type');\n        const swap = (t === 'futures') || (t === 'perp');\n        return { 'swap': swap, 'spot': !swap };\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut swap: bool = ');
+        expect(out).toContain('Value::Bool(swap)');
+    });
+});
