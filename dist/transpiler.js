@@ -69657,6 +69657,9 @@ ${iden}}`;
     const alwaysList = from === void 0 && !nilDeclared && init !== void 0 && this.rustAlwaysListProducer(init);
     if (alwaysList)
       from = "list";
+    const mapTernary = from === void 0 && !nilDeclared && init !== void 0 && this.rustMapTernaryInit(init);
+    if (mapTernary)
+      from = "dict";
     let sbMapWrites = 0;
     if (from === void 0 && !nilDeclared)
       return void 0;
@@ -71362,6 +71365,31 @@ ${iden}}`;
     if (t === void 0 || f === void 0)
       return void 0;
     return `(if ${this.printCondition(node.condition, 0)} { ${t} } else { ${f} })`;
+  }
+  /** ral-44g: `c ? a : b` where each arm is an empty map literal `{}` or a base map producer call (`safeDict` with a literal `{}`
+   *  default, extend / omit): every path answers a map, so the local is a map producer. An `undefined` arm keeps Value. */
+  rustMapTernaryInit(init) {
+    const node = this.rustSkipWrappers(init);
+    if (node === void 0 || !isConditionalExpression4(node))
+      return false;
+    const arm = (x) => {
+      const a = this.rustSkipWrappers(x);
+      if (a === void 0)
+        return false;
+      if (isObjectLiteralExpression4(a))
+        return a.properties.length === 0;
+      if (!isCallExpression6(a))
+        return false;
+      if (this.rustDictTernaryCall(a))
+        return true;
+      const callee = a.expression;
+      if (!isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword || String(callee.name.text) !== "safeDict")
+        return false;
+      const args = Array.from(a.arguments ?? []);
+      const dflt = args.length === 3 ? this.rustSkipWrappers(args[2]) : void 0;
+      return dflt !== void 0 && isObjectLiteralExpression4(dflt) && dflt.properties.length === 0 && this.rustBorrowedSourceKind(a) === "dict";
+    };
+    return arm(node.whenTrue) && arm(node.whenFalse);
   }
   rustDictTernaryCall(call) {
     const callee = call.expression;
