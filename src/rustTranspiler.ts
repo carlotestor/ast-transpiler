@@ -16946,7 +16946,7 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     /** rd: `i <op> <int literal>` (either side) over a counter: the `Int` payload compares as the `i64` itself. */
-    rustI64LiteralCompare(id: any): { op: string, literal: string, counterLeft: boolean } | undefined {
+    rustI64LiteralCompare(id: any): { op: string, literal: string, counterLeft: boolean, float?: boolean } | undefined {
         const up: any = id.parent;
         if (!isBinaryExpression(up)) return undefined;
         const kind = up.operatorToken.kind;
@@ -16955,6 +16955,11 @@ export class RustTranspiler extends BaseTranspiler {
         const other: any = this.unwrapParens(up.left === id ? up.right : up.left);
         // an int literal, or an `i64` scalar local (decided by its own uses, printed bare either way)
         const literal = this.rustScalarIntLiteral(other) ?? (isIdentifier(other) && this.rustScalarLocalOf(other)?.kind === 'int' ? super.printIdentifier(other) : undefined);
+        if (literal === undefined && !this.isEqualityOp(kind) && this.rustScalarValueNumber(other)) {
+            // ral-55n: ordered against a number-typed `Value` (paradex pro `i >= start`): the boxed counter compared its `Int`
+            // payload `as_f64()`, which is `i as f64`; the other side keeps its own `as_f64()` read (NaN when not a number)
+            return { op, literal: `${this.printNode(other, 0).trim()}.as_f64().unwrap_or(f64::NAN)`, counterLeft: up.left === id, float: true };
+        }
         return literal === undefined ? undefined : { op, literal, counterLeft: up.left === id };
     }
 
@@ -16964,7 +16969,7 @@ export class RustTranspiler extends BaseTranspiler {
         const id: any = isIdentifier(node.left) && this.rustI64CounterOf(node.left) !== undefined ? node.left : (isIdentifier(node.right) && this.rustI64CounterOf(node.right) !== undefined ? node.right : undefined);
         const cmp = id === undefined ? undefined : this.rustI64LiteralCompare(id);
         if (cmp === undefined || !this.rustI64CounterUse(id)) return undefined;
-        const name = String(id.text);
+        const name = cmp.float ? `(${String(id.text)} as f64)` : String(id.text);
         const text = cmp.counterLeft ? `${name} ${cmp.op} ${cmp.literal}` : `${cmp.literal} ${cmp.op} ${name}`;
         return this.isBooleanPosition(node) ? text : `Value::Bool(${text})`;
     }

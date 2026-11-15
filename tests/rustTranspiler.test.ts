@@ -18478,3 +18478,25 @@ describe('ral-54n: safeInteger locals ordered against a number Value or each oth
         expect(out).toMatch(/let mut batchSize: Value = /);
     });
 });
+
+describe('ral-55n: postfix counters ordered against a number Value or used as an element-write key', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    extend (a: any, b: any): any { return a; }\n    hold (x: any): any { return x; }\n}\n";
+    const run = (body: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-55n-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        try { return t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+    };
+    test('paradex pro: `i >= start` with a number parameter keeps the counter i64', () => {
+        const out = run("    async a (channels: string[], start: number, params: Dict = {}): Promise<any> {\n        let n = 0;\n        for (let i = 0; i < channels.length; i++) {\n            if (i >= start) {\n                await this.hold (i);\n                n = n + 1;\n            }\n        }\n        return n;\n    }\n    async b (channels: string[], i: any): Promise<any> {\n        return await this.a (channels, i + 1);\n    }\n");
+        expect(out).toContain('start: Value');
+        expect(out).toContain('let mut i: i64 = 0;');
+        expect(out).toContain('(i as f64) >= start.as_f64().unwrap_or(f64::NAN)');
+    });
+    test('guard: an equality against a number Value keeps the Value counter', () => {
+        const out = run("    c (channels: string[], start: number) {\n        let n = 0;\n        for (let i = 0; i < channels.length; i++) {\n            if (i === start) {\n                n = n + 1;\n            }\n        }\n        return n;\n    }\n");
+        expect(out).toMatch(/let mut i: Value = Value::Int\(0\);/);
+    });
+});
