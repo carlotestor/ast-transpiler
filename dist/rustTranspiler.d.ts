@@ -342,6 +342,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     printPadStartCall(node: any, identation: any, name: any, parsedArg: any, parsedArg2: any): string;
     printPadEndCall(node: any, identation: any, name: any, parsedArg: any, parsedArg2: any): string;
     printVariableDeclarationList(node: any, identation: any): string;
+    /** ral-56e: `const e = xs[i]` where `xs` already prints as a typed list (`xs.get(K).cloned().unwrap_or(Value::Null)`)
+     *  and every use of `e` is the receiver of an rvalue element read `e[k]`: the element is borrowed out of the list
+     *  (`xs.get(K).unwrap_or(&Value::Null)`), so the copy goes. Reading `e[k]` through `&Value` is the same runtime read
+     *  (`get_value` takes `&Value`; a missing row is the same Null). The list must not be written anywhere in the
+     *  method, so the borrow cannot conflict. */
+    printRust56eBorrowedElement(declaration: any, parsedValue: string, indent: string, varName: string): string | undefined;
+    rust56eBorrowedElementLocal(declaration: any): boolean;
     private static readonly RUST_NIL_INT_HELPERS;
     private static readonly RUST_NIL_BOOL_HELPERS;
     private static readonly RUST_NIL_PRECISE_STR;
