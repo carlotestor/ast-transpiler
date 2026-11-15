@@ -10944,6 +10944,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (!isIdentifier(inner)) return !isBinaryExpression(inner) || (this.rustUbPartnerInBucket(inner.left) && this.rustUbPartnerInBucket(inner.right));
         const d: any = this.rustDeclaredNode(inner);
         if (d === undefined || !isVariableDeclaration(d)) return d !== undefined && isParameterDeclaration(d);
+        // ral-54e: a `const k = <int literal>` local is an `i64` decided by nothing else (no later write, no other source)
+        if ((d.parent?.flags & NodeFlags.Const) !== 0 && this.rustScalarIntLiteral(this.unwrapParens(d.initializer)) !== undefined && this.rustScalarLocalOf(inner)?.kind === 'int') return true;
         return this.rustTbParseToIntInit(d) || d.parent?.parent?.kind === SyntaxKind.ForStatement;
     }
 
@@ -10956,6 +10958,7 @@ export class RustTranspiler extends BaseTranspiler {
             let top: any = u;
             while (isParenthesizedExpression(top.parent)) top = top.parent;
             const up: any = top.parent;
+            if (this.rust54ePtiSelfStep(u)) return true;
             if (this.rustIdentifierIsWritten(u) || (isVariableDeclaration(up) && up.initializer === top)) ok = false;
             else if (isBinaryExpression(up) && (RustTranspiler.NATIVE_COMPARISON_OPERATORS[up.operatorToken.kind] === undefined && !this.isEqualityOp(up.operatorToken.kind)
                 && !RustTranspiler.RUST_SCALAR_VALUE_OPERAND_OPS.has(up.operatorToken.kind))) ok = false;
@@ -10965,6 +10968,23 @@ export class RustTranspiler extends BaseTranspiler {
             return true;
         });
         return ok;
+    }
+
+    /** ral-54e: `x = this.parseToInt (x + <int literal>)` (the write target, or the operand inside it): a self step of a
+     *  parseToInt local stays inside the local (no other local meets it), so it does not make the local a partner. */
+    rust54ePtiSelfStep(u: any): boolean {
+        const name = String(u.text);
+        let top: any = u;
+        while (top.parent !== undefined && top.parent.kind !== SyntaxKind.ExpressionStatement) top = top.parent;
+        const write: any = top;
+        if (!isBinaryExpression(write) || write.operatorToken.kind !== SyntaxKind.EqualsToken || !isIdentifier(write.left) || String(write.left.text) !== name) return false;
+        const call: any = this.unwrapParens(write.right);
+        if (!isCallExpression(call) || !isPropertyAccessExpression(call.expression) || call.expression.expression.kind !== SyntaxKind.ThisKeyword
+            || String(call.expression.name.text) !== 'parseToInt' || call.arguments.length !== 1) return false;
+        const arg: any = this.unwrapParens(call.arguments[0]);
+        return isBinaryExpression(arg) && arg.operatorToken.kind === SyntaxKind.PlusToken && isIdentifier(this.unwrapParens(arg.left))
+            && String(this.unwrapParens(arg.left).text) === name && this.rustScalarIntLiteral(this.unwrapParens(arg.right)) !== undefined
+            && (u === write.left || u === this.unwrapParens(arg.left));
     }
 
     /** tb: `i OP b` as the condition of `for (let i = <int>; ..; i++)` (the step is the counter's only write, so it is always
