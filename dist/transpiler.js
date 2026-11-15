@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -63804,6 +63804,8 @@ ${i1}}`;
       return false;
     if (!isClassDeclaration4(node.parent))
       return false;
+    if (this.rustReturnsOptOutcome(node))
+      return true;
     if (!_RustTranspiler.RUST_OPT_MARKET_RETURNS.has(String(node.name.text)))
       return this.rustVenueReturnsOptMarket(node);
     if (!_RustTranspiler.RUST_BASE_TIER_FILE.test(String(node.getSourceFile?.()?.fileName ?? "")))
@@ -63826,6 +63828,28 @@ ${i1}}`;
     };
     node.body.forEachChild(visit);
     return ok;
+  }
+  /** ral-48c: `outcome` / `safeOutcome` / `loadOutcome` of the prediction base class, declared with the outcome record. */
+  rustReturnsOptOutcome(node) {
+    if (node === void 0 || node.kind !== SyntaxKind7.MethodDeclaration || node.body === void 0 || !isIdentifier3(node.name))
+      return false;
+    const want = _RustTranspiler.RUST_OPT_OUTCOME_RETURNS[String(node.name.text)];
+    if (want === void 0 || !isClassDeclaration4(node.parent))
+      return false;
+    if (!/ts[/]src[/]base[/]PredictionExchange\.ts$/.test(String(node.getSourceFile?.()?.fileName ?? "").replace(/\\/g, "/")))
+      return false;
+    let ret = node.type;
+    if (ret?.kind === SyntaxKind7.TypeReference && isIdentifier3(ret.typeName) && String(ret.typeName.text) === "Promise" && ret.typeArguments?.length === 1)
+      ret = ret.typeArguments[0];
+    return ret?.kind === SyntaxKind7.TypeReference && isIdentifier3(ret.typeName) && String(ret.typeName.text) === want;
+  }
+  /** ral-48c: `await this.loadOutcome (..)` is the call itself for the `Option<Market>` proofs. */
+  rustSkipOutcomeAwait(node) {
+    const inner = this.rustSkipWrappers(node);
+    if (inner?.kind !== SyntaxKind7.AwaitExpression)
+      return node;
+    const call = this.rustSkipWrappers(inner.expression);
+    return call !== void 0 && isCallExpression6(call) && isPropertyAccessExpression3(call.expression) && String(call.expression.name.text) === "loadOutcome" ? call : node;
   }
   /** ral-46e: a venue (not base-tier) method declared `Market`, not async, no override, never referenced by name as a
    *  value, whose every return is `undefined` or a `safeMarket` record and that returns at least one of each
@@ -63878,11 +63902,13 @@ ${i1}}`;
   }
   /** `this.getMarketFromSymbols (..)` resolving to the typed base method (or a venue `rustVenueReturnsOptMarket` one). */
   rustIsOptMarketCall(init) {
-    const call = this.rustSkipWrappers(init);
+    const call = this.rustSkipWrappers(this.rustSkipOutcomeAwait(init));
     if (call === void 0 || !isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword)
       return false;
     if (!_RustTranspiler.RUST_OPT_MARKET_RETURNS.has(String(call.expression.name.text))) {
       const venue = this.rustScalarCallee(call);
+      if (venue !== void 0 && isMethodDeclaration5(venue) && venue.body !== void 0 && this.rustReturnsOptOutcome(venue))
+        return true;
       return venue !== void 0 && isMethodDeclaration5(venue) && venue.body !== void 0 && this.rustVenueReturnsOptMarket(venue);
     }
     let declaration = this.rustScalarCallee(call);
@@ -63950,6 +63976,29 @@ ${i1}}`;
     const armTrue = this.unwrapParens(cond.whenTrue) === arm;
     return `(if ${this.printCondition(cond.condition, 0)} { ${armTrue ? some : "None"} } else { ${armTrue ? "None" : some} })`;
   }
+  /** ral-48c: `await this.loadOutcome (..)` in a `Value` place: the answer boxed once after the `.await`. */
+  printOptOutcomeAwaitBox(node, identation) {
+    const call = this.rustSkipWrappers(node.expression);
+    if (call === void 0 || this.rustSkipOutcomeAwait(node) !== call || this.rustOptMarketBoxing.has(call) || !this.rustIsOptMarketCall(call))
+      return void 0;
+    let current = node;
+    while (current.parent !== void 0 && (isParenthesizedExpression3(current.parent) || isAsExpression3(current.parent) || isNonNullExpression2(current.parent)))
+      current = current.parent;
+    const up = current.parent;
+    const awaited = () => `${this.printNode(node.expression, identation)}.await`;
+    if (up?.kind === SyntaxKind7.ExpressionStatement)
+      return awaited();
+    if (up?.kind === SyntaxKind7.VariableDeclaration && up.initializer === current && this.rustMarketLocalKind(up) === "opt")
+      return awaited();
+    if (isBinaryExpression5(up) && up.right === current && isIdentifier3(up.left) && this.rustIsOptMarketWriteOf(up.left) && this.rustOptMarketLocalOf(up.left) !== void 0)
+      return awaited();
+    if (isCallExpression6(up) && up.expression !== current) {
+      const at = Array.from(up.arguments).indexOf(current);
+      if (at >= 0 && this.rustMarketSlot(this.rustCalleeParams(up), at))
+        return `${awaited()}.as_ref()`;
+    }
+    return `crate::types::IntoRaw::into_raw(${awaited()})`;
+  }
   /** `return x` in an `Option<Market>` method. */
   printOptMarketReturnValue(exp) {
     const inner = this.unwrapParens(exp);
@@ -63963,6 +64012,17 @@ ${i1}}`;
     }
     if (isIdentifier3(inner) && this.rustTypedMarketLocalOf(inner) !== void 0)
       return `Some(${super.printIdentifier(inner)})`;
+    if (isIdentifier3(inner) && this.rustMarketSlotParamOf(inner) !== void 0)
+      return `${super.printIdentifier(inner)}.cloned()`;
+    if (this.rustIsOptMarketCall(inner)) {
+      const call = this.rustSkipWrappers(this.rustSkipOutcomeAwait(inner));
+      this.rustOptMarketBoxing.add(call);
+      try {
+        return this.printNode(exp, 0).trim();
+      } finally {
+        this.rustOptMarketBoxing.delete(call);
+      }
+    }
     return `<Option<crate::types::Market> as crate::types::FromRaw>::from_raw(${this.printNode(exp, 0).trim()})`;
   }
   /** An `Option<Market>` call in a `Value` place: boxed once (its record's `raw`). */
@@ -63971,6 +64031,11 @@ ${i1}}`;
       return void 0;
     let current = node;
     while (current.parent !== void 0 && isParenthesizedExpression3(current.parent))
+      current = current.parent;
+    if (current.parent?.kind === SyntaxKind7.AwaitExpression)
+      return void 0;
+    current = node;
+    while (current.parent !== void 0 && (isParenthesizedExpression3(current.parent) || isAsExpression3(current.parent) || isNonNullExpression2(current.parent)))
       current = current.parent;
     const up = current.parent;
     if (up?.kind === SyntaxKind7.VariableDeclaration && up.initializer === current && this.rustMarketLocalKind(up) === "opt")
@@ -65976,6 +66041,12 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     return isNumericLiteral4(this.rustSkipWrappers(declaration.initializer));
   }
   /** Strips `( )`, `as T` and `!` wrappers. */
+  /** The first ancestor of `node` that is not a parenthesis / `as` / non-null wrapper. */
+  rustSkipWrappersUp(node) {
+    while (node !== void 0 && (isParenthesizedExpression3(node) || isAsExpression3(node) || isNonNullExpression2(node)))
+      node = node.parent;
+    return node;
+  }
   rustSkipWrappers(node) {
     while (node !== void 0 && (isParenthesizedExpression3(node) || isAsExpression3(node) || isNonNullExpression2(node)))
       node = node.expression;
@@ -68057,6 +68128,9 @@ ${this.getIden(identation)}}`;
     const typedCall = isCallExpression6(node.expression) ? this.printTypedUnifiedCall(node.expression) : void 0;
     if (typedCall !== void 0)
       return typedCall;
+    const outcomeBox = this.printOptOutcomeAwaitBox(node, identation);
+    if (outcomeBox !== void 0)
+      return outcomeBox;
     if (isIdentifier3(node.expression) && this.rustInlinesValueSpawn(findAncestor(node, isMethodDeclaration5))) {
       return this.printNode(node.expression, identation);
     }
@@ -81720,6 +81794,8 @@ ${this.getIden(identation)}}`;
   }
   /** `n` is an argument in a lent market slot of its call. */
   rustMarketSlotUse(n) {
+    while (n.parent !== void 0 && (isAsExpression3(n.parent) || isParenthesizedExpression3(n.parent)) && isCallExpression6(this.rustSkipWrappersUp(n.parent)))
+      n = n.parent;
     const call = n.parent;
     if (call === void 0 || !isCallExpression6(call) || call.expression === n)
       return false;
@@ -82030,7 +82106,9 @@ ${this.getIden(identation)}}`;
   }
   /** Argument text for a lent market slot: a typed market lends itself, any other value decodes once. */
   rustMarketSlotArgText(arg, identation) {
-    const inner = this.unwrapParens(arg);
+    let inner = this.unwrapParens(arg);
+    if (isAsExpression3(inner) && isIdentifier3(this.rustSkipWrappers(inner)) && this.rustOptMarketLocalOf(this.rustSkipWrappers(inner)) !== void 0)
+      inner = this.rustSkipWrappers(inner);
     if (this.literalKindOfNode(inner) === "null")
       return "None";
     if (isIdentifier3(inner)) {
@@ -83084,6 +83162,13 @@ _RustTranspiler.RUST_RAW_RECORD_TYPES = /* @__PURE__ */ new Set([
 _RustTranspiler.RUST_BOOK_SIDE_GROUP = { "handleDelta": 0, "handleDeltas": 0 };
 // Base methods declared `: Market` whose every return is `undefined` or a loaded market: `Option<crate::types::Market>`.
 _RustTranspiler.RUST_OPT_MARKET_RETURNS = /* @__PURE__ */ new Set(["getMarketFromSymbols"]);
+// ral-48c: the prediction outcome accessors hand back a market-shaped record (a cached outcome token, the fallback
+// market or an identity stub) or nothing: `Option<crate::types::Market>`, so callers lend `.as_ref()` without `from_raw`.
+_RustTranspiler.RUST_OPT_OUTCOME_RETURNS = {
+  "outcome": "PredictionOutcomeMarket",
+  "safeOutcome": "PredictionOutcomeHandle",
+  "loadOutcome": "PredictionOutcomeHandle"
+};
 // `MarketInterface` keys typed `Bool`: a raw read of one holds a Bool or Null.
 _RustTranspiler.RUST_MARKET_FLAG_KEYS = /* @__PURE__ */ new Set(["spot", "margin", "swap", "future", "option", "index", "stock", "prediction", "contract", "linear", "inverse", "quanto"]);
 // Hand-written runtime methods (`exchange_stubs.rs`, `exchange.rs`, the ws `Client`/`Future` handles) take a
