@@ -6904,6 +6904,13 @@ export class RustTranspiler extends BaseTranspiler {
         return column + 2 * String(parent.left.getText()).length + String(n.getText()).length + 72 <= 400;
     }
 
+    /** ral-46d: `n` reads a local declared `const f = m['<opt flag>']` off a loaded market struct (`Option<bool>` field). */
+    rustMarketFlagFieldLocal(n: any): boolean {
+        const declaration: any = isIdentifier(n) ? this.rustDeclaredNode(n) : undefined;
+        if (declaration === undefined || !isVariableDeclaration(declaration) || declaration.initializer === undefined) return false;
+        return this.rustMarketFieldScalar(this.unwrapParens(declaration.initializer))?.kind === 'obool';
+    }
+
     rustScalarUseFormOwn(n, kind: string): string | undefined {
         const parent: any = n.parent;
         if (parent === undefined) return undefined;
@@ -6919,7 +6926,8 @@ export class RustTranspiler extends BaseTranspiler {
         if ((kind === 'bool' || kind === 'obool') && this.rustIdentifierUseIsCondition(n)) return 'cond';
         // ral-46d: an `Option<bool>` leaf of a logical the printer emits as a native `bool` (a narrowed bool local's initializer,
         // a `Value::Bool(..)` box): the leaf prints its truthiness `(x == Some(true))`, the very test the boxed `is_true` made
-        if (kind === 'obool' && this.rustClimbLogicalWrappers(n) !== n && this.rustConditionBoolSlot(n)) return 'cond';
+        // (only a local the printer itself types off the struct field: other `Option<bool>` locals may be narrowed to `bool` later)
+        if (kind === 'obool' && this.rustClimbLogicalWrappers(n) !== n && this.rustConditionBoolSlot(n) && this.rustMarketFlagFieldLocal(n)) return 'cond';
         // vd: a string operand of a `Precise.string<Add|Sub|..>` arithmetic entry point is lent as is (the runtime takes
         // `&impl PreciseArg`: `None` reads as the `Null` box, a string as its `Str`); no box, no copy
         if ((kind === 'str' || kind === 'ostr') && this.rustPreciseLentOperand(n) && this.rustPreciseLendLocal(n)) return 'parg';

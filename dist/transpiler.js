@@ -58231,6 +58231,13 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const column = parent.getStart() - String(parent.getSourceFile().text).lastIndexOf("\n", parent.getStart()) - 1;
     return column + 2 * String(parent.left.getText()).length + String(n.getText()).length + 72 <= 400;
   }
+  /** ral-46d: `n` reads a local declared `const f = m['<opt flag>']` off a loaded market struct (`Option<bool>` field). */
+  rustMarketFlagFieldLocal(n) {
+    const declaration = isIdentifier3(n) ? this.rustDeclaredNode(n) : void 0;
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.initializer === void 0)
+      return false;
+    return this.rustMarketFieldScalar(this.unwrapParens(declaration.initializer))?.kind === "obool";
+  }
   rustScalarUseFormOwn(n, kind) {
     const parent = n.parent;
     if (parent === void 0)
@@ -58249,7 +58256,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     if ((kind === "bool" || kind === "obool") && this.rustIdentifierUseIsCondition(n))
       return "cond";
-    if (kind === "obool" && this.rustClimbLogicalWrappers(n) !== n && this.rustConditionBoolSlot(n))
+    if (kind === "obool" && this.rustClimbLogicalWrappers(n) !== n && this.rustConditionBoolSlot(n) && this.rustMarketFlagFieldLocal(n))
       return "cond";
     if ((kind === "str" || kind === "ostr") && this.rustPreciseLentOperand(n) && this.rustPreciseLendLocal(n))
       return "parg";

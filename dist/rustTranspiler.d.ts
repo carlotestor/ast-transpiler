@@ -977,6 +977,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-ua: `acc += x` (statement) with `acc` a checker-string local the solve leaves boxed (its decision is not taken
      *  during seeding: the join is assumed, then re-checked) and `x` a `string | undefined`, within the 400-char line. */
     rustPlusEqualsJoinOperand(n: any): boolean;
+    /** ral-46d: `n` reads a local declared `const f = m['<opt flag>']` off a loaded market struct (`Option<bool>` field). */
+    rustMarketFlagFieldLocal(n: any): boolean;
     rustScalarUseFormOwn(n: any, kind: string): string | undefined;
     private static readonly RUST_WS_CLIENT_VALUE_METHODS;
     rustWsClientCallArg(call: any, kind: string): boolean;
