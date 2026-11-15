@@ -1297,6 +1297,14 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-51e: `+` / `-` over int literals, `i64` scalar locals and the counter of an enclosing `for (let j = <int>; j < <i64 local>; j++)`
      *  whose body never writes it (the counter the loop prints as an `i64`; while the scope solves it is not registered yet). */
     rustCounterArithInit(expr: any, declaration: any): boolean;
+    /** ral-57e: `j * <int literal>` (either order) over a `for (let j = <int>; ..; j++)` counter only the step writes
+     *  (rustValueIntCounter, always an `Int`): the
+     *  printer already spells it `(j * k)` on the `i64` counter, the `Int` the runtime product of two Ints answers. */
+    rust57eCounterProduct(node: any, declaration: any): boolean;
+    /** ral-57e: `n` is an operand of a base `this.sum (n, <int literal>)` that is itself a base `safeDict` key: with `n` an
+     *  `i64` the sum prints as the native `i64` add (rustArithCallKind 'int') and boxes once into the key slot as the Int
+     *  the runtime `sum` of two Ints answers. */
+    rust57eSumKeyOperand(n: any): boolean;
     rustCounterArithHasCounter(expr: any, declaration: any): boolean;
     /** The enclosing `for` whose block-scoped counter `node` reads (int-literal start, `j++` / `++j` step, `j < <i64 local>`, never written in the body). */
     rustCounterLoopOf(node: any, declaration: any): any;

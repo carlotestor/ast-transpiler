@@ -60450,6 +60450,8 @@ ${binding(plan.indent)}` : ""), head: "" };
         keys++;
         return true;
       }
+      if (this.rust57eSumKeyOperand(n))
+        return true;
       if (!this.rustSafeDictKeyArg(n))
         return false;
       keys++;
@@ -60465,6 +60467,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       return false;
     if (isBinaryExpression5(node)) {
       const op = node.operatorToken.kind;
+      if (op === SyntaxKind7.AsteriskToken)
+        return this.rust57eCounterProduct(node, declaration);
       return (op === SyntaxKind7.PlusToken || op === SyntaxKind7.MinusToken) && this.rustCounterArithInit(node.left, declaration) && this.rustCounterArithInit(node.right, declaration);
     }
     if (this.rustScalarIntLiteral(node) !== void 0)
@@ -60476,10 +60480,30 @@ ${binding(plan.indent)}` : ""), head: "" };
     const target = this.rustDeclaredNode(node);
     return target !== void 0 && target !== declaration && this.rustEnclosingFunction(target) === this.rustEnclosingFunction(declaration) && this.rustScalarLocalOf(node)?.kind === "int";
   }
+  /** ral-57e: `j * <int literal>` (either order) over a `for (let j = <int>; ..; j++)` counter only the step writes
+   *  (rustValueIntCounter, always an `Int`): the
+   *  printer already spells it `(j * k)` on the `i64` counter, the `Int` the runtime product of two Ints answers. */
+  rust57eCounterProduct(node, declaration) {
+    const l = this.unwrapParens(node.left);
+    const r = this.unwrapParens(node.right);
+    const lit = (x) => this.rustScalarIntLiteral(x) !== void 0;
+    const ctr = (x) => isIdentifier3(x) && this.rustValueIntCounter(x);
+    return ctr(l) && lit(r) || lit(l) && ctr(r);
+  }
+  /** ral-57e: `n` is an operand of a base `this.sum (n, <int literal>)` that is itself a base `safeDict` key: with `n` an
+   *  `i64` the sum prints as the native `i64` add (rustArithCallKind 'int') and boxes once into the key slot as the Int
+   *  the runtime `sum` of two Ints answers. */
+  rust57eSumKeyOperand(n) {
+    const call = n?.parent;
+    if (!isCallExpression6(call) || !this.rustSumShape(call) || call.arguments.length !== 2)
+      return false;
+    const other = call.arguments[0] === n ? call.arguments[1] : call.arguments[1] === n ? call.arguments[0] : void 0;
+    return other !== void 0 && this.rustScalarIntLiteral(this.unwrapParens(other)) !== void 0 && this.rustSafeDictKeyArg(call);
+  }
   rustCounterArithHasCounter(expr, declaration) {
     const node = this.unwrapParens(expr);
     if (isBinaryExpression5(node))
-      return this.rustCounterArithHasCounter(node.left, declaration) || this.rustCounterArithHasCounter(node.right, declaration);
+      return node.operatorToken.kind === SyntaxKind7.AsteriskToken && this.rust57eCounterProduct(node, declaration) || this.rustCounterArithHasCounter(node.left, declaration) || this.rustCounterArithHasCounter(node.right, declaration);
     return isIdentifier3(node) && this.rustCounterLoopOf(node, declaration) !== void 0;
   }
   /** The enclosing `for` whose block-scoped counter `node` reads (int-literal start, `j++` / `++j` step, `j < <i64 local>`, never written in the body). */
