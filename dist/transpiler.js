@@ -54255,6 +54255,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const kind = joined;
     if (kind === "ostr" && !this.rustSiblingStrBoxesMove(declaration, scope))
       return void 0;
+    if (kind === "ostr" && this.rust45bUsesNewForm(declaration, scope, name) && this.rust45bReturnedFromStrMethod(declaration, scope, name))
+      return void 0;
     if (this.rustScalarSeeding)
       return kind;
     const boxed = [];
@@ -54280,6 +54282,25 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (boxed.length > 0)
       this.rustScalarGuarded.add(declaration);
     return kind;
+  }
+  /** ral-45b: the local has a `x = x.slice(..)` / case self write or a `x += ..` append (the forms lift 1 / 2 admit). */
+  rust45bUsesNewForm(declaration, scope, name) {
+    return this.rustScopeNameNodes(scope, name).some((n) => {
+      const parent = n.parent;
+      if (!isIdentifier3(n) || !isBinaryExpression5(parent) || parent.left !== n || this.rustDeclaredNode(n) !== declaration)
+        return false;
+      if (parent.operatorToken.kind === SyntaxKind7.PlusEqualsToken)
+        return true;
+      return parent.operatorToken.kind === SyntaxKind7.EqualsToken && this.rust45bSelfStrWrite(this.unwrapParens(parent.right), declaration);
+    });
+  }
+  /** ral-45b: `return x;` of the local in a method whose declared return is a string type. */
+  rust45bReturnedFromStrMethod(declaration, scope, name) {
+    if (scope?.kind !== SyntaxKind7.MethodDeclaration || scope.type === void 0)
+      return false;
+    if (this.primitiveKindOfType(this.getChecker().getTypeFromTypeNode(scope.type)) !== "string")
+      return false;
+    return this.rustScopeNameNodes(scope, name).some((n) => isIdentifier3(n) && this.rustDeclaredNode(n) === declaration && isReturnStatement4(n.parent) && this.rustEnclosingFunction(n) === scope);
   }
   /** ral-45b: `x.slice(..)` / case of the declared local itself, in a shape whose `Option<String>`
    *  receiver form maps `None` to `None` (the boxed helper gives `Null` for a `Null` receiver too). */
@@ -61097,6 +61118,18 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
         return void 0;
       const format = this.rustScalarFormatText(right);
       return format === void 0 ? void 0 : dry ? "_" : `${name}.push_str(&${format})`;
+    }
+    if (kind === "ostr" && node.operatorToken.kind === SyntaxKind7.PlusEqualsToken) {
+      let rhs;
+      if (this.literalKindOfNode(right) === "string" && !(right.text in this.StringLiteralReplacements))
+        rhs = dry ? "_" : this.quotedStringLiteral(right.text);
+      else if (isIdentifier3(right) && this.rustScalarLocalOf(right)?.kind === "str")
+        rhs = dry ? "_" : `${super.printIdentifier(right)}`;
+      else if (isBinaryExpression5(right) && right.operatorToken.kind === SyntaxKind7.PlusToken && this.primitiveKindOfType(this.typeOfNodeIfAny(right)) === "string")
+        rhs = this.rustScalarFormatText(right);
+      if (rhs === void 0)
+        return void 0;
+      return dry ? "_" : `${name} = Some(format!("{}{}", ${name}.as_deref().unwrap_or("null"), ${rhs}))`;
     }
     if (kind !== "int" || this.rustScalarNumericKind(right) !== "int")
       return void 0;

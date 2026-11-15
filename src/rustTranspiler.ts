@@ -2872,6 +2872,9 @@ export class RustTranspiler extends BaseTranspiler {
         if (declared !== undefined && declared !== (joined === 'ostr' ? 'string' : 'number')) return undefined;
         const kind = joined;
         if (kind === 'ostr' && !this.rustSiblingStrBoxesMove(declaration, scope)) return undefined;
+        // ral-45b: a local the new self-slice / `+=` forms type keeps `Value` when a string-returning method returns it
+        // (typing it would move the method's `-> Option<String>` signature back to `Value`)
+        if (kind === 'ostr' && this.rust45bUsesNewForm(declaration, scope, name) && this.rust45bReturnedFromStrMethod(declaration, scope, name)) return undefined;
         // nc: while the function's solver seeds, assume the kind (as the initialised path does), so an alias chain
         // whose links hold each other converges to its largest consistent set; the later passes re-prove every link
         if (this.rustScalarSeeding) return kind;
@@ -2896,6 +2899,24 @@ export class RustTranspiler extends BaseTranspiler {
         // boxed uses are checked against the printed method lines
         if (boxed.length > 0) this.rustScalarGuarded.add(declaration);
         return kind;
+    }
+
+    /** ral-45b: the local has a `x = x.slice(..)` / case self write or a `x += ..` append (the forms lift 1 / 2 admit). */
+    rust45bUsesNewForm(declaration: any, scope: any, name: string): boolean {
+        return (this.rustScopeNameNodes(scope, name) as any[]).some((n: any) => {
+            const parent: any = n.parent;
+            if (!isIdentifier(n) || !isBinaryExpression(parent) || parent.left !== n || this.rustDeclaredNode(n) !== declaration) return false;
+            if (parent.operatorToken.kind === SyntaxKind.PlusEqualsToken) return true;
+            return parent.operatorToken.kind === SyntaxKind.EqualsToken && this.rust45bSelfStrWrite(this.unwrapParens(parent.right), declaration);
+        });
+    }
+
+    /** ral-45b: `return x;` of the local in a method whose declared return is a string type. */
+    rust45bReturnedFromStrMethod(declaration: any, scope: any, name: string): boolean {
+        if (scope?.kind !== SyntaxKind.MethodDeclaration || scope.type === undefined) return false;
+        if (this.primitiveKindOfType(this.getChecker().getTypeFromTypeNode(scope.type)) !== 'string') return false;
+        return (this.rustScopeNameNodes(scope, name) as any[]).some((n: any) => isIdentifier(n) && this.rustDeclaredNode(n) === declaration
+            && isReturnStatement(n.parent) && this.rustEnclosingFunction(n) === scope);
     }
 
     /** ral-45b: `x.slice(..)` / case of the declared local itself, in a shape whose `Option<String>`
@@ -9565,6 +9586,16 @@ export class RustTranspiler extends BaseTranspiler {
             if (this.primitiveKindOfType(this.typeOfNodeIfAny(right)) !== 'string') return undefined;
             const format = this.rustScalarFormatText(right);
             return format === undefined ? undefined : (dry ? '_' : `${name}.push_str(&${format})`);
+        }
+        // ral-45b: `x += <string>` on an `Option<String>` local appends to what `Value` Display gave for Str / Null (`null`),
+        // the add helper's Str + Str / Null + Str text, and leaves a `Some`
+        if (kind === 'ostr' && node.operatorToken.kind === SyntaxKind.PlusEqualsToken) {
+            let rhs: string | undefined;
+            if (this.literalKindOfNode(right) === 'string' && !(right.text in this.StringLiteralReplacements)) rhs = dry ? '_' : this.quotedStringLiteral(right.text);
+            else if (isIdentifier(right) && this.rustScalarLocalOf(right)?.kind === 'str') rhs = dry ? '_' : `${super.printIdentifier(right)}`;
+            else if (isBinaryExpression(right) && right.operatorToken.kind === SyntaxKind.PlusToken && this.primitiveKindOfType(this.typeOfNodeIfAny(right)) === 'string') rhs = this.rustScalarFormatText(right);
+            if (rhs === undefined) return undefined;
+            return dry ? '_' : `${name} = Some(format!("{}{}", ${name}.as_deref().unwrap_or("null"), ${rhs}))`;
         }
         if (kind !== 'int' || this.rustScalarNumericKind(right) !== 'int') return undefined;
         return dry ? '_' : `${name} ${node.operatorToken.kind === SyntaxKind.PlusEqualsToken ? '+=' : '-='} ${this.rustScalarOperandText('int', right)}`;

@@ -390,6 +390,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_NIL_SCALAR_NATIVE_FORMS;
     /** `ostr|oint|onum` for an empty local the scalar rule types, else undefined. */
     rustNilScalarKind(declaration: any): string | undefined;
+    /** ral-45b: the local has a `x = x.slice(..)` / case self write or a `x += ..` append (the forms lift 1 / 2 admit). */
+    rust45bUsesNewForm(declaration: any, scope: any, name: string): boolean;
+    /** ral-45b: `return x;` of the local in a method whose declared return is a string type. */
+    rust45bReturnedFromStrMethod(declaration: any, scope: any, name: string): boolean;
     /** ral-45b: `x.slice(..)` / case of the declared local itself, in a shape whose `Option<String>`
      *  receiver form maps `None` to `None` (the boxed helper gives `Null` for a `Null` receiver too). */
     rust45bSelfStrWrite(rhs: any, declaration: any): boolean;
