@@ -73667,6 +73667,8 @@ ${iden}}`;
       const member = symbolValueDeclaration(this.getChecker().getSymbolAtLocation(e.name));
       return member !== void 0 && isMethodDeclaration5(member);
     }
+    if (e.kind === SyntaxKind7.ElementAccessExpression && this.rustHandlerTable(this.rustSkipWrappers(e.expression)))
+      return true;
     return this.rustHandlerTableRead(e);
   }
   /** The `Option<String>` text of a handler value accepted by `rustHandlerTableValue`. */
@@ -73837,7 +73839,14 @@ ${iden}}`;
     }
     return this.rustBlockLocalUsesAll(declaration, String(declaration.name.text), (n) => {
       const up = n.parent;
-      return isCallExpression6(up) && up.arguments[0] === n && isPropertyAccessExpression3(up.expression) && up.expression.expression.kind === SyntaxKind7.ThisKeyword && String(up.expression.name.text) === "safeValue";
+      if (isCallExpression6(up) && up.arguments[0] === n && isPropertyAccessExpression3(up.expression) && up.expression.expression.kind === SyntaxKind7.ThisKeyword && String(up.expression.name.text) === "safeValue")
+        return true;
+      if (isCallExpression6(up) && up.arguments.length === 1 && up.arguments[0] === n && isPropertyAccessExpression3(up.expression) && isIdentifier3(up.expression.expression) && String(up.expression.expression.text) === "Object" && String(up.expression.name.text) === "keys")
+        return true;
+      if (up?.kind !== SyntaxKind7.ElementAccessExpression || up.expression !== n)
+        return false;
+      const use = up.parent;
+      return isVariableDeclaration3(use) && use.initializer === up || isBinaryExpression5(use) && use.right === up && use.operatorToken.kind === SyntaxKind7.EqualsToken;
     });
   }
   rustHandlerTableLocalOf(node) {
