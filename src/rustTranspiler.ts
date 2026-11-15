@@ -19332,6 +19332,9 @@ export class RustTranspiler extends BaseTranspiler {
                 if (up.parent?.kind !== SyntaxKind.ExpressionStatement) return false;
                 if (extendReuse) {
                     if (this.rustSelfExtendWrite(n, declaration) || this.rustSelfMergeWrite(n, declaration)) return ++extendWrites > 0;
+                    // ral-50b: `x = this.handleUntilOption (k, x, p)` (slot list written whole into x): `.into_dict()` answers the empty
+                    // map for the list, exactly the map every later `extend` head (`ExtendHead for Value`) took from the boxed list
+                    if (this.rustUntilListWrite(n, declaration)) return reuseProducerWrites.push(up) > 0 && ++extendWrites > 0;
                     // ral-vf: a write from a producer that answers a map on every path replaces the owned map
                     if (!this.rustReuseMapProducerWrite(n)) return false;
                     reuseProducerWrites.push(up);
@@ -19418,7 +19421,7 @@ export class RustTranspiler extends BaseTranspiler {
             // ral-48b: `x['k'] = v` (statement, one level, literal key, the value not reading x) on a held map: the runtime
             // `add_element_to_object` takes the typed map itself (`impl AddTarget for Dict / Option<Dict>`) and runs the very tag
             // hooks (book meta, ws subscriptions, cache buckets) the boxed `Value::Dict` arm ran; `None` skips as `Null` did
-            if (!extendReuse && !sbAlias && this.rustAeoTargetWrite(n) && !this.rustAeoBoxedNative(n)) return aeoWriteUses.push(n) > 0 && ++reads > 0;
+            if (!sbAlias && this.rustAeoTargetWrite(n) && !this.rustAeoBoxedNative(n)) return aeoWriteUses.push(n) > 0 && ++reads > 0;
             const handed = () => (optAliasInit && this.rustLocalStoreHandOff(n) && !this.rustScalarInNestedWrite(n, true) && ++optionalBoxes > 0
                 || this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0
                 || this.rustBuiltReturnBoxUse(n, init, extendReuse) && ++defaultedBoxes > 0 || this.rustOptReaderBoxUse(n, init) && ++optionalBoxes > 0
@@ -19551,7 +19554,7 @@ export class RustTranspiler extends BaseTranspiler {
         // ral-48b: helper writes need a map on every path (a list receiver wrote an index there); each line stays within 400
         if (aeoWriteUses.length > 0 && (from !== 'dict' || aeoWriteUses.some((n: any) => !this.rustBuiltKeyWriteLineOk(n, 30)))) return undefined;
         // the plain form turns a Null source into the empty map, where the boxed write was skipped: only a never-null source
-        if (aeoWriteUses.length > 0 && !optional && !(init !== undefined && (this.rustLentContainerSource(init)
+        if (aeoWriteUses.length > 0 && !optional && !extendReuse && !(init !== undefined && (this.rustLentContainerSource(init)
             || (isCallExpression(init) && this.rustBuiltReturnSourceKind(init) === 'dict')))) return undefined;
         if (keyWrites > 0 && aeoWriteUses.length === 0) this.rustMutableBuiltLocals.add(declaration);
         for (const n of aeoWriteUses) this.rustAeoWrites.add(n.parent.parent);
@@ -19813,6 +19816,33 @@ export class RustTranspiler extends BaseTranspiler {
         return call;
     }
 
+    /** ral-50b: a statement `n = this.handleUntilOption (k, n, p)` (the two-slot list written whole into a reuse literal). */
+    rustUntilListWrite(n: any, declaration: any): boolean {
+        const up: any = n?.parent;
+        if (!isBinaryExpression(up) || up.left !== n || up.operatorToken.kind !== SyntaxKind.EqualsToken || up.parent?.kind !== SyntaxKind.ExpressionStatement) return false;
+        const call: any = this.rustSkipWrappers(up.right);
+        if (call === undefined || !isCallExpression(call) || !this.rustBaseCallNamed(call, RustTranspiler.RUST_UNTIL_LIST_WRITE) || call.arguments.length !== 3) return false;
+        const arg: any = this.rustSkipWrappers(call.arguments[1]);
+        if (arg === undefined || !isIdentifier(arg) || !this.rustIdentifierRefersToDeclaration(arg, declaration)) return false;
+        const names = (x: any): boolean => (isIdentifier(x) && x.text === n.text) || (x.forEachChild(names) ?? false);
+        return !names(call.arguments[0]) && !names(call.arguments[2]) && String(up.getText()).length <= 160 && this.rustUntilListUsesExtendOnly(n, declaration);
+    }
+
+    private static readonly RUST_UNTIL_LIST_WRITE = new Set([ 'handleUntilOption' ]);
+
+    /** ral-50b: after the list write the local is only an `extend` head (the empty-map equivalence holds nowhere else). */
+    rustUntilListUsesExtendOnly(n: any, declaration: any): boolean {
+        const at = n.getStart();
+        let ok = true;
+        this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (u: any) => {
+            if (u === n || u.getStart() <= at || this.rustSkipWrappers(n.parent.right) === u.parent) return true;
+            const call: any = u.parent;
+            if (!(isCallExpression(call) && call.arguments[0] === u && this.rustBaseCallNamed(call, RustTranspiler.RUST_SELF_EXTEND))) ok = false;
+            return true;
+        });
+        return ok;
+    }
+
     rustUntilSelfWrite(n: any, declaration: any): boolean {
         return this.rustUntilSelfCall(n, declaration) !== undefined;
     }
@@ -19822,6 +19852,7 @@ export class RustTranspiler extends BaseTranspiler {
         const call: any = n.parent;
         if (!isCallExpression(call) || call.arguments[1] !== n) return false;
         const write: any = call.parent;
+        if (isBinaryExpression(write) && isIdentifier(write.left) && this.rustSkipWrappers(write.right) === call) return this.rustUntilListWrite(write.left, declaration);
         if (!isBinaryExpression(write) || !isArrayLiteralExpression(write.left)) return false;
         const target: any = write.left.elements[0];
         return target !== undefined && isIdentifier(target) && this.rustUntilSelfCall(target, declaration) === call;
@@ -21409,6 +21440,13 @@ export class RustTranspiler extends BaseTranspiler {
         // ral-yc: a never-null venue container result (rustVenueContainerReturnKind) is a built container too
         if (up === undefined || !literalDict && (init === undefined || !isCallExpression(init) || (this.rustBuiltReturnSourceKind(init) === undefined
             && !(this.rustVenueContainerReturnKind(init) !== undefined && this.rustVenueContainerReturnKind(init)?.nullable === false)))) return false;
+        // `this.tickers[k] = x` (a plain base cache field, one key, statement): the field insert stores the handle
+        // ral-50b: also `this.bidsasks[k] = x as Ticker` (a type-only cast prints the bare local)
+        const cast: any = isAsExpression(up) && up.expression === n && isBinaryExpression(up.parent) && up.parent.right === up ? up.parent : undefined;
+        if (cast !== undefined && cast.operatorToken.kind === SyntaxKind.EqualsToken && isElementAccessExpression(cast.left) && cast.parent?.kind === SyntaxKind.ExpressionStatement
+            && (this.rustFieldKeyReceiver(cast.left.expression) !== undefined || this.rustDictShapedFieldInsert(cast.left.expression))) {
+            return !new RegExp(`\\b${String(n.text)}\\b`).test(String(cast.left.argumentExpression.getText()));
+        }
         // `this.tickers[k] = x` (a plain base cache field, one key, statement): the field insert stores the handle
         if (isBinaryExpression(up) && up.right === n && up.operatorToken.kind === SyntaxKind.EqualsToken && isElementAccessExpression(up.left)
             && up.parent?.kind === SyntaxKind.ExpressionStatement && (this.rustFieldKeyReceiver(up.left.expression) !== undefined || this.rustDictShapedFieldInsert(up.left.expression))) {
