@@ -19678,3 +19678,24 @@ describe('ral-58k: a safeCurrencyCode local re-read as a reader default lends at
         expect(out).toContain('let mut code: Value = ');
     });
 });
+
+describe('ral-58k: the key of a safeDict whose result is written into a Dict-declared local (bitget pro handleBalance code)', () => {
+    const write = (name: string, venue: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    balance: Dict = {};\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeDict (o: any, k: any, d: any = undefined): any { return o; }\n    account (): Dict { return {}; }\n    safeCurrencyCode (currencyId: Str, currency: any = undefined): Str { return currencyId; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), venue);
+        return new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } }).transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    // two sibling-block bindings of `code` (as in bitget pro) take the per-binding walk
+    const body = (decl: string) => "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    handleBalance (rawBalance: Dict, uta: boolean) {\n        if (uta) {\n            const code = this.safeCurrencyCode (this.safeString (rawBalance, 'coin'));\n            " + decl + " = this.account ();\n            if ((code !== undefined) && (code in this.balance)) {\n                account = this.safeDict (this.balance, code, account);\n            }\n            account['free'] = this.safeString (rawBalance, 'available');\n            if (code !== undefined) {\n                this.balance[code] = account;\n            }\n        } else {\n            const code = this.safeCurrencyCode (this.safeString (rawBalance, 'coin'));\n            " + decl + " = this.account ();\n            if ((code !== undefined) && (code in this.balance)) {\n                account = this.safeDict (this.balance, code, account);\n            }\n            account['free'] = this.safeString (rawBalance, 'available');\n            if (code !== undefined) {\n                this.balance[code] = account;\n            }\n        }\n    }\n}\n";
+    test('the safeDict key boxes once and the currency code is Option<String>', () => {
+        const out = write ('58k-safedict-key', body ('let account: Dict'));
+        expect(out).toContain('let mut code: Option<String> = ');
+        expect(out).toContain('Value::from(code.as_deref())');
+    });
+    test('negative: an untyped written local keeps the key Value', () => {
+        const out = write ('58k-safedict-key-neg', body ('let account'));
+        expect(out).toContain('let mut code: Value = ');
+    });
+});

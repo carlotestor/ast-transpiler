@@ -6699,9 +6699,22 @@ export class RustTranspiler extends BaseTranspiler {
             const write: any = findAncestor(n, (m: any) => isStatement(m) || (isBinaryExpression(m) && m.operatorToken.kind === SyntaxKind.EqualsToken));
             if (write !== undefined && isBinaryExpression(write) && this.isNodeInsideNode(n, write.right) && !this.rustScalarBoxedField(n, write, declaration)
                 && !this.rustScalarFeedsElementWrite(n, write) && !this.rustScalarPreciseFeed(n, write, declaration) && !this.rustScalarCacheFieldCtor(n, write)
-                && !this.rustScalarSumOperandWrite(n, write)) return false;
+                && !this.rustScalarSumOperandWrite(n, write) && !this.rust58kDictReaderKeyWrite(n, write)) return false;
         }
         return true;
+    }
+
+    /** ral-58k: the key argument of a base `this.safeDict (src, k, dflt)` that is the whole source of a write to a local
+     *  declared `Dict` (bitget pro handleBalance `account = this.safeDict (this.balance, code, account)`): the written local's
+     *  type is its annotation, never this key's, and the reader takes the key as a boxed `Value` either way. */
+    rust58kDictReaderKeyWrite(n: any, write: any): boolean {
+        if (write.operatorToken?.kind !== SyntaxKind.EqualsToken || this.rustTestTierSource(n)) return false;
+        const target: any = this.unwrapParens(write.left);
+        const call: any = this.unwrapParens(write.right);
+        if (!isIdentifier(target) || !isCallExpression(call) || !isPropertyAccessExpression(call.expression) || call.expression.expression.kind !== SyntaxKind.ThisKeyword
+            || String(call.expression.name.text) !== 'safeDict' || call.arguments.length < 2 || this.unwrapParens(call.arguments[1]) !== n) return false;
+        const d: any = this.rustDeclaredNode(target);
+        return d !== undefined && isVariableDeclaration(d) && d.type !== undefined && String(d.type.getText()) === 'Dict';
     }
 
     /** ral-53s: a direct operand of a base `this.sum (a, b)` that is the whole source of a write to another local
