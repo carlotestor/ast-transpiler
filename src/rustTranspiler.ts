@@ -12457,7 +12457,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (optMarket !== undefined) {
             const optKey = this.rustMarketReadKey(node.expression);
             if (optKey === undefined || !RustTranspiler.RUST_MARKET_BOOL_FIELDS.has(optKey)) return undefined;
-            return { kind: 'bool', text: `${this.printNode(optMarket.name, 0)}.as_ref().map_or(false, |__m| __m.${optKey})` };
+            // a pattern test, not a closure: the struct's own `bool` field, `false` for `None`
+            return { kind: 'bool', text: `matches!(${this.printNode(optMarket.name, 0)}, Some(crate::types::Market { ${optKey}: true, .. }))` };
         }
         const declaration = this.rustTypedMarketLocalOf(node.expression);
         const localKind = declaration === undefined ? false : this.rustMarketLocalKind(declaration);

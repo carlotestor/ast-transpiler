@@ -16424,7 +16424,8 @@ describe('ral-46e: a flag read off an Option<Market> local is a native bool', ()
         const typed = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['market'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
         const out = typed.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
         expect(out).toContain('let mut firstMarket: Option<crate::types::Market> = self.getMarketFromSymbols(');
-        expect(out).toMatch(/let (mut )?isContract: bool = firstMarket\.as_ref\(\)\.map_or\(false, \|__m\| __m\.contract\);/);
+        expect(out).toContain('let mut isContract: bool = matches!(firstMarket, Some(crate::types::Market { contract: true, .. }));');
+        expect(out).not.toMatch(/\|__\w+\|/);
         expect(out).toContain('Value::Bool(isContract), params');
         expect(out).not.toContain('Value::Bool(Value::Bool(');
         // negative: a non-flag key keeps the KeyRead box
