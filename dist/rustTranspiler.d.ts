@@ -1309,6 +1309,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustScalarLengthRecv(node: any, params?: boolean): any;
     /** Non-optional numeric operand kind (`int|num`), optional (`oint|onum`), or undefined. */
     rustScalarNumericKind(node: any): string | undefined;
+    /** 51k: `a % b` over int literals / `int` / `oint` locals with a non-literal divisor (a parseToInt answer, a const int):
+     *  an `Option<i64>` (`mod_val` answers `Int(a % b)`, `Null` for a zero or `Null` operand). */
+    rust51kLitModKind(node: any): string | undefined;
     /** The exact kind an expression shape yields over typed operands, else undefined. */
     rustScalarExpressionKind(expr: any): string | undefined;
     private static readonly RUST_ALWAYS_INT_CALLS;
