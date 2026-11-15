@@ -18201,6 +18201,10 @@ describe('ral-54k: nested-write keys (bucket entry under an int37 upper key; saf
         expect(out).toContain('let mut code: Option<String> = ');
         expect(out).toContain('.insert(code.as_deref().unwrap_or("null").to_string(), ');
     });
+    test('negative: a safeCurrencyCode key that also reads the map back by itself keeps the local Value (digifinex)', () => {
+        const out = write ('54k-htx-self', htx ('this.safeCurrencyCode').replace ('subResult[code] = this.hold (balance, code, subResult);', 'subResult[code] = this.hold (balance, code, subResult);\n                this.hold (subResult[code]);'));
+        expect(out).toMatch(/let mut code: Value = self/);
+    });
     test('negative: a hold() key of the same map keeps the local Value', () => {
         const out = write ('54k-htx-neg', htx ('this.hold'));
         expect(out).toMatch(/let mut code: Value = /);

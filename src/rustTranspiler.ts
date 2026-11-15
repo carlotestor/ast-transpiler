@@ -10607,6 +10607,20 @@ export class RustTranspiler extends BaseTranspiler {
         }).join('\n');
     }
 
+    /** ral-54k: map local `name` is read (not written) by the key local `key` somewhere (`m[key]` outside an assignment target). */
+    rustMapReadByLocal(declaration: any, name: string, key: any): boolean {
+        let read = false;
+        this.rustLocalUsesAll(declaration, name, false, (u) => {
+            const access: any = u.parent;
+            if (isElementAccessExpression(access) && access.expression === u && !(isBinaryExpression(access.parent) && access.parent.left === access)) {
+                const k: any = this.rustSkipWrappers(access.argumentExpression);
+                if (isIdentifier(k) && this.rustDeclaredNode(k) === key) read = true;
+            }
+            return true;
+        });
+        return read;
+    }
+
     /** ral-54k: `this.safeCurrencyCode (..)` (base reader, `string` return). */
     rustSafeCurrencyCodeInit(init: any): boolean {
         const call: any = this.rustSkipWrappers(init);
@@ -10734,7 +10748,7 @@ export class RustTranspiler extends BaseTranspiler {
             // ral-54k: a `safeCurrencyCode` result (an owned `Option<String>`, never a borrowed element read) keys the insert by
             // its own text even when the enumerated map is also read by key afterwards (htx fetchBalance `subResult[code]`):
             // the later reads key by other locals and the map's keys are the same strings either way
-            if (enumerated && keyRead && this.rustSafeCurrencyCodeInit(local.initializer)) return this.rustScalarInsertKeyUse(n);
+            if (enumerated && keyRead && this.rustSafeCurrencyCodeInit(local.initializer) && !this.rustMapReadByLocal(declaration, name, local)) return this.rustScalarInsertKeyUse(n);
             if (enumerated) return !keyRead && (isElementAccessExpression(this.rustSkipWrappers(local.initializer)) || this.rustTbNetworkCodeInit(local.initializer))
                 && this.rustScalarInsertKeyUse(n);
             return this.rustBearerWriteKeyOk(n, name) || this.rustScalarInsertKeyUse(n);
