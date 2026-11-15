@@ -58155,6 +58155,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return `(${name} as f64) ${operator} ${super.printIdentifier(bound)}`;
     if (boundKind === "oint" && this.rustTbCounterBound(cond, bound, "oint") !== void 0)
       return `matches!(${super.printIdentifier(bound)}, Some(__b) if (${name} as f64) ${operator} (__b as f64))`;
+    if (boundKind === "oint" && this.rustTbParseToIntInit(this.rustDeclaredNode(bound)) && this.rust55ePtiTypedPartners(this.rustDeclaredNode(bound)))
+      return `matches!(${super.printIdentifier(bound)}, Some(__b) if (${name} as f64) ${operator} (__b as f64))`;
     const refs = (n) => isIdentifier3(n) && n.text === name || (n.forEachChild(refs) ?? false);
     if (refs(right) || !this.printsValueExpression(left) || !this.printsValueExpression(this.orderedComparisonOperand(right)))
       return void 0;
@@ -61196,8 +61198,25 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
     const own = this.rustScalarNumericKind(node);
     if (own !== void 0)
       return own;
+    const typed = this.rustArithTypedIntCall(node);
+    if (typed !== void 0)
+      return typed;
     const param = this.rustArithParamKind(node);
     return param === "int" || param === "oint" ? param : void 0;
+  }
+  /** ral-55e: `this.parseToInt (..)` (a base method of the typed-return table, no venue override) as an arithmetic side:
+   *  the runtime answers `Option<i64>` (`Int` or `Null`), exactly what the boxed helper operand held. */
+  rustArithTypedIntCall(node) {
+    const inner = this.unwrapParens(node);
+    if (inner === void 0 || !isCallExpression6(inner) || !isPropertyAccessExpression3(inner.expression) || inner.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return void 0;
+    if (String(inner.expression.name.text) !== "parseToInt" || inner.arguments.length !== 1 || !this.rustCalleeIsRuntimeBase(inner) || this.rustVenueReturnTypesHas(inner, "parseToInt"))
+      return void 0;
+    return this.rustBaseTypedReturnKind(inner) === "oint" ? "oint" : void 0;
+  }
+  /** ral-55e: a binary initializer with a typed parseToInt side (`time * this.parseToInt (x)`). */
+  rustArithTypedIntSide(node) {
+    return isBinaryExpression5(node) && (this.rustArithTypedIntCall(node.left) !== void 0 || this.rustArithTypedIntCall(node.right) !== void 0);
   }
   /** zb: the numeric kind of an unwritten typed-signature parameter read (`oint` / `onum` / `int` / `num`), else undefined. */
   rustArithParamKind(node) {
@@ -62888,7 +62907,24 @@ ${ind}];`;
       return d !== void 0 && isParameterDeclaration3(d);
     if ((d.parent?.flags & NodeFlags4.Const) !== 0 && this.rustScalarIntLiteral(this.unwrapParens(d.initializer)) !== void 0 && this.rustScalarLocalOf(inner)?.kind === "int")
       return true;
+    if ((d.parent?.flags & NodeFlags4.Const) !== 0 && isBinaryExpression5(this.unwrapParens(d.initializer)) && this.rustArithTypedIntSide(this.unwrapParens(d.initializer)) && ["int", "oint"].includes(this.rustScalarLocalOf(inner)?.kind ?? ""))
+      return true;
+    if ((d.parent?.flags & NodeFlags4.Const) !== 0 && this.rust55eCeilDivInit(d))
+      return true;
     return this.rustTbParseToIntInit(d) || d.parent?.parent?.kind === SyntaxKind7.ForStatement;
+  }
+  /** ral-55e: a parseToInt local whose every partner is one the 55e arms admit (a typed parseToInt-product const, a
+   *  `Math.ceil` division const) or a for counter / literal: checked by the ub partner walk itself. */
+  rust55ePtiTypedPartners(d) {
+    return d !== void 0 && this.rustUbPtiPartnersDecided(d);
+  }
+  /** ral-55e: `Math.ceil (<x> / <y>)` as a declaration's whole initializer. */
+  rust55eCeilDivInit(d) {
+    const init = this.unwrapParens(d?.initializer);
+    if (init === void 0 || !isCallExpression6(init) || !isPropertyAccessExpression3(init.expression) || !isIdentifier3(init.expression.expression) || init.expression.expression.text !== "Math" || String(init.expression.name.text) !== "ceil" || init.arguments.length !== 1)
+      return false;
+    const arg = this.unwrapParens(init.arguments[0]);
+    return isBinaryExpression5(arg) && arg.operatorToken.kind === SyntaxKind7.SlashToken;
   }
   /** ub: a parseToInt local whose partner uses are all ordered / equality tests the solver prints with both operands
    *  decided (`rustScalarCompareText`): its plain reads box like any other typed base call result. */
