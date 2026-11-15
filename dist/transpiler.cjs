@@ -53666,8 +53666,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const slotNested = keyStrs.length > 1 ? this.printSlotNestedInsert(left, right, this.rustOwnedArgText(right, rhs.trim())) : void 0;
       if (slotNested !== void 0)
         return slotNested;
-      const helperCall = `add_element_to_object(${acc}, &${keyStrs[keyStrs.length - 1]}, ${this.rustOwnedArgText(right, rhs.trim())})`;
-      const helperWrite = this.rustDictHoistHosts.has(node) ? `{ let __be_tmp = ${rhs}; add_element_to_object(${acc}, &${keyStrs[keyStrs.length - 1]}, __be_tmp); }` : helperCall;
+      const counterKey = keyStrs.length === 1 ? this.rustSkipWrappers(keys[0]) : void 0;
+      const counterKeyText = counterKey !== void 0 && this.rustI64CounterOperand(counterKey) ? `Value::Int(${String(counterKey.text)})` : void 0;
+      const helperCall = `add_element_to_object(${acc}, &${_nullishCoalesce(counterKeyText, () => ( keyStrs[keyStrs.length - 1]))}, ${this.rustOwnedArgText(right, rhs.trim())})`;
+      const helperWrite = this.rustDictHoistHosts.has(node) ? `{ let __be_tmp = ${rhs}; add_element_to_object(${acc}, &${_nullishCoalesce(counterKeyText, () => ( keyStrs[keyStrs.length - 1]))}, __be_tmp); }` : helperCall;
       const nestedInsert = keyStrs.length === 2 ? _nullishCoalesce(this.rustNestedBearerInsert(baseExpr, keys[0], keyStrs[0], keys[1], keyStrs[1], rhs), () => ( this.nestedDictWrite(baseExpr, keys, keyStrs, rhs, helperWrite))) : _nullishCoalesce(this.nestedDictWrite(baseExpr, keys, keyStrs, rhs, helperWrite), () => ( this.rustNestedBearerBucket(baseExpr, keys[0], keyStrs[0], right)));
       if (nestedInsert !== void 0)
         return nestedInsert;
@@ -53678,6 +53680,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (bearerChain !== void 0)
         return bearerChain;
       const nativeInsert = keyStrs.length === 1 ? _nullishCoalesce(_nullishCoalesce(_nullishCoalesce(_nullishCoalesce(this.rustBearerDictInsert(baseExpr, keys[0], keyStrs[0], rhs), () => ( this.rustMapParamDictInsert(baseExpr, keys[0], keyStrs[0], rhs))), () => ( this.printNativeBookMetaWrite(baseExpr, keys[0], keyStrs[0], rhs))), () => ( this.printNativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs))), () => ( this.rustNativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs))) : void 0;
+      if (nativeInsert === void 0 && counterKeyText !== void 0)
+        this.rustI64CounterUse(counterKey);
       return _nullishCoalesce(nativeInsert, () => ( helperWrite));
     }
     if (isAssign && _is.isIdentifier.call(void 0, left) && this.rustDictBearerDeclaration(left) !== void 0 && this.rustBearerPlainLiteral(right)) {
@@ -68338,6 +68342,9 @@ ${idn}}`;
       return void 0;
     const other = this.unwrapParens(up.left === id ? up.right : up.left);
     const literal2 = _nullishCoalesce(this.rustScalarIntLiteral(other), () => ( (_is.isIdentifier.call(void 0, other) && _optionalChain([this, 'access', _9687 => _9687.rustScalarLocalOf, 'call', _9688 => _9688(other), 'optionalAccess', _9689 => _9689.kind]) === "int" ? super.printIdentifier(other) : void 0)));
+    if (literal2 === void 0 && !this.isEqualityOp(kind) && this.rustScalarValueNumber(other)) {
+      return { op, literal: `${this.printNode(other, 0).trim()}.as_f64().unwrap_or(f64::NAN)`, counterLeft: up.left === id, float: true };
+    }
     return literal2 === void 0 ? void 0 : { op, literal: literal2, counterLeft: up.left === id };
   }
   /** rd: the native compare of a registered `i64` counter against an integer literal, else undefined. */
@@ -68348,7 +68355,7 @@ ${idn}}`;
     const cmp = id === void 0 ? void 0 : this.rustI64LiteralCompare(id);
     if (cmp === void 0 || !this.rustI64CounterUse(id))
       return void 0;
-    const name = String(id.text);
+    const name = cmp.float ? `(${String(id.text)} as f64)` : String(id.text);
     const text = cmp.counterLeft ? `${name} ${cmp.op} ${cmp.literal}` : `${cmp.literal} ${cmp.op} ${name}`;
     return this.isBooleanPosition(node) ? text : `Value::Bool(${text})`;
   }

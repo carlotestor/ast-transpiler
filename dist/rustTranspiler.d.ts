@@ -2383,6 +2383,7 @@ export declare class RustTranspiler extends BaseTranspiler {
         op: string;
         literal: string;
         counterLeft: boolean;
+        float?: boolean;
     } | undefined;
     /** rd: the native compare of a registered `i64` counter against an integer literal, else undefined. */
     printI64CounterCompare(node: any): string | undefined;
