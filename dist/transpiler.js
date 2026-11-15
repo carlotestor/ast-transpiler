@@ -76893,64 +76893,76 @@ ${iden}}`;
         const forms = /* @__PURE__ */ new Map();
         let reads = 0;
         let sourced = !this.rustWsCacheUndefined(init);
-        const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
-          const p = n.parent;
-          if ((isPropertyAccessExpression3(p) || p?.kind === SyntaxKind7.PropertyAssignment) && p.name === n)
-            return true;
-          if (kind === "opt" && isBinaryExpression5(p) && this.isEqualityOp(p.operatorToken.kind) && this.rustWsCacheUndefined(p.left === n ? p.right : p.left)) {
-            forms.set(n, "test");
-            return true;
-          }
-          if (this.rustWsBookMethodReceiver(n) || kind === "opt" && this.rustWsBookLimitReturn(n)) {
-            forms.set(n, "bare");
-            reads++;
-            return true;
-          }
-          const key = this.rustWsBookFieldKey(n);
-          if (key !== void 0 && _RustTranspiler.RUST_BOOK_SIDE_FIELDS.has(key)) {
-            const access = p;
-            const write = access.parent;
-            if (isBinaryExpression5(write) && write.left === access && write.operatorToken.kind === SyntaxKind7.EqualsToken) {
-              if (!_RustTranspiler.RUST_BOOK_META_WRITES.has(key) || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
-                return false;
-              forms.set(n, "meta");
+        const shadowSkip = this.rustDisjointShadowSkip;
+        this.rustDisjointShadowSkip = true;
+        let ok;
+        try {
+          ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+            if (!this.rustIdentifierRefersToDeclaration(n, declaration)) {
+              const other = this.rustDeclarationOfIdentifier(n);
+              return other !== void 0 && other !== declaration && this.rustDisjointBinding(other, declaration);
+            }
+            const p = n.parent;
+            if ((isPropertyAccessExpression3(p) || p?.kind === SyntaxKind7.PropertyAssignment) && p.name === n)
+              return true;
+            if (kind === "opt" && isBinaryExpression5(p) && this.isEqualityOp(p.operatorToken.kind) && this.rustWsCacheUndefined(p.left === n ? p.right : p.left)) {
+              forms.set(n, "test");
+              return true;
+            }
+            if (this.rustWsBookMethodReceiver(n) || kind === "opt" && this.rustWsBookLimitReturn(n)) {
+              forms.set(n, "bare");
               reads++;
               return true;
             }
-            if (this.isNativeWriteTargetBase(access) || isDeleteExpression2(write) || isCallExpression6(write) && write.expression === access)
+            const key = this.rustWsBookFieldKey(n);
+            if (key !== void 0 && _RustTranspiler.RUST_BOOK_SIDE_FIELDS.has(key)) {
+              const access = p;
+              const write = access.parent;
+              if (isBinaryExpression5(write) && write.left === access && write.operatorToken.kind === SyntaxKind7.EqualsToken) {
+                if (!_RustTranspiler.RUST_BOOK_META_WRITES.has(key) || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
+                  return false;
+                forms.set(n, "meta");
+                reads++;
+                return true;
+              }
+              if (this.isNativeWriteTargetBase(access) || isDeleteExpression2(write) || isCallExpression6(write) && write.expression === access)
+                return false;
+              let outer = access;
+              while (isParenthesizedExpression3(outer.parent) || isAsExpression3(outer.parent))
+                outer = outer.parent;
+              if (isPropertyAccessExpression3(outer.parent) && outer.parent.expression === outer && (String(outer.parent.name.text) !== "length" || this.isNativeWriteTargetBase(outer.parent)))
+                return false;
+              forms.set(n, "field");
+              reads++;
+              return true;
+            }
+            if (key !== void 0 && isPropertyAccessExpression3(p))
               return false;
-            let outer = access;
-            while (isParenthesizedExpression3(outer.parent) || isAsExpression3(outer.parent))
-              outer = outer.parent;
-            if (isPropertyAccessExpression3(outer.parent) && outer.parent.expression === outer && (String(outer.parent.name.text) !== "length" || this.isNativeWriteTargetBase(outer.parent)))
-              return false;
-            forms.set(n, "field");
-            reads++;
-            return true;
-          }
-          if (key !== void 0 && isPropertyAccessExpression3(p))
-            return false;
-          if (isBinaryExpression5(p) && p.left === n && p.operatorToken.kind === SyntaxKind7.EqualsToken) {
-            if (p.parent?.kind !== SyntaxKind7.ExpressionStatement)
-              return false;
-            const ok2 = kind === "opt" ? this.rustWsBookOptSource(p.right, true) : this.rustWsBookCtorLike(p.right);
-            if (ok2)
+            if (isBinaryExpression5(p) && p.left === n && p.operatorToken.kind === SyntaxKind7.EqualsToken) {
+              if (p.parent?.kind !== SyntaxKind7.ExpressionStatement)
+                return false;
+              const ok2 = kind === "opt" ? this.rustWsBookOptSource(p.right, true) : this.rustWsBookCtorLike(p.right);
+              if (ok2)
+                forms.set(n, "bare");
+              if (ok2 && !this.rustWsCacheUndefined(p.right))
+                sourced = true;
+              return ok2;
+            }
+            if (this.rustWsBookMapWriteValue(n)) {
               forms.set(n, "bare");
-            if (ok2 && !this.rustWsCacheUndefined(p.right))
-              sourced = true;
-            return ok2;
-          }
-          if (this.rustWsBookMapWriteValue(n)) {
-            forms.set(n, "bare");
-            return true;
-          }
-          if (this.rustWsBookBoxUse(n)) {
-            forms.set(n, "box");
-            reads++;
-            return true;
-          }
-          return false;
-        });
+              return true;
+            }
+            if (this.rustWsBookBoxUse(n)) {
+              forms.set(n, "box");
+              reads++;
+              return true;
+            }
+            return false;
+          });
+        } finally {
+          this.rustDisjointShadowSkip = shadowSkip;
+          this.rustDisjointShadowSeen = false;
+        }
         if (ok && sourced) {
           known = kind;
           for (const [n, form] of forms)

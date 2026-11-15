@@ -76892,64 +76892,76 @@ ${iden}}`;
         const forms = /* @__PURE__ */ new Map();
         let reads = 0;
         let sourced = !this.rustWsCacheUndefined(init);
-        const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
-          const p = n.parent;
-          if ((_is.isPropertyAccessExpression.call(void 0, p) || _optionalChain([p, 'optionalAccess', _10349 => _10349.kind]) === _ast.SyntaxKind.PropertyAssignment) && p.name === n)
-            return true;
-          if (kind === "opt" && _is.isBinaryExpression.call(void 0, p) && this.isEqualityOp(p.operatorToken.kind) && this.rustWsCacheUndefined(p.left === n ? p.right : p.left)) {
-            forms.set(n, "test");
-            return true;
-          }
-          if (this.rustWsBookMethodReceiver(n) || kind === "opt" && this.rustWsBookLimitReturn(n)) {
-            forms.set(n, "bare");
-            reads++;
-            return true;
-          }
-          const key = this.rustWsBookFieldKey(n);
-          if (key !== void 0 && _RustTranspiler.RUST_BOOK_SIDE_FIELDS.has(key)) {
-            const access = p;
-            const write = access.parent;
-            if (_is.isBinaryExpression.call(void 0, write) && write.left === access && write.operatorToken.kind === _ast.SyntaxKind.EqualsToken) {
-              if (!_RustTranspiler.RUST_BOOK_META_WRITES.has(key) || _optionalChain([write, 'access', _10350 => _10350.parent, 'optionalAccess', _10351 => _10351.kind]) !== _ast.SyntaxKind.ExpressionStatement)
-                return false;
-              forms.set(n, "meta");
+        const shadowSkip = this.rustDisjointShadowSkip;
+        this.rustDisjointShadowSkip = true;
+        let ok;
+        try {
+          ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+            if (!this.rustIdentifierRefersToDeclaration(n, declaration)) {
+              const other = this.rustDeclarationOfIdentifier(n);
+              return other !== void 0 && other !== declaration && this.rustDisjointBinding(other, declaration);
+            }
+            const p = n.parent;
+            if ((_is.isPropertyAccessExpression.call(void 0, p) || _optionalChain([p, 'optionalAccess', _10349 => _10349.kind]) === _ast.SyntaxKind.PropertyAssignment) && p.name === n)
+              return true;
+            if (kind === "opt" && _is.isBinaryExpression.call(void 0, p) && this.isEqualityOp(p.operatorToken.kind) && this.rustWsCacheUndefined(p.left === n ? p.right : p.left)) {
+              forms.set(n, "test");
+              return true;
+            }
+            if (this.rustWsBookMethodReceiver(n) || kind === "opt" && this.rustWsBookLimitReturn(n)) {
+              forms.set(n, "bare");
               reads++;
               return true;
             }
-            if (this.isNativeWriteTargetBase(access) || _is.isDeleteExpression.call(void 0, write) || _is.isCallExpression.call(void 0, write) && write.expression === access)
+            const key = this.rustWsBookFieldKey(n);
+            if (key !== void 0 && _RustTranspiler.RUST_BOOK_SIDE_FIELDS.has(key)) {
+              const access = p;
+              const write = access.parent;
+              if (_is.isBinaryExpression.call(void 0, write) && write.left === access && write.operatorToken.kind === _ast.SyntaxKind.EqualsToken) {
+                if (!_RustTranspiler.RUST_BOOK_META_WRITES.has(key) || _optionalChain([write, 'access', _10350 => _10350.parent, 'optionalAccess', _10351 => _10351.kind]) !== _ast.SyntaxKind.ExpressionStatement)
+                  return false;
+                forms.set(n, "meta");
+                reads++;
+                return true;
+              }
+              if (this.isNativeWriteTargetBase(access) || _is.isDeleteExpression.call(void 0, write) || _is.isCallExpression.call(void 0, write) && write.expression === access)
+                return false;
+              let outer = access;
+              while (_is.isParenthesizedExpression.call(void 0, outer.parent) || _is.isAsExpression.call(void 0, outer.parent))
+                outer = outer.parent;
+              if (_is.isPropertyAccessExpression.call(void 0, outer.parent) && outer.parent.expression === outer && (String(outer.parent.name.text) !== "length" || this.isNativeWriteTargetBase(outer.parent)))
+                return false;
+              forms.set(n, "field");
+              reads++;
+              return true;
+            }
+            if (key !== void 0 && _is.isPropertyAccessExpression.call(void 0, p))
               return false;
-            let outer = access;
-            while (_is.isParenthesizedExpression.call(void 0, outer.parent) || _is.isAsExpression.call(void 0, outer.parent))
-              outer = outer.parent;
-            if (_is.isPropertyAccessExpression.call(void 0, outer.parent) && outer.parent.expression === outer && (String(outer.parent.name.text) !== "length" || this.isNativeWriteTargetBase(outer.parent)))
-              return false;
-            forms.set(n, "field");
-            reads++;
-            return true;
-          }
-          if (key !== void 0 && _is.isPropertyAccessExpression.call(void 0, p))
-            return false;
-          if (_is.isBinaryExpression.call(void 0, p) && p.left === n && p.operatorToken.kind === _ast.SyntaxKind.EqualsToken) {
-            if (_optionalChain([p, 'access', _10352 => _10352.parent, 'optionalAccess', _10353 => _10353.kind]) !== _ast.SyntaxKind.ExpressionStatement)
-              return false;
-            const ok2 = kind === "opt" ? this.rustWsBookOptSource(p.right, true) : this.rustWsBookCtorLike(p.right);
-            if (ok2)
+            if (_is.isBinaryExpression.call(void 0, p) && p.left === n && p.operatorToken.kind === _ast.SyntaxKind.EqualsToken) {
+              if (_optionalChain([p, 'access', _10352 => _10352.parent, 'optionalAccess', _10353 => _10353.kind]) !== _ast.SyntaxKind.ExpressionStatement)
+                return false;
+              const ok2 = kind === "opt" ? this.rustWsBookOptSource(p.right, true) : this.rustWsBookCtorLike(p.right);
+              if (ok2)
+                forms.set(n, "bare");
+              if (ok2 && !this.rustWsCacheUndefined(p.right))
+                sourced = true;
+              return ok2;
+            }
+            if (this.rustWsBookMapWriteValue(n)) {
               forms.set(n, "bare");
-            if (ok2 && !this.rustWsCacheUndefined(p.right))
-              sourced = true;
-            return ok2;
-          }
-          if (this.rustWsBookMapWriteValue(n)) {
-            forms.set(n, "bare");
-            return true;
-          }
-          if (this.rustWsBookBoxUse(n)) {
-            forms.set(n, "box");
-            reads++;
-            return true;
-          }
-          return false;
-        });
+              return true;
+            }
+            if (this.rustWsBookBoxUse(n)) {
+              forms.set(n, "box");
+              reads++;
+              return true;
+            }
+            return false;
+          });
+        } finally {
+          this.rustDisjointShadowSkip = shadowSkip;
+          this.rustDisjointShadowSeen = false;
+        }
         if (ok && sourced) {
           known = kind;
           for (const [n, form] of forms)
