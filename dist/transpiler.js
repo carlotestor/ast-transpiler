@@ -56185,7 +56185,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (this.rustListParamElement(declaration.initializer) && boxed > 0)
       this.rustScalarGuarded.add(declaration);
-    if (copied > 0 && kind === "ostr" && !this.rustElementReadScalarKind(this.unwrapParens(declaration.initializer)) && this.rustScalarKeyedLocal(declaration))
+    if (copied > 0 && kind === "ostr" && !keyLent && !this.rustElementReadScalarKind(this.unwrapParens(declaration.initializer)) && this.rustScalarKeyedLocal(declaration))
       return void 0;
     if (this.rustScalarOptKeyCostly(declaration, kind) === false && kind === "ostr" && this.rustScalarOptKeyCount(declaration) > 0)
       this.rustScalarGuarded.add(declaration);
@@ -59431,11 +59431,26 @@ ${binding(plan.indent)}` : ""), head: "" };
         keyed = true;
       const up = n.parent;
       const argCopy = isCallExpression6(up) && up.expression !== n && (form === "box" || form === "xbox");
-      if (form === "err" || form === "key" && !this.rustElemInsertKey(this.rustKeyWrapped(n)) || (form === "box" || form === "xbox") && !argCopy && !this.rustScalarBoxMoves(n, form, declaration))
+      const insertValue = form === "box" && up?.kind === SyntaxKind7.PropertyAssignment && up.initializer === n && this.rustElemKeyInsertLiteralValue(n, declaration);
+      if (form === "err" || form === "key" && !this.rustElemInsertKey(this.rustKeyWrapped(n)) || (form === "box" || form === "xbox") && !argCopy && !insertValue && !this.rustScalarBoxMoves(n, form, declaration))
         copied = true;
       return true;
     });
     return keyed && copied;
+  }
+  /** ral-52i: `n` is a top-level value of the object literal written by `m[k] = { .. }` keyed by the same local `k`. */
+  rustElemKeyInsertLiteralValue(n, declaration) {
+    const literal2 = n.parent?.parent;
+    if (!isObjectLiteralExpression4(literal2))
+      return false;
+    const write = literal2.parent;
+    if (!isBinaryExpression5(write) || write.right !== literal2 || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const access = write.left;
+    if (!isElementAccessExpression4(access))
+      return false;
+    const key = this.rustSkipWrappers(access.argumentExpression);
+    return key !== void 0 && isIdentifier3(key) && this.rustDeclarationOfIdentifier(key) === declaration && this.rustElemInsertKey(key);
   }
   /** `m[k] = v` as a statement: the element key of a native insert. */
   rustElemInsertKey(n) {

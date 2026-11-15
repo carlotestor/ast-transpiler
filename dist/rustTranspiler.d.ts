@@ -1137,6 +1137,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustElemKeyInUse(n: any): boolean;
     /** An `in`-keyed element local stays `Value` when a boxed use would copy where the `Value` moved or was lent. */
     rustElemKeyInCostly(declaration: any): boolean;
+    /** ral-52i: `n` is a top-level value of the object literal written by `m[k] = { .. }` keyed by the same local `k`. */
+    rustElemKeyInsertLiteralValue(n: any, declaration: any): boolean;
     /** `m[k] = v` as a statement: the element key of a native insert. */
     rustElemInsertKey(n: any): boolean;
     printElemKeyInOp(key: any, obj: any): string | undefined;
