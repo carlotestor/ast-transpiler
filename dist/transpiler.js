@@ -51229,7 +51229,7 @@ ${this.getIden(identation)}}}`;
 // src/rustTranspiler.ts
 init_esm_shims();
 import { NodeFlags as NodeFlags4, SyntaxKind as SyntaxKind7 } from "typescript/unstable/ast";
-import { isArrayBindingPattern, isArrayLiteralExpression as isArrayLiteralExpression4, isArrowFunction as isArrowFunction5, isAsExpression as isAsExpression3, isBinaryExpression as isBinaryExpression5, isBindingElement, isBlock as isBlock4, isCallExpression as isCallExpression6, isClassDeclaration as isClassDeclaration4, isClassExpression as isClassExpression2, isConditionalExpression as isConditionalExpression4, isDeleteExpression as isDeleteExpression2, isElementAccessExpression as isElementAccessExpression4, isForInStatement as isForInStatement2, isForOfStatement as isForOfStatement2, isIdentifier as isIdentifier3, isMethodDeclaration as isMethodDeclaration5, isNoSubstitutionTemplateLiteral, isNonNullExpression as isNonNullExpression2, isNumericLiteral as isNumericLiteral4, isObjectLiteralExpression as isObjectLiteralExpression4, isParameterDeclaration as isParameterDeclaration3, isParenthesizedExpression as isParenthesizedExpression3, isPostfixUnaryExpression as isPostfixUnaryExpression3, isPrefixUnaryExpression as isPrefixUnaryExpression3, isPropertyAccessExpression as isPropertyAccessExpression3, isReturnStatement as isReturnStatement4, isShorthandPropertyAssignment as isShorthandPropertyAssignment2, isSourceFile as isSourceFile5, isStatement, isStringLiteral as isStringLiteral3, isStringLiteralLikeNode as isStringLiteralLikeNode4, isTypeAssertion as isTypeAssertion3, isVariableDeclaration as isVariableDeclaration3, isVariableDeclarationList as isVariableDeclarationList2 } from "typescript/unstable/ast/is";
+import { isArrayBindingPattern, isArrayLiteralExpression as isArrayLiteralExpression4, isArrowFunction as isArrowFunction5, isAsExpression as isAsExpression3, isBinaryExpression as isBinaryExpression5, isBindingElement, isBlock as isBlock4, isCallExpression as isCallExpression6, isClassDeclaration as isClassDeclaration4, isClassExpression as isClassExpression2, isConditionalExpression as isConditionalExpression4, isDeleteExpression as isDeleteExpression2, isElementAccessExpression as isElementAccessExpression4, isForInStatement as isForInStatement2, isForOfStatement as isForOfStatement2, isIdentifier as isIdentifier3, isIfStatement as isIfStatement4, isMethodDeclaration as isMethodDeclaration5, isNoSubstitutionTemplateLiteral, isNonNullExpression as isNonNullExpression2, isNumericLiteral as isNumericLiteral4, isObjectLiteralExpression as isObjectLiteralExpression4, isParameterDeclaration as isParameterDeclaration3, isParenthesizedExpression as isParenthesizedExpression3, isPostfixUnaryExpression as isPostfixUnaryExpression3, isPrefixUnaryExpression as isPrefixUnaryExpression3, isPropertyAccessExpression as isPropertyAccessExpression3, isReturnStatement as isReturnStatement4, isShorthandPropertyAssignment as isShorthandPropertyAssignment2, isSourceFile as isSourceFile5, isStatement, isStringLiteral as isStringLiteral3, isStringLiteralLikeNode as isStringLiteralLikeNode4, isTypeAssertion as isTypeAssertion3, isVariableDeclaration as isVariableDeclaration3, isVariableDeclarationList as isVariableDeclarationList2 } from "typescript/unstable/ast/is";
 import { IndexKind as IndexKind4, ObjectFlags, SignatureKind as SignatureKind2, SymbolFlags as SymbolFlags3, TypeFlags as TypeFlags6 } from "typescript/unstable/sync";
 import * as fs3 from "fs";
 import * as tsSync2 from "typescript/unstable/sync";
@@ -54316,14 +54316,14 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         write = "ostr";
       if (write === void 0 && this.rustScalarSeeding && this.rustNilStrPartner(rhs, declaration, scope))
         write = "ostr";
-      joined = this.rustScalarJoinKinds(joined, write);
+      joined = this.rustScalarJoinKinds(joined, write, write === "bool" && this.rustPreciseCompareCall(rhs));
       if (joined === void 0)
         return void 0;
     }
-    if (joined !== "ostr" && joined !== "oint" && joined !== "onum")
+    if (joined !== "ostr" && joined !== "oint" && joined !== "onum" && joined !== "obool")
       return void 0;
     const declared = declaration.type === void 0 ? void 0 : this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name));
-    if (declared !== void 0 && declared !== (joined === "ostr" ? "string" : "number"))
+    if (declared !== void 0 && declared !== (joined === "ostr" ? "string" : joined === "obool" ? "boolean" : "number"))
       return void 0;
     const kind = joined;
     if (kind === "ostr" && !this.rustSiblingStrBoxesMove(declaration, scope))
@@ -60740,7 +60740,7 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
     if (shape === "affix")
       return { recv, recvKind, method, kind: "bool" };
     if (shape === "vslice" || shape === "vaffix" || shape === "vfind" || shape === "vreplace") {
-      if (this.rustScalarLocalOf(recv) === void 0 || this.rust41bWsKeyLocal(recv))
+      if (this.rustScalarLocalOf(recv) === void 0 || this.rust41bWsKeyLocal(recv) && shape !== "vreplace")
         return void 0;
       if (args.some((a) => isIdentifier3(this.unwrapParens(a)) && this.rust41bWsKeyLocal(this.unwrapParens(a))))
         return void 0;
@@ -60840,7 +60840,55 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
     const lit = this.rustNativeStringLiteralArg(inner);
     if (lit !== void 0)
       return `"${lit}"`;
-    return isIdentifier3(inner) && this.rustScalarLocalOf(inner)?.kind === "str" ? `${super.printIdentifier(inner)}.as_str()` : void 0;
+    if (isIdentifier3(inner) && this.rustScalarLocalOf(inner)?.kind === "str")
+      return `${super.printIdentifier(inner)}.as_str()`;
+    if (isBinaryExpression5(inner) && inner.operatorToken.kind === SyntaxKind7.PlusToken && this.rustStrConcatOperandLeaves(inner)) {
+      const text = this.rustUnboxedFormatText(this.printNode(inner, 0));
+      if (text !== void 0)
+        return `${text}.as_str()`;
+    }
+    return void 0;
+  }
+  /** ral-55x K1: `Value::Str(format!(..).into())` -> the `format!(..)` itself, when that macro call spans the whole box. */
+  rustUnboxedFormatText(text) {
+    const head = "Value::Str(format!(";
+    if (!text.startsWith(head) || !text.endsWith(").into())"))
+      return void 0;
+    let depth = 1;
+    let quoted = false;
+    for (let i = head.length; i < text.length; i++) {
+      const c = text[i];
+      if (quoted) {
+        if (c === "\\")
+          i++;
+        else if (c === '"')
+          quoted = false;
+        continue;
+      }
+      if (c === '"')
+        quoted = true;
+      else if (c === "(")
+        depth++;
+      else if (c === ")" && --depth === 0)
+        return text.slice(i + 1) === ".into())" ? text.slice("Value::Str(".length, i + 1) : void 0;
+    }
+    return void 0;
+  }
+  /** ral-55x K1: every leaf of a `+` chain is a string literal or a `str` / `ostr` typed local, and at least one is a literal. */
+  rustStrConcatOperandLeaves(node) {
+    let literal2 = false;
+    const walk = (n) => {
+      const inner = this.unwrapParens(n);
+      if (isBinaryExpression5(inner) && inner.operatorToken.kind === SyntaxKind7.PlusToken)
+        return walk(inner.left) && walk(inner.right);
+      if (this.rustNativeStringLiteralArg(inner) !== void 0) {
+        literal2 = true;
+        return true;
+      }
+      const kind = isIdentifier3(inner) ? this.rustScalarLocalOf(inner)?.kind : void 0;
+      return kind === "str" || kind === "ostr";
+    };
+    return walk(node) && literal2;
   }
   /** 41b: a local some use of which is a ws subscription / future / cache key, a ws client call argument or a ws cache
    *  write key: those keep their `Value` (the new string-method forms never decide them). */
@@ -62553,6 +62601,31 @@ ${ind}];`;
   // boxed local is its string, or `"null"` for `Null`; the borrowed `Option` gives the same text.
   // An object-literal receiver is the typed-bearer rule's: its key proof wants a `Value` key, so an
   // optional key there would turn the map back into a `Value`.
+  /** ral-55x K1: `let id = this.safeString(o, k)` inserted as `m[id] = v` only inside an `if (id !== undefined ..)` block: the
+   *  insert never sees a `None` key, so the key text is the `Str` the boxed key held (removeRepeatedTradesFromArray `id`). */
+  rust55xGuardedSafeStringKey(n, local) {
+    const init = this.rustSkipWrappers(local.initializer);
+    if (!isCallExpression6(init) || !isPropertyAccessExpression3(init.expression) || init.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(init.expression.name.text) !== "safeString" || init.arguments.length !== 2)
+      return false;
+    const name = String(n.text);
+    for (let up = n.parent; up !== void 0 && !isFunctionLike(up); up = up.parent) {
+      if (isIfStatement4(up) && up.thenStatement !== void 0 && n.pos >= up.thenStatement.pos && n.end <= up.thenStatement.end) {
+        const conjuncts = [];
+        const split = (e) => {
+          e = this.unwrapParens(e);
+          if (isBinaryExpression5(e) && e.operatorToken.kind === SyntaxKind7.AmpersandAmpersandToken) {
+            split(e.left);
+            split(e.right);
+          } else
+            conjuncts.push(e);
+        };
+        split(up.expression);
+        if (conjuncts.some((c) => isBinaryExpression5(c) && c.operatorToken.kind === SyntaxKind7.ExclamationEqualsEqualsToken && isIdentifier3(this.unwrapParens(c.left)) && String(this.unwrapParens(c.left).text) === name && this.rustDeclaredNode(this.unwrapParens(c.left)) === local && this.literalKindOfNode(this.unwrapParens(c.right)) === "null"))
+          return true;
+      }
+    }
+    return false;
+  }
   rustScalarOptKeyUse(n) {
     const local = this.rustDeclaredNode(n);
     if (local === void 0 || !isVariableDeclaration3(local) || local.initializer === void 0 || this.literalKindOfNode(local.initializer) === "null")
@@ -62582,7 +62655,7 @@ ${ind}];`;
       if (enumerated && keyRead && this.rustSafeCurrencyCodeInit(local.initializer) && !this.rustMapReadByLocal(declaration, name, local))
         return this.rustScalarInsertKeyUse(n);
       if (enumerated)
-        return !keyRead && (isElementAccessExpression4(this.rustSkipWrappers(local.initializer)) || this.rustTbNetworkCodeInit(local.initializer)) && this.rustScalarInsertKeyUse(n);
+        return !keyRead && (isElementAccessExpression4(this.rustSkipWrappers(local.initializer)) || this.rustTbNetworkCodeInit(local.initializer) || this.rust55xGuardedSafeStringKey(n, local)) && this.rustScalarInsertKeyUse(n);
       return this.rustBearerWriteKeyOk(n, name) || this.rustScalarInsertKeyUse(n);
     }
     return this.rustScalarInsertKeyUse(n);
