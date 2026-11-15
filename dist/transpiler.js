@@ -51815,6 +51815,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     /** ral-48b: statement writes `x['k'] = v` printed as `add_element_to_object(&mut x, ..)` on a typed map local. */
     this.rustAeoWrites = /* @__PURE__ */ new WeakSet();
     this.rustDictElementBoxes = /* @__PURE__ */ new WeakMap();
+    this.rustNnAliasDecls = /* @__PURE__ */ new WeakSet();
     this.rustContainerAliasInits = /* @__PURE__ */ new WeakSet();
     this.rustContainerAliasAsking = /* @__PURE__ */ new WeakSet();
     this.rustValueWriteTargets = /* @__PURE__ */ new Map();
@@ -53849,6 +53850,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (node.declarations.length === 1 && this.rustBorrowedDictLocal(declaration) && this.rustEcdsaCall(this.rustSkipWrappers(declaration.initializer))) {
       this.rustPrintedBorrowed.add(declaration);
       return `${indent}let mut ${varName}: crate::value::Dict = ${this.rustBytesBareText(this.rustSkipWrappers(declaration.initializer), identation)}`;
+    }
+    if (node.declarations.length === 1 && this.rustBorrowedDictLocal(declaration) && this.rustNnAliasDecls.has(declaration)) {
+      this.rustPrintedBorrowed.add(declaration);
+      return `${indent}let mut ${varName}: crate::value::${this.rustBorrowedLocalKind(declaration) === "list" ? "List" : "Dict"} = ${this.rustNnAliasSourceText(this.rustSkipWrappers(declaration.initializer), declaration)}.into_${this.rustBorrowedLocalKind(declaration) === "list" ? "list" : "dict"}()`;
     }
     if (node.declarations.length === 1 && this.rustBorrowedDictLocal(declaration)) {
       this.rustPrintedBorrowed.add(declaration);
@@ -71142,6 +71147,11 @@ ${iden}}`;
     const sbAlias = from === void 0 && !nilDeclared && this.rustSbDictAliasSource(init);
     if (sbAlias)
       from = "dict";
+    const nnAlias = from === void 0 && !nilDeclared && allSlot === void 0 && init !== void 0 && isIdentifier3(init) ? this.rustNeverNullAliasKind(declaration) : void 0;
+    if (nnAlias !== void 0) {
+      from = nnAlias;
+      this.rustNnAliasDecls.add(declaration);
+    }
     if (from === void 0 && !nilDeclared && declaration.initializer !== void 0 && this.rustWsWatchResultKind(declaration.initializer) === "dict")
       from = "dict";
     if (from === void 0 && !nilDeclared && declaration.initializer !== void 0 && this.rustWsWatchResultKind(declaration.initializer) === "list")
@@ -71240,6 +71250,10 @@ ${iden}}`;
         if (sbAlias && (this.rustHandleTupleMapSlotRead(rhs) || this.rustHandedSlotIdentifier(rhs)) && String(rhs.getText()).split("\n")[0].length <= 240) {
           this.rustSbAliasWrites.add(up);
           return ++sbMapWrites > 0;
+        }
+        if (nnAlias !== void 0 && isIdentifier3(rhs) && String(rhs.getText()).length <= 240) {
+          this.rustSbAliasWrites.add(up);
+          return true;
         }
         writes++;
         if (this.literalKindOfNode(rhs) === "null")
@@ -71343,6 +71357,8 @@ ${iden}}`;
         return ++lentNullable > 0 && ++reads > 0;
       if (this.rustOptAliasInitTargetUse(n, declaration, fn))
         return ++lentNullable > 0 && ++reads > 0;
+      if (!nilDeclared && (from === "dict" || from === "list") && this.rustNnAliasSourceUse(n, from))
+        return ++reads > 0;
       if (this.rustContainerAliasInit(n, declaration))
         return ++aliasBoxes > 0 && boxedElementUses.push(n) > 0;
       if (sbAlias && isVariableDeclaration3(up) && up.initializer === n && isIdentifier3(up.name) && up.parent?.declarations?.length === 1 && this.rustEnclosingFunction(up) === fn) {
@@ -71828,7 +71844,11 @@ ${iden}}`;
   }
   printSbAliasWrite(node, left, right) {
     const declaration = this.rustDeclarationOfIdentifier(left);
-    if (declaration === void 0 || !this.rustSbAliasWrites.has(node) || !this.rustPrintedBorrowed.has(declaration) || this.rustBorrowedLocalKind(declaration) !== "dict")
+    if (declaration === void 0 || !this.rustSbAliasWrites.has(node) || !this.rustPrintedBorrowed.has(declaration))
+      return void 0;
+    if (this.rustNnAliasDecls.has(declaration) && isIdentifier3(this.rustSkipWrappers(right)))
+      return `${super.transformIdentifier(left, this.ReservedKeywordsReplacements[left.text] ?? left.text)} = ${this.rustNnAliasSourceText(this.rustSkipWrappers(right), node)}.into_${this.rustBorrowedLocalKind(declaration) === "list" ? "list" : "dict"}()`;
+    if (this.rustBorrowedLocalKind(declaration) !== "dict")
       return void 0;
     const name = super.transformIdentifier(left, this.ReservedKeywordsReplacements[left.text] ?? left.text);
     const slot = this.rustSkipWrappers(right);
@@ -72705,6 +72725,103 @@ ${iden}}`;
     if (ok)
       this.rustContainerAliasInits.add(n);
     return ok;
+  }
+  rustNnAliasSourceUse(n, kind) {
+    const up = n.parent;
+    let target;
+    if (isVariableDeclaration3(up) && up.initializer === n)
+      target = up;
+    else if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && isIdentifier3(up.left))
+      target = this.rustDeclaredNode(up.left);
+    if (target === void 0 || !isVariableDeclaration3(target) || target.name === n || this.rustBorrowedPending.has(target))
+      return false;
+    if (this.rustNeverNullAliasKind(target) !== kind)
+      return false;
+    return this.rustBorrowedLocalKind(target) === kind && this.rustNnAliasDecls.has(target);
+  }
+  /** ral-53n: the boxed source of a never-null alias, cloned when it is read again after `at` (or `at` sits in a loop), moved otherwise. */
+  rustNnAliasSourceText(src, at) {
+    const d = this.rustDeclarationOfIdentifier(src);
+    const text = super.transformIdentifier(src, this.ReservedKeywordsReplacements[src.text] ?? src.text);
+    const fn = this.rustEnclosingFunction(at);
+    let after = findAncestor(at, (a) => a.kind === SyntaxKind7.ForStatement || a.kind === SyntaxKind7.ForInStatement || a.kind === SyntaxKind7.ForOfStatement || a.kind === SyntaxKind7.WhileStatement || a.kind === SyntaxKind7.DoStatement || isFunctionLike(a)) !== fn;
+    const end = at.getEnd();
+    if (!after && d !== void 0)
+      this.rustLocalUsesAll(d, String(d.name.text), true, (n) => {
+        if (n !== src && (n.getStart() >= end || this.rustEnclosingFunction(n) !== fn))
+          after = true;
+        return true;
+      });
+    if (d !== void 0 && (this.rustPrintedBorrowed.has(d) || this.rustLentListLocal(d) || this.rustHandedDictLocal(d)))
+      return `Value::from(&${text})`;
+    return after || d === void 0 ? `${text}.clone()` : text;
+  }
+  /** ral-53n: the container kind of a local declared as an alias whose initializer and every whole write are identifiers of
+   *  never-null container locals (rustContainerNeverNullLocal) whose root producers all answer the same kind. */
+  rustNeverNullAliasKind(declaration) {
+    if (!this.rustContainerNeverNullLocal(declaration, 0))
+      return void 0;
+    const fn = this.rustEnclosingFunction(declaration);
+    const kinds = /* @__PURE__ */ new Set();
+    const rootKind = (e, depth) => {
+      const x = this.rustSkipWrappers(e);
+      if (x === void 0 || depth > 3)
+        return void 0;
+      if (isIdentifier3(x)) {
+        const d = this.rustDeclarationOfIdentifier(x);
+        if (d === void 0 || !isVariableDeclaration3(d) || d.name === x)
+          return void 0;
+        const ks = /* @__PURE__ */ new Set();
+        const k0 = rootKind(d.initializer, depth + 1);
+        if (k0 === void 0)
+          return void 0;
+        ks.add(k0);
+        for (const n of this.rustScopeNameNodes(this.rustEnclosingFunction(d), String(d.name.text))) {
+          if (!isIdentifier3(n) || n === d.name || this.rustDeclaredNode(n) !== d)
+            continue;
+          const up = n.parent;
+          if (isBinaryExpression5(up) && up.left === n && up.operatorToken.kind === SyntaxKind7.EqualsToken) {
+            const k = rootKind(up.right, depth + 1);
+            if (k === void 0)
+              return void 0;
+            ks.add(k);
+          }
+        }
+        return ks.size === 1 ? k0 : void 0;
+      }
+      if (!isCallExpression6(x))
+        return void 0;
+      if (this.rustContainerInitNeverNull(x, "map") || this.rustOmitOfDict(x))
+        return "dict";
+      if (this.rustContainerInitNeverNull(x, "list"))
+        return "list";
+      const built = this.rustBuiltReturnSourceKind(x);
+      if (built === "dict" || built === "list")
+        return built;
+      const venue = this.rustVenueContainerReturnKind(x);
+      return venue !== void 0 && venue.nullable === false && (venue.kind === "dict" || venue.kind === "list") ? venue.kind : void 0;
+    };
+    const add = (e) => {
+      const x = this.rustSkipWrappers(e);
+      if (x === void 0 || !isIdentifier3(x))
+        return false;
+      const k = rootKind(x, 0);
+      if (k === void 0)
+        return false;
+      kinds.add(k);
+      return true;
+    };
+    if (!add(declaration.initializer))
+      return void 0;
+    let written = 0;
+    for (const n of this.rustScopeNameNodes(fn, String(declaration.name.text))) {
+      if (!isIdentifier3(n) || n === declaration.name || this.rustDeclaredNode(n) !== declaration)
+        continue;
+      const up = n.parent;
+      if (isBinaryExpression5(up) && up.left === n && rustIsAssignmentOperator(up.operatorToken.kind) && (!add(up.right) || ++written === 0))
+        return void 0;
+    }
+    return written > 0 && kinds.size === 1 ? Array.from(kinds)[0] : void 0;
   }
   /** ral-40h: a local whose initializer and every whole write hold a container on every path (never Null): a fresh
    *  built container, `omit` of a proven map, a `safeDict*` / `safeList*` read with an empty literal default, a

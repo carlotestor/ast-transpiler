@@ -3008,6 +3008,13 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  (`Value::Dict(x)` / `Value::Arr(x)` when `x` is dead after it, else `Value::from(&x)`). Every other local's rule is
      *  untouched: the target must stay `Value` or be the shared-map alias, both read `x` only as this one box. */
     rustContainerAliasInit(n: any, own: any): boolean;
+    private rustNnAliasDecls;
+    rustNnAliasSourceUse(n: any, kind: 'dict' | 'list'): boolean;
+    /** ral-53n: the boxed source of a never-null alias, cloned when it is read again after `at` (or `at` sits in a loop), moved otherwise. */
+    rustNnAliasSourceText(src: any, at: any): string;
+    /** ral-53n: the container kind of a local declared as an alias whose initializer and every whole write are identifiers of
+     *  never-null container locals (rustContainerNeverNullLocal) whose root producers all answer the same kind. */
+    rustNeverNullAliasKind(declaration: any): 'dict' | 'list' | undefined;
     /** ral-40h: a local whose initializer and every whole write hold a container on every path (never Null): a fresh
      *  built container, `omit` of a proven map, a `safeDict*` / `safeList*` read with an empty literal default, a
      *  never-null venue container return, or an alias of such a local (syntactic: no other local's decision is read). */
