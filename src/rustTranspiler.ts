@@ -18477,6 +18477,10 @@ export class RustTranspiler extends BaseTranspiler {
         // the empty map the other arm already is), so the uses below are checked exactly as for a plain producer
         const mapTernary = from === undefined && !nilDeclared && init !== undefined && this.rustMapTernaryInit(init);
         if (mapTernary) from = 'dict';
+        // ral-45g: `c ? undefined : this.safeDict (..)` (one arm `undefined`, the other a source the optional form already takes)
+        // answers Null or that source's map: the local holds `Option<Dict>` (`(if c { Value::Null } else { .. }).into_opt_dict()`)
+        const optTernary = from === undefined && !nilDeclared && init !== undefined && this.rustOptMapTernaryInit(init);
+        if (optTernary) from = 'dict';
         let sbMapWrites = 0;
         if (from === undefined && !nilDeclared) return undefined;
         const name = String(declaration.name.text);
@@ -18709,7 +18713,7 @@ export class RustTranspiler extends BaseTranspiler {
         // a nullable source lent whole keeps Null apart from an empty container: the optional form
         // ral-zg: a sibling-admitted map row handed on whole keeps Null apart from the empty map (the optional form)
         const zgRow = this.rustZgSiblingRows.has(declaration) && boxedElementUses.length > 0;
-        const optional = nilDeclared || nullTests > 0 || writes > 0 || lentNullable > 0 || optionalBoxes > 0 || zgRow || elementKeyWrites > 0;
+        const optional = nilDeclared || nullTests > 0 || writes > 0 || lentNullable > 0 || optionalBoxes > 0 || zgRow || elementKeyWrites > 0 || optTernary;
         if (jwtLends > 0 && optional) return undefined;
         // ral-40h: an alias takes the plain container only (an optional one would copy at the box)
         if (aliasBoxes > 0 && (optional || reads === 0 && aliasBoxes === boxedElementUses.length)) return undefined;
@@ -18740,7 +18744,7 @@ export class RustTranspiler extends BaseTranspiler {
         for (const n of indexReadUses) this.rustBorrowedIndexReads.add(n.parent);
         if (optional) {
             // Null stays distinct from an empty container: the local holds `Option<Dict>` / `Option<List>`.
-            if (from === 'api' || (nilDeclared && writes === 0) || (!nilDeclared && !((zgRow || elementKeyWrites > 0) && this.rustDictElementSource(init)) && !this.rustOptContainerSourceOk(init, from))) return undefined;
+            if (from === 'api' || (nilDeclared && writes === 0) || (!nilDeclared && !((zgRow || elementKeyWrites > 0) && this.rustDictElementSource(init)) && !optTernary && !this.rustOptContainerSourceOk(init, from))) return undefined;
             this.rustOptContainerLocals.add(declaration);
         }
         for (const n of boxedElementUses) this.rustDictElementBoxes.set(n, this.rustLocalLastUse(n, declaration) || (n.parent?.kind === SyntaxKind.ConditionalExpression && this.rustOwnedLastUse(n, declaration)) ? 'move' : 'share');
@@ -20120,6 +20124,20 @@ export class RustTranspiler extends BaseTranspiler {
             return dflt !== undefined && isObjectLiteralExpression(dflt) && dflt.properties.length === 0 && this.rustBorrowedSourceKind(a) === 'dict';
         };
         return arm(node.whenTrue) && arm(node.whenFalse);
+    }
+
+    /** ral-45g: `c ? undefined : <src>` / `c ? <src> : undefined` where `<src>` is a base map source the optional form takes
+     *  (`safeDict` with no / nullish / `{}` default, extend / omit): Null on one path, that map (or its Null) on the other. */
+    rustOptMapTernaryInit(init: any): boolean {
+        const node: any = this.rustSkipWrappers(init);
+        if (node === undefined || !isConditionalExpression(node)) return false;
+        const t: any = this.rustSkipWrappers(node.whenTrue);
+        const f: any = this.rustSkipWrappers(node.whenFalse);
+        const isNil = (x: any): boolean => x !== undefined && this.literalKindOfNode(x) === 'null';
+        const src = (x: any): boolean => x !== undefined && isCallExpression(x) && isPropertyAccessExpression(x.expression)
+            && x.expression.expression.kind === SyntaxKind.ThisKeyword && /^safeDict2?$|^extend$|^deepExtend$|^omit$/.test(String(x.expression.name.text))
+            && this.rustBorrowedSourceKind(x) === 'dict' && this.rustOptContainerSourceOk(x, 'dict');
+        return (isNil(t) && src(f)) || (src(t) && isNil(f));
     }
 
     rustDictTernaryCall(call: any): boolean {

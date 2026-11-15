@@ -69660,6 +69660,9 @@ ${iden}}`;
     const mapTernary = from === void 0 && !nilDeclared && init !== void 0 && this.rustMapTernaryInit(init);
     if (mapTernary)
       from = "dict";
+    const optTernary = from === void 0 && !nilDeclared && init !== void 0 && this.rustOptMapTernaryInit(init);
+    if (optTernary)
+      from = "dict";
     let sbMapWrites = 0;
     if (from === void 0 && !nilDeclared)
       return void 0;
@@ -69865,7 +69868,7 @@ ${iden}}`;
     if ((keyReads > 0 || init !== void 0 && isCallExpression6(init) && this.rustRecordLookupSource(init)) && !this.rustEcdsaCall(init) && !this.rustDictKeyReadLineOk(declaration, name))
       return void 0;
     const zgRow = this.rustZgSiblingRows.has(declaration) && boxedElementUses.length > 0;
-    const optional = nilDeclared || nullTests > 0 || writes > 0 || lentNullable > 0 || optionalBoxes > 0 || zgRow || elementKeyWrites > 0;
+    const optional = nilDeclared || nullTests > 0 || writes > 0 || lentNullable > 0 || optionalBoxes > 0 || zgRow || elementKeyWrites > 0 || optTernary;
     if (jwtLends > 0 && optional)
       return void 0;
     if (aliasBoxes > 0 && (optional || reads === 0 && aliasBoxes === boxedElementUses.length))
@@ -69903,7 +69906,7 @@ ${iden}}`;
     for (const n of indexReadUses)
       this.rustBorrowedIndexReads.add(n.parent);
     if (optional) {
-      if (from === "api" || nilDeclared && writes === 0 || !nilDeclared && !((zgRow || elementKeyWrites > 0) && this.rustDictElementSource(init)) && !this.rustOptContainerSourceOk(init, from))
+      if (from === "api" || nilDeclared && writes === 0 || !nilDeclared && !((zgRow || elementKeyWrites > 0) && this.rustDictElementSource(init)) && !optTernary && !this.rustOptContainerSourceOk(init, from))
         return void 0;
       this.rustOptContainerLocals.add(declaration);
     }
@@ -71390,6 +71393,18 @@ ${iden}}`;
       return dflt !== void 0 && isObjectLiteralExpression4(dflt) && dflt.properties.length === 0 && this.rustBorrowedSourceKind(a) === "dict";
     };
     return arm(node.whenTrue) && arm(node.whenFalse);
+  }
+  /** ral-45g: `c ? undefined : <src>` / `c ? <src> : undefined` where `<src>` is a base map source the optional form takes
+   *  (`safeDict` with no / nullish / `{}` default, extend / omit): Null on one path, that map (or its Null) on the other. */
+  rustOptMapTernaryInit(init) {
+    const node = this.rustSkipWrappers(init);
+    if (node === void 0 || !isConditionalExpression4(node))
+      return false;
+    const t = this.rustSkipWrappers(node.whenTrue);
+    const f = this.rustSkipWrappers(node.whenFalse);
+    const isNil = (x) => x !== void 0 && this.literalKindOfNode(x) === "null";
+    const src = (x) => x !== void 0 && isCallExpression6(x) && isPropertyAccessExpression3(x.expression) && x.expression.expression.kind === SyntaxKind7.ThisKeyword && /^safeDict2?$|^extend$|^deepExtend$|^omit$/.test(String(x.expression.name.text)) && this.rustBorrowedSourceKind(x) === "dict" && this.rustOptContainerSourceOk(x, "dict");
+    return isNil(t) && src(f) || src(t) && isNil(f);
   }
   rustDictTernaryCall(call) {
     const callee = call.expression;

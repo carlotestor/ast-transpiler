@@ -2819,6 +2819,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-44g: `c ? a : b` where each arm is an empty map literal `{}` or a base map producer call (`safeDict` with a literal `{}`
      *  default, extend / omit): every path answers a map, so the local is a map producer. An `undefined` arm keeps Value. */
     rustMapTernaryInit(init: any): boolean;
+    /** ral-45g: `c ? undefined : <src>` / `c ? <src> : undefined` where `<src>` is a base map source the optional form takes
+     *  (`safeDict` with no / nullish / `{}` default, extend / omit): Null on one path, that map (or its Null) on the other. */
+    rustOptMapTernaryInit(init: any): boolean;
     rustDictTernaryCall(call: any): boolean;
     private rustNilResponseLocals;
     /** The container kind of a write to a borrowed local; an endpoint write to an empty `let` counts as a map. */

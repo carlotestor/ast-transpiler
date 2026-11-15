@@ -16166,8 +16166,16 @@ describe('ral-44g: a ternary whose arms are {} or a base safeDict with a {} defa
         expect(out).toContain('let mut network: crate::value::Dict = ');
         expect(out).toContain('}).into_dict();');
     });
-    test('negative: an undefined arm keeps Value', () => {
+    test('ral-45g: an undefined arm beside a nullable safeDict is the optional map (Null stays None)', () => {
         const out = mk("(code === undefined) ? undefined : this.safeDict (networks, code)");
+        expect(out).toMatch(/let mut network: Option<crate::value::Dict> = \(if .*\{ Value::Null \} else \{ self\.safe_?[dD]ict\(.*\) \}\)\.into_opt_dict\(\);/);
+    });
+    test('ral-45g: the arms swapped are the same optional map', () => {
+        const out = mk("(code !== undefined) ? this.safeDict (networks, code) : undefined");
+        expect(out).toContain('let mut network: Option<crate::value::Dict> = ');
+    });
+    test('negative: an undefined arm beside a plain element read keeps Value', () => {
+        const out = mk("(code === undefined) ? undefined : networks[code]");
         expect(out).toMatch(/let mut network: Value = /);
     });
 });
