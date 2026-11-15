@@ -886,6 +886,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  local, and the hand-written `::new(impl Into<Value>)` boxes an `i64` / `Option<i64>` into the `Value` the boxed
      *  local held (`Value::Int` / `Value::Null`), so no other local's decision reads this one's type. */
     rustScalarCacheFieldCtor(n: any, write: any): boolean;
+    /** ral-51x: an optional string boxed as a property value of a map literal handed to a `this.m(..)` call that is the one
+     *  argument of `xs.push (..)` (`result.push (this.safeMarketStructure ({ 'quote': quote }))`): the pushed source prints
+     *  `self.m(..)`, so ccxt's native-push pass reads that call's text and never this operand's box. */
+    rustPushSelfCallArgUse(n: any, push: any, kind: string | undefined): boolean;
     /** 40d: a Copy number that is a direct element of the array literal pushed whole (`rows.push ([ price, amount ])`):
      *  the element prints `Value::from(x)` (the Int / Float / Null its box held, no copy) inside `Value::from(vec![..])`,
      *  which ccxt's rustVecPushInline (build/rustTranspiler.ts) already treats as a marker-free source whatever the
