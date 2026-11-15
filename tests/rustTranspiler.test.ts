@@ -17663,6 +17663,10 @@ describe('ral-52a: an alias of a shared-map alias is decided on its own (the fir
         expect(out).toContain('let mut paramsOmitted: crate::value::Dict = Value::from(&paramsPaginate).into_dict();');
         expect(out).not.toContain('paramsOmitted.clone()');
     });
+    test('a further alias that is itself not a shared map takes the box of the Dict alias', () => {
+        const out = emit('paramsPaginate');
+        expect(out).not.toMatch(/paramsOmitted[^\\n]*= paramsPaginate\\.clone\\(\\)/);
+    });
     test('guard: an alias of a non-map initializer keeps Value', () => {
         const out = emit("(until !== undefined) ? paramsPaginate : undefined");
         expect(out).not.toContain('let mut paramsOmitted: crate::value::Dict');

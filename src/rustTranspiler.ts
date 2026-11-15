@@ -19745,9 +19745,6 @@ export class RustTranspiler extends BaseTranspiler {
             // `add_element_to_object` takes the typed list (`impl AddTarget for List`) and writes the index exactly as the boxed
             // `Value::Arr` arm did (padding with Null); the value may read `xs` (bound first, as the boxed write did)
             if (from === 'list' && !nilDeclared && this.rustListIndexLiteralWrite(n)) return ++listIndexWrites > 0 && ++reads > 0;
-            // ral-52a: a shared-map alias read whole as the initializer of a further alias in the same function (`const y: Dict = x`):
-            // the next alias shares the same Arc (`Value::from(&x)`, the bump the boxed alias paid) and is decided on its own
-            if (sbAlias && isVariableDeclaration(up) && up.initializer === n && isIdentifier(up.name) && this.rustEnclosingFunction(up) === fn) return ++reads > 0;
             const handed = () => (optAliasInit && this.rustLocalStoreHandOff(n) && !this.rustScalarInNestedWrite(n, true) && ++optionalBoxes > 0
                 || this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0
                 || this.rustBuiltReturnBoxUse(n, init, extendReuse) && ++defaultedBoxes > 0 || this.rustOptReaderBoxUse(n, init) && ++optionalBoxes > 0
@@ -19786,6 +19783,10 @@ export class RustTranspiler extends BaseTranspiler {
             if (this.rustOptAliasInitTargetUse(n, declaration, fn)) return ++lentNullable > 0 && ++reads > 0;
             // ral-40h: `const|let y = x` of a container local (phase 1): the alias takes the container whole
             if (this.rustContainerAliasInit(n, declaration)) return ++aliasBoxes > 0 && boxedElementUses.push(n) > 0;
+            // ral-52a: a shared-map alias read whole as the initializer of a further alias (`let y: Dict = x`, same function) whose own
+            // decision is still open: boxed as an alias init, printed from y's final decision (`Value::from(&x).into_dict()` when y is
+            // the shared-map alias, else the box `Value::from(&x)` / `Value::Dict(x)`)
+            if (sbAlias && isVariableDeclaration(up) && up.initializer === n && isIdentifier(up.name) && (up.parent as any)?.declarations?.length === 1 && this.rustEnclosingFunction(up) === fn) { this.rustContainerAliasInits.add(n); return ++aliasBoxes > 0 && boxedElementUses.push(n) > 0; }
             if (!isCallExpression(up) || up.arguments[0] !== n) return handed();
             // An endpoint response may be a list or a map: only string-key reads agree for both.
             const keyArgs: any[] = up.arguments.slice(1, isPropertyAccessExpression(up.expression) && /2$/.test(String(up.expression.name.text)) ? 3 : 2).map((a: any) => this.rustSkipWrappers(a));
