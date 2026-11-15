@@ -133,6 +133,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustVirtualDispatch: Record<string, string[]>;
     /** Virtual base methods whose overrides call `super.X()`: the base body prints as `X_non_virtual`. */
     rustNonVirtualShims: Set<string>;
+    /** ccxt error classes with a subclass (`errorHierarchy`): `e instanceof K` on a caught error walks the hierarchy. */
+    rustErrorClassesWithSubclasses: Set<string>;
     constructor(config?: {});
     initConfig(): void;
     quotedStringLiteral(text: string): string;
@@ -2284,6 +2286,18 @@ export declare class RustTranspiler extends BaseTranspiler {
     printReplaceCall(node: any, identation: any, name?: any, parsedArg?: any, parsedArg2?: any): string;
     printReplaceAllCall(node: any, identation: any, name?: any, parsedArg?: any, parsedArg2?: any): string;
     printThrowStatement(node: any, identation: any): string;
+    rustCaughtErrorMemo: WeakMap<object, boolean>;
+    rustCaughtErrorBinding(catchClause: any): boolean;
+    rustCaughtErrorBindingProof(catchClause: any): boolean;
+    rustCaughtErrorSink(n: any): boolean;
+    rustCaughtErrorClassName(node: any): string | undefined;
+    /** `e instanceof K` over a typed caught binding. */
+    printCaughtErrorInstanceOf(node: any): string | undefined;
+    rustPresenceFlagLocals: WeakSet<object>;
+    rustSubscriptionPresenceFlag(declaration: any, parsedValue: string): boolean;
+    /** `X === undefined` / `X !== undefined` that is the whole `if` condition (parens allowed): '==' / '!='. */
+    rustPresenceTest(n: any): string | undefined;
+    printPresenceFlagTest(left: any, right: any, op: any): string | undefined;
     rustCatchBindingIsRead(block: Node, name: string): boolean;
     printTryStatement(node: any, identation: any): string;
     printReturnStatement(node: any, identation: any): string;

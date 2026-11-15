@@ -7127,6 +7127,35 @@ describe('rust catch binding', () => {
         const out = rs("        try { this.foo (); } catch { this.bar (); }");
         expect(out).toContain('if _try_result.is_err() {');
     });
+    test('ral-44h: a binding read only as an error object is marked CaughtError and its class tests are native', () => {
+        const out = rs("        try { this.foo (); } catch (e) {\n            if (e instanceof RateLimitExceeded) { throw e; }\n            client.reject (e, 'h');\n            this.exceptionMessage (e);\n        }");
+        expect(out).toContain('if let Err(_e) = _try_result { /* CaughtError */');
+        expect(out).toContain('e.names("RateLimitExceeded")');
+        expect(out).not.toContain('is_instance(&e');
+    });
+
+    test('ral-44h: any other read of the binding keeps the Value binding', () => {
+        const out = rs("        try { this.foo (); } catch (e) {\n            if (e instanceof RateLimitExceeded) { throw e; }\n            this.bar (e);\n        }");
+        expect(out).toContain('if let Err(_e) = _try_result {\n');
+        expect(out).not.toContain('CaughtError');
+        expect(out).toContain('is_instance(&e');
+    });
+});
+
+describe('ral-44h ws subscription presence flags', () => {
+    const rs = (body: string) => transpiler.transpileRust(`class Foo {\n    f (client) {\n${body}\n    }\n}`).content;
+
+    test('a subscriptions lookup used only as if presence tests prints a bool local', () => {
+        const out = rs("        const messageHash = 'auth' + client.url;\n        const authenticated = this.safeValue (client.subscriptions, messageHash);\n        if (authenticated === undefined) { this.a (); }\n        if (authenticated !== undefined) { this.b (); }");
+        expect(out).toMatch(/let authenticated: bool = self\.safeValue\(\(?client\)?\.subscriptions[^;]*\) != Value::Null/);
+        expect(out).toContain('if (!authenticated)');
+        expect(out).toContain('if (authenticated)');
+    });
+
+    test('a lookup that is returned keeps Value', () => {
+        const out = rs("        const messageHash = 'auth' + client.url;\n        const authenticated = this.safeValue (client.subscriptions, messageHash);\n        if (authenticated !== undefined) { return authenticated; }\n        return undefined;");
+        expect(out).not.toContain('authenticated: bool');
+    });
 });
 
 describe('rust string member read off a class-typed parameter', () => {
