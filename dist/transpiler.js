@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -55761,7 +55761,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return true;
     if (isIdentifier3(node) || isConditionalExpression4(node) || this.rustScalarStrMethod(node, true) !== void 0 || this.rustScalarPreciseCall(node) || this.rustArithCombinator(node))
       return true;
-    if (this.rustStrCastCall(node) !== void 0 || this.rustClockString(node) || this.rustVenueTypedCall(node) !== void 0)
+    if (this.rustStrCastCall(node) !== void 0 || this.rustClockString(node) || this.rustIdString(node) || this.rustVenueTypedCall(node) !== void 0)
       return true;
     if (isPropertyAccessExpression3(node))
       return isIdentifier3(node.name) && node.name.text === "length" && isIdentifier3(node.expression);
@@ -55923,7 +55923,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     const numericSum = (kind === "int" || kind === "num" || kind === "oint" || kind === "onum") && this.rustSumShape(this.unwrapParens(declaration.initializer));
     const clockInit = this.unwrapParens(declaration.initializer);
-    const clockLent = kind === "str" && this.rustClockString(clockInit) && !this.rustStrNoLend && (copied > 0 ? this.rustReaderLendBoxes(declaration) : handOff) && !this.rustConcatWithNilLocal(declaration);
+    const idLent = kind === "str" && typedUses > 0 && copied > 0 && this.rustIdString(clockInit);
+    const clockLent = kind === "str" && (this.rustClockString(clockInit) || idLent) && !this.rustStrNoLend && (copied > 0 ? this.rustReaderLendBoxes(declaration) : handOff) && !this.rustConcatWithNilLocal(declaration);
     if (clockLent && copied > 0)
       this.rustStrLentLocals.add(declaration);
     if (kind === "str" && copied > 0 && this.rustRandomBytesCall(clockInit) && !this.rustStrNoLend && this.rustReaderLendBoxes(declaration))
@@ -56211,6 +56212,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (cast !== void 0)
       return this.rustScalarValueKind(cast, fresh) === "ostr" ? "ostr" : void 0;
     if (fresh && this.rustClockString(node))
+      return "str";
+    if (fresh && this.rustIdString(node) && !this.rustIntToStringShape(node))
       return "str";
     if (fresh && this.rustSbJoinShape(node))
       return "str";
@@ -56840,6 +56843,14 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   rustRandomBytesCall(node) {
     return isCallExpression6(node) && isPropertyAccessExpression3(node.expression) && node.expression.name.text === "randomBytes" && this.rustStrRuntimeCall(node);
   }
+  /** ral-46c: `n.toString()` of an `i64` scalar local, or `this.requestId().toString()` of a venue method every
+   *  declaration of which returns `int` (rustVenueIntCall, or the typed `-> i64` return rustBaseTypedReturnKind proves): the decimal text of the `i64`, as `to_string_val` prints an `Int`. */
+  rustIdString(node) {
+    if (node === void 0 || !isCallExpression6(node) || node.arguments.length !== 0 || !isPropertyAccessExpression3(node.expression) || node.expression.name.text !== "toString")
+      return false;
+    const recv = this.unwrapParens(node.expression.expression);
+    return this.rustIntToStringShape(node) || this.rustVenueIntCall(recv) || isCallExpression6(recv) && isPropertyAccessExpression3(recv.expression) && recv.expression.expression.kind === SyntaxKind7.ThisKeyword && this.rustBaseTypedReturnKind(recv) === "int";
+  }
   /** `this.milliseconds().toString()`: the decimal text of the `i64`, as `to_string_val` prints an `Int`. */
   rustClockString(node) {
     if (!isCallExpression6(node) || node.arguments.length !== 0 || !isPropertyAccessExpression3(node.expression) || node.expression.name.text !== "toString")
@@ -57467,7 +57478,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         continue;
       const trial = this.rustScalarDecisions.get(declaration);
       const form = this.rustScalarUseForms.get(n);
-      if ((trial === "str" || trial === "ostr") && (form === "box" || form === "xbox" || form === "err" || form === "key") && !this.rustScalarBoxMoves(n, form, declaration) && !(form === "key" && trial === "ostr") && !(form === "box" && this.rustElementReadScalarKind(this.unwrapParens(declaration.initializer)) !== void 0 && this.rustScalarSelfArgBox(n)) && !(form === "box" && trial === "str" && !this.rustStrNoLend && this.rustScalarSelfArgBox(n) && this.rustFormatLendLocal(declaration)) && !(form === "box" && trial === "str" && !this.rustStrNoLend && this.rustClockString(this.unwrapParens(declaration.initializer)) && this.rustLendSlot(n)) && !(form === "box" && !this.rustStrNoLend && this.rustUdReaderStr(declaration.initializer) && this.rustLendSlot(n) && this.rustUdLent.add(declaration)))
+      if ((trial === "str" || trial === "ostr") && (form === "box" || form === "xbox" || form === "err" || form === "key") && !this.rustScalarBoxMoves(n, form, declaration) && !(form === "key" && trial === "ostr") && !(form === "box" && this.rustElementReadScalarKind(this.unwrapParens(declaration.initializer)) !== void 0 && this.rustScalarSelfArgBox(n)) && !(form === "box" && trial === "str" && !this.rustStrNoLend && this.rustScalarSelfArgBox(n) && this.rustFormatLendLocal(declaration)) && !(form === "box" && trial === "str" && !this.rustStrNoLend && (this.rustClockString(this.unwrapParens(declaration.initializer)) || this.rustIdString(this.unwrapParens(declaration.initializer))) && this.rustLendSlot(n)) && !(form === "box" && !this.rustStrNoLend && this.rustUdReaderStr(declaration.initializer) && this.rustLendSlot(n) && this.rustUdLent.add(declaration)))
         return false;
       if (form === "concat" && (trial === "str" || trial === "ostr"))
         continue;
@@ -59683,7 +59694,7 @@ ${binding(plan.indent)}` : ""), head: "" };
     const text = this.printNode(node, 0).trim();
     if (this.rustClockCall(node))
       return kind === "int" || kind === "oint" ? wrap(`${text}.as_i64().unwrap_or_default()`) : void 0;
-    const clock = base === "str" && this.rustClockString(node) && isPropertyAccessExpression3(node.expression) ? node.expression.expression : void 0;
+    const clock = base === "str" && (this.rustClockString(node) || this.rustIdString(node) && !this.rustIntToStringShape(node)) && isPropertyAccessExpression3(node.expression) ? node.expression.expression : void 0;
     if (clock !== void 0 && this.rustNonceCall(this.unwrapParens(clock)))
       return wrap(`format!("{}", ${this.printNode(this.unwrapParens(clock), 0).trim()})`);
     if (clock !== void 0)

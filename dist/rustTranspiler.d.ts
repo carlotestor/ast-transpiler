@@ -733,6 +733,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustVenueReturnTypesHas(node: any, name: string): boolean;
     /** tc: `this.randomBytes(n)` resolved to the hand-written `-> String` runtime method */
     rustRandomBytesCall(node: any): boolean;
+    /** ral-46c: `n.toString()` of an `i64` scalar local, or `this.requestId().toString()` of a venue method every
+     *  declaration of which returns `int` (rustVenueIntCall, or the typed `-> i64` return rustBaseTypedReturnKind proves): the decimal text of the `i64`, as `to_string_val` prints an `Int`. */
+    rustIdString(node: any): boolean;
     /** `this.milliseconds().toString()`: the decimal text of the `i64`, as `to_string_val` prints an `Int`. */
     rustClockString(node: any): boolean;
     /** `this.nonce()` where every declaration of the name (base and each override) declares `int`: the trait slot
