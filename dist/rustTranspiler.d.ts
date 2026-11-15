@@ -2288,6 +2288,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     printReverseCall(node: any, identation: any, name?: any): string;
     printPopCall(node: any, identation: any, name?: any): string;
     printSliceCall(node: any, identation: any, name?: any, parsedArg?: any, parsedArg2?: any): string;
+    /** ral-44b: `n` is a bound (argument 0 or 1) of `recv.slice(..)` whose receiver is no typed string local (looseSlice prints
+     *  it), `n` an Int / Option<i64> local (not a ws key): the bound reads as the i64 / Option<i64> the helper's looseI64 match
+     *  would have produced from the `Int` / `Null` box (start: `None` is 0; end: `None` is the length). */
+    rust44bValueRecvSliceBound(n: any, kind: string): boolean;
+    /** ral-44b: the typed (i64 / Option<i64>) text of each slice bound that rust44bValueRecvSliceBound admitted. */
+    rust44bSliceBounds(node: any): Array<string | undefined>;
     printReplaceCall(node: any, identation: any, name?: any, parsedArg?: any, parsedArg2?: any): string;
     printReplaceAllCall(node: any, identation: any, name?: any, parsedArg?: any, parsedArg2?: any): string;
     printThrowStatement(node: any, identation: any): string;
@@ -3834,7 +3840,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     looseI64(expr: string): string;
     looseI64OrZero(expr: string): string;
     looseSliceArm(variant: string, len: string, take: string, empty: string): string;
-    looseSlice(name: string, start: string, end: string): string;
+    looseSlice(name: string, start: string, end: string, typed?: Array<string | undefined>): string;
     looseIndexOf(name: string, needle: string): string;
     looseStrCase(name: string, method: string): string;
     private rustVenueStrDecisions;
