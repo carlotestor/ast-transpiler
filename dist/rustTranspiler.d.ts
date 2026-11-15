@@ -3141,6 +3141,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustHandlerTableLocals;
     rustHandlerTableLocal(declaration: any): boolean;
     rustHandlerTableLocalUncached(declaration: any): boolean;
+    rustHandlerTableValue(expr: any, write: boolean): boolean;
+    /** The `Option<String>` text of a handler value accepted by `rustHandlerTableValue`. */
+    printHandlerTableValue(expr: any): string;
     /** `this.safeValue (table, k)` of a base-tier `safeValue` over a handler table. */
     rustHandlerTableRead(expr: any): boolean;
     private rustSubscriptionMethodFields;
