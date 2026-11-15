@@ -1557,6 +1557,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** 40d: `const n = this.safeInteger* (.., <integer literal>)`: the reader answers an `Int` on every path (parsed or the
      *  literal default), printed `i64` by the existing int reader form: an exact `i64` bound like a `parseToInt` one. */
     rustIntReaderLitDefault(declaration: any): boolean;
+    /** ral-54n: `this.safeInteger* (..)` printed as its `Value` (an `Int` or `Null` on every path). */
+    rustIntReaderCall(node: any): boolean;
     /** wi: a tuple slot whose producer builds an exact Int-or-null on every return (`checkOptionInteger`): an `i64` bound too. */
     rustTbExactIntSlot(declaration: any): boolean;
     /** ub: a `this.parseToInt(..)` call printed as its boxed `Int` / `Null` (`Value::from(self.parse_to_int(..))`). */
