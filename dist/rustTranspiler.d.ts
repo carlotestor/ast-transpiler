@@ -1275,6 +1275,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_BORROW_STR_METHODS;
     /** wg: `k.m (..)` with `m` a pure string method (reads the receiver, returns a fresh value). */
     rustBorrowStrMethodRecv(n: any): boolean;
+    /** ral-57f: `bucket` (`this.F[k]`) is the receiver of a plain two-level read `this.F[k][k2]` that is no assignment
+     *  target, update, delete or deeper chain link, in a non-test source. */
+    rustFieldBucketChainRead(bucket: any): boolean;
     /** ral-56f: `read` (`this.F[k]`) is an argument of a `this.` call that is the whole value of the statement write
      *  `this.F[k] = this.m (.., this.F[k], ..)` whose key admits the bucket reread. */
     rustFieldBucketRereadUse(wrapped: any, read: any): boolean;

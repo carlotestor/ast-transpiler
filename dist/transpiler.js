@@ -59530,6 +59530,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       return "frd";
     if (this.rustFieldBucketRereadUse(wrapped, up))
       return "frd";
+    if (this.rustFieldBucketChainRead(up))
+      return "frd";
     if (!isBinaryExpression5(write) || write.left !== up || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
       return void 0;
     if (new RegExp(`\\b${String(n.text)}\\b`).test(String(write.right.getText()))) {
@@ -60320,6 +60322,21 @@ ${binding(plan.indent)}` : ""), head: "" };
     const access = n.parent;
     const call = access?.parent;
     return isPropertyAccessExpression3(access) && access.expression === n && _RustTranspiler.RUST_BORROW_STR_METHODS.has(String(access.name.text)) && isCallExpression6(call) && call.expression === access;
+  }
+  /** ral-57f: `bucket` (`this.F[k]`) is the receiver of a plain two-level read `this.F[k][k2]` that is no assignment
+   *  target, update, delete or deeper chain link, in a non-test source. */
+  rustFieldBucketChainRead(bucket) {
+    if (this.rustTestTierSource(bucket))
+      return false;
+    const outer = bucket.parent;
+    if (!isElementAccessExpression4(outer) || outer.expression !== bucket)
+      return false;
+    const up = outer.parent;
+    if (up === void 0 || isElementAccessExpression4(up) && up.expression === outer || isPropertyAccessExpression3(up) || up.kind === SyntaxKind7.DeleteExpression || isPrefixUnaryExpression3(up) || up.kind === SyntaxKind7.PostfixUnaryExpression)
+      return false;
+    if (isBinaryExpression5(up) && up.left === outer && rustIsAssignmentOperator(up.operatorToken.kind))
+      return false;
+    return this.isNativeAccessPositionSafe(outer) && !this.isNativeWriteTargetBase(outer) && !this.isNativeWriteTargetBase(bucket);
   }
   /** ral-56f: `read` (`this.F[k]`) is an argument of a `this.` call that is the whole value of the statement write
    *  `this.F[k] = this.m (.., this.F[k], ..)` whose key admits the bucket reread. */
@@ -67066,6 +67083,9 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
         return void 0;
       return this.printNativeListIndex(receiverText, index, receiverNode);
     }
+    const fieldKeyRead = isElementAccessExpression4(keyNode.parent) && keyNode.parent.argumentExpression === keyNode ? this.printFieldKeyRead(keyNode.parent) : void 0;
+    if (fieldKeyRead !== void 0)
+      return fieldKeyRead;
     const dictRead = this.rustBearerDictDynamicRead(receiverText, receiverNode, keyNode) ?? this.printNativeDynamicMapAccess(receiverText, receiverNode, keyNode) ?? this.printNativeThisFieldDynamicMapAccess(receiverText, receiverNode, keyNode) ?? this.rustDynamicRead(receiverText, receiverNode, keyNode) ?? this.rustFieldDynamicRead(receiverText, receiverNode, keyNode) ?? this.rustLocalDictRead(receiverText, receiverNode, keyNode);
     if (dictRead !== void 0)
       return dictRead;
