@@ -17423,3 +17423,29 @@ describe('ral-51k: a parseToInt local as the divisor of an int-literal remainder
         expect(out).toContain('mod_val(&Value::Int(1000), &leverage)');
     });
 });
+
+describe('ral-51k: ternary initializers whose two arms share a kind', () => {
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export type Str = string | undefined;\nexport type Strings = string[] | undefined;\nexport default class Exchange {\n    safeString2 (o: any, k: any, k2: any): Str { return o; }\n    safeInteger (o: any, k: any): number | undefined { return o; }\n    isEmpty (o: any): boolean { return true; }\n    hold (x: any): any { return x; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Str, Strings } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    walletAddressOrUndefined (): Str {\n        return undefined;\n    }\n" + body + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('myriad: `p !== undefined ? p : this.<venue Str method> ()` is an Option<String>', () => {
+        const out = write ('51k-venuestr', "    a (params: any) {\n        const traderParam = this.safeString2 (params, 'trader', 'address');\n        const trader = (traderParam !== undefined) ? traderParam : this.walletAddressOrUndefined ();\n        if (trader === undefined) {\n            return undefined;\n        }\n        return this.hold (trader);\n    }\n");
+        expect(out).toContain('let mut trader: Option<String> = (if (traderParam.is_some()) { traderParam.clone() } else { self.walletAddressOrUndefined() });');
+    });
+    test('poloniex: `symbols === undefined ? \'\' : symbols.join (\',\')` is a String', () => {
+        const out = write ('51k-join', "    b (messageHash: string, symbols: Strings = undefined) {\n        const symbolsSuffix = (symbols === undefined) ? '' : symbols.join (',');\n        let symbolsHash: Str = undefined;\n        if (this.isEmpty (symbols)) {\n            symbolsHash = messageHash;\n        } else {\n            symbolsHash = messageHash + '::' + symbolsSuffix;\n        }\n        return this.hold (symbolsHash);\n    }\n");
+        expect(out).toMatch(/let mut symbolsSuffix: String = \(if \(symbols == Value::Null\) \{ "".to_string\(\) \} else \{ /);
+    });
+    test('bybit: `p === undefined ? n : p` over an Option<i64> local and an i64 local is `p.unwrap_or(n)`', () => {
+        const out = write ('51k-oint', "    c (params: any) {\n        const limitParam = this.safeInteger (params, 'limit');\n        let defaultLimit = 500;\n        if (limitParam === undefined) {\n            defaultLimit = 50;\n        }\n        const limit = (limitParam === undefined) ? defaultLimit : limitParam;\n        let channel = 'orderbook.';\n        channel += limit.toString ();\n        return this.hold (channel);\n    }\n");
+        expect(out).toContain('let mut limit: i64 = limitParam.unwrap_or(defaultLimit);');
+    });
+    test('negative: arms of different kinds stay Value', () => {
+        const out = write ('51k-mixed', "    d (params: any) {\n        const a = this.safeString2 (params, 'a', 'b');\n        const x = (a !== undefined) ? a : params['n'];\n        return this.hold ('p' + x);\n    }\n");
+        expect(out).toMatch(/let mut x: Value = /);
+    });
+});

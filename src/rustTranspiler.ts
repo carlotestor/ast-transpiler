@@ -5134,6 +5134,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (this.rustParseNumberStrCall(node)) return 'onum';
         if (this.rustVenueParseToInt(node)) return 'int';
         if ((this.rustVenueInitializer(node) || this.rustNilVenueWrite(node)) && this.rustVenueStrCall(node)) return 'ostr';
+        // 51k: a venue `Str` method as an arm of a ternary initializer (`p !== undefined ? p : this.walletAddressOrUndefined ()`)
+        if (fresh && this.rustTernaryArm(node) && this.rustVenueStrCall(node)) return 'ostr';
         if (fresh && this.rustVenueInitializer(node) && this.rustVenueIntCall(node)) return 'int';
         if (fresh && this.rustVenueInitializer(node) && this.rustVenueTypedCall(node) !== undefined) return this.rustVenueTypedCall(node);
         // ral-41a: the whole right side of a write into a nil-declared local, from a venue `Num` parse helper (`Float` or `Null`)
@@ -7077,7 +7079,21 @@ export class RustTranspiler extends BaseTranspiler {
         const recv: any = this.unwrapParens(node.expression.expression);
         if (!isIdentifier(recv)) return false;
         const decl: any = node.parent;
+        // 51k: also an arm of a ternary initializer whose other arm is a string (`symbols === undefined ? '' : symbols.join (',')`)
+        if (this.rustTernaryArm(node) && this.rust51kStrTernaryJoin(node)) return true;
         return decl !== undefined && isVariableDeclaration(decl) && decl.initializer === node && isIdentifier(decl.name);
+    }
+
+    /** 51k: the join is one arm of a ternary initializer of a plain identifier whose other arm is a string literal. */
+    rust51kStrTernaryJoin(node: any): boolean {
+        let child: any = node;
+        let up: any = node.parent;
+        while (up !== undefined && isParenthesizedExpression(up)) { child = up; up = up.parent; }
+        if (up === undefined || !isConditionalExpression(up)) return false;
+        const other: any = this.unwrapParens(up.whenTrue === child ? up.whenFalse : up.whenTrue);
+        let top: any = up;
+        while (isParenthesizedExpression(top.parent)) top = top.parent;
+        return isVariableDeclaration(top.parent) && isIdentifier(top.parent.name) && this.literalKindOfNode(other) === 'string' && !(other.text in this.StringLiteralReplacements);
     }
 
     /** The `String` inside the printed join, printed at emission only (a print inside a decision perturbs other locals);
@@ -9366,7 +9382,10 @@ export class RustTranspiler extends BaseTranspiler {
         const positive = cond.operatorToken.kind === SyntaxKind.ExclamationEqualsToken || cond.operatorToken.kind === SyntaxKind.ExclamationEqualsEqualsToken;
         const [ present, fallback ]: any[] = positive ? [ node.whenTrue, node.whenFalse ] : [ node.whenFalse, node.whenTrue ];
         const param: any = this.unwrapParens(tested);
-        const own = this.rustOptParamKind(param);
+        const ownParam = this.rustOptParamKind(param);
+        // 51k: an `Option<i64>` / `Option<f64>` LOCAL (`limitParam = this.safeInteger (..)`) defaulted by an int literal / int local: `x.unwrap_or(D)`
+        const ownLocal = ownParam === undefined && isIdentifier(param) ? this.rustScalarLocalOf(param)?.kind : undefined;
+        const own = ownParam ?? (ownLocal === 'oint' || ownLocal === 'onum' ? ownLocal : undefined);
         const kind = own === 'oint' || own === 'onum' ? own : undefined;
         const d: any = this.unwrapParens(fallback);
         // `p === undefined ? D : Math.min (p, M)` with literal D <= M (`max`: D >= M) is `min (p ?? D, M)` exactly
@@ -9377,6 +9396,7 @@ export class RustTranspiler extends BaseTranspiler {
         const dk = this.rustScalarIntLiteral(d) !== undefined ? 'int' : (this.rustScalarFloatLiteral(d) !== undefined ? 'num' : (isIdentifier(d) ? this.rustScalarLocalOf(d)?.kind : undefined));
         const base = kind.slice(1);
         if (dk !== base && !(base === 'num' && dk === 'int')) return undefined;
+        if (ownParam === undefined) return { kind: base, text: `${super.printIdentifier(param)}.unwrap_or(${this.rustScalarOperandText(base, d)})` };
         return { kind: base, text: `${super.printIdentifier(param)}.${kind === 'oint' ? 'as_i64' : 'as_f64'}().unwrap_or(${this.rustScalarOperandText(base, d)})` };
     }
 
