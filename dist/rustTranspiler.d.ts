@@ -2841,6 +2841,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** The `Value` hand-off: the map moved at the last use, else the Arc bump; `None` is `Value::Null`. */
     printNilMapBox(node: any, text: string): string | undefined;
     private rustMutableBuiltLocals;
+    /** ral-48b: statement writes `x['k'] = v` printed as `add_element_to_object(&mut x, ..)` on a typed map local. */
+    private rustAeoWrites;
+    /** ral-48b: the boxed local's write is already a native insert (asked while the local's kind is pending, i.e. the
+     *  untyped view): that write is not a helper row, and its source proof is the native-insert rule's, not this one. */
+    rustAeoBoxedNative(n: any): boolean;
+    /** ral-48b: `n['k'] = v` (statement, literal non-digit key) whose value does not read `n`. */
+    rustAeoTargetWrite(n: any): boolean;
     /** The source statement of a box (`Value::Dict(x)`, +13 chars) leaves the printed line within 400 chars. */
     rustBoxLineOk(n: any): boolean;
     /** The copy-on-write insert line (indent + `Arc::make_mut(&mut x).insert(..)`) stays within the 400-char budget. */
