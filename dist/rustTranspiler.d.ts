@@ -3682,6 +3682,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustWsSubscriptionWriteValue(n: any): boolean;
     private rustBuiltLists;
     rustBuiltListLocal(declaration: any): boolean;
+    /** ral-56s: a base `this.arrayConcat (a, b)` (two operands, non-test tier): always a `Value::Arr`. */
+    rustBuiltListConcatInit(init: any): boolean;
+    /** ral-56s: `t = x` (statement) where `t` is a nil-declared (`let t: T = undefined` / `let t;`) local of the same function
+     *  that no rule types (it prints `Value`), so the write takes the boxed list. */
+    rustBuiltListValueAliasWrite(n: any, declaration: any): boolean;
     /** ral-tf: no later statement of the function pushes to or writes the list, and the use is in no loop or closure. */
     rustBuiltListFrozenAfter(node: any, declaration: any, name: string): boolean;
     /** `this.inArray (needle, x)` (haystack), `this.arrayConcat (a, b)` (either operand) on the base helpers, or the row of a

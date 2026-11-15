@@ -75053,6 +75053,8 @@ ${iden}}`;
       return this.rustBuiltListLocal(declaration);
     if (this.rustDefaultedListRead(init) && isIdentifier3(declaration.name) && this.rustLocalIsReassigned(declaration, String(declaration.name.text)))
       return this.rustBuiltListLocal(declaration);
+    if (this.rustBuiltListConcatInit(init) && isIdentifier3(declaration.name) && this.rustLocalIsReassigned(declaration, String(declaration.name.text)))
+      return this.rustBuiltListLocal(declaration);
     if (!this.rustLentListSource(init))
       return false;
     const defaulted = this.rustDefaultedListRead(init);
@@ -78000,7 +78002,7 @@ ${iden}}`;
     if (/[\\/]test[\\/]/.test(String(declaration.getSourceFile?.()?.fileName ?? "")))
       return false;
     const init = declaration.initializer;
-    const read = init !== void 0 && this.rustDefaultedListRead(this.rustSkipWrappers(init));
+    const read = init !== void 0 && (this.rustDefaultedListRead(this.rustSkipWrappers(init)) || this.rustBuiltListConcatInit(this.rustSkipWrappers(init)));
     if (init === void 0 || !read && (!isArrayLiteralExpression4(init) || init.elements.some((e) => e.kind === SyntaxKind7.SpreadElement)))
       return false;
     const type = this.typeOfNodeIfAny(read ? init : declaration.name);
@@ -78113,6 +78115,11 @@ ${iden}}`;
           handOffs++;
           return true;
         }
+        if (this.rustBuiltListValueAliasWrite(n, declaration) && short(n)) {
+          boxes.push([n, "clone"]);
+          handOffs++;
+          return true;
+        }
         if (isCallExpression6(up) && up.expression !== n && up.arguments.some((a) => a === n)) {
           const callee = up.expression;
           if (!isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword || !short(n) || _RustTranspiler.MUT_SELF_METHODS.has(this.toSnakeCaseName(String(callee.name.text))) || !this.rustNilBoxSlotOk(up, Array.from(up.arguments).indexOf(n)))
@@ -78135,6 +78142,33 @@ ${iden}}`;
     for (const [n, form] of boxes)
       this.rustLentListBoxes.set(n, form);
     this.rustBuiltLists.add(declaration);
+    return true;
+  }
+  /** ral-56s: a base `this.arrayConcat (a, b)` (two operands, non-test tier): always a `Value::Arr`. */
+  rustBuiltListConcatInit(init) {
+    if (init === void 0 || !isCallExpression6(init) || init.arguments.length !== 2 || !isPropertyAccessExpression3(init.expression) || init.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(init.expression.name.text) !== "arrayConcat")
+      return false;
+    return this.rustAlwaysListProducer(init);
+  }
+  /** ral-56s: `t = x` (statement) where `t` is a nil-declared (`let t: T = undefined` / `let t;`) local of the same function
+   *  that no rule types (it prints `Value`), so the write takes the boxed list. */
+  rustBuiltListValueAliasWrite(n, declaration) {
+    const up = n.parent;
+    if (!isBinaryExpression5(up) || up.right !== n || up.operatorToken.kind !== SyntaxKind7.EqualsToken || up.parent?.kind !== SyntaxKind7.ExpressionStatement || !isIdentifier3(up.left))
+      return false;
+    const t = this.rustDeclarationOfIdentifier(up.left);
+    if (t === void 0 || t === declaration || !isVariableDeclaration3(t) || t.name === up.left || !isIdentifier3(t.name))
+      return false;
+    if (this.rustEnclosingFunction(t) !== this.rustEnclosingFunction(declaration))
+      return false;
+    const list = t.parent;
+    if (list?.kind !== SyntaxKind7.VariableDeclarationList || list.declarations?.length !== 1 || (list.flags & NodeFlags4.Const) !== 0)
+      return false;
+    const init = t.initializer === void 0 ? void 0 : this.rustSkipWrappers(t.initializer);
+    if (init !== void 0 && !(isIdentifier3(init) && init.text === "undefined") && init.kind !== SyntaxKind7.NullKeyword)
+      return false;
+    if (this.rustBorrowedPending.has(t) || this.rustBorrowedLocalKind(t) !== void 0 || this.rustNilLocalKind(t) !== void 0 || this.rustScalarLocalKind(t) !== void 0 || this.rustLentListLocal(t) || this.rustVecLocalIsTyped(t) || this.rustDictLocalIsTyped(t) || this.rustReadBearerKindOfDeclaration(t) !== false)
+      return false;
     return true;
   }
   /** ral-tf: no later statement of the function pushes to or writes the list, and the use is in no loop or closure. */
