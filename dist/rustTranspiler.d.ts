@@ -2325,6 +2325,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** The `__destr_tmp` line keeps the 400-char budget with the slot unwrap and the lent self default (`Value::from(&x)`). */
     private rustStrSlotLineMemo;
     rustStrSlotLineFits(write: any): boolean;
+    /** ral-51f: the short head of a string slot write: every slot typed, or slot 0 typed with the boxed rest outside the test tier. */
+    rustStrSlotShortHeadSlots(write: any, typedSlots: (string | undefined)[], head: string): boolean;
     /** ral-50f: the typed destructure line of a string slot write would newly cross 400 chars: the short head keeps it under. */
     rustStrSlotShortHead(write: any, printed: string): boolean;
     /** Some write of the initialised local is a string tuple slot (`rustStrSlotWrite`). */
