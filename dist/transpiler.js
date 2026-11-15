@@ -58833,6 +58833,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (!isElementAccessExpression4(parent) || parent.argumentExpression !== n)
       return false;
     const access = this.rustClientHandleAccess(parent.expression);
+    const up = parent.parent;
+    if (isBinaryExpression5(up) && up.left === parent && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement)
+      return access?.key === "subscriptions" && access.write;
     if (isDeleteExpression2(parent.parent))
       return access?.key === "subscriptions" && parent.parent.parent?.kind === SyntaxKind7.ExpressionStatement;
     return !this.isNativeWriteTargetBase(parent) && access !== void 0 && !access.write && _RustTranspiler.RUST_CLIENT_HANDLE_NAMES[access.key] !== void 0;
@@ -59124,7 +59127,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     const value = this.printNode(right, 0).trim();
     const moved = /^[A-Za-z_][A-Za-z0-9_]*$/.test(value) && value !== "self" && value !== "true" && value !== "false" ? `${value}.clone()` : value;
-    return `${this.rustClientHandleReceiver(access.plan, false)}.add_subscription(&${this.printNode(left.argumentExpression, 0).trim()}, ${moved})`;
+    const key = this.rustWsStrKey(left.argumentExpression) ? this.rustWsKeyText(left.argumentExpression) : `&${this.printNode(left.argumentExpression, 0).trim()}`;
+    return `${this.rustClientHandleReceiver(access.plan, false)}.add_subscription(${key}, ${moved})`;
   }
   /** A bare use of a local declared as the handle hands the `Value` handle on. */
   printClientHandleUse(node) {
