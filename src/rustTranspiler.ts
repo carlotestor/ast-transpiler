@@ -8269,6 +8269,9 @@ export class RustTranspiler extends BaseTranspiler {
         const recvKind = this.rustScalarIdentifierKind(recv) ?? (params ? this.rustScalarParamRead(recv)?.kind : undefined);
         // `n.toString()` of an `i64` local: `format!("{}", n)`, the decimal text `Display` gives the `Int` box
         if (recvKind === 'int' && method === 'toString') return { recv, recvKind, method, kind: 'str' };
+        // ral-43b: `n.toString()` of an `Option<i64>` local displays its box (`format!("{}", Value::from(n))`: the Display the
+        // `Value` local printed, `Int` or `Null` alike), so the receiver is a plain read of the Copy integer
+        if (recvKind === 'oint' && method === 'toString' && this.rustScalarLocalOf(recv) !== undefined) return { recv, recvKind, method, kind: 'str' };
         if (recvKind !== 'str' && recvKind !== 'ostr') return undefined;
         if (shape === 'affix') return { recv, recvKind, method, kind: 'bool' };
         // 41b: the new forms read a typed string local receiver only (a parameter read keeps the old paths)
@@ -9353,6 +9356,7 @@ export class RustTranspiler extends BaseTranspiler {
             if (method.recvKind === 'ostr') return wrap(`${name}.as_deref().map(str::${fn})`);
             if (method.method === 'trim') return wrap(`${name}.trim().to_string()`);
             if (method.method === 'toString' && method.recvKind === 'int') return wrap(`format!("{}", ${name})`);
+            if (method.method === 'toString' && method.recvKind === 'oint') return wrap(`format!("{}", Value::from(${name}))`);
             if (method.method === 'toString') {
                 const local = this.rustScalarLocalOf(method.recv);
                 // an equality operand is only borrowed by `==`: the text itself, no copy

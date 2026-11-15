@@ -15652,3 +15652,28 @@ describe('ral-43b lift 1: a string concat operand in a sibling-twin block keeps 
         expect(out).toContain('let mut symbol: Value');
     });
 });
+
+describe('ral-43b lift 2: `n.toString()` of an Option<i64> local displays its box', () => {
+    const t43 = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+    const root = path.join (rustFixtureRoot, '43b-oint-tostring');
+    const base = "export interface Dict { [key: string]: any }\nexport default class Exchange {\n" +
+        "    safeInteger (o: any, k: any, d: any = undefined): number | undefined { return o; }\n    hold (x: any): any { return x; }\n}\n";
+    const venue = (body: string) => "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n";
+    let n = 0;
+    const run = (body: string) => {
+        const dir = path.join (root, String (n++));
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), venue (body));
+        return t43.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('a safeInteger local read by toString() keeps Option<i64> and prints format! of Value::from (Int or Null, the Display the Value had)', () => {
+        const out = run ("    m (o: Dict) {\n        let method = 'sub';\n        const limit = this.safeInteger (o, 'limit');\n        if (limit !== undefined) {\n            method = method + 'Depth' + limit.toString ();\n        }\n        return this.hold (method);\n    }\n");
+        expect(out).toContain('let mut limit: Option<i64> = ');
+        expect(out).toContain('format!("{}", Value::from(limit))');
+    });
+    test('negative: an Option<i64> toString() with an argument (radix) is not taken', () => {
+        const out = run ("    m (o: Dict) {\n        const limit = this.safeInteger (o, 'limit');\n        return this.hold (limit.toString (16));\n    }\n");
+        expect(out).not.toContain('format!("{}", Value::from(limit))');
+    });
+});

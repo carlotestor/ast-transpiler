@@ -59660,6 +59660,8 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
     const recvKind = _nullishCoalesce(this.rustScalarIdentifierKind(recv), () => ( (params ? _optionalChain([this, 'access', _9035 => _9035.rustScalarParamRead, 'call', _9036 => _9036(recv), 'optionalAccess', _9037 => _9037.kind]) : void 0)));
     if (recvKind === "int" && method === "toString")
       return { recv, recvKind, method, kind: "str" };
+    if (recvKind === "oint" && method === "toString" && this.rustScalarLocalOf(recv) !== void 0)
+      return { recv, recvKind, method, kind: "str" };
     if (recvKind !== "str" && recvKind !== "ostr")
       return void 0;
     if (shape === "affix")
@@ -60849,6 +60851,8 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
         return wrap(`${name}.trim().to_string()`);
       if (method.method === "toString" && method.recvKind === "int")
         return wrap(`format!("{}", ${name})`);
+      if (method.method === "toString" && method.recvKind === "oint")
+        return wrap(`format!("{}", Value::from(${name}))`);
       if (method.method === "toString") {
         const local = this.rustScalarLocalOf(method.recv);
         let up = node.parent;
