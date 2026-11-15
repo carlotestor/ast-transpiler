@@ -15334,3 +15334,22 @@ describe('ral-41f: the nested-write veto is lifted per class (non-safe* producer
         expect(out).toContain('let mut s: Value = ');
     });
 });
+
+describe('ral-42f: a bool-literal-only local reads natively in a printer bool slot (rustNativeBoolEquals moved into the printer)', () => {
+    test('negative: a literal-only local is left to ccxt narrowBoolLocals (is_true read kept)', () => {
+        const out = transpiler.transpileRust("class X {\n    f (m: any, a: boolean) {\n        let stock = false;\n        if ('t' in m) {\n            stock = true;\n        }\n        const omit = (stock) || (a && (m['x'] !== true));\n        if (omit) {\n            return 1;\n        }\n        return 2;\n    }\n}").content;
+        expect(out).toContain('is_true(&(stock))');
+    });
+    test('slot 0 of handleOptionBoolAndParams (Bool or undefined) keeps the box Bool / Null: the read in a bool local is native', () => {
+        const out = transpiler.transpileRust("class X {\n    handleOptionBoolAndParams (params: any, m: string, o: string, d: boolean = undefined): [boolean, any] { return [ d, params ]; }\n    f (params: any, market: any, s: boolean) {\n        let fees = false;\n        [ fees, params ] = this.handleOptionBoolAndParams (params, 'fetchOrders', 'fees', false);\n        if (market !== undefined) {\n            fees = false;\n            if ('t' in market) {\n                fees = true;\n            }\n        }\n        const both = (fees) || s;\n        if (both) {\n            return params;\n        }\n        return market;\n    }\n}").content;
+        expect(out).toContain('fees.as_bool() == Some(true) ||');
+    });
+    test('`x = x && y;` over a bool-literal-only local is boxed by the printer with the native read', () => {
+        const out = transpiler.transpileRust("class X {\n    handleOptionBoolAndParams (params: any, m: string, o: string, d: boolean = undefined): [boolean, any] { return [ d, params ]; }\n    f (params: any, s: boolean) {\n        let fees = undefined;\n        let rest = undefined;\n        [ fees, rest ] = this.handleOptionBoolAndParams (params, 'fetchMarkets', 'fees', true);\n        fees = fees && s;\n        return [ fees, rest ];\n    }\n}").content;
+        expect(out).toContain('fees = Value::Bool(fees.as_bool() == Some(true) && ');
+    });
+    test('negative: a local also written from a call keeps the helper', () => {
+        const out = transpiler.transpileRust("class X {\n    g (m: any): boolean { return true; }\n    f (m: any, a: boolean) {\n        let stock = false;\n        if ('t' in m) {\n            stock = this.g (m);\n        }\n        const omit = (stock) || (a && (m['x'] !== true));\n        if (omit) {\n            return 1;\n        }\n        return 2;\n    }\n}").content;
+        expect(out).not.toContain('stock.as_bool() == Some(true) ||');
+    });
+});

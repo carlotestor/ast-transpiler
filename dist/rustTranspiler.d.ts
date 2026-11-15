@@ -209,6 +209,15 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** Same native truthiness for a bare `Value`-boxed identifier of boolean type. Prints the bool-tuple
      *  truthiness text (`x.as_bool() == Some(true)`) so the typed-locals pass keeps rewriting it byte-identically. */
     printNativeIdentifierTruthiness(node: any): string | undefined;
+    /** ral-42f: a local whose box only ever holds a `Value::Bool` or `Null`: declared with `true` / `false` / `undefined`, written
+     *  at least once as slot 0 of `[x, p] = this.handleOptionBoolAndParams(2)(..)` (`checkOptionBool`: Bool or undefined), every
+     *  other write one of those literals or a `&&` / `||` (printed `Value::Bool(..)`).
+     *  In a printer bool slot (`let x: bool = ..` / `Value::Bool(..)`) `x.as_bool() == Some(true)` answers what `is_true(&x)` did
+     *  for both (the ccxt rustNativeBoolEquals pass printed the same text after the fact). */
+    rustBoolLiteralOnlyLocal(node: any): boolean;
+    /** ral-42f: `x = a && b;` (statement) whose `&&` / `||` has a bool-literal-only local operand: the printer boxes the logical
+     *  itself (`x = Value::Bool(..)`, the box the ccxt bool-assignment regex added keyed on the leading `is_true`). */
+    rustBoolLiteralLogicalStore(node: any): boolean;
     literalKindOfNode(node: any): string;
     printsValueExpression(node: any): boolean;
     callExpressionName(node: any): string;

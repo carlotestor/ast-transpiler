@@ -52322,15 +52322,79 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   /** Same native truthiness for a bare `Value`-boxed identifier of boolean type. Prints the bool-tuple
    *  truthiness text (`x.as_bool() == Some(true)`) so the typed-locals pass keeps rewriting it byte-identically. */
   printNativeIdentifierTruthiness(node) {
-    if (!this.isBooleanValueIdentifier(node) || !this.printsValueExpression(node) || !this.isBooleanOrUndefinedType(this.typeOfNodeIfAny(node)) || !this.isBareBoolEmissionSafe(node)) {
+    if (!this.isBooleanValueIdentifier(node) || !this.printsValueExpression(node) || !this.isBooleanOrUndefinedType(this.typeOfNodeIfAny(node)))
       return void 0;
+    if (!this.isBareBoolEmissionSafe(node)) {
+      if (!this.rustBoolLiteralOnlyLocal(node) || !(this.rustConditionBoolSlot(node) || this.rustBoolLiteralLogicalStore(this.rustClimbLogicalWrappers(node))))
+        return void 0;
     }
-    const text = `${this.printNode(node, 0)}.as_bool() == Some(true)`;
+    const text = `${this.isBareBoolEmissionSafe(node) ? this.printNode(node, 0) : this.printNode(this.unwrapParens(node), 0).trim()}.as_bool() == Some(true)`;
     let current = node;
     while (current.parent !== void 0 && isParenthesizedExpression3(current.parent))
       current = current.parent;
     const negated = current.parent?.kind === SyntaxKind7.PrefixUnaryExpression && current.parent.operator === SyntaxKind7.ExclamationToken;
     return negated ? `(${text})` : text;
+  }
+  /** ral-42f: a local whose box only ever holds a `Value::Bool` or `Null`: declared with `true` / `false` / `undefined`, written
+   *  at least once as slot 0 of `[x, p] = this.handleOptionBoolAndParams(2)(..)` (`checkOptionBool`: Bool or undefined), every
+   *  other write one of those literals or a `&&` / `||` (printed `Value::Bool(..)`).
+   *  In a printer bool slot (`let x: bool = ..` / `Value::Bool(..)`) `x.as_bool() == Some(true)` answers what `is_true(&x)` did
+   *  for both (the ccxt rustNativeBoolEquals pass printed the same text after the fact). */
+  rustBoolLiteralOnlyLocal(node) {
+    const inner = this.unwrapParens(node);
+    const declaration = inner !== void 0 && isIdentifier3(inner) ? this.rustDeclaredNode(inner) : void 0;
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name))
+      return false;
+    const isBoolLiteral = (e) => {
+      const x = this.unwrapParens(e);
+      return x?.kind === SyntaxKind7.TrueKeyword || x?.kind === SyntaxKind7.FalseKeyword || this.literalKindOfNode(x) === "null";
+    };
+    if (declaration.initializer === void 0 || !isBoolLiteral(declaration.initializer))
+      return false;
+    const isBoolWrite = (e) => {
+      const x = this.unwrapParens(e);
+      return isBoolLiteral(x) || isBinaryExpression5(x) && this.isLogicalOp(x.operatorToken.kind);
+    };
+    const boolSlotZero = (lit, r) => {
+      const call = this.unwrapParens(lit.parent.right);
+      return lit.elements[0] === r && isCallExpression6(call) && isPropertyAccessExpression3(call.expression) && call.expression.expression.kind === SyntaxKind7.ThisKeyword && /^handleOptionBoolAndParams2?$/.test(String(call.expression.name.text));
+    };
+    const scope = findAncestor(declaration, isFunctionLike);
+    if (scope === void 0)
+      return false;
+    let slotWrite = false;
+    for (const r of this.rustScopeNameNodes(scope, String(declaration.name.text))) {
+      if (!isIdentifier3(r) || r === declaration.name || this.rustDeclarationOfIdentifier(r) !== declaration)
+        continue;
+      const p = r.parent;
+      if (isArrayLiteralExpression4(p) && isBinaryExpression5(p.parent) && p.parent.left === p && boolSlotZero(p, r))
+        slotWrite = true;
+      if (isBinaryExpression5(p) && p.left === r && rustIsAssignmentOperator(p.operatorToken.kind) && (p.operatorToken.kind !== SyntaxKind7.EqualsToken || !isBoolWrite(p.right)))
+        return false;
+      if ((isPrefixUnaryExpression3(p) || p?.kind === SyntaxKind7.PostfixUnaryExpression) && p.operand === r && p.operator !== SyntaxKind7.ExclamationToken)
+        return false;
+      if (isArrayLiteralExpression4(p) && isBinaryExpression5(p.parent) && p.parent.left === p && !boolSlotZero(p, r))
+        return false;
+    }
+    return slotWrite;
+  }
+  /** ral-42f: `x = a && b;` (statement) whose `&&` / `||` has a bool-literal-only local operand: the printer boxes the logical
+   *  itself (`x = Value::Bool(..)`, the box the ccxt bool-assignment regex added keyed on the leading `is_true`). */
+  rustBoolLiteralLogicalStore(node) {
+    const inner = this.unwrapParens(node);
+    if (inner === void 0 || !isBinaryExpression5(inner) || !this.isLogicalOp(inner.operatorToken.kind))
+      return false;
+    let top = inner;
+    while (isParenthesizedExpression3(top.parent))
+      top = top.parent;
+    const store = top.parent;
+    if (store === void 0 || !isBinaryExpression5(store) || store.right !== top || store.operatorToken.kind !== SyntaxKind7.EqualsToken || !isIdentifier3(store.left) || store.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const operand = (e) => {
+      const x = this.unwrapParens(e);
+      return isIdentifier3(x) && this.rustBoolLiteralOnlyLocal(x);
+    };
+    return operand(inner.left) || operand(inner.right);
   }
   // Kind of a literal operand whose printed Value variant is exactly known.
   literalKindOfNode(node) {
@@ -53555,7 +53619,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const boolLogical = this.isBooleanPosition(node) ? void 0 : this.rustScalarBoolLogicalText(node);
     if (boolLogical !== void 0)
       return `Value::Bool(${boolLogical})`;
-    if ((op === SyntaxKind7.AmpersandAmpersandToken || op === SyntaxKind7.BarBarToken) && (this.hasNativeComparisonOperand(left) || this.hasNativeComparisonOperand(right))) {
+    if ((op === SyntaxKind7.AmpersandAmpersandToken || op === SyntaxKind7.BarBarToken) && (this.hasNativeComparisonOperand(left) || this.hasNativeComparisonOperand(right) || this.rustBoolLiteralLogicalStore(node))) {
       return `Value::Bool(${this.printLogicalInBooleanContext(node)})`;
     }
     if (op in this.binaryExpressionsWrappers) {
