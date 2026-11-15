@@ -17322,6 +17322,11 @@ describe('ral-50e: a number local keying base safeDict passes unboxed (generated
         expect(out.base).toContain('key: impl Into<crate::Value>');
         expect(out.base).toContain('let mut key: Value = key.into();');
     });
+    test('bybit lastIndex: the same int local also keys the write-back `rows[lastIndex] = last`', () => {
+        const out = run(body.replace('return this.hold (last);', 'rows[lastIndex] = last;\n        return this.hold (rows);'));
+        expect(out.venue).toMatch(/let mut lastIndex: i64 = /);
+        expect(out.venue).toContain('add_element_to_object(&mut rows, &Value::from(lastIndex), ');
+    });
     test('guard: a string key local is untouched by the int rule', () => {
         const out = run(body.replace('const lastIndex = length - 1;', "const lastIndex = 'k' + length.toString ();"));
         expect(out.venue).not.toMatch(/let mut lastIndex: i64/);

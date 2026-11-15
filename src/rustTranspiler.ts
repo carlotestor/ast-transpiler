@@ -4716,7 +4716,8 @@ export class RustTranspiler extends BaseTranspiler {
         // an all-`i64` base `sum` is an `Int` whatever its `any` checker type says; zb: likewise an `Option<i64>` / `f64` /
         // `Option<f64>` combinator (`sum` / `Math.min|max`) whose kind its proven operands give (`any` is only its TS type)
         const combinatorKind = this.rustArithCombinator(this.unwrapParens(declaration.initializer)) ? this.rustArithCallKind(declaration.initializer) : undefined;
-        if (checked !== expected && !boolTested && !(kind === 'ostr' && this.rustAnyStrPushElem(this.unwrapParens(declaration.initializer)) && this.rustAnyStrPlaceRead(declaration)) && !(combinatorKind !== undefined && combinatorKind === kind && (kind === 'int' || checked === undefined))) return undefined;
+        if (checked !== expected && !boolTested && !(kind === 'ostr' && this.rustAnyStrPushElem(this.unwrapParens(declaration.initializer)) && this.rustAnyStrPlaceRead(declaration)) && !(combinatorKind !== undefined && combinatorKind === kind && (kind === 'int' || checked === undefined))
+            && !(kind === 'int' && checked === undefined && this.rustSafeDictKeyOnlyLocal(declaration))) return undefined;
         const seeded = kind;
         kind = this.rustScalarWidenedKind(declaration, kind);
         const widened = kind !== seeded || this.rustScalarExpressionKind(declaration.initializer) !== undefined;
@@ -7163,6 +7164,9 @@ export class RustTranspiler extends BaseTranspiler {
         // ral-50e: a number local as the key of base `safeDict` passes as is (its generated `key` takes `impl Into<Value>`: an
         // `i64` / `Option<i64>` / `f64` converts to the very Int / Null / Float its box held)
         if ((kind === 'int' || kind === 'oint' || kind === 'num' || kind === 'onum') && this.rustSafeDictKeyArg(n)) return 'parg';
+        // ral-50e: the same local as the key of a statement element write `x[n] = v` boxes there (`Value::from(n)`: the Int the
+        // `Value` local held), only for a local whose other reads are all safeDict keys
+        if (kind === 'int' && this.rustElemInsertKey(n) && this.rustSafeDictKeyOnlyLocal(this.rustDeclaredNode(n))) return 'box';
         if ((kind === 'str' || kind === 'ostr') && this.rustWsCacheMapKeyUse(n)) return 'fin';
         if (kind === 'bool' && this.rustScalarBoolLogicalText(this.rustClimbLogicalWrappers(n)) !== undefined) return 'cond';
         if (kind === 'bool' && isPrefixUnaryExpression(parent) && this.rustValueNotOfBoolLocal(parent) !== undefined) return 'cond';
@@ -8434,6 +8438,20 @@ export class RustTranspiler extends BaseTranspiler {
             && String(method.name.text) === 'safeDict' && method.parameters?.[1] === param && isIdentifier(param.name)
             && param.initializer === undefined && param.questionToken === undefined
             && RustTranspiler.RUST_BASE_TIER_FILE.test(String(param.getSourceFile?.()?.fileName ?? '')) && !this.rustMethodReferencedAsValue(method);
+    }
+
+    /** ral-50e: a local read only as base `safeDict` keys (its `any` checker type comes from an `any` operand such as
+     *  `response.length`): an `i64` the printer proved passes there as the Int its box held, so the checker's `any` is moot. */
+    rustSafeDictKeyOnlyLocal(declaration: any): boolean {
+        if (!isIdentifier(declaration?.name)) return false;
+        let keys = 0;
+        const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n: any) => {
+            if (this.rustElemInsertKey(n)) return true;
+            if (!this.rustSafeDictKeyArg(n)) return false;
+            keys++;
+            return true;
+        });
+        return ok && keys > 0;
     }
 
     /** ral-50e: `n` is the key (argument 1) of `this.safeDict (x, n, ..)` resolving to the generated base body, outside the test crate. */
