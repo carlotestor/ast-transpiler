@@ -17329,3 +17329,24 @@ describe('ral-50h: handler tables read by `k in table` and tables holding a read
         expect(out).toMatch(/let mut notTable: Value = /);
     });
 });
+
+describe('ral-50h: a subscription method field written from a const string tuple slot', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeValue (o: any, k: any, d: any = undefined): any { return o[k]; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    safeDict (o: any, k: any, d: any = undefined): any { return o[k]; }\n    handleOptionStringAndParams (params: Dict, methodName: Str, optionName: string, defaultValue: string): [string, Dict];\n    handleOptionStringAndParams (params: Dict, methodName: Str, optionName: string, defaultValue?: Str): [Str, Dict];\n    handleOptionStringAndParams (params: Dict, methodName: Str, optionName: string, defaultValue: Str = undefined): [Str, Dict] { return [ defaultValue, params ]; }\n    handleOptionAndParams (params: Dict, methodName: Str, optionName: string, defaultValue: any = undefined): [any, Dict] { return [ defaultValue, params ]; }\n}\n";
+    const client = "export default class Client {\n    subscriptions: Dict = {};\n    resolve (v: any, h: string | undefined = undefined): void {}\n}\nimport type { Dict } from '../Exchange';\n";
+    const mk = (slot: string) => "import Exchange from '../base/Exchange';\nimport type { Dict } from '../base/Exchange';\nimport Client from '../base/ws/Client';\nexport default class venue extends Exchange {\n    handleA (client: Client, message: Dict) {}\n    send (params: Dict = {}) {\n        const sub: Dict = { 'method': this.handleA };\n        const [ method, rest ] = this." + slot + " (params, 'send', 'method', 'ticker.book');\n        const message: Dict = { 'id': 1, 'method': method, 'params': rest, 'sub': sub };\n        return message;\n    }\n    handleMessage (client: Client, message: Dict) {\n        const id = this.safeString (message, 'id');\n        const subscription = this.safeDict (client.subscriptions, id);\n        const method = this.safeValue (subscription, 'method');\n        if (method !== undefined) {\n            method.call (this, client, message);\n        }\n    }\n}\n";
+    const emit = (name: string, slot: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base/ws'), { recursive: true });
+        fs.mkdirSync (path.join (dir, 'ts/src/pro'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/base/ws/Client.ts'), client);
+        fs.writeFileSync (path.join (dir, 'ts/src/pro/venue.ts'), mk (slot));
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/pro/venue.ts')).content;
+    };
+    test('a string-typed const tuple slot written to method keeps the read Option<String>', () => {
+        expect(emit ('ral50h-slot-str', 'handleOptionStringAndParams')).toMatch(/let mut method: Option<String> = [^\n]*"method"[^\n]*\.as_str\(\)\.map\(str::to_owned\);/);
+    });
+    test('an any-typed tuple slot written to method keeps the read a Value', () => {
+        expect(emit ('ral50h-slot-any', 'handleOptionAndParams')).toMatch(/let mut method: Value = [^\n]*"method"/);
+    });
+});

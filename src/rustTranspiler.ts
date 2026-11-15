@@ -22504,6 +22504,13 @@ export class RustTranspiler extends BaseTranspiler {
                     fn.forEachChild(visit);
                     return ok;
                 }
+                // ral-50h: a const tuple slot (binance `const [ method, paramsMethod ] = this.handleOptionStringAndParams (.., 'ticker.book')`)
+                // that the checker types string: the overload with a string default returns `[string, Dict]`
+                if (d.kind === SyntaxKind.BindingElement && d.parent?.kind === SyntaxKind.ArrayBindingPattern && isVariableDeclaration(d.parent.parent)
+                    && ((d.parent.parent.parent as any)?.flags & NodeFlags.Const)) {
+                    const t: any = this.typeOfNodeIfAny(v);
+                    return this.isStringOrNullishType(t) && this.isStringLikeType(t);
+                }
                 if (isParameterDeclaration(d) && isMethodDeclaration(d.parent) && isIdentifier(d.parent.name) && findAncestor(d.parent, isClassDeclaration) === cls) {
                     if (d.initializer !== undefined && !valueOk(d.initializer)) return false;
                     const index = d.parent.parameters.indexOf(d);
