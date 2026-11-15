@@ -2441,7 +2441,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     nativeEqualityText(node: any): string;
     unwrapParens(node: any): any;
     hasNativeComparisonOperand(node: any): any;
-    printLogicalInBooleanContext(node: any): string;
+    printLogicalInBooleanContext(node: any): any;
     printWhileStatement(node: any, identation: any): string;
     printIfStatement(node: any, identation: any): string;
     printPostFixUnaryExpression(node: any, identation: any): string;
@@ -3363,9 +3363,16 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustWsCacheFieldWriteBack(n: any): boolean;
     /** 'opt' for a local bound to a typed field, 'cache' for one bound to a constructor; undefined when it stays `Value`. */
     rustWsCacheLocal(declaration: any): 'opt' | 'cache' | undefined;
+    /** ral-54w: a slot of `const [ a, b, c ] = await this.m (..)` (a proven watch, see rustWsWatchResultKind) where every
+     *  resolve that can match the awaited hash passes an array literal (or an unreassigned local bound to one) whose
+     *  element at the slot's index is a cache: the slot holds that cache. Any other matching resolve (another kind,
+     *  a value read through a helper parameter, a Null settle, an unknown hash) leaves the slot `Value`. */
+    rustWsTupleCacheSlot(element: any): boolean;
     /** `x.length` read on an optional cache local: the slot's own `size()`. */
     rustWsCacheLengthRead(n: any): boolean;
     printWsCacheLength(node: any): string | undefined;
+    /** ral-54w: a watched tuple's cache slot: the runtime's marker test converts the slot once. */
+    printWsTupleCacheSlot(element: any, printedName: string, read: string, nativeList: boolean, indent: string): string | undefined;
     printWsCacheLocalDeclaration(declaration: any, varName: string, indent: string): string | undefined;
     /** A use of a typed cache local: the handle itself, or boxed once at a `Value` hand-off. */
     printWsCacheLocalUse(node: any): string | undefined;
@@ -3434,6 +3441,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustWsWatchKinds;
     private rustWsHashEnv;
     private rustWsFollowed;
+    private rustWsWrapperNil;
     /** The hash text of a Null hash (`stringify_param(Null)`): a literal no watch spells. */
     private static readonly RUST_WS_NIL_HASH;
     /** The hash patterns of `n`: segments are literal text or `null` (any text). */
@@ -3488,6 +3496,7 @@ export declare class RustTranspiler extends BaseTranspiler {
         pats: Array<Array<string | null>>;
         rpats?: Array<Array<string | null>>;
         kind: string;
+        value?: any;
     }> | null;
     /** When `site` sits in a method of `cls` with parameters: the parameter bindings of every call of that method
      *  (`this.m (..)`, or `this.spawn (this.m, ..)`), so a hash or value built from a parameter reads each caller's
