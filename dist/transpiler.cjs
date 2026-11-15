@@ -55976,7 +55976,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (_is.isPropertyAccessExpression.call(void 0, node))
       return _is.isIdentifier.call(void 0, node.name) && node.name.text === "length" && _is.isIdentifier.call(void 0, node.expression);
     if (_is.isElementAccessExpression.call(void 0, node))
-      return _is.isIdentifier.call(void 0, node.expression);
+      return _is.isIdentifier.call(void 0, node.expression) || this.rustInlineHandleStrSlot(node);
     if (_is.isCallExpression.call(void 0, node) && _is.isIdentifier.call(void 0, node.expression) && _RustTranspiler.RUST_STR_RUNTIME_FREE.has(String(node.expression.text)))
       return true;
     if (!_is.isCallExpression.call(void 0, node) || !_is.isPropertyAccessExpression.call(void 0, node.expression) || !this.rustScalarReceiver(node.expression.expression))
@@ -56435,6 +56435,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "str";
     if (this.rustElementReadScalarKind(node) !== void 0)
       return this.rustElementReadScalarKind(node);
+    if (fresh && this.rustInlineHandleStrSlot(node))
+      return "ostr";
     if (fresh && this.rustRowFieldStrText(node) !== void 0)
       return "ostr";
     if (fresh && this.rustNilElemStrText(node) !== void 0)
@@ -57180,6 +57182,20 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const text = this.printNode(node, 0).trim();
     const place = this.rustNativeLengths.get(node);
     return place !== void 0 ? `${place}.len() as i64` : `${text}.as_i64().unwrap_or_default()`;
+  }
+  /** ral-52f: `this.handle*AndParams (..)[0]` read inline (bitget `productType`, toobit / okx pro `marketType`) where the
+   *  helper's declared tuple slot 0 is a string (`[string, Dict]` / `[Str, Dict]`): the read is that string or undefined,
+   *  printed off the temp list exactly as the destructured slot 0 (`.and_then(Value::as_str).map(str::to_owned)`). */
+  rustInlineHandleStrSlot(node) {
+    if (!_is.isElementAccessExpression.call(void 0, node) || this.rustTestTierSource(node) || this.checkerOrUndefined() === void 0)
+      return false;
+    const index = this.unwrapParens(node.argumentExpression);
+    if (index === void 0 || index.kind !== _ast.SyntaxKind.NumericLiteral || String(index.text) !== "0")
+      return false;
+    const call = this.unwrapParens(node.expression);
+    if (!_is.isCallExpression.call(void 0, call) || !_is.isPropertyAccessExpression.call(void 0, call.expression) || call.expression.expression.kind !== _ast.SyntaxKind.ThisKeyword || !/^handle\w*AndParams\d*$/.test(String(call.expression.name.text)))
+      return false;
+    return this.primitiveKindOfType(this.typeOfNodeIfAny(node)) === "string";
   }
   // `xs[i]` over a local string list (`string[]`, `split`, `Object.keys`): `Option<String>` from the element.
   rustElementReadScalarKind(node) {
@@ -60044,7 +60060,7 @@ ${binding(plan.indent)}` : ""), head: "" };
       if (owned !== void 0)
         return owned;
     }
-    if (kind === "ostr" && this.rustElementReadScalarKind(node) !== void 0) {
+    if (kind === "ostr" && (this.rustElementReadScalarKind(node) !== void 0 || this.rustInlineHandleStrSlot(node))) {
       const read = this.printNode(node, 0).trim();
       const tail = ".cloned().unwrap_or(Value::Null)";
       return read.endsWith(tail) ? `${read.slice(0, -tail.length)}.and_then(Value::as_str).map(str::to_owned)` : void 0;
