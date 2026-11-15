@@ -73988,6 +73988,11 @@ ${iden}}`;
     });
     if (!safe || natives === 0 || defaulted && indexed === 0 && boxes.some(([, form]) => form === "clone"))
       return false;
+    if (rowWrites > 0) {
+      for (const box of boxes)
+        if (box[1] === "clone" && this.rustLocalLastUse(box[0], declaration))
+          box[1] = "move";
+    }
     if (rowWrites > 0 && boxes.some(([, form]) => form === "clone"))
       return false;
     for (const [n, form] of boxes)
