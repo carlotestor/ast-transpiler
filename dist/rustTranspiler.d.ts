@@ -342,6 +342,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     printPadStartCall(node: any, identation: any, name: any, parsedArg: any, parsedArg2: any): string;
     printPadEndCall(node: any, identation: any, name: any, parsedArg: any, parsedArg2: any): string;
     printVariableDeclarationList(node: any, identation: any): string;
+    /** ral-56e: `const e = xs[i]` where `xs` already prints as a typed list (`xs.get(K).cloned().unwrap_or(Value::Null)`)
+     *  and every use of `e` is the receiver of an rvalue element read `e[k]`: the element is borrowed out of the list
+     *  (`xs.get(K).unwrap_or(&Value::Null)`), so the copy goes. Reading `e[k]` through `&Value` is the same runtime read
+     *  (`get_value` takes `&Value`; a missing row is the same Null). The list must not be written anywhere in the
+     *  method, so the borrow cannot conflict. */
+    printRust56eBorrowedElement(declaration: any, parsedValue: string, indent: string, varName: string): string | undefined;
+    rust56eBorrowedElementLocal(declaration: any): boolean;
     private static readonly RUST_NIL_INT_HELPERS;
     private static readonly RUST_NIL_BOOL_HELPERS;
     private static readonly RUST_NIL_PRECISE_STR;
@@ -813,6 +820,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  printed off the temp list exactly as the destructured slot 0 (`.and_then(Value::as_str).map(str::to_owned)`). */
     rustInlineHandleStrSlot(node: any): boolean;
     rustElementReadScalarKind(node: any): string | undefined;
+    /** ral-56e: `const xs = this.m (..)` where `m` is a method of the same class declared `number[]` whose body builds
+     *  one `const r: number[] = []` filled only by `r.push (i)` of a plain int for-counter and answers `return r`; a
+     *  declaration's literal-index `xs[k]` is then an `Int` or (out of range) `Null`: `Option<i64>`. Non-test sources. */
+    rust56eIntListVenueElem(node: any, owner: any): boolean;
     /** ral-53f: `const t = this.m (..); const x = t[0]` where `t` is a const tuple local (a declared `[string, Str, Dict]`
      *  return, e.g. binance pro `resolveAuthType`) and the literal-index slot is declared `string`: the read is the slot's
      *  string or undefined. Non-test sources only. */
