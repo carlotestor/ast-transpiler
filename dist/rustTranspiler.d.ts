@@ -482,6 +482,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** The argument is a local the PRINTER declares `bool` from a bool expression (comparison / logical); literal and
      *  alias locals are narrowed later by ccxt narrowBoolLocals, which boxes their uses itself. */
     rustOptionalBoolArgLocal(a: any): boolean;
+    private rustMarketFlagBoolDecisions;
+    rustMarketFlagBoolLocal(declaration: any): boolean;
+    rustMarketFlagText(right: any): string | undefined;
+    rustMarketFlagBoolLocalUncached(declaration: any): boolean;
+    /** `x = m['contract']` / `x = true` into a `rustMarketFlagBoolLocal`. */
+    printMarketFlagBoolWrite(left: any, right: any): string | undefined;
     /** An argument in an optional native-`bool` slice slot: a bool local the printer still prints bare is boxed once
      *  (a scalar bool local already prints its own `Value::Bool(x)`). */
     rustOptionalBoolSlotArgText(call: any, params: any, at: number, a: any): string;
