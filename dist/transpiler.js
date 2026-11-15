@@ -58923,7 +58923,7 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (!recvOk)
       return false;
     const keyed = isParameterDeclaration3(owner);
-    return this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+    return this.rustScalarUsesAll(declaration, String(declaration.name.text), (n) => {
       if (this.rustIdentifierIsPropertyName(n))
         return n.parent?.kind !== SyntaxKind7.ShorthandPropertyAssignment;
       const form = this.rustScalarUseForms.get(n);

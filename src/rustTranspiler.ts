@@ -7647,7 +7647,9 @@ export class RustTranspiler extends BaseTranspiler {
         if (!recvOk) return false;
         // wg: a parameter list's element keys no map (a keyed map decides its own type from a `Value` key)
         const keyed = isParameterDeclaration(owner);
-        return this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n: any) => {
+        // ral-41g: the element's uses go through the one per-binding walk the scalar decision itself took (a same-named
+        // `const k = ..` in a sibling block is another Rust local), so the borrow is decided for exactly the uses whose forms it read
+        return this.rustScalarUsesAll(declaration, String(declaration.name.text), (n: any) => {
             if (this.rustIdentifierIsPropertyName(n)) return n.parent?.kind !== SyntaxKind.ShorthandPropertyAssignment;
             const form = this.rustScalarUseForms.get(n);
             if (keyed && (form === 'okey' || form === 'kin' || form === 'key' || form === 'inbox')) return false;
