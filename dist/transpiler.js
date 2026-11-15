@@ -54921,7 +54921,18 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     }
     const params = this.rustCalleeParams(call);
-    return params !== void 0 && this.rustNativeBoolArgumentSlot(params, at);
+    return params !== void 0 && (this.rustNativeBoolArgumentSlot(params, at) || this.rustOptionalBoolArgumentSlot(call, params, at));
+  }
+  /** ral-45e: the call's `at`-th argument lands in an OPTIONAL venue `boolean` parameter the callee binds
+   *  `let p: bool = get_arg(optional_args, i, ..).is_truthy()`: a native bool local re-boxes as `Value::Bool(x)` there,
+   *  and the callee applies the same truthiness the old `Value` box got. */
+  rustOptionalBoolArgumentSlot(call, params, at) {
+    const param = params !== void 0 && at < params.length ? params[at] : void 0;
+    if (param === void 0 || param.initializer === void 0 && param.questionToken === void 0)
+      return false;
+    if (call?.expression?.kind !== SyntaxKind7.PropertyAccessExpression || call.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    return this.rustParamPrintsBool(param);
   }
   /** Parameter declarations of a call's resolved callee, when the checker has them. */
   rustCalleeParams(call) {
@@ -63971,7 +63982,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
         if (watchCall !== void 0)
           return watchCall;
         const calleeParams = this.rustCalleeParams(node);
-        const printArg = (a, at) => calleeParams !== void 0 && at < calleeParams.length && this.rustBookSideParam(calleeParams[at]) ? this.printBookSideArg(a, 0) : this.rustMarketSlot(calleeParams, at) ? this.rustMarketSlotArgText(a, 0) : this.rustCurrencySlot(calleeParams, at) ? this.rustCurrencySlotArgText(a, 0) : this.rustVenueStrSlot(calleeParams, at) !== void 0 ? this.rustVenueStrArgText(a, this.rustVenueStrSlot(calleeParams, at), 0) : this.rustNativeMapArgumentSlot(calleeParams, at) !== void 0 ? this.rustMapArgumentText(a, 0) : this.rustNativeStrVecArgumentSlot(calleeParams, at) ? this.rustStrVecArgumentText(a, 0) : this.rustNativeBoolArgumentSlot(calleeParams, at) ? this.rustBoolArgumentText(a, 0) : this.printNode(a, 0);
+        const printArg = (a, at) => calleeParams !== void 0 && at < calleeParams.length && this.rustBookSideParam(calleeParams[at]) ? this.printBookSideArg(a, 0) : this.rustMarketSlot(calleeParams, at) ? this.rustMarketSlotArgText(a, 0) : this.rustCurrencySlot(calleeParams, at) ? this.rustCurrencySlotArgText(a, 0) : this.rustVenueStrSlot(calleeParams, at) !== void 0 ? this.rustVenueStrArgText(a, this.rustVenueStrSlot(calleeParams, at), 0) : this.rustNativeMapArgumentSlot(calleeParams, at) !== void 0 ? this.rustMapArgumentText(a, 0) : this.rustNativeStrVecArgumentSlot(calleeParams, at) ? this.rustStrVecArgumentText(a, 0) : this.rustNativeBoolArgumentSlot(calleeParams, at) ? this.rustBoolArgumentText(a, 0) : this.rustOptionalBoolArgumentSlot(node, calleeParams, at) && this.rustNativeBoolArgumentText(a) !== void 0 ? `Value::Bool(${this.rustNativeBoolArgumentText(a)})` : this.printNode(a, 0);
         const printArgs = (list, from = 0) => list.map((a, i) => this.rustWsWatchSlot(node, from + i) ? this.rustWsWatchSlotText(a, this.printNode(a, 0)) : printArg(a, from + i)).join(", ");
         const ownedArgs = (list) => list.map((a, i) => this.rustOwnedArgText(a, this.rustWsWatchSlot(node, i) ? this.rustWsWatchSlotText(a, this.printNode(a, 0)) : printArg(a, i))).join(", ");
         const requiredArgs = [ownedArgs(args.slice(0, sig.requiredCount)), ...this.rustVenuePads(calleeParams, args.length, sig.requiredCount)].filter((a) => a !== "").join(", ");

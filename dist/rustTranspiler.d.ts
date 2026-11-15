@@ -466,6 +466,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** Native type text of a parameter in the emitted signature. */
     rustParamType(param: any): string;
     rustBoolParamUseAccepted(node: any): boolean;
+    /** ral-45e: the call's `at`-th argument lands in an OPTIONAL venue `boolean` parameter the callee binds
+     *  `let p: bool = get_arg(optional_args, i, ..).is_truthy()`: a native bool local re-boxes as `Value::Bool(x)` there,
+     *  and the callee applies the same truthiness the old `Value` box got. */
+    rustOptionalBoolArgumentSlot(call: any, params: any, at: number): boolean;
     /** Parameter declarations of a call's resolved callee, when the checker has them. */
     rustCalleeParams(call: any): any[] | undefined;
     /** `bool` text for an argument in a native-`bool` parameter slot. */
