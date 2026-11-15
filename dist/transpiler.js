@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -67845,14 +67845,11 @@ ${this.getIden(identation)}}`;
     const init = this.unwrapParens(declaration?.initializer);
     if (!isIdentifier3(declaration?.name) || !isCallExpression6(init) || !isPropertyAccessExpression3(init.expression) || init.expression.expression.kind !== SyntaxKind7.ThisKeyword || init.expression.name.text !== "safeValue" || init.arguments.length !== 2)
       return false;
-    if (!/^self\.safe(?:_v|V)alue\((?:\(client\)|__ch|client)\.subscriptions\.clone\(\), [^;\n]*, &\[\]\)$/.test(parsedValue))
+    if (!/^self\.safe(?:_v|V)alue(?:_k)?\((?:(?:\(client\)|__ch|client)\.subscriptions\.clone\(\)|client\.subscriptions), [^;\n]*, &\[\]\)$/.test(parsedValue))
       return false;
     const fn = this.rustEnclosingFunction(declaration);
     const name = String(declaration.name.text);
-    if (isStringLiteralLikeNode4(init.arguments[1]) || fn === void 0)
-      return false;
-    const fnText = String(fn.getSourceFile().text).slice(fn.pos, fn.end);
-    if (new RegExp(`//[^\\n]*(?<![A-Za-z0-9_])${name}(?![A-Za-z0-9_])`).test(fnText))
+    if (fn === void 0)
       return false;
     let uses = 0;
     let ok = fn !== void 0;
@@ -73813,9 +73810,12 @@ ${iden}}`;
         this.rustWsHashEnv = save;
       }
     }
-    if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.initializer === void 0 || seen.has(declaration))
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || seen.has(declaration))
       return any;
-    const keyed = this.rustWsSubscriptionKeyRead(declaration.initializer);
+    const nilStart = declaration.initializer === void 0 || this.rustWsCacheUndefined(declaration.initializer);
+    if (declaration.initializer === void 0 && !this.rustLocalReassigned(declaration))
+      return any;
+    const keyed = declaration.initializer === void 0 ? void 0 : this.rustWsSubscriptionKeyRead(declaration.initializer);
     if (keyed !== void 0 && !this.rustLocalReassigned(declaration)) {
       seen.add(declaration);
       try {
@@ -73829,7 +73829,7 @@ ${iden}}`;
       return any;
     seen.add(declaration);
     try {
-      const out = [...this.rustWsHashPatterns(declaration.initializer, depth + 1, seen)];
+      const out = nilStart ? [[_RustTranspiler.RUST_WS_NIL_HASH]] : [...this.rustWsHashPatterns(declaration.initializer, depth + 1, seen)];
       for (const r of this.rustScopeNameNodes(scope, String(declaration.name.text))) {
         const p = r.parent;
         if (isIdentifier3(r) && isBinaryExpression5(p) && p.left === r && rustIsAssignmentOperator(p.operatorToken.kind)) {
@@ -82628,6 +82628,8 @@ _RustTranspiler.RUST_CACHE_MAP_TYPE = "pro::cache::CacheMap";
 // Its inner map `this.F[k]` / `this.safeDict (this.F, k)` is read like a cache map; `this.F[k] = {}` resets and
 // `this.F[k] = this.safeDict|safeValue (this.F, k, {})` ensures an entry. Any other write throws.
 _RustTranspiler.RUST_CACHE_SHELF_TYPE = "pro::cache::CacheShelf";
+/** The hash text of a Null hash (`stringify_param(Null)`): a literal no watch spells. */
+_RustTranspiler.RUST_WS_NIL_HASH = "null";
 // ral-we: base record builders that answer `this.extend (..)` (a fresh map) on every path
 _RustTranspiler.RUST_WS_MAP_RECORD_BUILDERS = /* @__PURE__ */ new Set(["safeTicker"]);
 // ── ws order books (rustWsBookMapField / rustWsBookLocal / printWsBook*) ──
