@@ -3489,6 +3489,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `ostr` for a string slot read through the scalar forms: tests, `format!` concats, string methods, typed
      *  writes, and boxes (alias, ternary arm, `Value` slots) that re-box through `From`; needs one native use. */
     rustStrSlotKind(element: any, scope: any): string | undefined;
+    /** 42i: `n` (through parens) is a direct element of an array literal: the list boxes each element itself, so the
+     *  local the list is written to never takes this slot's type. */
+    rustStrSlotListElement(n: any): boolean;
     /** zi: `n` is an arm of `c ? a : b`, the whole initializer of a local the joint solve currently types `Option<String>`
      *  (or `String`), and the other arm prints as that kind too: the target is decided with the slot, never left `Value`. */
     rustStrSlotTernaryArmJoined(n: any, element: any): boolean;

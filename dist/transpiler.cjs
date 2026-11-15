@@ -70867,7 +70867,7 @@ ${iden}}`;
       return `crate::value::KeyRead::key_read(&${super.printIdentifier(recv)}, "${this.escapeRustStringLiteral(k)}")`;
     }
     const declaration = this.rustDeclarationOfIdentifier(recv);
-    if (declaration === void 0 || declaration === recv || declaration.name === recv || this.rustBorrowedLocalKind(declaration) !== "dict" && !this.rustMutableDictSlot(declaration))
+    if (declaration === void 0 || declaration === recv || declaration.name === recv || this.rustBorrowedLocalKind(declaration) !== "dict" && !this.rustMutableDictSlot(declaration) && !(declaration.kind === _ast.SyntaxKind.BindingElement && this.rustUntilHeadSlot(declaration)))
       return void 0;
     const key = _is.isElementAccessExpression.call(void 0, node) ? String(this.rustSkipWrappers(node.argumentExpression).text) : String(node.name.text);
     const name = super.transformIdentifier(recv, _nullishCoalesce(this.ReservedKeywordsReplacements[recv.text], () => ( recv.text)));
@@ -75413,7 +75413,7 @@ ${iden}}`;
         head = true;
       return true;
     });
-    return !head;
+    return !head || element.kind === _ast.SyntaxKind.BindingElement && !this.rustUntilHeadSlot(element);
   }
   rustUntilHeadSlot(element) {
     if (_optionalChain([element, 'optionalAccess', _10205 => _10205.kind]) !== _ast.SyntaxKind.BindingElement)
@@ -75459,6 +75459,8 @@ ${iden}}`;
       if (this.rustExtendHeadUse(n))
         return heads++ >= 0;
       if (this.rustUntilHeadReaderUse(n))
+        return true;
+      if (this.rustDictKeyReadUse(n))
         return true;
       return this.rustUntilHeadKeyWrite(n) !== void 0;
     });
@@ -76549,7 +76551,7 @@ ${iden}}`;
           return true;
         }
         const feeds = _chunkC7C726CWcjs.findAncestor.call(void 0, n, (m) => _is.isStatement.call(void 0, m) || _is.isBinaryExpression.call(void 0, m) && m.operatorToken.kind === _ast.SyntaxKind.EqualsToken && _is.isIdentifier.call(void 0, m.left) || _is.isVariableDeclaration.call(void 0, m));
-        if (feeds !== void 0 && !_is.isStatement.call(void 0, feeds) && (form === "box" || form === "xbox"))
+        if (feeds !== void 0 && !_is.isStatement.call(void 0, feeds) && (form === "box" || form === "xbox") && !this.rustStrSlotListElement(n))
           return false;
         if (_RustTranspiler.RUST_NIL_SCALAR_NATIVE_FORMS.has(form) || form === "write")
           nativeUses++;
@@ -76568,6 +76570,14 @@ ${iden}}`;
       return void 0;
     this.rustStrLentLocals.add(element);
     return "ostr";
+  }
+  /** 42i: `n` (through parens) is a direct element of an array literal: the list boxes each element itself, so the
+   *  local the list is written to never takes this slot's type. */
+  rustStrSlotListElement(n) {
+    let top = n;
+    while (_is.isParenthesizedExpression.call(void 0, top.parent))
+      top = top.parent;
+    return _is.isArrayLiteralExpression.call(void 0, top.parent);
   }
   /** zi: `n` is an arm of `c ? a : b`, the whole initializer of a local the joint solve currently types `Option<String>`
    *  (or `String`), and the other arm prints as that kind too: the target is decided with the slot, never left `Value`. */
@@ -81440,7 +81450,13 @@ _RustTranspiler.RUST_HANDWRITTEN_SLOT_KINDS = {
   lighterSignModifyOrder: ["number", "string"],
   lighterSignTransfer: ["number", "string"],
   lighterSignUpdateLeverage: ["number", "string"],
-  lighterSignUpdateMargin: ["number", "string"]
+  lighterSignUpdateMargin: ["number", "string"],
+  // 42i: TS `[ res.txType, res.txInfo, res.messageToSign ]`; Go appends GetTxType() (uint8), txInfoStr, GetL1SignatureBody
+  // (string); C# formatSignedLighterTx {TxType (int), TxInfo, MessageToSign (string)}; Python `[tx_type, tx_info, message_to_sign]`
+  lighterSignApproveIntegrator: ["number", "string", "string"],
+  lighterSignChangePubkey: ["number", "string", "string"],
+  // 42i: TS `[ res.privateKey, res.publicKey ]`; Go / C# / Python append the two key strings
+  lighterGenerateApiKey: ["string", "string"]
 };
 // ── pro-tier WS handler `message` shadow ─────────────────────────────────
 // `handle_x (client: Client, message: Dict)` is dispatched by NAME with
