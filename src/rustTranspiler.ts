@@ -3497,6 +3497,8 @@ export class RustTranspiler extends BaseTranspiler {
             // ral-qd: nor of any other local (`transfer () { const transfer = this.parseTransfer (..) }`): it names the method
             if ((skipScopeName || this.rustOwnMethodName(n, scope)) && n === (scope as any).name) continue;
             if (n !== declaration && this.rustBindsName(n, name)) {
+                // ral-52i: a binding in a sibling block (neither block holds the other) prints its own `let` there
+                if (this.rustDisjointShadowSkip && this.rustDisjointBinding(n, declaration)) { this.rustDisjointShadowSeen = true; continue; }
                 safe = false; // a second binding of the name in scope — stay boxed
                 break;
             }
@@ -3516,6 +3518,22 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     private rustOwnNameSkip = false;
+
+    /** ral-52i: set only while the built-list rule walks its uses. */
+    private rustDisjointShadowSkip = false;
+    private rustDisjointShadowSeen = false;
+    private rustBuiltListCopiedElement = false;
+
+    /** ral-52i: `other` (a variable declaration) and `declaration` sit in two blocks of one function, neither inside the other. */
+    rustDisjointBinding(other: any, declaration: any): boolean {
+        if (!isVariableDeclaration(other) || !isVariableDeclaration(declaration)) return false;
+        const block = (d: any): any => { let up: any = d.parent; while (up !== undefined && !isBlock(up) && !isFunctionLike(up)) up = up.parent; return up; };
+        const a: any = block(declaration);
+        const b: any = block(other);
+        if (a === undefined || b === undefined || !isBlock(a) || !isBlock(b) || a === b) return false;
+        if (this.rustEnclosingFunction(a) !== this.rustEnclosingFunction(b)) return false;
+        return a.end <= b.pos || b.end <= a.pos;
+    }
 
     rustLocalUsesAcceptBool(declaration, sourceName: string): boolean {
         return this.rustLocalUsesAll(declaration, sourceName, false, (n) =>
@@ -25039,6 +25057,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (this.rustReadBearerKindOfDeclaration(declaration) !== false || this.rustDictLocalIsTyped(declaration) || this.rustVecLocalIsTyped(declaration)
             || this.rustNestedDictLocalIsTyped(declaration) || this.rustMarketLocalKind(declaration) !== false || this.rustBorrowedDictLocal(declaration)
             || this.rustNilLocalKind(declaration) !== undefined || this.rustScalarLocalKind(declaration) !== undefined) return false;
+        this.rustBuiltListCopiedElement = false;
         if (String(init.getText()).split('\n')[0].length > (read ? 240 : 120) || !this.rustBuiltListWriteSource(init)) return false;
         const boxes: [any, 'clone' | 'move' | 'lend'][] = [];
         let natives = 0;
@@ -25047,11 +25066,19 @@ export class RustTranspiler extends BaseTranspiler {
         const short = (n: any): boolean => { let st: any = n; while (st !== undefined && !isStatement(st)) st = st.parent; return st !== undefined && String(st.getText()).split('\n')[0].length <= 160; };
         // ral-47c: the enclosing method's own name (`const fetchMarkets = []` in `fetchMarkets ()`) is no use of the list (ral-qd skip)
         const ownNameSkip = this.rustOwnNameSkip;
+        const shadowSkip = this.rustDisjointShadowSkip;
         this.rustOwnNameSkip = true;
+        this.rustDisjointShadowSkip = true;
+        this.rustDisjointShadowSeen = false;
         let safe: boolean;
         try {
             safe = this.rustLocalUsesAll(declaration, name, false, (n: any) => {
                 if (this.rustIdentifierIsPropertyName(n)) return !(n.parent?.kind === SyntaxKind.ShorthandPropertyAssignment && n.parent.name === n);
+                // ral-52i: a read of the sibling-block binding of the same name is no use of this list
+                if (!this.rustIdentifierRefersToDeclaration(n, declaration)) {
+                    const other: any = this.rustDeclarationOfIdentifier(n);
+                    if (other !== undefined && other !== declaration && this.rustDisjointBinding(other, declaration)) return true;
+                }
                 if (!this.rustIdentifierRefersToDeclaration(n, declaration) || this.rustEnclosingFunction(n) !== fn) return false;
                 const up: any = n.parent;
                 if (isBinaryExpression(up) && up.left === n) {
@@ -25151,7 +25178,13 @@ export class RustTranspiler extends BaseTranspiler {
             });
         } finally {
             this.rustOwnNameSkip = ownNameSkip;
+            this.rustDisjointShadowSkip = shadowSkip;
         }
+        // ral-52i: the sibling-block skip types only a list read natively (no boxed-straight-back list)
+        // (so do the copied-element literal and the shared guarded copy)
+        if ((this.rustDisjointShadowSeen || this.rustBuiltListCopiedElement) && natives === 0) safe = false;
+        this.rustBuiltListCopiedElement = false;
+        this.rustDisjointShadowSeen = false;
         // a list with no native use is typed only when every use is a hand-off that moves or lends it (a `return x` move included)
         if (!safe || (natives === 0 && (handOffs === 0 || handOffs + boxes.filter(([b]) => isReturnStatement(b.parent) || (b.parent?.kind === SyntaxKind.AsExpression && isReturnStatement(b.parent.parent))).length !== boxes.length || boxes.some(([, form]) => form === 'clone')))) return false;
         for (const [n, form] of boxes) this.rustLentListBoxes.set(n, form);
@@ -25291,7 +25324,25 @@ export class RustTranspiler extends BaseTranspiler {
         // the printer may mark the bare move owned (`\u0004`): still the plain `Value` binding
         const printedY = this.printNode(y, 0).trim();
         if ((printedY.startsWith('\u0004') ? printedY.slice(1) : printedY) !== String(y.text)) return false;
-        return this.rustLocalLastUse(y, declaration) || this.rustGuardedBranchLastUse(y, declaration, guard);
+        if (this.rustLocalLastUse(y, declaration) || this.rustGuardedBranchLastUse(y, declaration, guard)) return true;
+        // ral-52i: read again later (`'info': response`): the guarded `Value::Arr` is shared (`y.clone().into_list()`,
+        // the same one Arc bump the boxed `x = y.clone()` made)
+        this.rustArrayGuardedCopies.add(write);
+        this.rustBuiltListCopiedElement = true;
+        return true;
+    }
+
+    private rustArrayGuardedCopies = new WeakSet<any>();
+
+    /** ral-52i: `id` names a plain `Value` local or parameter of its own function (no typed local form). */
+    rustPlainValueBinding(id: any): boolean {
+        const declaration: any = this.rustDeclarationOfIdentifier(id);
+        if (declaration === undefined || declaration.name === id || !(isVariableDeclaration(declaration) || isParameterDeclaration(declaration))) return false;
+        if (this.rustEnclosingFunction(declaration) !== this.rustEnclosingFunction(id)) return false;
+        if (isParameterDeclaration(declaration)) return false;
+        return !(this.rustLentListLocal(declaration) || this.rustBorrowedLocalKind(declaration) !== undefined || this.rustScalarLocalKind(declaration) !== undefined
+            || this.rustNilLocalKind(declaration) !== undefined || this.rustDictLocalIsTyped(declaration) || this.rustVecLocalIsTyped(declaration)
+            || this.rustMarketLocalKind(declaration) !== false || this.rustReadBearerKindOfDeclaration(declaration) !== false);
     }
 
     /** ral-uf: every later read of `node`'s local lies in the else branch of `guard` (a path disjoint from the move) and
@@ -25388,14 +25439,22 @@ export class RustTranspiler extends BaseTranspiler {
         if (parts.length !== elements.length) return undefined;
         for (let i = 0; i < elements.length; i++) {
             const id: any = this.rustSkipWrappers(elements[i]);
-            if (isIdentifier(id) && !this.rustBuiltListMovedElement(elements[i]) && /^[A-Za-z_][A-Za-z0-9_]*$/.test(parts[i])) return undefined;
+            if (isIdentifier(id) && !this.rustBuiltListMovedElement(elements[i]) && /^[A-Za-z_][A-Za-z0-9_]*$/.test(parts[i])) {
+                // ral-52i: a plain `Value` local read again later is copied into the slot explicitly (the copy ccxt's clone
+                // pass would have added to the boxed literal), so the native literal holds the same one copy
+                if (id !== elements[i] || parts[i] !== String(id.text) || !this.rustPlainValueBinding(id)) return undefined;
+                parts[i] = `${parts[i]}.clone()`;
+                this.rustBuiltListCopiedElement = true;
+            }
         }
-        return `vec![${m[1]}]`;
+        return `vec![${parts.join(', ')}]`;
     }
 
     printBuiltListLiteral(node: any): string {
         if (node.elements?.some((e: any) => isIdentifier(this.rustSkipWrappers(e)))) {
-            const moved = this.rustBuiltListMovedLiteral(node) ?? this.rustBuiltListBoxedLiteral(node);
+            // ral-52i: the bare-move form only when every bare element moves (else the box form copies the read-again ones)
+            const allMoved = node.elements.every((e: any) => !isIdentifier(this.rustSkipWrappers(e)) || this.rustBuiltListMovedElement(e));
+            const moved = (allMoved ? this.rustBuiltListMovedLiteral(node) : undefined) ?? this.rustBuiltListBoxedLiteral(node);
             if (moved !== undefined) return `std::sync::Arc::new(${moved})`;
         }
         const native = this.rustVecNativeLiteral({ initializer: node });
@@ -25456,6 +25515,7 @@ export class RustTranspiler extends BaseTranspiler {
         const guarded: any = isIdentifier(rhs) && isBinaryExpression(rhs.parent) ? this.rustOptListGuardedMove(rhs.parent) : undefined;
         if (guarded !== undefined) return `${this.printNode(left, 0).trim()} = ${rhs.text}.${this.rustDefaultedListValue(guarded, rhs) ? 'into_list' : 'unwrap_or_default'}()`;
         if (isIdentifier(rhs) && isBinaryExpression(rhs.parent) && this.rustDefaultedAliasMove(rhs.parent) !== undefined) return `${this.printNode(left, 0).trim()} = ${rhs.text}.into_list()`;
+        if (isIdentifier(rhs) && isBinaryExpression(rhs.parent) && this.rustArrayGuardedCopies.has(rhs.parent)) return `${this.printNode(left, 0).trim()} = ${rhs.text}.clone().into_list()`;
         const value = isArrayLiteralExpression(rhs) ? this.printBuiltListLiteral(rhs) : `${this.printNode(right, 0).trim()}.into_list()`;
         return `${this.printNode(left, 0).trim()} = ${value}`;
     }

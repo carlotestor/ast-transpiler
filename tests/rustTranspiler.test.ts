@@ -13350,8 +13350,9 @@ describe('ral-uf: nullable list aliases read again only on the other branch, ear
     test('a []-defaulted safeList source read again only in the else branch moves', () => {
         expect(out).toMatch(/fn defElse[\s\S]*?let mut list: crate::value::List = [\s\S]*?list = given\.into_list\(\);/);
     });
-    test('negative: the source read after the if keeps the Value alias', () => {
-        expect(out).toMatch(/fn readAfter[\s\S]*?let mut rows: Value = /);
+    test('negative: the source read after the if is never moved (ral-52i: shared by an Arc copy instead)', () => {
+        expect(out).toMatch(/fn readAfter[\s\S]*?rows = data\.clone\(\)\.into_list\(\);/);
+        expect(out).not.toMatch(/fn readAfter[\s\S]*?rows = data\.into_list\(\);[\s\S]*?fn /);
     });
 });
 
@@ -17610,5 +17611,34 @@ describe('ral-50e: a number local keying base safeDict passes unboxed (generated
     test('guard: a string key local is untouched by the int rule', () => {
         const out = run(body.replace('const lastIndex = length - 1;', "const lastIndex = 'k' + length.toString ();"));
         expect(out.venue).not.toMatch(/let mut lastIndex: i64/);
+    });
+});
+
+describe('ral-52i: a list local reassigned whole from an endpoint answer or a `[x]` literal', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type List = any[];\nexport default class Exchange {\n    safeString (o: any, k: any, d: any = undefined): any { return o[k]; }\n    hold (x: any): any { return x; }\n}\n";
+    const venue = "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    tag (raw: any, many: boolean) {\n        const response = this.hold (raw);\n        const out = [];\n        if (many) {\n            let rows: Dict[] = [];\n            if (Array.isArray (response)) {\n                rows = response;\n            } else {\n                rows = [ response ];\n            }\n            for (let j = 0; j < rows.length; j++) {\n                out.push (this.safeString (rows[j], 'id'));\n            }\n        } else {\n            const rows = this.hold (response);\n            out.push (rows);\n        }\n        return out;\n    }\n    info (response: any) {\n        let safe: Dict[] = [];\n        if (Array.isArray (response)) {\n            safe = response;\n        }\n        const first = this.safeString (safe, 0);\n        return { 'info': response, 'first': first };\n    }\n    boxed (response: any) {\n        let kept: Dict[] = [];\n        if (Array.isArray (response)) {\n            kept = response;\n        }\n        return this.hold ([ kept, response ]);\n    }\n}\n";
+    const run = (): string => {
+        const dir = path.join (rustFixtureRoot, 'ral-52i');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), venue);
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('a `[x]` literal of a read-again local and a sibling-block shadow keep a native List', () => {
+        const out = run();
+        const t = out.slice(out.indexOf('fn tag'), out.indexOf('fn info'));
+        expect(t).toContain('let mut rows: crate::value::List = ');
+        expect(t).toContain('rows = std::sync::Arc::new(vec![response.clone()])');
+    });
+    test('a guarded answer read again later is shared, not moved', () => {
+        const out = run();
+        const t = out.slice(out.indexOf('fn info'), out.indexOf('fn boxed'));
+        expect(t).toContain('let mut safe: crate::value::List = ');
+        expect(t).toContain('safe = response.clone().into_list()');
+    });
+    test('guard: a list only boxed straight back stays Value', () => {
+        const out = run();
+        const t = out.slice(out.indexOf('fn boxed'));
+        expect(t).toContain('let mut kept: Value = ');
     });
 });
