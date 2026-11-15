@@ -12066,11 +12066,11 @@ export class RustTranspiler extends BaseTranspiler {
             }
             // `m = undefined` on an `Option<Market>` local clears it; `m = this.safeMarket (..)` stores `Some(..)`
             if (empty && this.rustIsNullWriteOf(n)) return true;
-            if (empty && (this.rustIsSafeMarketWriteOf(n) || this.rustIsOptMarketWriteOf(n) || this.rustMarketAliasWriteSource(n) !== undefined)) {
+            if (empty && (this.rustIsSafeMarketWriteOf(n) || this.rustIsOptMarketWriteOf(n) || this.rustMarketAliasWriteSource(n) !== undefined || this.rustIsSlotParamWriteOf(n))) {
                 writes++;
                 return true;
             }
-            if (empty && this.rustOptMarketKeyRead(n)) return true;
+            if (empty && (this.rustOptMarketKeyRead(n) || this.rustOptMarketKeyAsKey(n))) return true;
             // a lent market slot takes `m.as_ref()`: not a `Value` hand-off
             if (empty && this.rustMarketSlotUse(n)) return true;
             if (empty) return this.rustIsNullTestOf(n) || this.rustMarketValueUse(n) || this.rustMarketValueUseThroughCast(n) || this.rustMarketStoreUse(n);
@@ -12112,7 +12112,7 @@ export class RustTranspiler extends BaseTranspiler {
     /** `crate::value::KeyRead::key_read(&&m, "k")` for a direct read on an `Option<Market>` local. */
     printOptMarketKeyRead(node: any): string | undefined {
         const recv: any = node.expression;
-        if (recv === undefined || !isIdentifier(recv) || !this.rustDictKeyReadUse(recv) || this.rustOptMarketLocalOf(recv) === undefined) return undefined;
+        if (recv === undefined || !isIdentifier(recv) || !(this.rustDictKeyReadUse(recv) || this.rustOptMarketKeyAsKey(recv)) || this.rustOptMarketLocalOf(recv) === undefined) return undefined;
         const key = isElementAccessExpression(node) ? String((this.rustSkipWrappers(node.argumentExpression) as any).text) : String(node.name.text);
         return `crate::value::KeyRead::key_read(&&${super.printIdentifier(recv)}, "${this.escapeRustStringLiteral(key)}")`;
     }
@@ -12833,6 +12833,23 @@ export class RustTranspiler extends BaseTranspiler {
         return this.rustOptMarketLocalOf(up.left);
     }
 
+    /** ral-50c: `m = market` as its own statement, `market` a lent `Option<&Market>` parameter: stores `market.cloned()`. */
+    rustIsSlotParamWriteOf(n: any): boolean {
+        const up: any = n.parent;
+        return up !== undefined && isBinaryExpression(up) && up.left === n && up.operatorToken.kind === SyntaxKind.EqualsToken
+            && up.parent?.kind === SyntaxKind.ExpressionStatement && isIdentifier(up.right) && this.rustMarketSlotParamOf(up.right) !== undefined;
+    }
+
+    /** ral-50c: `d[m['k']]`: a literal-key read of the local used as another map's key (read through `KeyRead`, a `Value`). */
+    rustOptMarketKeyAsKey(n: any): boolean {
+        const up: any = n.parent;
+        if (up === undefined || !isElementAccessExpression(up) || up.expression !== n) return false;
+        const arg: any = this.rustSkipWrappers(up.argumentExpression);
+        if (arg === undefined || !isStringLiteralLikeNode(arg) || /^\d+$/.test(String(arg.text))) return false;
+        const use: any = up.parent;
+        return use !== undefined && isElementAccessExpression(use) && use.argumentExpression === up;
+    }
+
     /** `m = undefined` as its own statement. */
     rustIsNullWriteOf(n: any): boolean {
         const up: any = n.parent;
@@ -12843,6 +12860,7 @@ export class RustTranspiler extends BaseTranspiler {
     /** A later `m = this.market (y)` on a struct local (`Some(..)` on an `Option<Market>` one). */
     printTypedMarketWrite(left: any, right: any): string | undefined {
         if (isIdentifier(left) && this.rustIsNullWriteOf(left) && this.rustOptMarketLocalOf(left) !== undefined) return `${super.printIdentifier(left)} = None`;
+        if (isIdentifier(left) && this.rustIsSlotParamWriteOf(left) && this.rustOptMarketLocalOf(left) !== undefined) return `${super.printIdentifier(left)} = ${super.printIdentifier(right)}.cloned()`;
         if (isIdentifier(left) && this.rustIsSafeMarketWriteOf(left) && this.rustOptMarketLocalOf(left) !== undefined) return `${super.printIdentifier(left)} = Some(${this.printNode(right, 0).trim()})`;
         if (isIdentifier(left) && this.rustIsOptMarketWriteOf(left) && this.rustOptMarketLocalOf(left) !== undefined) return `${super.printIdentifier(left)} = ${this.printNode(right, 0).trim()}`;
         if (isIdentifier(left) && this.rustMarketAliasWriteSource(left) !== undefined && this.rustOptMarketLocalOf(left) !== undefined
@@ -15851,6 +15869,10 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     printNativeMapAccess(receiverText: string, receiverNode: Node, keyText: string): string | undefined {
+        // ral-50c: an `Option<Market>` local reads through `KeyRead` (Null when empty), as `printOptMarketKeyRead` does
+        if (isIdentifier(receiverNode) && this.rustOptMarketLocalOf(receiverNode) !== undefined && RustTranspiler.rustBearerKeyTextOk(keyText)) {
+            return `crate::value::KeyRead::key_read(&&${receiverText}, "${this.escapeRustStringLiteral(keyText)}")`;
+        }
         // `client.url` on a ws `Client`: the handle's own accessor, no map closure.
         if (keyText === 'url' && this.rustIsWsClientType(this.getCheckedTypeOf(receiverNode))) return `${receiverText}.url()`;
         // A native-map parameter is an `&mut IndexMap` too.
