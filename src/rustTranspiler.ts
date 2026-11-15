@@ -3567,7 +3567,17 @@ export class RustTranspiler extends BaseTranspiler {
             return false;
         }
         const params = this.rustCalleeParams(call);
-        return params !== undefined && this.rustNativeBoolArgumentSlot(params, at);
+        return params !== undefined && (this.rustNativeBoolArgumentSlot(params, at) || this.rustOptionalBoolArgumentSlot(call, params, at));
+    }
+
+    /** ral-45e: the call's `at`-th argument lands in an OPTIONAL venue `boolean` parameter the callee binds
+     *  `let p: bool = get_arg(optional_args, i, ..).is_truthy()`: a native bool local re-boxes as `Value::Bool(x)` there,
+     *  and the callee applies the same truthiness the old `Value` box got. */
+    rustOptionalBoolArgumentSlot(call, params, at: number): boolean {
+        const param: any = params !== undefined && at < params.length ? params[at] : undefined;
+        if (param === undefined || (param.initializer === undefined && param.questionToken === undefined)) return false;
+        if (call?.expression?.kind !== SyntaxKind.PropertyAccessExpression || call.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
+        return this.rustParamPrintsBool(param);
     }
 
     /** Parameter declarations of a call's resolved callee, when the checker has them. */
@@ -12619,7 +12629,9 @@ export class RustTranspiler extends BaseTranspiler {
                         ? this.rustStrVecArgumentText(a, 0)
                         : (this.rustNativeBoolArgumentSlot(calleeParams, at)
                             ? this.rustBoolArgumentText(a, 0)
-                            : this.printNode(a, 0));
+                            : this.rustOptionalBoolArgumentSlot(node, calleeParams, at) && this.rustNativeBoolArgumentText(a) !== undefined
+                                ? `Value::Bool(${this.rustNativeBoolArgumentText(a)})`
+                                : this.printNode(a, 0));
                 const printArgs = (list, from = 0) => list.map((a, i) => this.rustWsWatchSlot(node, from + i) ? this.rustWsWatchSlotText(a, this.printNode(a, 0)) : printArg(a, from + i)).join(', ');
                 // a required positional argument is a by-value hand-off: an owned one is marked (the slice tail keeps its clones)
                 const ownedArgs = (list) => list.map((a, i) => this.rustOwnedArgText(a, this.rustWsWatchSlot(node, i) ? this.rustWsWatchSlotText(a, this.printNode(a, 0)) : printArg(a, i))).join(', ');

@@ -16179,3 +16179,30 @@ describe('ral-44e: ethEncodeStructuredData is a byte producer, its locals hold c
         expect(text).toMatch(/let mut raw: Value = Value::from\(self\.ethEncodeStructuredData\(/);
     });
 });
+
+describe('ral-45e: a bool local handed to an OPTIONAL native-`bool` venue parameter stays bool and re-boxes once', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    hold (x: any): any { return x; }\n}\n";
+    const venue = "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\n"
+        + "export default class venue extends Exchange {\n"
+        + "    tradeType (isContract: boolean = false, isUnified: boolean = false, params: Dict = {}): string {\n        if (isUnified) {\n            return 'u';\n        }\n        return isContract ? 'c' : 's';\n    }\n"
+        + "    viaOptional (params: Dict) {\n        const mode = params['mode'];\n        const isUnified = (mode === 'unified');\n        const t = this.tradeType (true, isUnified, params);\n        if (!isUnified) {\n            return t;\n        }\n        return t + 'x';\n    }\n"
+        + "    boxedOptional (params: Dict) {\n        const mode = params['mode'];\n        const isWide = (mode === 'wide');\n        const t = this.tradeType (false, isWide);\n        return [ isWide, t ];\n    }\n}\n";
+    const out = () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-45e-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), venue);
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        try { return t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+    };
+    test('the local is bool, the optional slot gets Value::Bool(x)', () => {
+        const text = out();
+        expect(text).toContain('let isUnified: bool = get_arg(optional_args, 1, Value::Bool(false)).is_truthy();');
+        expect(text).toMatch(/let mut isUnified: bool = /);
+        expect(text).toMatch(/self\.tradeType\(&\[Value::Bool\(true\), Value::Bool\(isUnified\), /);
+    });
+    test('negative: a bool local also read into a Value slot keeps its box', () => {
+        const text = out();
+        expect(text).toMatch(/let mut isWide: Value = /);
+    });
+});
