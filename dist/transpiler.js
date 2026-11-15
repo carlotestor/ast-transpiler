@@ -67649,7 +67649,7 @@ ${this.getIden(identation)}}`;
     const init = this.unwrapParens(declaration?.initializer);
     if (!isIdentifier3(declaration?.name) || !isCallExpression6(init) || !isPropertyAccessExpression3(init.expression) || init.expression.expression.kind !== SyntaxKind7.ThisKeyword || init.expression.name.text !== "safeValue" || init.arguments.length !== 2)
       return false;
-    if (!/^self\.safe(?:_v|V)alue\((?:\(client\)|__ch|client)\.subscriptions(?:\.clone\(\))?, [^;\n]*\)$/.test(parsedValue))
+    if (!/^self\.safe(?:_v|V)alue\((?:\(client\)|__ch|client)\.subscriptions\.clone\(\), [^;\n]*, &\[\]\)$/.test(parsedValue))
       return false;
     const fn = this.rustEnclosingFunction(declaration);
     const name = String(declaration.name.text);

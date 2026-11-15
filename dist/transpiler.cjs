@@ -67648,7 +67648,7 @@ ${this.getIden(identation)}}`;
     const init = this.unwrapParens(_optionalChain([declaration, 'optionalAccess', _9597 => _9597.initializer]));
     if (!_is.isIdentifier.call(void 0, _optionalChain([declaration, 'optionalAccess', _9598 => _9598.name])) || !_is.isCallExpression.call(void 0, init) || !_is.isPropertyAccessExpression.call(void 0, init.expression) || init.expression.expression.kind !== _ast.SyntaxKind.ThisKeyword || init.expression.name.text !== "safeValue" || init.arguments.length !== 2)
       return false;
-    if (!/^self\.safe(?:_v|V)alue\((?:\(client\)|__ch|client)\.subscriptions(?:\.clone\(\))?, [^;\n]*\)$/.test(parsedValue))
+    if (!/^self\.safe(?:_v|V)alue\((?:\(client\)|__ch|client)\.subscriptions\.clone\(\), [^;\n]*, &\[\]\)$/.test(parsedValue))
       return false;
     const fn = this.rustEnclosingFunction(declaration);
     const name = String(declaration.name.text);
