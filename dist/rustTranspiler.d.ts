@@ -3089,6 +3089,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustListPassthroughCallee(call: any, method: string): boolean;
     /** ral-43a: `{ 'k': x }` (a plain object literal, not a destructuring target) or `return x` of a held endpoint answer. */
     rustDeclaredEndpointWholeBox(n: any): boolean;
+    /** ral-53a: a plain `Value` argument slot of a `this.` method (not extend / omit, not a lent slot, no loop between). */
+    rustSbAliasValueSlot(n: any): boolean;
     rustDeclaredEndpointBoxUse(n: any): boolean;
     /** `this.F` for a checker dict-shaped field (`fundingRates: Dictionary<FundingRate>`) the native insert writes
      *  (`printNativeDictInsert`: `rustFieldStaysDict`). The insert stores whatever handle it is given, so a built map
@@ -3798,6 +3800,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** The call a slot destructures, past parentheses, casts and one `await`. */
     rustAwaitedCall(node: any): any;
     rustHandedSlotBoxUse(n: any, declaration: any): boolean;
+    /** ral-53a: no loop or closure between the source's declaration and the alias declaration. */
+    rustAliasInitOutsideLoop(alias: any, declaration: any): boolean;
     /** No loop or closure between the destructure and this use: a box there copies the slot once. */
     rustSlotUseOutsideLoop(node: any, element: any): boolean;
     /** `Value::Dict(x)` at the slot's last use (moved), else `Value::from(&x)`. */

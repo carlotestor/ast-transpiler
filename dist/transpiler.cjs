@@ -58530,6 +58530,13 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       }
       return this.rustHandedDictLocal(source);
     }
+    if (source !== void 0 && _is.isVariableDeclaration.call(void 0, source) && this.rustHandedTernaryLocal(source) && this.rustHandedDictLocal(source))
+      return true;
+    if (source !== void 0 && _is.isVariableDeclaration.call(void 0, source) && this.rustHandedPending.has(source)) {
+      if (_is.isVariableDeclaration.call(void 0, init.parent) && init.parent.initializer === init)
+        this.rustSbAliasDeferred.add(init.parent);
+      return false;
+    }
     if (source !== void 0 && _is.isVariableDeclaration.call(void 0, source) && this.rustBorrowedPending.has(source) && this.rustContainerAliasAsking.has(init)) {
       this.rustSbAliasDeferred.add(init.parent);
       return false;
@@ -71161,7 +71168,7 @@ ${iden}}`;
         return aeoWriteUses.push(n) > 0 && ++reads > 0;
       if (from === "list" && !nilDeclared && this.rustListIndexLiteralWrite(n))
         return ++listIndexWrites > 0 && ++reads > 0;
-      const handed = () => (optAliasInit && this.rustLocalStoreHandOff(n) && !this.rustScalarInNestedWrite(n, true) && ++optionalBoxes > 0 || this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0 || this.rustBuiltReturnBoxUse(n, init, extendReuse) && ++defaultedBoxes > 0 || this.rustOptReaderBoxUse(n, init) && ++optionalBoxes > 0 || this.rustOptionalParamsSlot(up, n) && (from === "dict" || from === "api" && this.rustDeclaredEndpointKind(init) === "dict") && ++paramsBoxes > 0 || nilDeclared && this.rustDeclaredEndpointBoxUse(n) && ++endpointBoxes > 0 || endpoint && !nilDeclared && (from !== "api" && this.rustDeclaredEndpointWholeBox(n) && ++defaultedBoxes > 0 || from === "dict" && this.rustSafeDictDefaultUse(n))) && boxedElementUses.push(n) > 0;
+      const handed = () => (optAliasInit && this.rustLocalStoreHandOff(n) && !this.rustScalarInNestedWrite(n, true) && ++optionalBoxes > 0 || this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0 || this.rustBuiltReturnBoxUse(n, init, extendReuse) && ++defaultedBoxes > 0 || this.rustOptReaderBoxUse(n, init) && ++optionalBoxes > 0 || this.rustOptionalParamsSlot(up, n) && (from === "dict" || from === "api" && this.rustDeclaredEndpointKind(init) === "dict") && ++paramsBoxes > 0 || nilDeclared && this.rustDeclaredEndpointBoxUse(n) && ++endpointBoxes > 0 || sbAlias && !nilDeclared && this.rustSbAliasValueSlot(n) && ++defaultedBoxes > 0 || endpoint && !nilDeclared && (from !== "api" && this.rustDeclaredEndpointWholeBox(n) && ++defaultedBoxes > 0 || from === "dict" && this.rustSafeDictDefaultUse(n))) && boxedElementUses.push(n) > 0;
       const asArg = _is.isAsExpression.call(void 0, up) && up.expression === n && _is.isCallExpression.call(void 0, up.parent) && Array.from(up.parent.arguments).includes(up) ? up : void 0;
       if (asArg !== void 0 && this.rustLentAsHandOff(asArg, init, from, endpoint, nilDeclared))
         return ++lentResponses > 0 && ++reads > 0 && (this.rustLentAsNullable(init, nilDeclared, endpoint) ? ++lentNullable > 0 : true);
@@ -73231,6 +73238,19 @@ ${iden}}`;
     if (_RustTranspiler.RUST_HANDED_DICT_EXTEND.has(callee) || _RustTranspiler.RUST_HANDED_DICT_OMIT.has(callee))
       return false;
     return !this.rustLentResponseSlot(up, n) && !this.rustLentListSlot(up, n) && this.rustNilBoxSlotOk(up, Array.from(up.arguments).indexOf(n));
+  }
+  /** ral-53a: a plain `Value` argument slot of a `this.` method (not extend / omit, not a lent slot, no loop between). */
+  rustSbAliasValueSlot(n) {
+    const up = n.parent;
+    if (up === void 0 || !_is.isCallExpression.call(void 0, up) || up.expression === n || !_is.isPropertyAccessExpression.call(void 0, up.expression) || up.expression.expression.kind !== _ast.SyntaxKind.ThisKeyword || this.rustScalarInNestedWrite(n, true))
+      return false;
+    const callee = String(up.expression.name.text);
+    if (_RustTranspiler.RUST_HANDED_DICT_EXTEND.has(callee) || _RustTranspiler.RUST_HANDED_DICT_OMIT.has(callee))
+      return false;
+    const declaration = this.rustDeclarationOfIdentifier(n);
+    if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || !this.rustAliasInitOutsideLoop(up, declaration))
+      return false;
+    return !this.rustLentResponseSlot(up, n) && !this.rustLentListSlot(up, n) && !this.rustLentParamsSlot(up, n) && !this.rustOptionalParamsSlot(up, n) && this.rustNilBoxSlotOk(up, Array.from(up.arguments).indexOf(n));
   }
   // ── rustDeclaredEndpointBoxUse (ral-ld): a declared-endpoint optional container handed on whole ──
   // `{ 'info': response }` / `return response`: the box `x.map_or(Value::Null, Value::Dict|Arr)` gives back the
@@ -78976,6 +78996,8 @@ ${iden}}`;
       return true;
     if (_is.isArrayLiteralExpression.call(void 0, up) && _is.isReturnStatement.call(void 0, up.parent) && _optionalChain([declaration, 'optionalAccess', _10590 => _10590.kind]) === _ast.SyntaxKind.BindingElement && _optionalChain([declaration, 'access', _10591 => _10591.parent, 'optionalAccess', _10592 => _10592.elements, 'optionalAccess', _10593 => _10593.indexOf, 'call', _10594 => _10594(declaration)]) === 1)
       return true;
+    if (_is.isVariableDeclaration.call(void 0, up) && up.initializer === n && _is.isVariableDeclaration.call(void 0, declaration) && this.rustHandedTernaryLocal(declaration) && this.rustEnclosingFunction(up) === this.rustEnclosingFunction(declaration) && this.rustAliasInitOutsideLoop(up, declaration))
+      return this.rustSlotTargetStaysValue(up);
     if (!_is.isCallExpression.call(void 0, up) || up.expression === n || !_is.isPropertyAccessExpression.call(void 0, up.expression) || up.expression.expression.kind !== _ast.SyntaxKind.ThisKeyword && up.expression.expression.kind !== _ast.SyntaxKind.SuperKeyword)
       return false;
     const callee = String(up.expression.name.text);
@@ -78986,6 +79008,14 @@ ${iden}}`;
     if (this.rustTypedParamsSlot(up, Array.from(up.arguments).indexOf(n)))
       return true;
     return this.rustNilBoxSlotOk(up, Array.from(up.arguments).indexOf(n));
+  }
+  /** ral-53a: no loop or closure between the source's declaration and the alias declaration. */
+  rustAliasInitOutsideLoop(alias, declaration) {
+    for (let p = alias.parent; p !== void 0 && !(p.pos <= declaration.pos && declaration.end <= p.end); p = p.parent) {
+      if (_chunkC7C726CWcjs.isFunctionLike.call(void 0, p) || p.kind === _ast.SyntaxKind.ForStatement || p.kind === _ast.SyntaxKind.ForOfStatement || p.kind === _ast.SyntaxKind.ForInStatement || p.kind === _ast.SyntaxKind.WhileStatement || p.kind === _ast.SyntaxKind.DoStatement)
+        return false;
+    }
+    return true;
   }
   /** No loop or closure between the destructure and this use: a box there copies the slot once. */
   rustSlotUseOutsideLoop(node, element) {
