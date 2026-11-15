@@ -18267,6 +18267,7 @@ describe('ral-54h: book locals of one name in sibling blocks are proven each on 
         "ts/src/base/Exchange.ts": "import { WsOrderBook } from './ws/OrderBook.js';\nexport interface Dictionary<T> { [key: string]: T }\nexport default class Exchange {\n    orderbooks: Dictionary<WsOrderBook> = {};\n    orderBook (snapshot = {}, depth = 100): WsOrderBook { return new WsOrderBook (snapshot, depth); }\n}\n",
         "ts/src/pro/venue.ts": "import Exchange from '../base/Exchange.js';\nimport Client from '../base/ws/Client.js';\nexport default class venue extends Exchange {\n" +
             "    handleBook (client: Client, message: any, symbol: string, type: string) {\n        if (type === 'snapshot') {\n            const orderbook = this.orderbooks[symbol];\n            orderbook.reset (message);\n            client.resolve (orderbook, 'book');\n        } else if (type === 'update') {\n            const orderbook = this.orderbooks[symbol];\n            orderbook['timestamp'] = 1;\n            client.resolve (orderbook, 'book');\n        }\n    }\n" +
+            "    handleBookDiff (client: Client, message: any, symbol: string) {\n        if (!(symbol in this.orderbooks)) {\n            this.orderbooks[symbol] = this.orderBook ({}, 10);\n        }\n        const orderBook = this.orderbooks[symbol];\n        orderBook['timestamp'] = 1;\n        client.resolve (orderBook, 'book');\n    }\n" +
             "    handleOther (client: Client, message: any, symbol: string, type: string) {\n        const orderbook = this.orderbooks[symbol];\n        if (type === 'snapshot') {\n            const orderbook = this.orderbooks[symbol];\n            orderbook.reset (message);\n        }\n        client.resolve (orderbook, 'book');\n    }\n}\n",
     };
     let out: string;
@@ -18282,6 +18283,9 @@ describe('ral-54h: book locals of one name in sibling blocks are proven each on 
     test('if / else-if siblings: both are optional books', () => {
         const body = out.slice (out.indexOf ('fn handleBook'), out.indexOf ('fn handleOther'));
         expect(body.match(/let mut orderbook: Option<crate::pro::order_book::Book> = self\.orderbooks\.at\(/g)?.length).toBe(2);
+    });
+    test('a local named like a base method (`this.orderBook (..)` is a property name, no binding) stays an optional book', () => {
+        expect(out).toContain('let mut orderBook: Option<crate::pro::order_book::Book> = self.orderbooks.at(');
     });
     test('negative: a nested binding (one block holds the other) keeps the outer local a Value', () => {
         const body = out.slice (out.indexOf ('fn handleOther'));

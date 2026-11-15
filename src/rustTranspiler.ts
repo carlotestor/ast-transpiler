@@ -25321,12 +25321,12 @@ export class RustTranspiler extends BaseTranspiler {
                 let ok: boolean;
                 try {
                     ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+                        const p: any = n.parent;
+                        if ((isPropertyAccessExpression(p) || p?.kind === SyntaxKind.PropertyAssignment) && p.name === n) return true;
                         if (!this.rustIdentifierRefersToDeclaration(n, declaration)) {
                             const other: any = this.rustDeclarationOfIdentifier(n);
                             return other !== undefined && other !== declaration && this.rustDisjointBinding(other, declaration);
                         }
-                        const p: any = n.parent;
-                        if ((isPropertyAccessExpression(p) || p?.kind === SyntaxKind.PropertyAssignment) && p.name === n) return true;
                         if (kind === 'opt' && isBinaryExpression(p) && this.isEqualityOp(p.operatorToken.kind) && this.rustWsCacheUndefined(p.left === n ? p.right : p.left)) { forms.set(n, 'test'); return true; }
                         if (this.rustWsBookMethodReceiver(n) || (kind === 'opt' && this.rustWsBookLimitReturn(n))) { forms.set(n, 'bare'); reads++; return true; }
                         const key = this.rustWsBookFieldKey(n);
