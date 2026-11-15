@@ -11282,7 +11282,8 @@ describe('safe scalar locals, sixth pass: equality partners held as Value', () =
         const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue6.ts')).content;
         // is_equal over Str|Null operands is the variant compare: Option<&str> == Value::as_str (Null == None)
         expect(out).toContain('let mut currencyId: Option<String> = ');
-        expect(out).toContain('(currencyId.as_deref() == code.as_str())');
+        // ral-58k: the safeCurrencyCode partner re-read as a reader default is itself Option<String> now (both sides typed)
+        expect(out).toContain('(code == currencyId)');
         // Int|Null partner: Option<i64> == Value::as_i64
         expect(out).toContain('let mut pu: Option<i64> = ');
         expect(out).toContain('(pu == nonce.as_i64())');
@@ -19635,5 +19636,45 @@ describe('ral-57f: the bucket of a two-level READ this.F[k][k2] lends a String u
         expect(out).not.toContain('accountType.as_str()');
         expect(out).not.toContain('get_value_mut(&mut self.balance, &accountType)');
         for (const line of out.split('\n')) expect(line.length).toBeLessThanOrEqual(400);
+    });
+});
+
+describe('ral-58k: a replace whose operand is an Option<String> local keeps a safeCurrencyCode local typed (bingx parseTransaction code)', () => {
+    const write = (name: string, venue: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeCurrencyCode (currencyId: Str, currency: any = undefined): Str { return currencyId; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), venue);
+        return new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } }).transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    const body = (arg: string) => "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parseTransaction (transaction: Dict): Dict {\n        const network = this.safeString (transaction, 'network');\n        let code = this.safeCurrencyCode (this.safeString (transaction, 'coin'));\n        if ((code !== undefined) && (network !== undefined)) {\n            code = code.replace (" + arg + ", '');\n        }\n        return { 'currency': code, 'network': network };\n    }\n}\n";
+    test('`code = code.replace (network, \'\')` with network an Option<String> local: the receiver stays when network is None', () => {
+        const out = write ('58k-replace-opt', body ('network'));
+        expect(out).toContain('let mut code: Option<String> = ');
+        expect(out).toContain('code = (if let (Some(__s), Some(__o)) = (code.as_deref(), network.as_deref()) { Some(__s.replace(__o, "")) } else { code.clone() });');
+    });
+    test('negative: an operand that is a Value read keeps the local Value', () => {
+        const out = write ('58k-replace-opt-neg', body ('transaction[\'n\']'));
+        expect(out).toContain('let mut code: Value = ');
+    });
+});
+
+describe('ral-58k: a safeCurrencyCode local re-read as a reader default lends at a native insert key (nado parseBalance code)', () => {
+    const write = (name: string, venue: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeDict (o: any, k: any, d: any = undefined): any { return o; }\n    safeCurrencyCode (currencyId: Str, currency: any = undefined): Str { return currencyId; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), venue);
+        return new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } }).transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    const body = (tail: string) => "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parseBalance (response: Dict): Dict {\n        const result: Dict = {};\n        const currencyId = this.safeString (response, 'id');\n        let code = this.safeCurrencyCode (currencyId);\n        if (code === currencyId) {\n            const market = this.safeDict (response, 'm');\n            code = this.safeString (market, 'base', code);\n        }\n" + tail + "        return result;\n    }\n}\n";
+    test('the insert key borrows the typed local', () => {
+        const out = write ('58k-reader-default-key', body ("        if (code !== undefined) {\n            result[code] = response;\n        }\n"));
+        expect(out).toContain('let mut code: Option<String> = ');
+        expect(out).toContain('code.as_deref().unwrap_or("null").to_string()');
+    });
+    test('negative: a plain safeString seed (not a safeCurrencyCode) keeps the local Value', () => {
+        const out = write ('58k-reader-default-key-neg', body ("        if (code !== undefined) {\n            result[code] = response;\n        }\n").replace ('let code = this.safeCurrencyCode (currencyId);', "let code = this.safeString (response, 'c');"));
+        expect(out).toContain('let mut code: Value = ');
     });
 });

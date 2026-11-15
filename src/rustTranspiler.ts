@@ -4861,7 +4861,9 @@ export class RustTranspiler extends BaseTranspiler {
         // ral-56f: an `Option<String>` reader local in a non-test source also lends at native options-field insert keys
         // (rustPlainFieldInsertKey: the printer owns the key text) and at copies into a jointly decided string local
         const readerLent = readerTouched && strKind && boxed > 0 && copied > 0 && !this.rustStrNoLend
-            && (this.rustReaderLendBoxes(declaration) || (kind === 'ostr' && !this.rustTestTierSource(declaration) && this.rustReaderLendBoxes(declaration, true, false, true)));
+            && (this.rustReaderLendBoxes(declaration) || (kind === 'ostr' && !this.rustTestTierSource(declaration) && this.rustReaderLendBoxes(declaration, true, false, true))
+                // ral-58k: a safeCurrencyCode local re-read as a reader default (nado parseBalance `code`) also lends at native insert keys
+                || (kind === 'ostr' && !this.rustTestTierSource(declaration) && this.rustSafeCurrencyCodeInit(declaration.initializer) && this.rustReaderLendBoxes(declaration, true)));
         if (readerTouched && strKind && ((boxed > 0 && copied > 0 && !readerLent) || this.rustReaderStrHandedOn(declaration))) return undefined;
         if (readerLent) this.rustStrLentLocals.add(declaration);
         // ud: a local seeded from a venue override of a native-`Str` base method never copies where the `Value` moved
@@ -9576,7 +9578,8 @@ export class RustTranspiler extends BaseTranspiler {
             if (shape === 'vslice') return this.rustStrSliceVarBounds(args) === undefined ? undefined : { recv, recvKind, method, kind: recvKind };
             if (shape === 'vaffix') return this.rustStrVarNeedle(args[0], method === 'includes') === undefined ? undefined : { recv, recvKind, method, kind: 'bool' };
             if (shape === 'vfind') return this.rustStrFindNeedle(args[0], false) === undefined ? undefined : { recv, recvKind, method, kind: 'int' };
-            return args.every((a) => this.rustStrReplaceOperand(a) !== undefined) ? { recv, recvKind, method, kind: recvKind } : undefined;
+            // ral-58k: one `Option<String>` local operand (the boxed form kept the receiver when it was `Null`)
+            return args.every((a) => this.rustStrReplaceOperand(a) !== undefined) || this.rust58kOptReplaceArgs(args) !== undefined ? { recv, recvKind, method, kind: recvKind } : undefined;
         }
         if (shape === 'find') return this.rustStrFindNeedle(args[0], false) === undefined ? undefined : { recv, recvKind, method, kind: 'int' };
         // pad / slice on a typed local, or on a typed parameter read: a `&str` parameter's binding is never `Null`
@@ -9652,6 +9655,23 @@ export class RustTranspiler extends BaseTranspiler {
         const lit = this.rustNativeStringLiteralArg(inner);
         if (lit !== undefined) return inner.text === '' && !empty ? undefined : `Some("${lit}")`;
         return this.rustStrFindNeedle(inner, false);
+    }
+
+    /** ral-58k: `x.replace (o, to)` where exactly one operand `o` is an `Option<String>` local (decided from the AST: a typed
+     *  string identifier) and the other a never-`Null` operand. The boxed form answered the receiver itself when `o` was `Null`
+     *  (`recv.as_str().zip(o.as_deref()).map(..).unwrap_or_else(|| recv.clone())`): the native form keeps that arm. */
+    rust58kOptReplaceArgs(args: any[]): { index: number, opt: string, other: string } | undefined {
+        if (args.length !== 2) return undefined;
+        const opt = (a: any) => {
+            const inner: any = this.unwrapParens(a);
+            return isIdentifier(inner) && inner.text !== 'undefined' && this.rustScalarIdentifierKind(inner) === 'ostr' && !this.rust41bWsKeyLocal(inner) ? inner : undefined;
+        };
+        for (const index of [ 0, 1 ]) {
+            const o = opt(args[index]);
+            const other = this.rustStrReplaceOperand(args[1 - index]);
+            if (o !== undefined && other !== undefined) return { index, opt: `${super.printIdentifier(o)}.as_deref()`, other };
+        }
+        return undefined;
     }
 
     /** 41b: a replace operand that is never `Null`: a string literal or a `String` local (`&str` text). */
@@ -10813,6 +10833,13 @@ export class RustTranspiler extends BaseTranspiler {
             }
             if ((method.method === 'replace' || method.method === 'replaceAll') && !args.every((a) => this.rustNativeStringLiteralArg(a) !== undefined)) {
                 // 41b: never-`Null` operands: the helper's all-`Str` arm (every occurrence), `None` for a `None` receiver
+                const optArgs = args.every((a) => this.rustStrReplaceOperand(a) !== undefined) ? undefined : this.rust58kOptReplaceArgs(args);
+                if (optArgs !== undefined) {
+                    // ral-58k: `None` operand -> the receiver unchanged, as the boxed form's fallback
+                    const [ f, r ] = optArgs.index === 0 ? [ '__o', optArgs.other ] : [ optArgs.other, '__o' ];
+                    if (method.recvKind === 'ostr') return wrap(`(if let (Some(__s), Some(__o)) = (${name}.as_deref(), ${optArgs.opt}) { Some(__s.replace(${f}, ${r})) } else { ${name}.clone() })`);
+                    return wrap(`(if let Some(__o) = ${optArgs.opt} { ${name}.replace(${f}, ${r}) } else { ${name}.clone() })`);
+                }
                 const [ from, to ] = args.map((a) => this.rustStrReplaceOperand(a));
                 if (method.recvKind === 'ostr') return wrap(`(if let Some(__s) = ${name}.as_deref() { Some(__s.replace(${from}, ${to})) } else { None })`);
                 return wrap(`${name}.replace(${from}, ${to})`);
