@@ -56212,6 +56212,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return this.rustScalarValueKind(cast, fresh) === "ostr" ? "ostr" : void 0;
     if (fresh && this.rustClockString(node))
       return "str";
+    if (fresh && this.rustNumParamToString(node))
+      return "str";
     if (fresh && this.rustSbJoinShape(node))
       return "str";
     if (this.rustArithCombinator(node))
@@ -56870,6 +56872,17 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (this.rustStrCastCall(node) === void 0 && !this.rustClockString(node) && !this.rustSumShape(node) && !this.rustIntToStringShape(node))
       return false;
     return typedUses === 0 || copied > 0;
+  }
+  /** ral-45g: `p.toString()` (no radix) of a parameter the checker types `number`: the printer already boxes
+   *  `format!("{}", p)` (the decimal text `Display` gives the `Int` / `Float` box), so the local holds that String. */
+  rustNumParamToString(node) {
+    if (node === void 0 || !isCallExpression6(node) || node.arguments.length !== 0 || !isPropertyAccessExpression3(node.expression) || String(node.expression.name.text) !== "toString")
+      return false;
+    const recv = this.unwrapParens(node.expression.expression);
+    if (recv === void 0 || !isIdentifier3(recv) || this.rustTestTierSource(node))
+      return false;
+    const d = this.rustDeclaredNode(recv);
+    return d !== void 0 && isParameterDeclaration3(d) && d.type !== void 0 && d.questionToken === void 0 && d.initializer === void 0 && this.primitiveKindOfType(this.typeOfNodeIfAny(recv)) === "number";
   }
   /** `n.toString()` of an `i64` scalar local. */
   rustIntToStringShape(node) {
@@ -59688,6 +59701,10 @@ ${binding(plan.indent)}` : ""), head: "" };
       return wrap(`format!("{}", ${this.printNode(this.unwrapParens(clock), 0).trim()})`);
     if (clock !== void 0)
       return wrap(`format!("{}", ${this.rustScalarNativeText("int", clock)})`);
+    if (base === "str" && this.rustNumParamToString(node)) {
+      const boxed = text.match(/^Value::Str\((format!\(.*\))\.into\(\)\)$/s);
+      return boxed !== null ? wrap(boxed[1]) : wrap(`${text}.as_str().unwrap_or_default().to_string()`);
+    }
     const fallback = node.arguments[node.arguments.length - 1];
     const defaulted = this.rustScalarValueKind(node, true) === base;
     if (kind === "int" && this.rustVenueParseToInt(node) && this.rustBaseTypedReturnKind(node) === "oint")
@@ -69908,7 +69925,7 @@ ${iden}}`;
     const extendReuse = from === void 0 && init !== void 0 && this.rustExtendReuseLiteral(declaration, init);
     if (extendReuse)
       from = "dict";
-    const keyReadOnly = from === void 0 && !nilDeclared && init !== void 0 && this.rustSafeValueKeyReadSource(init);
+    const keyReadOnly = from === void 0 && !nilDeclared && init !== void 0 && (this.rustSafeValueKeyReadSource(init) || this.rustKeyReadTernarySource(init));
     if (keyReadOnly)
       from = "dict";
     const elemKeyReadOnly = from === void 0 && !nilDeclared && init !== void 0 && this.rustListRowKeyReadSource(init);
@@ -69926,6 +69943,9 @@ ${iden}}`;
       from = "list";
     const mapTernary = from === void 0 && !nilDeclared && init !== void 0 && this.rustMapTernaryInit(init);
     if (mapTernary)
+      from = "dict";
+    const optTernary = from === void 0 && !nilDeclared && init !== void 0 && this.rustOptMapTernaryInit(init);
+    if (optTernary)
       from = "dict";
     let sbMapWrites = 0;
     if (from === void 0 && !nilDeclared)
@@ -70136,7 +70156,7 @@ ${iden}}`;
     if ((keyReads > 0 || init !== void 0 && isCallExpression6(init) && this.rustRecordLookupSource(init)) && !this.rustEcdsaCall(init) && !this.rustDictKeyReadLineOk(declaration, name))
       return void 0;
     const zgRow = this.rustZgSiblingRows.has(declaration) && boxedElementUses.length > 0;
-    const optional = nilDeclared || nullTests > 0 || writes > 0 || lentNullable > 0 || optionalBoxes > 0 || zgRow || elementKeyWrites > 0;
+    const optional = nilDeclared || nullTests > 0 || writes > 0 || lentNullable > 0 || optionalBoxes > 0 || zgRow || elementKeyWrites > 0 || optTernary;
     if (jwtLends > 0 && optional)
       return void 0;
     if (aliasBoxes > 0 && (optional || reads === 0 && aliasBoxes === boxedElementUses.length))
@@ -70174,7 +70194,7 @@ ${iden}}`;
     for (const n of indexReadUses)
       this.rustBorrowedIndexReads.add(n.parent);
     if (optional) {
-      if (from === "api" || nilDeclared && writes === 0 || !nilDeclared && !((zgRow || elementKeyWrites > 0) && this.rustDictElementSource(init)) && !this.rustOptContainerSourceOk(init, from))
+      if (from === "api" || nilDeclared && writes === 0 || !nilDeclared && !((zgRow || elementKeyWrites > 0) && this.rustDictElementSource(init)) && !optTernary && !this.rustOptContainerSourceOk(init, from))
         return void 0;
       this.rustOptContainerLocals.add(declaration);
     }
@@ -71684,6 +71704,18 @@ ${iden}}`;
     };
     return arm(node.whenTrue) && arm(node.whenFalse);
   }
+  /** ral-45g: `c ? undefined : <src>` / `c ? <src> : undefined` where `<src>` is a base map source the optional form takes
+   *  (`safeDict` with no / nullish / `{}` default, extend / omit): Null on one path, that map (or its Null) on the other. */
+  rustOptMapTernaryInit(init) {
+    const node = this.rustSkipWrappers(init);
+    if (node === void 0 || !isConditionalExpression4(node))
+      return false;
+    const t = this.rustSkipWrappers(node.whenTrue);
+    const f = this.rustSkipWrappers(node.whenFalse);
+    const isNil = (x) => x !== void 0 && this.literalKindOfNode(x) === "null";
+    const src = (x) => x !== void 0 && isCallExpression6(x) && isPropertyAccessExpression3(x.expression) && x.expression.expression.kind === SyntaxKind7.ThisKeyword && /^safeDict2?$|^extend$|^deepExtend$|^omit$/.test(String(x.expression.name.text)) && this.rustBorrowedSourceKind(x) === "dict" && this.rustOptContainerSourceOk(x, "dict");
+    return isNil(t) && src(f) || src(t) && isNil(f);
+  }
   rustDictTernaryCall(call) {
     const callee = call.expression;
     if (!isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword)
@@ -72497,6 +72529,33 @@ ${iden}}`;
       return false;
     const names = (x) => isPropertyAccessExpression3(x) && /^(?:markets|markets_by_id|currencies|currencies_by_id|clients|futures|subscriptions|orderbooks|cache)$/.test(String(x.name.text)) || (x.forEachChild(names) ?? false);
     return !names(call.arguments[0]);
+  }
+  /** ral-45g: `c ? a : b` whose arms are each a local / parameter, a numeric-index row, an empty map literal or a ral-qa
+   *  `safeValue` source: whatever kind each arm holds, a string-key read of a non-map answers Null exactly as the empty map
+   *  `into_dict()` leaves, so under ral-qa's use rule (literal-key base reads only) the typed local is observably identical.
+   *  No arm names ws client state nor a market / currency table. */
+  rustKeyReadTernarySource(init) {
+    const node = this.rustSkipWrappers(init);
+    if (node === void 0 || !isConditionalExpression4(node) || this.rustTestTierSource(node))
+      return false;
+    const names = (x) => isPropertyAccessExpression3(x) && /^(?:markets|markets_by_id|currencies|currencies_by_id|clients|futures|subscriptions|orderbooks|cache)$/.test(String(x.name.text)) || (x.forEachChild(names) ?? false);
+    const arm = (x) => {
+      const a = this.rustSkipWrappers(x);
+      if (a === void 0 || names(a))
+        return false;
+      if (isIdentifier3(a)) {
+        const d = this.rustDeclaredNode(a);
+        return d !== void 0 && (isVariableDeclaration3(d) || isParameterDeclaration3(d));
+      }
+      if (isObjectLiteralExpression4(a))
+        return a.properties.length === 0;
+      if (isElementAccessExpression4(a) && isIdentifier3(a.expression)) {
+        const key = this.rustSkipWrappers(a.argumentExpression);
+        return key !== void 0 && (isNumericLiteral4(key) || this.primitiveKindOfType(this.typeOfNodeIfAny(key)) === "number") && !this.rustWsCacheMapLike(a.expression);
+      }
+      return isCallExpression6(a) && this.rustSafeValueKeyReadSource(a);
+    };
+    return arm(node.whenTrue) && arm(node.whenFalse);
   }
   /** ral-42g: `xs[i]` (a numeric index) where `xs` is a local or parameter the checker types as a list (`T[]`, never a tuple, an
    *  ArrayCache or an order book side) outside the test tier: the row a counter loop binds. Read only at literal string keys (the

@@ -742,6 +742,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustSumShape(node: any): boolean;
     /** A cast, clock-string or `sum` local must earn a native use, and a string one never copies where the `Value` moved. */
     rustNewShapeCostly(init: any, typedUses: number, copied: number): boolean;
+    /** ral-45g: `p.toString()` (no radix) of a parameter the checker types `number`: the printer already boxes
+     *  `format!("{}", p)` (the decimal text `Display` gives the `Int` / `Float` box), so the local holds that String. */
+    rustNumParamToString(node: any): boolean;
     /** `n.toString()` of an `i64` scalar local. */
     rustIntToStringShape(node: any): boolean;
     rustStrCastCall(node: any): any;
@@ -2247,7 +2250,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     nativeEqualityText(node: any): string;
     unwrapParens(node: any): any;
     hasNativeComparisonOperand(node: any): any;
-    printLogicalInBooleanContext(node: any): any;
+    printLogicalInBooleanContext(node: any): string;
     printWhileStatement(node: any, identation: any): string;
     printIfStatement(node: any, identation: any): string;
     printPostFixUnaryExpression(node: any, identation: any): string;
@@ -2861,6 +2864,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-44g: `c ? a : b` where each arm is an empty map literal `{}` or a base map producer call (`safeDict` with a literal `{}`
      *  default, extend / omit): every path answers a map, so the local is a map producer. An `undefined` arm keeps Value. */
     rustMapTernaryInit(init: any): boolean;
+    /** ral-45g: `c ? undefined : <src>` / `c ? <src> : undefined` where `<src>` is a base map source the optional form takes
+     *  (`safeDict` with no / nullish / `{}` default, extend / omit): Null on one path, that map (or its Null) on the other. */
+    rustOptMapTernaryInit(init: any): boolean;
     rustDictTernaryCall(call: any): boolean;
     private rustNilResponseLocals;
     /** The container kind of a write to a borrowed local; an endpoint write to an empty `let` counts as a map. */
@@ -2963,6 +2969,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBorrowedSourceKind(call: any): 'dict' | 'list' | 'api' | undefined;
     private static readonly RUST_SAFE_VALUE_KEY_SOURCES;
     rustSafeValueKeyReadSource(call: any): boolean;
+    /** ral-45g: `c ? a : b` whose arms are each a local / parameter, a numeric-index row, an empty map literal or a ral-qa
+     *  `safeValue` source: whatever kind each arm holds, a string-key read of a non-map answers Null exactly as the empty map
+     *  `into_dict()` leaves, so under ral-qa's use rule (literal-key base reads only) the typed local is observably identical.
+     *  No arm names ws client state nor a market / currency table. */
+    rustKeyReadTernarySource(init: any): boolean;
     /** ral-42g: `xs[i]` (a numeric index) where `xs` is a local or parameter the checker types as a list (`T[]`, never a tuple, an
      *  ArrayCache or an order book side) outside the test tier: the row a counter loop binds. Read only at literal string keys (the
      *  ral-qa use rule), a non-map row (Null, list, scalar, out of range) reads Null there exactly as the empty map `into_dict()`
