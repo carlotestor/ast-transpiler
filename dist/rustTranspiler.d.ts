@@ -1192,6 +1192,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  `Math.*` / ternary, or initialises / is written into another local): those partners belong to other groups. */
     rustSbHasPartner(declaration: any): boolean;
     private rustSbJoinMemo;
+    /** ral-68a R3: `recv.join('<sep>')` (an identifier or `this.<field>` receiver the checker types as an array) that is the
+     *  whole right side of a statement `x = ..` into an identifier: every printed join form answers a `Str` (a non-list
+     *  receiver joins to `""`), never `Null`. */
+    rust68aJoinWrite(node: any): boolean;
     /** sb: `xs.join(sep)` as a local's initializer: every printed join form is `Value::Str(<String>.into())` (a non-list
      *  receiver joins to `""`, never `Null`), so the local is that `String`. Only at a declaration initializer. */
     rustSbJoinShape(node: any): boolean;
@@ -1354,6 +1358,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustThisFieldLiteralWrite(n: any): boolean;
     /** ud: `n` is the whole right side of `x[k1][k2] = n` with `x` a typed two-level local map (`rustNestedBearerInsert`). */
     rustUdNestedBearerValue(n: any): boolean;
+    /** ral-68a R2: `n` is a property value inside an object literal (possibly nested in further object literals) that is the
+     *  whole right-hand side of a statement `x['a']['b'] = {..}` the printer prints itself (rustBearerLitChainValue). */
+    rust68aBearerLitChainLiteralValue(n: any): boolean;
     /** ral-55k: `n` is the whole right side of a statement `x['a']['b'] = n` with `x` a typed one-level map bearer and both keys
      *  plain string literals (rustBearerChainedWrite prints the two-level guarded native insert). */
     rustBearerLitChainValue(n: any): boolean;
@@ -1693,6 +1700,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** Joins the initializer kind with every `x = <rhs>` write: a nullish write makes the local optional. */
     rustScalarWidenedKind(declaration: any, kind: string): string;
     rustOptParamKind(expr: any): string | undefined;
+    /** ral-68a R1: an identifier read of an unwritten parameter whose typed signature slot is `&str` / `Option<&str>`
+     *  (decided from the signature table / per-venue string slot, never from printed text). */
+    rust68aStrParamWrite(node: any): boolean;
     private static readonly RUST_PARAM_READ;
     rustOptParamText(kind: string, node: any): string | undefined;
     rustScalarParamRead(node: any): {

@@ -54594,6 +54594,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (!this.rustNilDecodedWrite(rhs))
         writes++;
       let write = isIdentifier3(rhs) && this.literalKindOfNode(rhs) !== "null" ? this.rustScalarIdentifierKind(rhs) ?? (this.rustNilValueStrAlias(rhs) ? "ostr" : void 0) : this.rustScalarValueKind(rhs, true);
+      if (write === void 0 && isIdentifier3(rhs) && this.rust68aStrParamWrite(rhs))
+        write = "ostr";
       if (write === void 0)
         write = this.rustNilSelfArmTernaryKind(rhs, declaration);
       if (write === void 0 && this.rust45bSelfStrWrite(rhs, declaration))
@@ -56616,7 +56618,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       this.rustStrLentLocals.add(declaration);
     if (kind === "str" && copied > 0 && this.rustRandomBytesCall(clockInit) && !this.rustStrNoLend && this.rustReaderLendBoxes(declaration))
       this.rustStrLentLocals.add(declaration);
-    if (!numericSum && !clockLent && this.rustNewShapeCostly(declaration.initializer, typedUses, kind === "str" || kind === "ostr" ? copied : 0))
+    const castLent = strKind && typedUses > 0 && copied > 0 && this.rustStrCastCall(clockInit) !== void 0 && !this.rustStrNoLend && !this.rust66s3StrReturnedVeto(declaration, scope) && this.rustReaderLendBoxes(declaration);
+    if (castLent)
+      this.rustStrLentLocals.add(declaration);
+    if (!numericSum && !clockLent && !castLent && this.rustNewShapeCostly(declaration.initializer, typedUses, kind === "str" || kind === "ostr" ? copied : 0))
       return void 0;
     if (this.rustFieldKeyCostly(declaration))
       return void 0;
@@ -56942,6 +56947,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (fresh && this.rustIdString(node) && !this.rustIntToStringShape(node))
       return "str";
     if (fresh && this.rustSbJoinShape(node))
+      return "str";
+    if (fresh && this.rust68aJoinWrite(node))
       return "str";
     if (this.rustArithCombinator(node))
       return this.rustArithCallKind(node);
@@ -59470,6 +59477,26 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustSbPartnerMemo.set(declaration, partner);
     return partner;
   }
+  /** ral-68a R3: `recv.join('<sep>')` (an identifier or `this.<field>` receiver the checker types as an array) that is the
+   *  whole right side of a statement `x = ..` into an identifier: every printed join form answers a `Str` (a non-list
+   *  receiver joins to `""`), never `Null`. */
+  rust68aJoinWrite(node) {
+    if (node === void 0 || !isCallExpression6(node) || !isPropertyAccessExpression3(node.expression) || String(node.expression.name.text) !== "join" || node.arguments.length !== 1 || this.literalKindOfNode(this.unwrapParens(node.arguments[0])) !== "string")
+      return false;
+    const recv = this.unwrapParens(node.expression.expression);
+    const thisField = isPropertyAccessExpression3(recv) && recv.expression.kind === SyntaxKind7.ThisKeyword;
+    if (!isIdentifier3(recv) && !thisField)
+      return false;
+    const checker = this.checkerOrUndefined();
+    const recvType = checker === void 0 ? void 0 : this.typeOfNodeIfAny(recv);
+    if (recvType === void 0 || !checker.isArrayType?.(checker.getNonNullableType(recvType)))
+      return false;
+    let top = node;
+    while (isParenthesizedExpression3(top.parent))
+      top = top.parent;
+    const write = top.parent;
+    return isBinaryExpression5(write) && write.right === top && write.operatorToken.kind === SyntaxKind7.EqualsToken && isIdentifier3(write.left) && write.parent?.kind === SyntaxKind7.ExpressionStatement;
+  }
   /** sb: `xs.join(sep)` as a local's initializer: every printed join form is `Value::Str(<String>.into())` (a non-list
    *  receiver joins to `""`, never `Null`), so the local is that `String`. Only at a declaration initializer. */
   rustSbJoinShape(node) {
@@ -59713,6 +59740,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "concat";
     if (kind === "ostr" && this.rust65bCastToStringRecv(n))
       return "concat";
+    if ((kind === "str" || kind === "ostr") && this.rust68aBearerLitChainLiteralValue(n) && this.rustLocalLastUse(n, this.rustDeclaredNode(n)))
+      return "box";
     if (this.rustScalarInNestedWrite(n))
       return void 0;
     if (kind === "str" && this.rustScalarInsertKeyUse(n))
@@ -60690,6 +60719,23 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (!isElementAccessExpression4(outer) || !isElementAccessExpression4(outer.expression))
       return false;
     return this.rustNestedDictBearerDeclaration(outer.expression.expression) !== void 0;
+  }
+  /** ral-68a R2: `n` is a property value inside an object literal (possibly nested in further object literals) that is the
+   *  whole right-hand side of a statement `x['a']['b'] = {..}` the printer prints itself (rustBearerLitChainValue). */
+  rust68aBearerLitChainLiteralValue(n) {
+    const prop = n.parent;
+    if (prop?.kind !== SyntaxKind7.PropertyAssignment || prop.initializer !== n)
+      return false;
+    let lit = prop.parent;
+    while (isObjectLiteralExpression4(lit)) {
+      const up = lit.parent;
+      if (up?.kind === SyntaxKind7.PropertyAssignment && up.initializer === lit && isObjectLiteralExpression4(up.parent)) {
+        lit = up.parent;
+        continue;
+      }
+      return this.rustBearerLitChainValue(lit);
+    }
+    return false;
   }
   /** ral-55k: `n` is the whole right side of a statement `x['a']['b'] = n` with `x` a typed one-level map bearer and both keys
    *  plain string literals (rustBearerChainedWrite prints the two-level guarded native insert). */
@@ -61786,6 +61832,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       return optional ? "None" : void 0;
     if (kind === "str" && this.rustSbJoinShape(node))
       return this.rustSbJoinText(node);
+    if (base === "str" && this.rust68aJoinWrite(node))
+      return wrap(this.rustSbJoinText(node));
     if (this.rustBaseTypedReturnKind(node) !== void 0 && !(kind === "int" && this.rustVenueParseToInt(node)))
       return this.rustBaseTypedText(kind, node);
     const paramText = this.rustOptParamText(kind, node);
@@ -62894,6 +62942,13 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
     }
     return kind;
   }
+  // the typed argument's own `Value` rebinding read back as the native kind the signature declared
+  /** ral-68a R1: an identifier read of an unwritten parameter whose typed signature slot is `&str` / `Option<&str>`
+   *  (decided from the signature table / per-venue string slot, never from printed text). */
+  rust68aStrParamWrite(node) {
+    const kind = this.rustOptParamKind(node);
+    return kind === "str" || kind === "ostr";
+  }
   rustOptParamText(kind, node) {
     const narrowed = isConditionalExpression4(node) ? this.rustOptParamDefault(node) : void 0;
     if (narrowed !== void 0 && (narrowed.kind === kind || `o${narrowed.kind}` === kind))
@@ -62987,6 +63042,8 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
         return narrowed === kind || `o${narrowed}` === kind;
     }
     if (isIdentifier3(node) && this.rustOptParamKind(node) === kind)
+      return true;
+    if (kind === "ostr" && isIdentifier3(node) && this.rustOptParamKind(node) === "str")
       return true;
     return kind === "bool" && this.rustBoolNativeText(node) !== void 0;
   }
@@ -88827,7 +88884,6 @@ _RustTranspiler.RUST_ALWAYS_INT_CALLS = /* @__PURE__ */ new Set(["milliseconds",
 // operand exactly an `Option<f64>` (`None` where the helper answers `Null`). `Math.abs` keeps an `Int` as `Int`,
 // so it is taken only over `num` / `onum` operands.
 _RustTranspiler.RUST_MATH_FLOAT_OPS = /* @__PURE__ */ new Set(["floor", "round", "ceil", "abs", "pow"]);
-// the typed argument's own `Value` rebinding read back as the native kind the signature declared
 _RustTranspiler.RUST_PARAM_READ = {
   oint: "as_i64()",
   onum: "as_f64()",
