@@ -34077,3 +34077,63 @@ GoTranspiler.prototype.goDeclaredTypeOfIdentifier = function (node) {
     this.goLocalSafeVerdicts.delete(owner);
     return answer;
 };
+
+// ---- 84g7 R2: a defined int64 pointer arm next to a Go `int` arm --------------------------------
+// `const n = (limit === undefined) ? defaultLimit : limit` with `limit` a `*int64` the condition proves
+// defined on its branch and `defaultLimit` a Go `int` local (an integer-literal seed): the literal kept a
+// boxed `int` or a boxed `*int64`; both read as the same integer through every helper. The local is
+// declared `int64`, the pointer arm is dereferenced on the branch that proves it defined and the `int` arm
+// converts with Go's own `int64(..)`, so later reads are native int64 operations.
+interface GoTernaryJoinIntParts { goType: string, derefTrue: boolean, derefFalse: boolean, widenTrue?: boolean, widenFalse?: boolean }
+
+const goTernaryJoinR1PartsUncached = GoTranspiler.prototype.goTernaryJoinPartsUncached;
+GoTranspiler.prototype.goTernaryJoinPartsUncached = function (declaration) {
+    const known = goTernaryJoinR1PartsUncached.call(this, declaration);
+    if (known !== undefined) {
+        return known;
+    }
+    const ternary: any = this.goUnwrapParenthesizedNode(declaration?.initializer);
+    if (ternary?.kind !== SyntaxKind.ConditionalExpression) {
+        return undefined;
+    }
+    const whenTrue = this.goTernaryJoinArmType(ternary.whenTrue);
+    const whenFalse = this.goTernaryJoinArmType(ternary.whenFalse);
+    if (this.goWithExprDepth(1, () => this.printCondition(ternary.condition, 0)).includes('\n')) {
+        return undefined;
+    }
+    const pointerArm = (armNode, armType: string, otherType: string, outcome: boolean): boolean => {
+        const arm: any = this.goUnwrapParenthesizedNode(armNode);
+        return (armType === '*int64') && (otherType === 'int') && (arm?.kind === SyntaxKind.Identifier)
+            && this.goTernaryJoinConditionDefines(ternary.condition, arm.text, outcome);
+    };
+    if (pointerArm(ternary.whenTrue, whenTrue, whenFalse, true)) {
+        return { goType: 'int64', derefTrue: true, derefFalse: false, widenFalse: true } as GoTernaryJoinIntParts;
+    }
+    if (pointerArm(ternary.whenFalse, whenFalse, whenTrue, false)) {
+        return { goType: 'int64', derefTrue: false, derefFalse: true, widenTrue: true } as GoTernaryJoinIntParts;
+    }
+    return undefined;
+};
+
+const goTernaryJoinR1Declaration = GoTranspiler.prototype.goTernaryJoinDeclaration;
+GoTranspiler.prototype.goTernaryJoinDeclaration = function (statement, declaration, identation: number) {
+    const parts = (goTernaryJoinOwner(declaration?.initializer) === declaration) ? (this.goTernaryJoinParts(declaration) as GoTernaryJoinIntParts) : undefined;
+    if ((parts === undefined) || (!parts.widenTrue && !parts.widenFalse)) {
+        return goTernaryJoinR1Declaration.call(this, statement, declaration, identation);
+    }
+    if ((statement?.parent?.kind !== SyntaxKind.FirstStatement) || (statement.declarations?.length !== 1)
+        || (this.getGoLocalType(declaration, this.printNode(declaration.initializer, identation)) !== parts.goType)) {
+        return undefined;
+    }
+    const ternary: any = this.goUnwrapParenthesizedNode(declaration.initializer);
+    const condition = this.goWithExprDepth(1, () => this.printCondition(ternary.condition, 0));
+    const arm = (node, deref: boolean, widen: boolean) => {
+        const printed = this.goPrintTernaryBranch(node, 1).trim();
+        return deref ? ('*' + printed) : (widen ? ('int64(' + printed + ')') : printed);
+    };
+    const whenTrue = arm(ternary.whenTrue, parts.derefTrue, parts.widenTrue === true);
+    const whenFalse = arm(ternary.whenFalse, parts.derefFalse, parts.widenFalse === true);
+    const name = this.printNode(declaration.name, 0);
+    const iden = this.getIden(identation);
+    return `${iden}var ${name} ${parts.goType}\n${iden}if ${this.goStripControlClauseParens(condition)} {\n${iden}\t${name} = ${whenTrue}\n${iden}} else {\n${iden}\t${name} = ${whenFalse}\n${iden}}`;
+};

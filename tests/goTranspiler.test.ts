@@ -14426,3 +14426,24 @@ describe('84g7 ternary locals copied into a defaulted parameter scan', () => {
         expect(out).not.toContain('Int64PtrTyped(cappedLimit)');
     });
 });
+
+describe('84g7 R2 int64 pointer arm next to an int arm', () => {
+    test('a defined *int64 arm and an int local arm declare int64 with a deref and an int64() conversion', () => {
+        const x = new Transpiler({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        installCcxtGoLocalTypes(x.goTranspiler);
+        const src = 'type Int = number | undefined;\n'
+            + 'class X {\n'
+            + '    f (method: string, rpi: boolean, limit: Int = undefined) {\n'
+            + '        const request = {};\n'
+            + '        const defaultLimit = (method === \'full\') ? 5000 : 100;\n'
+            + '        const requestedLimit = (limit === undefined) ? defaultLimit : limit;\n'
+            + '        const limitResolved = rpi ? 400 : requestedLimit;\n'
+            + '        request[\'sz\'] = limitResolved;\n'
+            + '        return request;\n'
+            + '    }\n'
+            + '}\n';
+        const out = x.transpileGo(src).content;
+        expect(out).toContain('\tvar requestedLimit int64\n\tif limit == nil {\n\t\trequestedLimit = int64(defaultLimit)\n\t} else {\n\t\trequestedLimit = *limit\n\t}');
+        expect(out).toContain('\tvar limitResolved int64\n');
+    });
+});
