@@ -56421,7 +56421,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
           copied++;
       } else if (form !== void 0 && !this.rustIdentifierIsPropertyName(n))
         nativeUses++;
-      if (form === "test" || form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "lwrite" || form === "okey" || form === "fin" || form === "frd" || form === "fok" || form === "kin" || form === "nkey" || form === "ukey" || form === "parg" || form === "dkey" || form === "key" && this.rustOkeyLocal(n) && this.rustElemInsertKey(n) || form === "mkey" && this.rust63kDictParamNestedKey(n))
+      if (form === "test" || form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "lwrite" || form === "okey" || form === "fin" || form === "frd" || form === "fok" || form === "kin" || form === "nkey" || form === "ukey" || form === "parg" || form === "dkey" || form === "bkey" || form === "key" && this.rustOkeyLocal(n) && this.rustElemInsertKey(n) || form === "mkey" && this.rust63kDictParamNestedKey(n))
         typedUses++;
       if (form === "xbox" || form === "native" || form === "targ" || form === "err")
         expressionUses = true;
@@ -59502,6 +59502,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "okey";
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rust63eChainLinkKeyRead(n))
       return "okey";
+    if ((kind === "str" || kind === "ostr") && this.rust64kBookKeyRead(n))
+      return "bkey";
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustUrlsKeyReadUse(n))
       return "okey";
     if (kind === "str" && this.rustStrLiteralTernaryLocal(n) && this.rustOkeyReadUse(n))
@@ -60928,11 +60930,11 @@ ${binding(plan.indent)}` : ""), head: "" };
       if (this.rustIdentifierIsPropertyName(n))
         return n.parent?.kind !== SyntaxKind7.ShorthandPropertyAssignment;
       const form = this.rustScalarUseForms.get(n);
-      if (keyed && (form === "okey" || form === "kin" || form === "key" || form === "inbox"))
+      if (keyed && (form === "okey" || form === "kin" || form === "key" || form === "inbox" || form === "bkey"))
         return false;
       if (this.rustElemKeyFeedsPushedLocal(n))
         return false;
-      if (form === "test" || form === "concat" || form === "okey" || form === "kin" || form === "key" || form === "inbox")
+      if (form === "test" || form === "concat" || form === "okey" || form === "kin" || form === "key" || form === "inbox" || form === "bkey")
         return true;
       if (form === "parg" && this.rustInArrayNeedle(n))
         return true;
@@ -61433,7 +61435,7 @@ ${binding(plan.indent)}` : ""), head: "" };
       return `&${super.printIdentifier(node)}`;
     if ((form === "box" || form === "targ") && (local.kind === "int" || local.kind === "oint") && this.rustCacheCtorLimitArg(node, local.kind))
       return `Value::from(${super.printIdentifier(node)})`;
-    if (form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "key" || form === "okey" || form === "fin" || form === "frd" || form === "fok" || form === "kin" || form === "nkey" || form === "ukey" || form === "parg")
+    if (form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "key" || form === "okey" || form === "bkey" || form === "fin" || form === "frd" || form === "fok" || form === "kin" || form === "nkey" || form === "ukey" || form === "parg")
       return super.printIdentifier(node);
     if (form === "err")
       return this.rustErrMsgMoves(node, local.declaration) ? super.printIdentifier(node) : `${super.printIdentifier(node)}.clone()`;
@@ -64084,6 +64086,34 @@ ${ind}];`;
     const declaration = this.rustDeclaredNode(n);
     const init = declaration !== void 0 && isVariableDeclaration3(declaration) ? this.unwrapParens(declaration.initializer) : void 0;
     return init !== void 0 && isConditionalExpression4(init) && this.literalKindOfNode(this.unwrapParens(init.whenTrue)) === "string" && this.literalKindOfNode(this.unwrapParens(init.whenFalse)) === "string";
+  }
+  /** ral-64k: `n` is the whole key of an element read `book[n]` (through `( .. as T)` wrappers) that initialises a local,
+   *  on a typed ws order-book local whose use there is its `Value` box: `get_value` takes the key as `impl ValueKey`
+   *  (`&str` / `Option<&str>` box to the very `Str` / `Null` key the `Value` local held), so the lookup is unchanged. */
+  rust64kBookKeyRead(n) {
+    if (!isIdentifier3(n) || this.rustTestTierSource(n))
+      return false;
+    const read = n.parent;
+    if (!isElementAccessExpression4(read) || read.argumentExpression !== n)
+      return false;
+    const recv = this.rustStripWrappers(read.expression);
+    if (!isIdentifier3(recv) || this.rustWsBookLocal(this.rustDeclarationOfIdentifier(recv)) === void 0 || this.rustWsBookUses.get(recv) !== "box")
+      return false;
+    let up = read;
+    while (isParenthesizedExpression3(up.parent) || isAsExpression3(up.parent) || isNonNullExpression2(up.parent))
+      up = up.parent;
+    return isVariableDeclaration3(up.parent) && up.parent.initializer === up;
+  }
+  /** ral-64k: the read of a `bkey` use: `get_value(&<book box>, k.as_str() | k.as_deref())`. */
+  print64kBookKeyRead(node) {
+    const key = node.argumentExpression;
+    if (!isIdentifier3(key) || this.rustScalarUseForms.get(key) !== "bkey")
+      return void 0;
+    const kind = this.rustScalarLocalOf(key)?.kind;
+    if (kind !== "str" && kind !== "ostr")
+      return void 0;
+    const recv = this.printNode(node.expression, 0).trim();
+    return `get_value(&${recv}, ${super.printIdentifier(key)}.${kind === "str" ? "as_str" : "as_deref"}())`;
   }
   /** Element-access hook: the native read of an `okey` use. */
   printOkeyRead(node) {
@@ -68151,7 +68181,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
         }
         const form = this.rustScalarUseForm(n, kind);
         this.rustScalarUseForms.set(n, form);
-        if (form === void 0 || form === "xbox" || form === "err" || form === "key" || form === "okey" || form === "targ")
+        if (form === void 0 || form === "xbox" || form === "err" || form === "key" || form === "okey" || form === "bkey" || form === "targ")
           return false;
         if (loose && (form !== "test" || this.literalKindOfNode(this.unwrapParens(n.parent.left === n ? n.parent.right : n.parent.left)) === "null"))
           return false;
@@ -69914,7 +69944,7 @@ ${ind}let ${view}: &${map} = &${arc};
     const dictKeyRead = this.printDictKeyRead(node);
     if (dictKeyRead !== void 0)
       return dictKeyRead;
-    const okeyRead = this.printOkeyRead(node);
+    const okeyRead = this.printOkeyRead(node) ?? this.print64kBookKeyRead(node);
     if (okeyRead !== void 0)
       return okeyRead;
     const handleRead = this.printClientHandleKeyedRead(node);
@@ -83149,7 +83179,7 @@ ${iden}}`;
           return false;
         const form = plus ? "concat" : this.rustScalarUseForm(n, "ostr");
         this.rustScalarUseForms.set(n, form);
-        if (form === void 0 || form === "err" || form === "key" || form === "okey" || form === "targ" && !this.rustWsKeyUse(n) || form === "kin")
+        if (form === void 0 || form === "err" || form === "key" || form === "okey" || form === "bkey" || form === "targ" && !this.rustWsKeyUse(n) || form === "kin")
           return false;
         const push = findAncestor(n, (m) => isStatement(m) || isCallExpression6(m) && isPropertyAccessExpression3(m.expression) && m.expression.name.text === "push");
         if (push !== void 0 && isCallExpression6(push))
