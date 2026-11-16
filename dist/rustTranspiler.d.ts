@@ -1758,6 +1758,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustOkeyBoxed(declaration: any, boxed: number): boolean;
     /** 'map' for a typed map receiver, 'value' for a proven-dict `Value` receiver, else undefined. */
     rustOkeyKind(receiver: any, read: any): 'map' | 'value' | undefined;
+    /** ral-63e: `m[k]` as the inner link of a pure read chain `m[k][j]` / `j in m[k]` (base featureValueByType `parentKey`):
+     *  the link prints the same native map read a one-level `okey` read prints (`(if let (Some(__m), Some(__k)) = ..)`), only
+     *  handed to the outer `get_value` / `in_op` by reference; the chain is never a write target, delete or update. */
+    rust63eChainLinkKeyRead(n: any): boolean;
     /** A one-level read `m[k]` (not a write target, not a chain link) on an `rustOkeyKind` receiver. */
     rustOkeyReadUse(n: any): boolean;
     /** ral-43c: a one-level read `m[k]` (no write, chain link, delete or update) on an identifier parameter typed `any` that no
