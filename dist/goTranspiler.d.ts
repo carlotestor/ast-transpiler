@@ -1996,3 +1996,13 @@ export interface GoTranspiler {
     goTernaryJoinConditionDefines(condition: any, name: string, outcome: boolean): boolean;
     goTernaryJoinDeclaration(statement: any, declaration: any, identation: number): string | undefined;
 }
+export interface GoTranspiler {
+    goClientFuturesTable(node: any): boolean;
+    goClientFutureReadKey(initializer: any): any;
+    goClientFutureLocal(declaration: any): boolean;
+    goClientFutureLocalCache: WeakMap<object, boolean>;
+}
+export interface GoTranspiler {
+    goSubscriptionPresenceLocal(declaration: any): boolean;
+    goSubscriptionPresenceCache: WeakMap<object, boolean>;
+}

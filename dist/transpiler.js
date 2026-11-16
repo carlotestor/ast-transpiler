@@ -41541,6 +41541,170 @@ GoTranspiler.prototype.printVariableDeclarationList = function(node, identation)
   }
   return goTernaryJoinUpstreamPrintDeclarationList.call(this, node, identation);
 };
+GoTranspiler.prototype.goClientFuturesTable = function(node) {
+  if (node?.kind !== SyntaxKind5.PropertyAccessExpression || node.name?.text !== "futures" || node.expression?.kind !== SyntaxKind5.Identifier || node.expression.text !== "client" || !clientIsInterfaceFrame(node)) {
+    return false;
+  }
+  const checker = this.checkerOrUndefined();
+  const symbol = checker?.getSymbolAtLocation(node.name);
+  if (symbol === void 0) {
+    return ((checker?.getTypeAtLocation(node.expression)?.flags ?? 0) & TypeFlags4.Any) !== 0;
+  }
+  const decl = symbol.valueDeclaration?.resolve();
+  return (decl?.kind === SyntaxKind5.PropertyDeclaration || decl?.kind === SyntaxKind5.PropertySignature) && decl.parent?.name?.text === SUBSCRIPTIONS_CLASS;
+};
+GoTranspiler.prototype.goClientFutureReadKey = function(initializer) {
+  const read = this.goUnwrapParenthesizedNode(initializer);
+  let table;
+  let key;
+  if (read?.kind === SyntaxKind5.ElementAccessExpression) {
+    table = read.expression;
+    key = read.argumentExpression;
+  } else if (read?.kind === SyntaxKind5.CallExpression && read.arguments?.length === 2 && read.expression?.kind === SyntaxKind5.PropertyAccessExpression && read.expression.expression?.kind === SyntaxKind5.ThisKeyword && read.expression.name?.text === "safeValue") {
+    table = read.arguments[0];
+    key = read.arguments[1];
+  }
+  if (key === void 0 || !this.goClientFuturesTable(table)) {
+    return void 0;
+  }
+  if (key.kind === SyntaxKind5.StringLiteral || key.kind === SyntaxKind5.Identifier && this.goIsStringKeyExpression(key)) {
+    return key;
+  }
+  return void 0;
+};
+GoTranspiler.prototype.goClientFutureLocal = function(declaration) {
+  if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier || declaration.parent?.parent?.kind !== SyntaxKind5.FirstStatement || declaration.type !== void 0 || /promise$/i.test(declaration.name.text)) {
+    return false;
+  }
+  if (this.goClientFutureLocalCache === void 0) {
+    this.goClientFutureLocalCache = /* @__PURE__ */ new WeakMap();
+  }
+  if (this.goClientFutureLocalCache.has(declaration)) {
+    return this.goClientFutureLocalCache.get(declaration);
+  }
+  this.goClientFutureLocalCache.set(declaration, false);
+  let verdict = false;
+  try {
+    if (this.goClientFutureReadKey(declaration.initializer) !== void 0) {
+      const checker = this.checkerOrUndefined();
+      const own = checker?.getSymbolAtLocation(declaration.name);
+      const scope = this.goEnclosingFunction(declaration);
+      const name = declaration.name.text;
+      verdict = own !== void 0 && scope !== void 0 && !this.goTypeNameIsShadowed(scope, "*Future") && !this.hasNodeWhere(scope, (n) => {
+        if (n.kind !== SyntaxKind5.Identifier || n.text !== name || n === declaration.name) {
+          return false;
+        }
+        const parent = n.parent;
+        if ((parent?.kind === SyntaxKind5.PropertyAccessExpression || parent?.kind === SyntaxKind5.PropertyAssignment) && parent.name === n) {
+          return false;
+        }
+        if (checker.getSymbolAtLocation(n) !== own) {
+          return true;
+        }
+        if (parent?.kind === SyntaxKind5.PropertyAccessExpression && parent.expression === n && (parent.name?.text === "resolve" || parent.name?.text === "reject") && parent.parent?.kind === SyntaxKind5.CallExpression && parent.parent.expression === parent) {
+          return false;
+        }
+        return !this.goIsNilComparisonOperand(n, parent);
+      });
+    }
+  } finally {
+    this.goClientFutureLocalCache.set(declaration, verdict);
+  }
+  return verdict;
+};
+{
+  const goTypeOfInitializer = GoTranspiler.prototype.goTypeOfInitializer;
+  GoTranspiler.prototype.goTypeOfInitializer = function(initializer, printedValue) {
+    const declaration = initializer?.parent;
+    if (declaration?.kind === SyntaxKind5.VariableDeclaration && declaration.initializer === initializer && this.goClientFutureLocal(declaration)) {
+      return "*Future";
+    }
+    return goTypeOfInitializer.call(this, initializer, printedValue);
+  };
+  const printVariableDeclarationList = GoTranspiler.prototype.printVariableDeclarationList;
+  GoTranspiler.prototype.printVariableDeclarationList = function(node, identation) {
+    const declaration = node?.declarations?.[0];
+    if (node?.declarations?.length === 1 && this.goClientFutureLocal(declaration)) {
+      const key = this.goClientFutureReadKey(declaration.initializer);
+      if (this.getGoLocalType(declaration, "") === "*Future") {
+        return `${this.getIden(identation)}var ${this.printNode(declaration.name, 0)} *Future = client.Futures[${this.printNode(key, 0)}]`;
+      }
+    }
+    return printVariableDeclarationList.call(this, node, identation);
+  };
+  const printCallExpression = GoTranspiler.prototype.printCallExpression;
+  GoTranspiler.prototype.printCallExpression = function(node, identation) {
+    const printed = printCallExpression.call(this, node, identation);
+    const callee = node?.expression;
+    if (callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.Identifier || callee.name?.text !== "resolve" && callee.name?.text !== "reject" || !clientIsInterfaceFrame(node)) {
+      return printed;
+    }
+    const receiver = this.printNode(callee.expression, 0);
+    const head = `${receiver}.${callee.name.text === "resolve" ? "Resolve" : "Reject"}(`;
+    const lead = /^\s*/.exec(printed)[0];
+    if (!/future$/.test(receiver) || !printed.startsWith(head, lead.length)) {
+      return printed;
+    }
+    const declaration = this.checkerOrUndefined()?.getSymbolAtLocation(callee.expression)?.valueDeclaration?.resolve?.();
+    if (this.goClientFutureLocal(declaration) && this.goDeclaredTypeOfIdentifier(callee.expression) === "*Future") {
+      return printed;
+    }
+    return lead + `${receiver}.(*Future).` + printed.slice(lead.length + receiver.length + 1);
+  };
+}
+GoTranspiler.prototype.goSubscriptionPresenceLocal = function(declaration) {
+  const call = this.goUnwrapParenthesizedNode(declaration?.initializer);
+  if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier || declaration.parent?.parent?.kind !== SyntaxKind5.FirstStatement || declaration.type !== void 0 || call?.kind !== SyntaxKind5.CallExpression || call.arguments?.length !== 2 || call.expression?.kind !== SyntaxKind5.PropertyAccessExpression || call.expression.expression?.kind !== SyntaxKind5.ThisKeyword || call.expression.name?.text !== "safeValue" || clientSubscriptions(this, call.arguments[0]) === void 0 || !clientIsInterfaceFrame(declaration)) {
+    return false;
+  }
+  if (this.goSubscriptionPresenceCache === void 0) {
+    this.goSubscriptionPresenceCache = /* @__PURE__ */ new WeakMap();
+  }
+  if (this.goSubscriptionPresenceCache.has(declaration)) {
+    return this.goSubscriptionPresenceCache.get(declaration);
+  }
+  this.goSubscriptionPresenceCache.set(declaration, false);
+  let verdict = false;
+  try {
+    const key = call.arguments[1];
+    if (key.kind === SyntaxKind5.StringLiteral || key.kind === SyntaxKind5.Identifier && this.goIsStringKeyExpression(key)) {
+      verdict = this.goDeclaredLocalTypeIfSafe(
+        declaration,
+        "bool",
+        (n) => this.goIsNilComparisonOperand(n, n.parent),
+        (n) => n.parent?.kind === SyntaxKind5.PropertyAccessExpression && n.parent.name === n || n.parent?.kind === SyntaxKind5.PropertyAssignment && n.parent.name === n
+      ) === "bool";
+    }
+  } finally {
+    this.goSubscriptionPresenceCache.set(declaration, verdict);
+  }
+  return verdict;
+};
+{
+  const marketLocal = GoTranspiler.prototype.goMarketLocalUnbox;
+  GoTranspiler.prototype.goMarketLocalUnbox = function(declaration) {
+    return this.goSubscriptionPresenceLocal(declaration) ? "bool" : marketLocal.call(this, declaration);
+  };
+  const marketValue = GoTranspiler.prototype.goMarketUnboxValue;
+  GoTranspiler.prototype.goMarketUnboxValue = function(declaration, parsedValue) {
+    return this.goSubscriptionPresenceLocal(declaration) ? `${parsedValue.trim()} != nil` : marketValue.call(this, declaration, parsedValue);
+  };
+  const printBinaryExpression = GoTranspiler.prototype.printBinaryExpression;
+  GoTranspiler.prototype.printBinaryExpression = function(node, identation) {
+    const op = node?.operatorToken?.kind;
+    if (op === SyntaxKind5.EqualsEqualsToken || op === SyntaxKind5.ExclamationEqualsToken || op === SyntaxKind5.EqualsEqualsEqualsToken || op === SyntaxKind5.ExclamationEqualsEqualsToken) {
+      const operand = node.left?.kind === SyntaxKind5.Identifier ? node.left : node.right;
+      if (operand?.kind === SyntaxKind5.Identifier && this.goIsNilComparisonOperand(operand, node)) {
+        const declaration = this.checkerOrUndefined()?.getSymbolAtLocation(operand)?.valueDeclaration?.resolve?.();
+        if (this.goSubscriptionPresenceLocal(declaration) && this.goDeclaredTypeOfIdentifier(operand) === "bool") {
+          const absent = op === SyntaxKind5.EqualsEqualsToken || op === SyntaxKind5.EqualsEqualsEqualsToken;
+          return (absent ? "!" : "") + this.printNode(operand, 0);
+        }
+      }
+    }
+    return printBinaryExpression.call(this, node, identation);
+  };
+}
 
 // src/javaTranspiler.ts
 init_esm_shims();
