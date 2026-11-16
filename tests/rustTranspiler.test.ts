@@ -23181,3 +23181,32 @@ describe('ral-68f: rustStr2LocalOptionString locals typed by the printer (no-def
         expect(out).not.toContain('let mut stopPrice: Value');
     });
 });
+
+describe('ral-73d: element reads of lists whose checker element type is a unified record from base types.ts', () => {
+    const files: Record<string, string> = {
+        "ts/src/base/types.ts": "export interface Dict { [key: string]: any }\nexport interface FundingRateHistory {\n    info: any;\n    symbol: string;\n    fundingRate: number;\n    timestamp?: number;\n}\nexport interface Trade {\n    info: any;\n    id: string | undefined;\n    timestamp: number | undefined;\n}\n",
+        "ts/src/base/Exchange.ts": "import type { Dict, FundingRateHistory, Trade } from './types.js';\nexport type { Dict, FundingRateHistory, Trade } from './types.js';\nexport default class Exchange {\n    safeInteger (o: any, k: any, d: any = undefined): any { return o[k]; }\n    safeString (o: any, k: any, d: any = undefined): any { return o[k]; }\n    parseFundingRateHistories (r: any): FundingRateHistory[] { return r; }\n    parseTrades (r: any): Trade[] { return r; }\n}\n",
+        "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict, FundingRateHistory, Trade } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    rows (response: any, until: any): FundingRateHistory[] {\n        const rates = this.parseFundingRateHistories (response);\n        const result: FundingRateHistory[] = [];\n        for (let i = 0; i < rates.length; i++) {\n            const rate = rates[i];\n            const timestamp = this.safeInteger (rate, 'timestamp');\n            if (timestamp !== undefined && timestamp < until) {\n                result.push (rate);\n            }\n        }\n        return result;\n    }\n    ids (response: any): string[] {\n        const trades: Trade[] = this.parseTrades (response);\n        const out: string[] = [];\n        for (let i = 0; i < trades.length; i++) {\n            const trade = trades[i];\n            out.push (this.safeString (trade, 'id'));\n        }\n        return out;\n    }\n}\n"
+    };
+    let out: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-73d-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        transpiler.transpileRustByPath(path.join (root, 'ts/src/base/Exchange.ts'));
+        out = transpiler.transpileRustByPath(path.join (root, 'ts/src/venue.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test('btse rate: a FundingRateHistory[] row read at literal keys and pushed whole is the shared map', () => {
+        expect(out).toContain('let mut rate: crate::value::Dict = rates.');
+        expect(out).toContain('.get(i as usize).cloned().unwrap_or(Value::Null).into_dict();');
+        expect(out).toContain('result.push(Value::Dict(rate));');
+        expect(out).not.toContain('let mut rate: Value');
+    });
+    test('guard: a Trade[] row read only at a literal key stays the shared map (ral-42g path)', () => {
+        expect(out).toContain('let mut trade: crate::value::Dict = trades.');
+        expect(out).not.toContain('let mut trade: Value');
+    });
+});

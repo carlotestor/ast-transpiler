@@ -24202,8 +24202,23 @@ export class RustTranspiler extends BaseTranspiler {
         } else if (!this.getChecker().isArrayType(listType)) return false;
         const element: any = this.typeOfNodeIfAny(init);
         if (element === undefined || (element.flags & (TypeFlags.Any | TypeFlags.Unknown | TypeFlags.Union)) !== 0) return false;
+        // ral-73d: a row of a list of unified records (`Trade[]`, `Position[]`, `Account[]`: interfaces declared in the base
+        // `types.ts`) is a map row the same way: every producer of such a list answers maps (the parse* builders, the base tables)
+        if (isNumericLiteral(key) || this.primitiveKindOfType(this.typeOfNodeIfAny(key)) === 'number') {
+            if (this.rust73dBaseRecordType(element)) return true;
+        }
         return this.primitiveKindOfType(element) === undefined && this.getChecker().getIndexTypeOfType(element, IndexKind.String) !== undefined
             && !this.getChecker().isArrayType(element);
+    }
+
+    /** ral-73d: an object interface declared only in the base `ts/src/base/types.ts` (a unified record such as `Trade`,
+     *  `Position`, `Account`, `PredictionPosition`): no call signature, no array, no union. */
+    rust73dBaseRecordType(type: any): boolean {
+        if (type === undefined || (type.flags & (TypeFlags.Any | TypeFlags.Unknown | TypeFlags.Union)) !== 0 || this.getChecker().isArrayType(type)) return false;
+        if ((type.flags & TypeFlags.Object) === 0 || this.primitiveKindOfType(type) !== undefined) return false;
+        const declarations = symbolDeclarations(this.typeSymbolOf(type));
+        if (declarations.length === 0 || !declarations.every((d: any) => d.kind === SyntaxKind.InterfaceDeclaration && /ts[\\/]src[\\/]base[\\/]types\.ts$/.test(String(d.getSourceFile?.()?.fileName ?? '')))) return false;
+        return this.getChecker().getSignaturesOfType(type, SignatureKind.Call).length === 0;
     }
 
     /** te: `this.urls['<lit>']` where the base `Exchange` declaration types that entry as a string-keyed map
