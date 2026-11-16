@@ -20196,3 +20196,16 @@ describe('ral-59x: an Option<String> reader receiver lends at a same-function st
         expect(out).not.toMatch(/let mut (?:ms|base): Value/);
     });
 });
+
+describe('ral-60x: a Str parameter whose caller passes `this.safeString (this.<field>, ..)` prints Option<&str>', () => {
+    test('the `this.options` argument no longer keeps the slot Value; the local written from it is typed', () => {
+        const dir = path.join (rustFixtureRoot, 'ral60x-strparam');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    options: Dict = {};\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    makeId (_accountId: Str): string {\n        let accountId: string = '';\n        if ((_accountId !== undefined) && (_accountId !== '')) {\n            accountId = _accountId;\n        }\n        return 'x-' + accountId;\n    }\n    first (): string {\n        return this.makeId (this.safeString (this.options, 'accountId'));\n    }\n    second (acct: Str): string {\n        return this.makeId (acct);\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('_accountId: Option<&str>');
+        expect(out).toContain('let mut accountId: Option<String> = ');
+        expect(out).not.toMatch(/let mut accountId: Value/);
+    });
+});
