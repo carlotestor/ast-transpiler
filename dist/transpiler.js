@@ -14821,8 +14821,24 @@ function ccxtGoFamilyCallType(goTranspiler, initializer, printedValue) {
   if (value.substring(0, open) !== expectedCallee) {
     return void 0;
   }
-  const methodNode = findClassMethod(enclosingClassDeclaration(initializer), name);
+  const methodNode = findClassMethod(enclosingClassDeclaration(initializer), name) ?? ccxtGoInheritedVenueMethod(goTranspiler, initializer);
   return ccxtGoFamilyMethodReturnType(goTranspiler, methodNode);
+}
+function ccxtGoInheritedVenueMethod(goTranspiler, initializer) {
+  let declaration;
+  try {
+    declaration = goTranspiler.getChecker().getResolvedSignature(initializer)?.declaration?.resolve();
+  } catch (e) {
+    return void 0;
+  }
+  if (declaration?.kind !== ts.SyntaxKind.MethodDeclaration) {
+    return void 0;
+  }
+  const fileName = String(declaration.getSourceFile?.()?.fileName ?? "");
+  if (!/(^|[\\/])ts[\\/]src[\\/][^\\/]+\.ts$/.test(fileName)) {
+    return void 0;
+  }
+  return declaration;
 }
 var CCXT_GO_SUM_LOCAL_TYPE = "int64";
 function ccxtGoIsDefaultedSafeInteger(node) {
