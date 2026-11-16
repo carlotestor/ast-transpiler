@@ -9041,11 +9041,24 @@ export class RustTranspiler extends BaseTranspiler {
         const key = String(node.name.text);
         if (!RustTranspiler.RUST_CLIENT_HANDLE_KEYS.has(key)) return undefined;
         const plan = this.rustClientHandlePlan(node);
-        if (plan === undefined || node.pos < plan.bindPos || (!plan.typed && !plan.declOk)) return undefined;
+        if (plan === undefined || node.pos < plan.bindPos || (!plan.typed && !plan.declOk && !this.rust80bClientDeclPending(plan))) return undefined;
         const write = this.isNativeWriteTargetBase(node);
         const first = plan.firstWrite.get(key);
         if (!write && first !== undefined && this.rustClientHandleLine(node) >= first) return undefined;
         return { plan, key, write };
+    }
+
+    /** ral-80b: a `const client = this.client (url)` local whose declaration has not printed yet. A scalar decision made
+     *  ahead of the method's print (a key local's use walk) would otherwise see `declOk` false and refuse every handle
+     *  key use; the declaration prints `let mut client: Value = self.client(..)` on one line (the declOk test) when its
+     *  initializer is that call over an identifier, string literal or property access argument. Decided from the AST. */
+    rust80bClientDeclPending(plan: any): boolean {
+        if (plan.kind !== 'local' || plan.declSeen) return false;
+        const init: any = this.unwrapParens(plan.decl.initializer);
+        if (!isCallExpression(init) || init.arguments.length !== 1 || !isPropertyAccessExpression(init.expression)
+            || init.expression.expression.kind !== SyntaxKind.ThisKeyword || String(init.expression.name.text) !== 'client') return false;
+        const arg: any = init.arguments[0];
+        return isIdentifier(arg) || isStringLiteral(arg) || (isPropertyAccessExpression(arg) && isIdentifier(arg.expression));
     }
 
     rustClientHandleReceiver(plan: any, field: boolean): string {
@@ -9163,6 +9176,7 @@ export class RustTranspiler extends BaseTranspiler {
         } finally {
             this.rustClientHandleDeclPrinting = false;
         }
+        plan.declSeen = true;
         plan.declOk = text.startsWith(`${indent}let mut client: Value = `) && !text.includes('\n');
         plan.indent = indent;
         return plan.declOk ? text + RustTranspiler.RUST_CLIENT_HANDLE_MARK : text;
