@@ -54588,6 +54588,12 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         write = this.rustNilSelfArmTernaryKind(rhs, declaration);
       if (write === void 0 && this.rust45bSelfStrWrite(rhs, declaration))
         write = "ostr";
+      if (write === void 0 && this.rust67bBoolLogicalWrite(rhs)) {
+        joined = this.rustScalarJoinKinds(joined, "bool", true);
+        if (joined === void 0)
+          return void 0;
+        continue;
+      }
       if (write === void 0 && this.rustScalarSeeding && this.rustNilStrPartner(rhs, declaration, scope))
         write = "ostr";
       joined = this.rustScalarJoinKinds(joined, write, write === "bool" && this.rustPreciseCompareCall(rhs));
@@ -54629,6 +54635,18 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (boxed.length > 0)
       this.rustScalarGuarded.add(declaration);
     return kind;
+  }
+  /** ral-67b: the right side of a write into a declared-empty `Bool` local: `a && b` / `a || !b` (rustBoolLeafLogical: every
+   *  leaf a local of the same function) whose checker type at the write is exactly `boolean`. JS hands back an operand, and
+   *  every operand the checker narrows to `boolean` is a JS boolean there, so the condition's native `bool` is the value. */
+  rust67bBoolLogicalWrite(expr) {
+    const node = this.unwrapParens(expr);
+    if (node === void 0 || this.checkerOrUndefined() === void 0 || !isBinaryExpression5(node) || !this.isLogicalOp(node.operatorToken.kind))
+      return false;
+    if (!this.rustBoolLeafLogical(node))
+      return false;
+    const t = this.typeOfNodeIfAny(node);
+    return t !== void 0 && (t.flags & TypeFlags6.Boolean) !== 0 && this.primitiveKindOfType(t) === "boolean";
   }
   /** ral-47d: `rhs` names another nil-declared (`let y: Str = undefined`) string local of the same function. */
   rustNilStrPartner(rhs, declaration, scope) {
@@ -57675,9 +57693,21 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   rustListLengthInit(node) {
     if (node === void 0 || !isPropertyAccessExpression3(node) || !isIdentifier3(node.name) || node.name.text !== "length")
       return false;
+    if (this.rust67bCastListLengthRecv(node.expression))
+      return true;
     if (!isIdentifier3(node.expression))
       return this.rustSelfRootedLengthRecv(node.expression) || this.rustLocalRootedLengthRecv(node.expression);
     return this.checkerOrUndefined() !== void 0 && this.rustScalarLengthRecv(node) === void 0;
+  }
+  /** ral-67b: `(x as T[]).length` (any array type T): the receiver is a local or parameter cast to an array type in the
+   *  source, so the read prints the same native `len()` (or `get_array_length`) as a list receiver, an `Int` every time. */
+  rust67bCastListLengthRecv(recv) {
+    if (this.checkerOrUndefined() === void 0 || !isParenthesizedExpression3(recv))
+      return false;
+    const cast = recv.expression;
+    if (!isAsExpression3(cast) || cast.type?.kind !== SyntaxKind7.ArrayType || !isIdentifier3(cast.expression) || cast.expression.text === "undefined")
+      return false;
+    return this.rustDeclaredNode(cast.expression) !== void 0;
   }
   // ral-52n: `this.orders.length` / `this.options['k'].length` print `get_array_length(&..)`, which answers a
   // `Value::Int` for every receiver; a receiver whose checker type is string keeps the string-length rule's form
@@ -60826,6 +60856,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       return true;
     if (kind === "oint" && this.rustLimitCall(node))
       return true;
+    if (kind === "obool" && depth === 0 && this.rust67bBoolLogicalWrite(node))
+      return true;
     if (isConditionalExpression4(node))
       return this.rustScalarWriteOk(kind, node.whenTrue, depth + 1) && this.rustScalarWriteOk(kind, node.whenFalse, depth + 1);
     const optional = kind.startsWith("o");
@@ -61543,6 +61575,8 @@ ${binding(plan.indent)}` : ""), head: "" };
     const boolText = kind === "bool" && this.literalKindOfNode(node) !== "boolean" ? this.rustBoolNativeText(node) : void 0;
     if (boolText !== void 0)
       return boolText;
+    if (kind === "obool" && this.rust67bBoolLogicalWrite(node))
+      return wrap(this.printCondition(node, 0).trim());
     if (base === "str" && this.literalKindOfNode(node) === "string")
       return wrap(`${this.quotedStringLiteral(node.text)}.to_string()`);
     if (base === "bool" && this.literalKindOfNode(node) === "boolean")
@@ -61559,6 +61593,8 @@ ${binding(plan.indent)}` : ""), head: "" };
     }
     if (kind === "int" && this.rustListLengthInit(node))
       return this.rustListLengthText(node);
+    if (kind === "oint" && this.rustListLengthInit(node) && this.rust67bCastListLengthRecv(node.expression))
+      return wrap(this.rustListLengthText(node));
     if (kind === "ostr" && this.rustTernaryArm(node) && this.rustBaseStrFieldRead(node))
       return `${this.printNode(node, 0).trim()}.as_str().map(str::to_owned)`;
     if (kind === "ostr" && this.rustTernaryArm(node)) {

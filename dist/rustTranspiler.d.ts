@@ -438,6 +438,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_NIL_SCALAR_NATIVE_FORMS;
     /** `ostr|oint|onum` for an empty local the scalar rule types, else undefined. */
     rustNilScalarKind(declaration: any): string | undefined;
+    /** ral-67b: the right side of a write into a declared-empty `Bool` local: `a && b` / `a || !b` (rustBoolLeafLogical: every
+     *  leaf a local of the same function) whose checker type at the write is exactly `boolean`. JS hands back an operand, and
+     *  every operand the checker narrows to `boolean` is a JS boolean there, so the condition's native `bool` is the value. */
+    rust67bBoolLogicalWrite(expr: any): boolean;
     /** ral-47d: `rhs` names another nil-declared (`let y: Str = undefined`) string local of the same function. */
     rustNilStrPartner(rhs: any, declaration: any, scope: any): boolean;
     /** ral-45b: the local has a `x = x.slice(..)` / case self write or a `x += ..` append (the forms lift 1 / 2 admit). */
@@ -871,6 +875,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustParseNumberStrCall(call: any): boolean;
     rustDerivedScalarKind(call: any): string | undefined;
     rustListLengthInit(node: any): boolean;
+    /** ral-67b: `(x as T[]).length` (any array type T): the receiver is a local or parameter cast to an array type in the
+     *  source, so the read prints the same native `len()` (or `get_array_length`) as a list receiver, an `Int` every time. */
+    rust67bCastListLengthRecv(recv: any): boolean;
     rustSelfRootedLengthRecv(recv: any): boolean;
     rustLocalRootedLengthRecv(recv: any): boolean;
     rustListLengthText(node: any): string;
