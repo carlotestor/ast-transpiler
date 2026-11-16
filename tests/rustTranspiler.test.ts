@@ -22154,7 +22154,9 @@ describe('ral-64i: an optional-map alias of a Value source converts a copy unles
     };
     test('the source read again later is cloned at the conversion', () => {
         const out = transpiler.transpileRustByPath (write ('ral-64i-conv-clone', "        result['info'] = response;\n")).content;
-        expect(out).toContain('let mut responseData: Option<crate::value::Dict> = response.clone().into_opt_dict();');
+        // ral-76b: the declared-endpoint source is the optional map itself now (`result['info'] = response` boxes it), so the
+        // alias shares a copy of it; still cloned, since the source is read again later
+        expect(out).toContain('let mut responseData: Option<crate::value::Dict> = response.clone();');
         expect(out).toContain('self.parseMarginModification(&responseData');
     });
 });
@@ -23474,5 +23476,26 @@ describe('ral-73e: safeDict results read at a typed string key', () => {
     test('A negative: a key that is no typed local (an inline reader call) keeps the local Value', () => {
         const out = write ('ral-73e-a-neg', "    m (market: Dict) {\n        const conflicting = this.safeDict (this.options, 'conflictingMarkets', {});\n        const id = this.safeString (market, 'id');\n        if (id in conflicting) {\n            return this.keep (conflicting[this.safeString (market, 'id')]);\n        }\n        return undefined;\n    }\n");
         expect(out).toMatch(/let (?:mut )?conflicting: Value = /);
+    });
+});
+
+describe('ral-76b: declared-endpoint responses seeded undefined and handed on whole', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type List = any[];\nexport default class Exchange {\n    hold (x: any): any { return x; }\n}\n";
+    const api = "import Exchange from '../base/Exchange.js';\nimport type { Dict, List } from '../base/Exchange.js';\nexport default abstract class venueApi extends Exchange {\n    privatePostA (params = {}): Promise<Dict> { return this.hold (params); }\n    privatePostB (params = {}): Promise<Dict> { return this.hold (params); }\n    publicGetRowsA (params = {}): Promise<List> { return this.hold (params); }\n    publicGetRowsB (params = {}): Promise<List> { return this.hold (params); }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync (path.join (dir, 'ts/src/abstract'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/abstract/venue.ts'), api);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import venueApi from './abstract/venue.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends venueApi {\n" + body + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('R1 `t = response` into an untyped local and `result[k] = response` box the optional container once', () => {
+        const out = write ('ral-76b-r1', "    async one (key: string, params: Dict = {}) {\n        let response = undefined;\n        if (key === 'a') {\n            response = await this.privatePostA (params);\n        } else {\n            response = await this.privatePostB (params);\n        }\n        const finalResponse = response;\n        return this.hold (finalResponse);\n    }\n    async two (key: string, params: Dict = {}) {\n        let rows = undefined;\n        if (key === 'a') {\n            rows = await this.publicGetRowsA (params);\n        } else {\n            rows = await this.publicGetRowsB (params);\n        }\n        const result: Dict = {};\n        result['info'] = rows;\n        return result;\n    }\n");
+        expect(out).toContain('let mut response: Option<crate::value::Dict> = None;');
+        expect(out).toContain('response.map_or(Value::Null, Value::Dict)');
+        expect(out).toContain('let mut rows: Option<crate::value::List> = None;');
+        expect(out).toContain('rows.map_or(Value::Null, Value::Arr)');
     });
 });

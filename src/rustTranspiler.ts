@@ -25447,11 +25447,35 @@ export class RustTranspiler extends BaseTranspiler {
         return file !== undefined && file === call.getSourceFile?.() && !RustTranspiler.RUST_BASE_TIER_FILE.test(String(file.fileName));
     }
 
+    /** ral-76b: `t[k] = x` (statement, one level, `t` a plain local or `this` field read) or `t = x` / `let t = x` whose
+     *  target local is untyped (no typed decision of its own), so the right side is a plain `Value` place. */
+    rust76bWholeHandOff(n: any): boolean {
+        const up: any = n.parent;
+        if (up?.kind === SyntaxKind.VariableDeclaration && up.initializer === n) return isIdentifier(up.name) && this.rust76bUntypedTarget(up);
+        if (!isBinaryExpression(up) || up.right !== n || up.operatorToken.kind !== SyntaxKind.EqualsToken || up.parent?.kind !== SyntaxKind.ExpressionStatement) return false;
+        const left: any = up.left;
+        if (isIdentifier(left)) {
+            const target: any = this.rustDeclaredNode(left);
+            return target !== undefined && isVariableDeclaration(target) && isIdentifier(target.name) && target !== this.rustDeclaredNode(n) && this.rust76bUntypedTarget(target);
+        }
+        if (!isElementAccessExpression(left) || !isIdentifier(left.expression)) return false;
+        const holder: any = this.rustDeclaredNode(left.expression);
+        return holder !== undefined && holder !== this.rustDeclaredNode(n) && (isVariableDeclaration(holder) || holder.kind === SyntaxKind.Parameter);
+    }
+
+    rust76bUntypedTarget(target: any): boolean {
+        return this.rustNilLocalKind(target) === undefined && this.rustScalarLocalKind(target) === undefined && this.rustBorrowedLocalKind(target) === undefined
+            && !this.rustDictLocalIsTyped(target) && !this.rustVecLocalIsTyped(target) && this.rustMarketLocalKind(target) === false && !this.rustOptListLocal(target);
+    }
+
     rustDeclaredEndpointBoxUse(n: any): boolean {
         const up: any = n.parent;
         if (up === undefined || this.rustScalarInNestedWrite(n, true)) return false;
         if (up.kind === SyntaxKind.PropertyAssignment) return up.initializer === n && isObjectLiteralExpression(up.parent) && !this.rustInDestructureWrite(n);
         if (isReturnStatement(up)) return up.expression === n;
+        // ral-76b: a whole hand-off into a plain `Value` place: `t[k] = x` (one level, statement), `t = x` / `let t = x` into an
+        // untyped local: the box `x.map_or(Value::Null, Value::Dict|Arr)` stores the answer of the declared shape, Null for `None`
+        if (this.rust76bWholeHandOff(n)) return true;
         // ral-63i: an argument of a same-class venue method (`this.m (.., x)`) at a plain by-value `Value` slot (no native
         // map / list / str / bool slot, not a typed unified method): the box hands over the map the boxed local held, Null for `None`
         if (isCallExpression(up) && up.expression !== n && isPropertyAccessExpression(up.expression) && up.expression.expression.kind === SyntaxKind.ThisKeyword
