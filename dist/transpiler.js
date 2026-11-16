@@ -72625,6 +72625,8 @@ ${iden}}`;
       return false;
     if (isArrayLiteralExpression4(up))
       return !this.rustInDestructureWrite(n) && !(isBinaryExpression5(up.parent) && up.parent.left === up);
+    if (up.kind === SyntaxKind7.ConditionalExpression)
+      return this.rust76gTernaryArmMove(up, n);
     if (!isCallExpression6(up) || up.arguments.length === 0 || up.arguments[0] !== n || !isPropertyAccessExpression3(up.expression))
       return false;
     const recv = up.expression.expression;
@@ -72640,6 +72642,26 @@ ${iden}}`;
     if (method === "send")
       return up.arguments.length === 1 && this.rustCallsRuntimeHandle(up);
     return (method === "resolve" || method === "reject") && this.rustWsSettleCall(up);
+  }
+  /** ral-76g: the admitted move is a ternary arm (rust76gTernaryArmMove); a whole re-seed (`x = { .. }`, rustBearerRebuild)
+   *  before it writes the same native map, so the single move still carries the last value. */
+  rust76gTernaryMoveUse(n) {
+    const up = n?.parent;
+    return up !== void 0 && up.kind === SyntaxKind7.ConditionalExpression && this.rust76gTernaryArmMove(up, n);
+  }
+  /** ral-76g: `c ? x : y` / `c ? y : x` (x an arm, not the condition) as the initializer of a plain `const` / `let` or the value
+   *  of an object-literal property: the if-expression's arms are `Value`, so the map's last use moves into `Value::Map(x)`
+   *  there, the box the helper form made (no copy; the other arm is evaluated instead, never both). */
+  rust76gTernaryArmMove(up, n) {
+    if (up.condition === n || up.whenTrue !== n && up.whenFalse !== n || this.rustTestTierSource(up))
+      return false;
+    let outer = up.parent;
+    while (outer !== void 0 && outer.kind === SyntaxKind7.ParenthesizedExpression)
+      outer = outer.parent;
+    if (outer?.kind === SyntaxKind7.PropertyAssignment)
+      return isObjectLiteralExpression4(outer.parent);
+    const list = outer?.parent;
+    return outer !== void 0 && isVariableDeclaration3(outer) && isIdentifier3(outer.name) && list?.declarations?.length === 1;
   }
   /** ral-73a: `y = x` (statement), y another plain `let` of the same function declared `undefined` (no initializer value) and
    *  annotated `NullableDict` / `Dict`: x moves whole into y's `Option<Dict>` / `Value` box (`Value::Map(x)`, the box the helper
@@ -72829,7 +72851,7 @@ ${iden}}`;
     if (siblings > 0 && elementUses === 0 && !siblingMove)
       return false;
     if (moveEscapes.length > 0) {
-      if (moveEscapes.length > 1 || escapes.length > 0 || rebuilds > 0 || widened && !siblingMove && !this.rustWsSettleMove(moveEscapes[0]) && !this.rust73aThisFieldStore(moveEscapes[0]) || enumUses > 0 || prediction && !this.rust73aThisFieldStore(moveEscapes[0]) || !this.rustLocalLastUse(moveEscapes[0], declaration) || !this.rustBoxLineOk(moveEscapes[0]))
+      if (moveEscapes.length > 1 || escapes.length > 0 || rebuilds > 0 && !this.rust76gTernaryMoveUse(moveEscapes[0]) || widened && !siblingMove && !this.rustWsSettleMove(moveEscapes[0]) && !this.rust73aThisFieldStore(moveEscapes[0]) || enumUses > 0 || prediction && !this.rust73aThisFieldStore(moveEscapes[0]) || !this.rustLocalLastUse(moveEscapes[0], declaration) || !this.rustBoxLineOk(moveEscapes[0]))
         return false;
       this.rustLiteralMoves.add(moveEscapes[0]);
     }

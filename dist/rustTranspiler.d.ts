@@ -3080,6 +3080,13 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  value of a ws `client.resolve|reject|send (m, ..)`: each takes the boxed `Value` by value, so the map's last
      *  use moves into `Value::Map(m)`, exactly the shared map the boxed local handed over. */
     rustLiteralMoveSlot(n: any): boolean;
+    /** ral-76g: the admitted move is a ternary arm (rust76gTernaryArmMove); a whole re-seed (`x = { .. }`, rustBearerRebuild)
+     *  before it writes the same native map, so the single move still carries the last value. */
+    rust76gTernaryMoveUse(n: any): boolean;
+    /** ral-76g: `c ? x : y` / `c ? y : x` (x an arm, not the condition) as the initializer of a plain `const` / `let` or the value
+     *  of an object-literal property: the if-expression's arms are `Value`, so the map's last use moves into `Value::Map(x)`
+     *  there, the box the helper form made (no copy; the other arm is evaluated instead, never both). */
+    rust76gTernaryArmMove(up: any, n: any): boolean;
     /** ral-73a: `y = x` (statement), y another plain `let` of the same function declared `undefined` (no initializer value) and
      *  annotated `NullableDict` / `Dict`: x moves whole into y's `Option<Dict>` / `Value` box (`Value::Map(x)`, the box the helper
      *  form made at the write; no copy) at x's last use. */
