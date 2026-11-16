@@ -1498,9 +1498,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-55x K1: every leaf of a `+` chain is a string literal or a `str` / `ostr` typed local, and at least one is a literal. */
     rustStrConcatOperandLeaves(node: any): boolean;
     private rust41bWsKeyMemo;
+    private rust60pWsKeyMemo;
+    /** ral-60p: `p` (`m[k]`) is a read (not a write target, not a delete operand) whose receiver is a plain identifier bound by a
+     *  `const` declared in the same function as the key's declaration `keyDecl`. */
+    rust60pLocalMapRead(p: any, keyDecl: any): boolean;
     /** 41b: a local some use of which is a ws subscription / future / cache key, a ws client call argument or a ws cache
      *  write key: those keep their `Value` (the new string-method forms never decide them). */
-    rust41bWsKeyLocal(node: any): boolean;
+    rust41bWsKeyLocal(node: any, localElemOk?: boolean): boolean;
     /** 41b: an argument (bound / needle / operand) of a string method its typed string local receiver prints natively. */
     rustStrMethodArgNative(n: any, kind: string): boolean;
     /** Native `String` text of a pad / slice over the `&str` `s`. */

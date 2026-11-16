@@ -51668,6 +51668,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     /** wg: field-write keys whose write value also reads the key (admitted only for a borrowed element). */
     this.rustWgKeyReadInValue = /* @__PURE__ */ new WeakSet();
     this.rust41bWsKeyMemo = /* @__PURE__ */ new WeakMap();
+    this.rust60pWsKeyMemo = /* @__PURE__ */ new WeakMap();
     this.rustScalarPending = /* @__PURE__ */ new Set();
     // ── native `Option<String>` returns (`: Str` methods) ─────────────────────
     //
@@ -61490,7 +61491,7 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
     if (shape === "vslice" || shape === "vaffix" || shape === "vfind" || shape === "vreplace") {
       if (this.rustScalarLocalOf(recv) === void 0 || this.rust41bWsKeyLocal(recv) && shape !== "vreplace")
         return void 0;
-      if (args.some((a) => _is.isIdentifier.call(void 0, this.unwrapParens(a)) && this.rust41bWsKeyLocal(this.unwrapParens(a))))
+      if (args.some((a) => _is.isIdentifier.call(void 0, this.unwrapParens(a)) && this.rust41bWsKeyLocal(this.unwrapParens(a), shape === "vfind")))
         return void 0;
       if (shape === "vslice")
         return this.rustStrSliceVarBounds(args) === void 0 ? void 0 : { recv, recvKind, method, kind: recvKind };
@@ -61631,16 +61632,35 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
     };
     return walk(node) && literal2;
   }
+  /** ral-60p: `p` (`m[k]`) is a read (not a write target, not a delete operand) whose receiver is a plain identifier bound by a
+   *  `const` declared in the same function as the key's declaration `keyDecl`. */
+  rust60pLocalMapRead(p, keyDecl) {
+    const recv = this.unwrapParens(p.expression);
+    if (recv === void 0 || !_is.isIdentifier.call(void 0, recv))
+      return false;
+    const decl = this.rustDeclaredNode(recv);
+    if (decl === void 0 || !_is.isVariableDeclaration.call(void 0, decl) || !_is.isVariableDeclarationList.call(void 0, decl.parent) || (decl.parent.flags & _ast.NodeFlags.Const) === 0)
+      return false;
+    if (_chunkC7C726CWcjs.findAncestor.call(void 0, decl, _chunkC7C726CWcjs.isFunctionLike) !== _chunkC7C726CWcjs.findAncestor.call(void 0, keyDecl, _chunkC7C726CWcjs.isFunctionLike))
+      return false;
+    const q = p.parent;
+    if (q !== void 0 && _is.isBinaryExpression.call(void 0, q) && q.left === p && q.operatorToken.kind >= _ast.SyntaxKind.FirstAssignment && q.operatorToken.kind <= _ast.SyntaxKind.LastAssignment)
+      return false;
+    if (q !== void 0 && (_is.isDeleteExpression.call(void 0, q) || _is.isPrefixUnaryExpression.call(void 0, q) || _is.isPostfixUnaryExpression.call(void 0, q)))
+      return false;
+    return true;
+  }
   /** 41b: a local some use of which is a ws subscription / future / cache key, a ws client call argument or a ws cache
    *  write key: those keep their `Value` (the new string-method forms never decide them). */
-  rust41bWsKeyLocal(node) {
+  rust41bWsKeyLocal(node, localElemOk = false) {
     const declaration = this.rustDeclaredNode(node);
     if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || !_is.isIdentifier.call(void 0, declaration.name))
       return false;
-    const memo = this.rust41bWsKeyMemo.get(declaration);
+    const memoMap = localElemOk ? this.rust60pWsKeyMemo : this.rust41bWsKeyMemo;
+    const memo = memoMap.get(declaration);
     if (memo !== void 0)
       return memo;
-    this.rust41bWsKeyMemo.set(declaration, true);
+    memoMap.set(declaration, true);
     let hit = false;
     this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
       let up = n;
@@ -61651,11 +61671,11 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
         hit = true;
       else if (p !== void 0 && _is.isCallExpression.call(void 0, p) && p.expression !== up && (this.rustWsClientCallArg(p, "str") || this.rustWsWatchSlot(p, p.arguments.indexOf(up))))
         hit = true;
-      else if (p !== void 0 && _is.isElementAccessExpression.call(void 0, p) && p.argumentExpression === up && this.rust40bProTier(n))
+      else if (p !== void 0 && _is.isElementAccessExpression.call(void 0, p) && p.argumentExpression === up && this.rust40bProTier(n) && !(localElemOk && this.rust60pLocalMapRead(p, declaration)))
         hit = true;
       return true;
     });
-    this.rust41bWsKeyMemo.set(declaration, hit);
+    memoMap.set(declaration, hit);
     return hit;
   }
   /** 41b: an argument (bound / needle / operand) of a string method its typed string local receiver prints natively. */
@@ -61670,7 +61690,7 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
     if (!["slice", "startsWith", "endsWith", "includes", "indexOf", "replace", "replaceAll"].includes(name))
       return false;
     const method = this.rustScalarStrMethod(call);
-    return method !== void 0 && method.recvKind !== "int" && this.rustScalarLocalOf(method.recv) !== void 0 && !this.rust41bWsKeyLocal(n) && !this.rust41bWsKeyLocal(method.recv);
+    return method !== void 0 && method.recvKind !== "int" && this.rustScalarLocalOf(method.recv) !== void 0 && !this.rust41bWsKeyLocal(n, name === "indexOf") && !this.rust41bWsKeyLocal(method.recv);
   }
   /** Native `String` text of a pad / slice over the `&str` `s`. */
   rustStrPadSliceText(method, args, s) {
@@ -83080,7 +83100,7 @@ ${this.getIden(identation)}}`;
       return false;
     if (_is.isIdentifier.call(void 0, recv) && (this.rustStringLocalIdentifierIsTyped(recv) || this.rustScalarLocalOf(recv) !== void 0 || this.rustScalarIdentifierKind(recv) !== void 0))
       return false;
-    return !this.rust41bWsKeyLocal(n);
+    return !this.rust41bWsKeyLocal(n, true);
   }
   // `x.indexOf(y)` with a proven-string needle: `-1` when either side is not a `Str` (byte index).
   printNativeStringIndexOfString(node, receiverText) {
