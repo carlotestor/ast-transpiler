@@ -40734,6 +40734,104 @@ var GO_ORDERBOOK_MEMBERS = { "reset": "Reset", "limit": "Limit", "cache": "GetCa
 var GO_WS_CACHE_CLASSES = ["ArrayCache", "ArrayCacheByTimestamp", "ArrayCacheBySymbolById", "ArrayCacheBySymbolBySide", "ArrayCacheByOutcomeById"];
 var GO_WS_CACHE_FIELD_DECLARED = /^ArrayCache(?:\s*\|\s*undefined)?$/;
 var GO_NON_POINTER_CACHE_CLASSES = ["ArrayCache", "ArrayCacheByTimestamp", "ArrayCacheBySymbolById", "ArrayCacheBySymbolBySide"];
+Object.assign(CCXT_GO_HELPER_RETURN_TYPES, Object.fromEntries(["ParseWsBidAsk", "ParseWsPosition", "ParseWsMyTrade", "ParseWsOrderTrade", "ParseWsUtaTrade", "ParseWsFundingRate"].flatMap((name) => [["this." + name, "map[string]any"], ["this.DerivedExchange." + name, "map[string]any"]])));
+var goLiteralDefaultStringLocalBase77g8 = GoTranspiler.prototype.goLiteralDefaultStringLocal;
+GoTranspiler.prototype.goLiteralDefaultStringLocal = function(declaration, goType, scope, name) {
+  const init = declaration?.initializer;
+  if (goType !== "string" || scope === void 0 || declaration.parent?.parent?.kind !== SyntaxKind5.FirstStatement || init?.kind !== SyntaxKind5.StringLiteral && init?.kind !== SyntaxKind5.NoSubstitutionTemplateLiteral) {
+    return goLiteralDefaultStringLocalBase77g8.call(this, declaration, goType, scope, name);
+  }
+  if (this.goLiteralDefaultStringLocalCache.has(declaration)) {
+    return this.goLiteralDefaultStringLocalCache.get(declaration);
+  }
+  this.goLiteralDefaultStringLocalCache.set(declaration, false);
+  let rewritten = false;
+  const visit = (n) => {
+    if (!rewritten && n.kind === SyntaxKind5.BinaryExpression && n.operatorToken?.kind === SyntaxKind5.EqualsToken && n.left?.kind === SyntaxKind5.Identifier && n.left.text === name && this.goLiteralDefaultStringCall(n.right, name)) {
+      rewritten = true;
+    }
+    if (!rewritten) {
+      n.forEachChild(visit);
+    }
+  };
+  scope.forEachChild(visit);
+  const verdict = rewritten && !this.goTypeNameIsShadowed(scope, "string") && this.goLiteralDefaultStringLocalUsesAreSafe(scope, declaration, name);
+  this.goLiteralDefaultStringLocalCache.set(declaration, verdict);
+  return verdict;
+};
+var GO_77G8_TUPLE_BOOL_PRODUCERS = { "handleOptionBoolAndParams": 3, "handleOptionBoolAndParams2": 4 };
+var goLocalIsSafeToTypeBase77g8 = GoTranspiler.prototype.goLocalIsSafeToType;
+GoTranspiler.prototype.goLocalIsSafeToType = function(scope, declaration, varName, goType, stringWriteProven = false) {
+  if (goLocalIsSafeToTypeBase77g8.call(this, scope, declaration, varName, goType, stringWriteProven)) {
+    return true;
+  }
+  const init = declaration?.initializer;
+  if (goType !== "bool" || scope === void 0 || declaration.kind !== SyntaxKind5.VariableDeclaration || init?.kind !== SyntaxKind5.TrueKeyword && init?.kind !== SyntaxKind5.FalseKeyword) {
+    return false;
+  }
+  const isBoolLiteral = (n) => n?.kind === SyntaxKind5.TrueKeyword || n?.kind === SyntaxKind5.FalseKeyword;
+  let tupleWrites = 0;
+  const unsafe = this.hasNodeWhere(scope, (n) => {
+    if (n.kind !== SyntaxKind5.Identifier || n.text !== varName || n === declaration.name) {
+      return false;
+    }
+    const parent = n.parent;
+    if (parent?.kind === SyntaxKind5.VariableDeclaration && parent.name === n) {
+      return false;
+    }
+    if (parent?.kind === SyntaxKind5.Parameter || parent?.kind === SyntaxKind5.BindingElement || parent?.kind === SyntaxKind5.SpreadElement) {
+      return true;
+    }
+    if (parent?.kind === SyntaxKind5.PostfixUnaryExpression || parent?.kind === SyntaxKind5.PrefixUnaryExpression && parent.operator !== SyntaxKind5.ExclamationToken) {
+      return true;
+    }
+    if (parent?.kind === SyntaxKind5.BinaryExpression && parent.left === n && isAssignmentOperator(parent.operatorToken.kind)) {
+      return parent.operatorToken.kind !== SyntaxKind5.EqualsToken || !isBoolLiteral(parent.right);
+    }
+    if (parent?.kind === SyntaxKind5.ArrayLiteralExpression) {
+      const assign = parent.parent;
+      if (assign?.kind !== SyntaxKind5.BinaryExpression || assign.left !== parent || assign.operatorToken.kind !== SyntaxKind5.EqualsToken) {
+        return false;
+      }
+      const call = assign.right;
+      const callee = call?.expression;
+      if (parent.elements.indexOf(n) !== 0 || parent.elements.length !== 2 || call?.kind !== SyntaxKind5.CallExpression || call.questionDotToken !== void 0 || callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword) {
+        return true;
+      }
+      const slot = GO_77G8_TUPLE_BOOL_PRODUCERS[String(callee.name?.text ?? "")];
+      if (slot === void 0 || !isBoolLiteral(call.arguments[slot]) || call.arguments.length !== slot + 1) {
+        return true;
+      }
+      let resolved = void 0;
+      try {
+        resolved = this.getChecker().getResolvedSignature(call)?.declaration?.resolve();
+      } catch (e) {
+        return true;
+      }
+      const fileName = String(resolved?.getSourceFile?.()?.fileName ?? "");
+      const baseDecl = CCXT_GO_ELEMENT_1_BASE_FILE.test(fileName) || !fileName.includes("ts/src/") && resolved?.parent?.kind === SyntaxKind5.ClassDeclaration && resolved.parent.name?.text === "Exchange";
+      if (!baseDecl) {
+        return true;
+      }
+      tupleWrites += 1;
+      return false;
+    }
+    return false;
+  });
+  return !unsafe && tupleWrites > 0 && !this.goTypeNameIsShadowed(scope, "bool");
+};
+var GO_77G8_WS_STRUCT_PARSERS = ["parseWsBidAsk", "parseWsPosition", "parseWsMyTrade", "parseWsOrderTrade", "parseWsUtaTrade", "parseWsFundingRate"];
+var printNativeElementAssignmentBase77g8 = GoTranspiler.prototype.printNativeElementAssignment;
+GoTranspiler.prototype.printNativeElementAssignment = function(containerNode, containerStr, keyNode, keyStr, valueStr, compound = false, valueNode) {
+  if (containerNode?.kind === SyntaxKind5.Identifier) {
+    const init = this.goDeclarationOfIdentifier(containerNode)?.initializer;
+    const callee = init?.expression;
+    if (init?.kind === SyntaxKind5.CallExpression && callee?.kind === SyntaxKind5.PropertyAccessExpression && GO_77G8_WS_STRUCT_PARSERS.indexOf(callee.name?.text) >= 0 && !this.goMapWriteValueIsNotPointer(valueNode)) {
+      return void 0;
+    }
+  }
+  return printNativeElementAssignmentBase77g8.call(this, containerNode, containerStr, keyNode, keyStr, valueStr, compound, valueNode);
+};
 GoTranspiler.prototype.goNativeIntWideningArithmetic = function(node, leftType, rightType, leftText, rightText) {
   const op = node.operatorToken.kind;
   const isMod = op === SyntaxKind5.PercentToken && this.isNonZeroIntegerLiteral(node.right);
