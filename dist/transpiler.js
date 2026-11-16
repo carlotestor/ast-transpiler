@@ -8725,6 +8725,13 @@ var CSharpTranspiler = class extends BaseTranspiler {
         }
       }
       if (op === SyntaxKind4.PlusToken) {
+        const guardedSpine = this.csharpPlusSpine(node);
+        if (guardedSpine !== void 0 && isIdentifier(guardedSpine.base) && this.csharpGuardedStringConcatLocal(guardedSpine.base)) {
+          const guardedChain = this.csharpObjectStringConcat(guardedSpine.base, guardedSpine.rights);
+          if (guardedChain !== void 0) {
+            return guardedChain;
+          }
+        }
         const nativeConcat = this.csharpNativeStringConcat(left, right, leftText, rightText);
         if (nativeConcat !== void 0) {
           return nativeConcat;
@@ -9060,7 +9067,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     while (local?.kind === SyntaxKind4.ParenthesizedExpression) {
       local = local.expression;
     }
-    if (!isIdentifier(local) || !this.csharpObjectStringLocal(local)) {
+    if (!isIdentifier(local) || !(this.csharpObjectStringLocal(local) || this.csharpGuardedStringConcatLocal(local))) {
       return void 0;
     }
     const texts = [];
@@ -9073,6 +9080,12 @@ var CSharpTranspiler = class extends BaseTranspiler {
     }
     const name = this.printNode(local, 0);
     return `((object)(${name} == null ? null : ${name} + ${texts.join(" + ")}))`;
+  }
+  // ral-84c8: a read the build layer declares `string?` (a string or null box, exactly what the untyped local
+  // held) whose `+` it leaves to this guarded form: the null test plus the concatenation is add(object, object)
+  // of that box, so the read keeps the helper's null answer under the typed declaration. Default: no such read.
+  csharpGuardedStringConcatLocal(identifier) {
+    return false;
   }
   // a single-binding local whose printed declaration is the untyped box and whose initializer and every write
   // store null or a value the printed C# makes a string (a literal, a string-typed call, a string concatenation,
