@@ -65977,6 +65977,10 @@ ${i1}}`;
       const ok2 = this.rustLocalUsesAll(declaration, String(declaration.name.text), true, (n) => {
         if (this.rustEnclosingFunction(n) !== callScope)
           return false;
+        if (elem === "vec" && this.rust67gSafeDictElemUse(n)) {
+          elemUses++;
+          return true;
+        }
         if (this.rustMarketValueUse(n)) {
           valueUses2++;
           return true;
@@ -66150,6 +66154,53 @@ ${i1}}`;
     if (elem === "map" || elem === "map2")
       return `crate::value::KeyRead::read(&&${name}, &${this.printNode(key, 0).trim()})`;
     return `${name}.get(${this.printTypedResultIndex(key)}).map(crate::Value::from).unwrap_or_default()`;
+  }
+  // ── ral-67g: `this.safeDict (rows, i[, d])` on a typed `Vec<record>` result ──
+  // The base `safeDict` over a list answers the element when it is a dict, else the default (Null without one).
+  // On the typed result the element is the row's own decoded map (`raw`): the read borrows the row and hands on its
+  // shared handle when that map is a dict, so out of range, a non-dict row and the default answer as the boxed list did.
+  /** `n` is the list argument of a base-tier `this.safeDict (n, i[, d])` whose index is an int literal, an i64 counter,
+   *  an int scalar local or a number local seeded with an int literal. */
+  rust67gSafeDictElemUse(n) {
+    const call = n?.parent;
+    if (call === void 0 || !isCallExpression6(call) || call.arguments[0] !== n || call.arguments.length < 2 || call.arguments.length > 3)
+      return false;
+    const callee = call.expression;
+    if (!isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword || String(callee.name.text) !== "safeDict")
+      return false;
+    if (call.arguments.some((a) => a.kind === SyntaxKind7.SpreadElement))
+      return false;
+    const declaration = this.rustScalarCallee(call);
+    if (declaration === void 0 || !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile().fileName)))
+      return false;
+    return this.rust67gIndexText(this.rustSkipWrappers(call.arguments[1]), false) !== void 0;
+  }
+  rust67gIndexText(key, mark) {
+    if (key === void 0)
+      return void 0;
+    if (isNumericLiteral4(key))
+      return Number.isInteger(Number(key.text)) && Number(key.text) >= 0 ? String(Number(key.text)) : void 0;
+    if (!isIdentifier3(key))
+      return void 0;
+    if (mark ? this.rustI64CounterUse(key) : this.rustI64CounterOf(key) !== void 0)
+      return `${String(key.text)} as usize`;
+    if (this.rustScalarLocalOf(key)?.kind === "int")
+      return `${String(key.text)} as usize`;
+    if (this.isRustValueIndexKey(key))
+      return mark ? this.printTypedResultIndex(key) : "";
+    return void 0;
+  }
+  /** Call hook: the native `safeDict` read of a typed result row. */
+  printTyped67gSafeDict(node, identation) {
+    const recv = node.arguments?.[0];
+    const declaration = recv !== void 0 && isIdentifier3(recv) ? this.rustCallLocalOf(recv) : void 0;
+    if (declaration === void 0 || this.rustTypedResultElemKind(declaration.initializer) !== "vec" || !this.rust67gSafeDictElemUse(recv))
+      return void 0;
+    const index = this.rust67gIndexText(this.rustSkipWrappers(node.arguments[1]), true);
+    if (index === void 0)
+      return void 0;
+    const fallback = node.arguments.length > 2 ? this.printNode(node.arguments[2], identation).trim() : "Value::Null";
+    return `(match ${super.printIdentifier(recv)}.get(${index}) { Some(__row) if matches!(__row.raw, Value::Dict(_)) => crate::Value::from(__row), _ => ${fallback} })`;
   }
   printTypedResultIndex(key) {
     if (isNumericLiteral4(key))
@@ -67815,6 +67866,9 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     const bookCall = this.printWsBookMapRead(node) ?? this.printWsBookCtorCall(node, identation);
     if (bookCall !== void 0)
       return bookCall;
+    const typed67g = this.printTyped67gSafeDict(node, identation);
+    if (typed67g !== void 0)
+      return typed67g;
     const mapLookup = this.printWsCacheMapRead(node);
     if (mapLookup !== void 0)
       return mapLookup;
