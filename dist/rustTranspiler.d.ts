@@ -703,6 +703,16 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustInitKeyLocal(n: any): boolean;
     /** Some use of the local is a native map-key read (`okey`) or `in` test (`kin`). */
     rustScalarKeyedLocal(declaration: any): boolean;
+    /** ral-66s3: a `const x = this.m (..)` local whose venue callee declares a `Str` return (rustVenueStrCall), returned
+     *  whole by its own sync venue method whose head prints `-> Option<String>` (rustNativeStrReturnHead): as an
+     *  `Option<String>` the `return x` is the payload itself (rustVenueStrReturnLocal), so the return is no copy and the
+     *  string-return veto does not apply. Decided from the AST: const declaration, venue callee, every return of the
+     *  local a bare `return x` in that method. */
+    rust66s3VenueStrReturnedWhole(declaration: any, scope: any): boolean;
+    /** The string-return veto of the hand-off rules, less the ral-66s3 returned-whole venue results. */
+    rust66s3StrReturnedVeto(declaration: any, scope: any): boolean;
+    /** ral-66s3: `x` read in a `return x` of the method owning a returned-whole venue `Str` local. */
+    rust66s3ReturnedWholeRead(n: any): boolean;
     /** A local some `return` of a method with a declared string return hands back as-is. */
     rustStrReturnedLocal(declaration: any, scope: any): boolean;
     private static readonly RUST_COPY_SCALAR_KINDS;

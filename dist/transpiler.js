@@ -56441,7 +56441,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     const guarded = (widened || expressionUses || this.rustOptListParamInit(declaration.initializer)) && boxed > 0;
     const strKind = kind === "str" || kind === "ostr";
-    const handOff = nativeUses === 0 && boxed >= 1 && (copied === 0 || !strKind || !this.rustStrNoLend && (this.rustStrLendSites(declaration) || kind === "str" && this.rustClockString(this.unwrapParens(declaration.initializer)) && this.rustReaderLendBoxes(declaration) || this.rustScOwnSelfCall(declaration.initializer) && !this.rustOdExcludedCallee(declaration.initializer) && !this.rustVenueLocalHandedOn(declaration) && this.rustReaderLendBoxes(declaration))) && !this.rustStrReturnedLocal(declaration, scope);
+    const handOff = nativeUses === 0 && boxed >= 1 && (copied === 0 || !strKind || !this.rustStrNoLend && (this.rustStrLendSites(declaration) || kind === "str" && this.rustClockString(this.unwrapParens(declaration.initializer)) && this.rustReaderLendBoxes(declaration) || this.rustScOwnSelfCall(declaration.initializer) && !this.rustOdExcludedCallee(declaration.initializer) && !this.rustVenueLocalHandedOn(declaration) && this.rustReaderLendBoxes(declaration))) && !this.rust66s3StrReturnedVeto(declaration, scope);
     const storeOnly = guarded && nativeUses === 0 && boxed === 1 && !handOff;
     const unused = typedUses === 0 && !handOff && this.rustScalarNeedsNativeUse(declaration.initializer) && !this.rustVenueIntReboxed(declaration, kind, boxed);
     const clientOnce = nativeUses === 0 && boxed === 1 && this.rustWsClientOnlyUse(declaration);
@@ -56460,16 +56460,16 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (handOff && isConditionalExpression4(this.unwrapParens(declaration.initializer)) && this.rustScalarNativeText(kind, declaration.initializer) === void 0)
       return void 0;
     if (strKind && copied > 0 && this.rustPrecisionTouched(declaration, scope) && this.rustPreciseOperandLocal(declaration)) {
-      if (this.rustStrNoLend || this.rustStrReturnedLocal(declaration, scope) || this.rustVenueLocalHandedOn(declaration) || this.rustReaderDeclTooLong(declaration, kind) || !this.rustReaderLendBoxes(declaration, false, true))
+      if (this.rustStrNoLend || this.rust66s3StrReturnedVeto(declaration, scope) || this.rustVenueLocalHandedOn(declaration) || this.rustReaderDeclTooLong(declaration, kind) || !this.rustReaderLendBoxes(declaration, false, true))
         return void 0;
       this.rustStrLentLocals.add(declaration);
     }
     if (this.rustVenueScalarSource(declaration.initializer) && (boxed > 0 && !handOff || this.rustVenueLocalHandedOn(declaration))) {
-      if (!strKind || this.rustStrNoLend || this.rustOdExcludedCallee(declaration.initializer) || this.rustStrReturnedLocal(declaration, scope) || this.rustVenueLocalHandedOn(declaration) || this.rustReaderDeclTooLong(declaration, kind) || !this.rustReaderLendBoxes(declaration))
+      if (!strKind || this.rustStrNoLend || this.rustOdExcludedCallee(declaration.initializer) || this.rust66s3StrReturnedVeto(declaration, scope) || this.rustVenueLocalHandedOn(declaration) || this.rustReaderDeclTooLong(declaration, kind) || !this.rustReaderLendBoxes(declaration))
         return void 0;
       this.rustStrLentLocals.add(declaration);
     }
-    const venueLent = kind === "ostr" && copied > 0 && !this.rustStrNoLend && this.rustVenueTypedCall(declaration.initializer) !== void 0 && !this.rustOdExcludedCallee(declaration.initializer) && !this.rustStrReturnedLocal(declaration, scope) && !this.rustVenueLocalHandedOn(declaration) && !this.rustReaderDeclTooLong(declaration, kind) && this.rustReaderLendBoxes(declaration);
+    const venueLent = kind === "ostr" && copied > 0 && !this.rustStrNoLend && this.rustVenueTypedCall(declaration.initializer) !== void 0 && !this.rustOdExcludedCallee(declaration.initializer) && !this.rust66s3StrReturnedVeto(declaration, scope) && !this.rustVenueLocalHandedOn(declaration) && !this.rustReaderDeclTooLong(declaration, kind) && this.rustReaderLendBoxes(declaration);
     if (venueLent)
       this.rustStrLentLocals.add(declaration);
     else if (this.rustVenueTypedCostly(declaration, kind, copied))
@@ -56485,7 +56485,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (readerLent)
       this.rustStrLentLocals.add(declaration);
     if (strKind && copied > 0 && this.rustUdOverrideStrSeed(declaration.initializer)) {
-      if (this.rustStrNoLend || this.rustStrReturnedLocal(declaration, scope) || !this.rustUdOverrideLendBoxes(declaration))
+      if (this.rustStrNoLend || this.rust66s3StrReturnedVeto(declaration, scope) || !this.rustUdOverrideLendBoxes(declaration))
         return void 0;
       this.rustStrLentLocals.add(declaration);
     }
@@ -56676,6 +56676,40 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     });
     return keyed;
   }
+  // ── ral-66s3: per-venue results returned whole ──
+  /** ral-66s3: a `const x = this.m (..)` local whose venue callee declares a `Str` return (rustVenueStrCall), returned
+   *  whole by its own sync venue method whose head prints `-> Option<String>` (rustNativeStrReturnHead): as an
+   *  `Option<String>` the `return x` is the payload itself (rustVenueStrReturnLocal), so the return is no copy and the
+   *  string-return veto does not apply. Decided from the AST: const declaration, venue callee, every return of the
+   *  local a bare `return x` in that method. */
+  rust66s3VenueStrReturnedWhole(declaration, scope) {
+    if (scope?.kind !== SyntaxKind7.MethodDeclaration || !isIdentifier3(declaration?.name) || (declaration.parent.flags & NodeFlags4.Const) === 0)
+      return false;
+    if (this.rustTestTierSource(declaration) || !this.rustVenueStrCall(this.unwrapParens(declaration.initializer)) || !this.rustNativeStrReturnHead(scope))
+      return false;
+    let ok = true;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      if (isReturnStatement4(n.parent) && n.parent.expression === n && findAncestor(n.parent.parent, isFunctionLike) !== scope)
+        ok = false;
+      return true;
+    });
+    return ok;
+  }
+  /** The string-return veto of the hand-off rules, less the ral-66s3 returned-whole venue results. */
+  rust66s3StrReturnedVeto(declaration, scope) {
+    return this.rustStrReturnedLocal(declaration, scope) && !this.rust66s3VenueStrReturnedWhole(declaration, scope);
+  }
+  /** ral-66s3: `x` read in a `return x` of the method owning a returned-whole venue `Str` local. */
+  rust66s3ReturnedWholeRead(n) {
+    if (!isReturnStatement4(n.parent) || n.parent.expression !== n)
+      return false;
+    const declaration = this.rustDeclaredNode(n);
+    if (declaration === void 0 || !isVariableDeclaration3(declaration))
+      return false;
+    const scope = this.rustEnclosingFunction(declaration);
+    return scope === findAncestor(n.parent.parent, isFunctionLike) && this.rust66s3VenueStrReturnedWhole(declaration, scope);
+  }
+  // ── end ral-66s3 ──
   /** A local some `return` of a method with a declared string return hands back as-is. */
   rustStrReturnedLocal(declaration, scope) {
     if (scope?.kind !== SyntaxKind7.MethodDeclaration || scope.type === void 0)
@@ -64831,6 +64865,8 @@ ${ind}];`;
       return true;
     }
     if (this.rustVenueStrReturnLocal(inner) !== void 0 && this.rustVenueStrParamLocal(inner))
+      return true;
+    if (isIdentifier3(inner) && this.rust66s3ReturnedWholeRead(inner))
       return true;
     if (isIdentifier3(inner) && (this.rustBaseNativeStrMethod(findAncestor(inner, isFunctionLike)) || this.rustVenueKeptStrArm(findAncestor(inner, isFunctionLike))) && ((this.getCheckedTypeOf(inner)?.flags ?? 0) & ~(TypeFlags6.Undefined | TypeFlags6.Null)) === 0)
       return true;
