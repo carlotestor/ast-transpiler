@@ -22686,6 +22686,9 @@ export class RustTranspiler extends BaseTranspiler {
      *  or a `let` filled by such writes) to a lent `impl Into<crate::Value>` slot. */
     rustLentOptionalHandOff(call: any, arg: any, init: any, from: 'dict' | 'list' | 'api' | undefined, nilDeclared: boolean): boolean {
         if (from !== 'dict' && from !== 'list') return false;
+        // ral-64i: a declaration-initialised alias of an optional map (ral-45f / ral-61i source proof) lends to the class's own
+        // lent `parse*` response slot exactly as its source would (`From<&Option<Dict>>`: Null for None, the shared map else)
+        if (!nilDeclared && from === 'dict' && init !== undefined && isIdentifier(init) && this.rustOptAliasSourceKind(init, this.rustEnclosingFunction(call)) === 'dict') return this.rustLentResponseSlot(call, arg);
         if (!nilDeclared && !(init !== undefined && isCallExpression(init) && this.rustOptContainerSourceOk(init, from))) return false;
         if (this.rustLentResponseSlot(call, arg)) return from === 'dict';
         if (this.rustLentEndpointSlot(call, arg, from)) return true;
@@ -23976,6 +23979,12 @@ export class RustTranspiler extends BaseTranspiler {
         if (src !== undefined && src.kind === kind && this.rustPrintedOptional.has(src.declaration)) {
             const s = super.transformIdentifier(init, this.ReservedKeywordsReplacements[init.text] ?? init.text);
             return `${indent}let mut ${varName}: Option<${type}> = ${this.rustOwnedLastUse(init, src.declaration) ? s : `${s}.clone()`}`;
+        }
+        // ral-64i: an alias of a source local that stays `Value` converts a copy unless this is the source's last use
+        if (isIdentifier(init)) {
+            const d: any = this.rustDeclarationOfIdentifier(init);
+            const s = super.transformIdentifier(init, this.ReservedKeywordsReplacements[init.text] ?? init.text);
+            if (d !== undefined && d !== init && d.name !== init && !this.rustOwnedLastUse(init, d)) return `${indent}let mut ${varName}: Option<${type}> = ${s}.clone().into_opt_${kind}()`;
         }
         return `${indent}let mut ${varName}: Option<${type}> = ${this.rustWsFieldGetText(init, true) ?? this.printNode(declaration.initializer, 0).trim()}.into_opt_${kind}()`;
     }
