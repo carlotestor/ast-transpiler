@@ -28894,7 +28894,7 @@ export class RustTranspiler extends BaseTranspiler {
         const nothing = (x: any) => x === undefined || this.rustStripWrappers(x)?.kind === SyntaxKind.UndefinedKeyword || (isIdentifier(this.rustStripWrappers(x)) && this.rustStripWrappers(x).text === 'undefined');
         const kindOf = (x: any) => (nothing(x) ? 'none' : (this.rustWsResolvedKind(x) ?? 'other'));
         // ral-80a: a boolean literal settles a scalar, never a list (no element at any tuple slot)
-        const boolean = (x: any) => { const v: any = x === undefined ? undefined : this.rustStripWrappers(x); return v !== undefined && (v.kind === SyntaxKind.TrueKeyword || v.kind === SyntaxKind.FalseKeyword); };
+        const boolean = (x: Node | undefined): boolean => { const v: Node | undefined = x === undefined ? undefined : this.rustStripWrappers(x); return v !== undefined && (v.kind === SyntaxKind.TrueKeyword || v.kind === SyntaxKind.FalseKeyword); };
         const add = (hash: any, x: any, kind?: string, site?: any, scalar = false) => {
             // ral-ye: a fixed-kind resolve (cleanUnsubscription's `true`) reads its hash per caller too
             const sites = site !== undefined ? this.rustWsHelperCallSites(cls, site, [ hash, x ]) : undefined;
@@ -28940,20 +28940,20 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** ral-80a: a helper's resolved value kept for the tuple-slot proof only when it is an array literal whose elements name
      *  no parameter of the helper (so reading them outside the caller's bindings reads the same nodes). */
-    rustWsSiteTupleValue(x: any): any {
-        const v: any = x === undefined ? undefined : this.rustStripWrappers(x);
+    rustWsSiteTupleValue(x: Node | undefined): Node | undefined {
+        const v: Node | undefined = x === undefined ? undefined : this.rustStripWrappers(x);
         if (v === undefined || !isArrayLiteralExpression(v)) return undefined;
         let param = false;
-        const visit = (n: any) => { if (isIdentifier(n) && this.rustDeclarationOfIdentifier(n)?.kind === SyntaxKind.Parameter) param = true; n.forEachChild?.(visit); };
+        const visit = (n: Node): void => { if (isIdentifier(n) && this.rustDeclarationOfIdentifier(n)?.kind === SyntaxKind.Parameter) param = true; n.forEachChild(visit); };
         visit(v);
         return param ? undefined : v;
     }
 
     /** ral-80a: `this.cleanUnsubscription (..)` bound to the base tier's method, whose only resolve is `client.resolve (true, unsubHash)`
      *  (a venue override may resolve anything, so it is not this). */
-    rustWsBaseCleanUnsubscription(call: any): boolean {
-        const callee: any = this.rustScalarCallee(call);
-        return callee !== undefined && isMethodDeclaration(callee) && RustTranspiler.RUST_BASE_TIER_FILE.test(String(callee.getSourceFile?.()?.fileName ?? ''));
+    rustWsBaseCleanUnsubscription(call: CallExpression): boolean {
+        const callee: Node | undefined = this.rustScalarCallee(call);
+        return callee !== undefined && isMethodDeclaration(callee) && RustTranspiler.RUST_BASE_TIER_FILE.test(String(callee.getSourceFile().fileName));
     }
 
     /** When `site` sits in a method of `cls` with parameters: the parameter bindings of every call of that method
