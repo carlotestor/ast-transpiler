@@ -20222,3 +20222,25 @@ describe('ral-59k: a field write whose value re-reads the bucket through this.sa
         expect(out).toContain('let mut code: Value = ');
     });
 });
+
+describe('ral-60k: the first key of a two-key write x[k][\'lit\'] = v on a map bearer takes the insert-key text (whitebit parseDepositWithdrawFees code)', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeDict (o: any, k: any, d: any = undefined): Dict | undefined { return o; }\n    safeCurrencyCode (currencyId: Str, currency: any = undefined): Str { return currencyId; }\n    hold (x: any, y: any = undefined, z: any = undefined): any { return x; }\n    depositWithdrawFee (info: any): Dict { return {}; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    const fees = (reader: string) => "    parse (response: any[], codes: any) {\n        const result: Dict = {};\n        for (let i = 0; i < response.length; i++) {\n            const entry = this.safeDict (response, i);\n            const code = " + reader + " (this.safeString (entry, 'ccy'));\n            if ((code !== undefined) && (codes === undefined || this.hold (code, codes))) {\n                if (this.safeDict (result, code) === undefined) {\n                    result[code] = this.depositWithdrawFee ({});\n                }\n                result[code]['withdraw'] = entry;\n            }\n        }\n        return result;\n    }\n";
+    test('the key is Option<String> and the two-key write enters by its insert-key text', () => {
+        const out = write ('60k-two', fees ('this.safeCurrencyCode'));
+        expect(out).toContain('let mut code: Option<String> = ');
+        expect(out).toContain('result.entry(code.as_deref().unwrap_or("null").to_string()).or_default()');
+        expect(out).not.toContain('stringify_param(&code)');
+    });
+    test('negative: a hold() key stays Value', () => {
+        const out = write ('60k-two-neg', fees ('this.hold'));
+        expect(out).toMatch(/let mut code: Value = /);
+    });
+});

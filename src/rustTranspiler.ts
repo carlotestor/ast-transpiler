@@ -8784,7 +8784,8 @@ export class RustTranspiler extends BaseTranspiler {
         let base: any = outer;
         let depth = 0;
         while (isElementAccessExpression(base)) { base = base.expression; depth++; }
-        if (depth < 3 || !isIdentifier(base)) return undefined;
+        // ral-60k: a two-key write `x[k1][k2] = v` prints through the same rustBearerChainedWrite first hop (`x.entry(<k1>)`); only k1 is asked
+        if (depth < 2 || !isIdentifier(base) || (depth === 2 && access.expression !== base)) return undefined;
         // the bearer decision of `x` leans on this very key (rustBearerChainHopArg), so it is asked syntactically here: a never
         // reassigned object-literal local; a local the bearer proof then refuses for another reason keeps the boxed chain,
         // whose key `&k` is the typed local's box (rustDeepBearerChainKeyText)
