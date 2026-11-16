@@ -53921,6 +53921,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return borrowedElem;
     if (node.declarations.length === 1 && this.rustSubscriptionPresenceFlag(declaration, parsedValue))
       return `${indent}let ${varName}: bool = ${parsedValue} != Value::Null`;
+    if (node.declarations.length === 1 && this.rust73cRejectOnlyError(declaration))
+      return `${indent}let mut ${varName}: crate::ExchangeError = (${parsedValue})`;
     if (declaration.initializer.kind === SyntaxKind7.NewExpression) {
       return `${indent}let mut ${varName} = ${parsedValue}`;
     }
@@ -60045,6 +60047,45 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     const name = String(callee.name.text);
     return (name === "resolve" || name === "reject") && !call.arguments.some((a) => a.kind === SyntaxKind7.SpreadElement) && this.rustCallsRuntimeHandle(call);
+  }
+  /** ral-73c E1: `const e = new XError (msg)` (a ccxt error class the printer routes to `crate::exchange_errors::<x>(msg)`,
+   *  which returns `ExchangeError`) in a non-test function, never written, whose every use is the settled value of a ws
+   *  `client.reject (e, ..)` (rustWsSettleCall: `err: impl Into<Value>`, the same `From<ExchangeError>` box the `Value`
+   *  local took at its declaration). Decided from the AST and the checker's symbols. */
+  rust73cRejectOnlyError(declaration) {
+    if (!isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name) || declaration.initializer?.kind !== SyntaxKind7.NewExpression)
+      return false;
+    const list = declaration.parent;
+    if (list?.kind !== SyntaxKind7.VariableDeclarationList || (list.flags & NodeFlags4.Const) === 0 || list.parent?.kind !== SyntaxKind7.VariableStatement)
+      return false;
+    const init = declaration.initializer;
+    if (!isIdentifier3(init.expression) || (init.arguments?.length ?? 0) !== 1 || init.arguments[0].kind === SyntaxKind7.SpreadElement)
+      return false;
+    const cls = String(init.expression.text);
+    if (cls === "Error" || !/^[A-Z]/.test(cls) || this.rustDynamicErrorClass(init) !== void 0)
+      return false;
+    if (!_RustTranspiler.RUST_ERROR_CLASS_NAME.test(cls) && !_RustTranspiler.RUST_NAME_VALUE_IMPORTS.has(cls))
+      return false;
+    if (this.rustTestTierSource(declaration))
+      return false;
+    const scope = this.rustEnclosingFunction(declaration);
+    if (scope === void 0 || isSourceFile5(scope))
+      return false;
+    const own = this.rustSymbolOf(declaration.name);
+    if (own === void 0)
+      return false;
+    let uses = 0;
+    for (const n of this.rustScopeNameNodes(scope, String(declaration.name.text))) {
+      if (n === declaration.name || !isIdentifier3(n) || this.rustSymbolOf(n) !== own)
+        continue;
+      if (this.rustEnclosingFunction(n) !== scope)
+        return false;
+      const call = n.parent;
+      if (!isCallExpression6(call) || call.arguments[0] !== n || !isPropertyAccessExpression3(call.expression) || String(call.expression.name.text) !== "reject" || !this.rustWsSettleCall(call))
+        return false;
+      uses++;
+    }
+    return uses > 0;
   }
   /** `client.future|reusableFuture(hash)` on a ws handle: the hand-written method takes `hash: impl Into<Value>`. */
   rustWsFlightCall(call) {
@@ -89025,6 +89066,8 @@ _RustTranspiler.RUST_SAFE_STRING_KEY_ARGS = {
 // rustWsClientCallArg: `client.resolve|reject|future|reusableFuture|send(.., x)` on a ws `Client`
 // receiver takes its arguments as plain `Value`s, so a string local boxes there.
 _RustTranspiler.RUST_WS_CLIENT_VALUE_METHODS = /* @__PURE__ */ new Set(["resolve", "reject", "future", "reusableFuture", "send"]);
+/** The class-name shape `printNewExpression` routes to the runtime error constructors. */
+_RustTranspiler.RUST_ERROR_CLASS_NAME = /^(?:[A-Z][a-zA-Z]*(?:Error|Required|Found|Failed|Rejected|Available|Exceeded|Limit|Pending|Funds|Address|Order|Cached|Fillable|Closed|Maintenance|Nonce|Timeout|Response|Settings|User|Supported|Implemented|Denied|Enabled|Suspended|Symbol|Change|Unavailable|Proxy|Set|Needed))$/;
 // ── ws client handle (rustClientHandlePlan / printClientHandle*) ──────────
 // A method's `client` (its `client` parameter, or its one `client` local) reads the four handle
 // fields through the typed `ClientHandle` the hand-written runtime keeps: a field read is the

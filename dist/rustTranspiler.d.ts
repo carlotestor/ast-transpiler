@@ -1255,6 +1255,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustOwnedLastUse(node: any, declaration: any): boolean;
     rustLocalLastUse(node: any, declaration: any): boolean;
     rustWsSettleCall(call: any): boolean;
+    /** ral-73c E1: `const e = new XError (msg)` (a ccxt error class the printer routes to `crate::exchange_errors::<x>(msg)`,
+     *  which returns `ExchangeError`) in a non-test function, never written, whose every use is the settled value of a ws
+     *  `client.reject (e, ..)` (rustWsSettleCall: `err: impl Into<Value>`, the same `From<ExchangeError>` box the `Value`
+     *  local took at its declaration). Decided from the AST and the checker's symbols. */
+    rust73cRejectOnlyError(declaration: any): boolean;
+    /** The class-name shape `printNewExpression` routes to the runtime error constructors. */
+    private static readonly RUST_ERROR_CLASS_NAME;
     /** `client.future|reusableFuture(hash)` on a ws handle: the hand-written method takes `hash: impl Into<Value>`. */
     rustWsFlightCall(call: any): boolean;
     /** `this.watch(url, hash, message, subscribeHash, ..)` / `this.watchMultiple(url, ..)`: url and hashes are `impl Into<Option<&str>>`. */
@@ -2896,7 +2903,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     nativeEqualityText(node: any): string;
     unwrapParens(node: any): any;
     hasNativeComparisonOperand(node: any): any;
-    printLogicalInBooleanContext(node: any): any;
+    printLogicalInBooleanContext(node: any): string;
     printWhileStatement(node: any, identation: any): string;
     printIfStatement(node: any, identation: any): string;
     printPostFixUnaryExpression(node: any, identation: any): string;
