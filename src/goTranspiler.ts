@@ -26013,6 +26013,13 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             }
             read = `${book}[${entry.index}]`;
         }
+        const cacheType = this.goOhlcvsReadCacheType(declaration);
+        if (cacheType !== undefined) {
+            // ral-84g5: a book entry is a cache or absent; the comma-ok assertion keeps an absent entry a nil interface
+            const assigned = `${name}, _ = ${read}.(${cacheType})`;
+            return (guards.length === 0) ? `${iden}var ${name} ${cacheType}\n${iden}${assigned}`
+                : `${iden}var ${name} ${cacheType}\n${iden}if ${guards.join(' && ')} {\n${iden}\t${assigned}\n${iden}}`;
+        }
         if (guards.length === 0) {
             return `${iden}var ${name} any = ${read}`;
         }
@@ -33999,4 +34006,105 @@ GoTranspiler.prototype.printVariableDeclarationList = function (node, identation
         }
     }
     return goTernaryJoinUpstreamPrintDeclarationList.call(this, node, identation);
+};
+
+// ---- ral-84g5: declared-then-assigned locals ----------------------------------------------------------------------
+// R1: an ohlcv book entry read (`let stored = this.safeValue (this.safeDict (this.ohlcvs, symbol), tf)` and the other
+// shapes goOhlcvsReadDeclaration prints) holds the ArrayCacheByTimestamp the BaseExchange field declares, or nothing.
+// Declared WsArrayCache, its appends are direct interface calls and its nil tests native; every write must be a cache
+// constructor (goLocalIsSafeToType admits only those for this type) and the local must live in the ws tree.
+export interface GoTranspiler {
+    goOhlcvsReadCacheType(declaration): string | undefined;
+}
+const goOhlcvsReadCacheMemo = new WeakMap<object, string | undefined>();
+GoTranspiler.prototype.goOhlcvsReadCacheType = function (declaration) {
+    if ((declaration?.kind !== SyntaxKind.VariableDeclaration) || (declaration.name?.kind !== SyntaxKind.Identifier)
+        || (declaration.initializer === undefined) || (declaration.parent?.parent?.kind !== SyntaxKind.FirstStatement)
+        || (declaration.parent.declarations?.length !== 1)) {
+        return undefined;
+    }
+    if (goOhlcvsReadCacheMemo.has(declaration)) {
+        return goOhlcvsReadCacheMemo.get(declaration);
+    }
+    goOhlcvsReadCacheMemo.set(declaration, undefined); // re-entry answers the box
+    let fileName = '';
+    try {
+        fileName = String(declaration.getSourceFile?.()?.fileName ?? '').replace(/\\/g, '/');
+    } catch (e) {
+        return undefined;
+    }
+    if (!/(^|\/)ts\/src\/pro\//.test(fileName) || /\/test\//.test(fileName)) {
+        return undefined;
+    }
+    const init: any = this.goUnwrapPrintedAssertions(declaration.initializer);
+    let shape = this.goOhlcvsFlatKeyNode(declaration) !== undefined;
+    if (!shape && (init?.kind === SyntaxKind.ElementAccessExpression)) {
+        shape = this.goOhlcvsBookAccess(init.expression) !== undefined;
+    }
+    if (!shape && (init?.kind === SyntaxKind.CallExpression) && (init.arguments?.length === 2) && (init.expression?.kind === SyntaxKind.PropertyAccessExpression)
+        && (init.expression.expression?.kind === SyntaxKind.ThisKeyword) && (init.expression.name?.text === 'safeValue')) {
+        const source = init.arguments[0];
+        const viaCall = this.goOhlcvsBookCall(source);
+        shape = (this.goOhlcvsBookAccess(source) !== undefined) || (this.goOhlcvsBookLocalOf(source) !== undefined)
+            || ((viaCall !== undefined) && (this.goUnwrapPrintedAssertions(source).expression.name.text === 'safeDict'));
+    }
+    if (!shape) {
+        return undefined;
+    }
+    const name = declaration.name.text;
+    const scope = this.goEnclosingFunction(declaration);
+    if ((scope === undefined) || this.goTypeNameIsShadowed(scope, GO_WS_CACHE_TYPE)) {
+        return undefined;
+    }
+    // every write is a cache constructor, and every read is an append, a nil test, a book store or a hand-off as a value
+    for (const n of this.goDescendantsOf(scope)) {
+        if ((n.kind !== SyntaxKind.Identifier) || (n.text !== name) || (n === declaration.name) || (this.goDeclarationOfIdentifier(n) !== declaration)) {
+            continue;
+        }
+        const parent: any = n.parent;
+        if ((parent?.kind === SyntaxKind.BinaryExpression) && (parent.left === n)) {
+            const op = parent.operatorToken.kind;
+            if (op === SyntaxKind.EqualsToken) {
+                if (this.goWsCacheTypeOfNode(this.goUnwrapParenthesizedNode(parent.right)) === undefined) {
+                    return undefined;
+                }
+                continue;
+            }
+            if (!this.goIsEqualityToken(op) || !this.goIsNilLiteral(parent.right)) {
+                return undefined;
+            }
+            continue;
+        }
+        if ((parent?.kind === SyntaxKind.PropertyAccessExpression) && (parent.expression === n)) {
+            if ((parent.name?.text !== 'append') || (parent.parent?.kind !== SyntaxKind.CallExpression) || (parent.parent.expression !== parent)) {
+                return undefined;
+            }
+            continue;
+        }
+        if ((parent?.kind === SyntaxKind.BinaryExpression) && (parent.right === n) && (parent.operatorToken.kind === SyntaxKind.EqualsToken)
+            && (this.goOhlcvsBookAccess(parent.left?.expression) !== undefined || (parent.left?.kind === SyntaxKind.ElementAccessExpression))) {
+            continue; // a book store `this.ohlcvs[s][tf] = stored` / `book[tf] = stored`
+        }
+        if ((parent?.kind === SyntaxKind.CallExpression) && (parent.expression !== n)) {
+            continue; // `client.resolve (stored, hash)`: handed on as a value
+        }
+        if (parent?.kind === SyntaxKind.ArrayLiteralExpression) {
+            continue;
+        }
+        return undefined;
+    }
+    if (!this.goLocalIsSafeToType(scope, declaration, name, GO_WS_CACHE_TYPE)) {
+        return undefined;
+    }
+    goOhlcvsReadCacheMemo.set(declaration, GO_WS_CACHE_TYPE);
+    return GO_WS_CACHE_TYPE;
+};
+
+const goOhlcvsReadUpstreamLocalType = GoTranspiler.prototype.getGoLocalType;
+GoTranspiler.prototype.getGoLocalType = function (declaration, parsedValue: string) {
+    const known = goOhlcvsReadUpstreamLocalType.call(this, declaration, parsedValue);
+    if (known !== 'any') {
+        return known;
+    }
+    return this.goOhlcvsReadCacheType(declaration) ?? known;
 };

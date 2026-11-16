@@ -9722,7 +9722,7 @@ describe ('goOhlcvsBook', () => {
             ].join ('\n'));
             expect (out).toContain ('var book map[string]any = this.SafeDictMap(this.Ohlcvs, symbol, map[string]any{})');
             expect (out).toContain ('this.Ohlcvs[symbol] = book');
-            expect (out).toContain ('stored = book[*timeframe]');
+            expect (out).toContain ('stored, _ = book[*timeframe].(WsArrayCache)'); // ral-84g5 R1 types the entry read
             expect (out).toContain ('book[*timeframe] = stored');
             expect (out).not.toContain ('AddElementToObject');
         });
@@ -14352,5 +14352,56 @@ describe ('ral-77g8 ws struct parser results', () => {
         const out = x.transpileGo (src).content;
         expect (out).toContain ('var defaultType string = "spot"');
         expect (out).toContain ('defaultType = *this.SafeString(this.Options, "defaultType", defaultType)');
+    });
+});
+
+describe ('ral-84g5 declared-then-assigned locals', () => {
+    const HEAD = 'type Dict = { [key: string]: any };\ntype Str = string | undefined;\n'
+        + 'class ArrayCacheByTimestamp { constructor (limit: any) {} append (x: any) {} }\n'
+        + 'class BaseExchange {\n'
+        + '    ohlcvs: { [key: string]: { [key: string]: ArrayCacheByTimestamp } } = {};\n'
+        + '    options: Dict = {};\n'
+        + '    safeString (d: any, k: any, def: any = undefined): Str { return d; }\n'
+        + '    safeValue (d: any, k: any, def: any = undefined): any { return d; }\n'
+        + '    safeDict (d: any, k: any, def: any = undefined): Dict { return d; }\n'
+        + '    safeInteger (d: any, k: any, def: any = undefined): any { return d; }\n'
+        + '    resolve (a: any, b: any) {}\n';
+    const printTree = (body: string, tree: string): string => {
+        const tmp = fs.mkdtempSync (path.join (os.tmpdir (), 'go84g5-'));
+        try {
+            const dir = path.join (tmp, 'ts', 'src', tree);
+            fs.mkdirSync (dir, { recursive: true });
+            const file = path.join (dir, 'venue.ts');
+            fs.writeFileSync (file, HEAD + '    handle (message: Dict) {\n' + body + '\n    }\n}\n');
+            const t = new Transpiler ({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+            installCcxtGoLocalTypes (t.goTranspiler);
+            return t.transpileGoByPath (file).content;
+        } finally {
+            fs.rmSync (tmp, { recursive: true, force: true });
+        }
+    };
+    const HANDLER = [
+        "const symbol = this.safeString (message, 's');",
+        "const timeframe = this.safeString (message, 't');",
+        'this.ohlcvs[symbol] = this.safeDict (this.ohlcvs, symbol, {});',
+        'let stored = this.safeValue (this.safeDict (this.ohlcvs, symbol), timeframe);',
+        'if (stored === undefined) {',
+        '    stored = new ArrayCacheByTimestamp (10);',
+        '    this.ohlcvs[symbol][timeframe] = stored;',
+        '}',
+        'stored.append ([ 1, 2 ]);',
+        'this.resolve (stored, symbol);',
+    ].join ('\n');
+    test('R1: an ohlcv book entry read in the ws tree is a WsArrayCache with a direct Append (fails on the parent)', () => {
+        const out = printTree (HANDLER, 'pro');
+        expect (out).toContain ('var stored WsArrayCache\n\tif symbol != nil && timeframe != nil {\n\t\tstored, _ = this.Ohlcvs[*symbol][*timeframe].(WsArrayCache)\n\t}');
+        expect (out).toContain ('if stored == nil {');
+        expect (out).toContain ('stored.Append(');
+        expect (out).not.toContain ('Appender');
+        expect (out).not.toContain ('var stored any');
+    });
+    test('R1: a read with another use keeps the box', () => {
+        const out = printTree (HANDLER + '\nconst n = stored.length;', 'pro');
+        expect (out).toContain ('var stored any');
     });
 });
