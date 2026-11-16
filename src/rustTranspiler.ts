@@ -21784,7 +21784,9 @@ export class RustTranspiler extends BaseTranspiler {
                 escapes.push(n);
                 return true;
             }
-            if (prediction && isCallExpression(parent) && parent.arguments.some((a: any) => a === n)) {
+            // ral-84b: `Object.keys/values(x)` of a literal-built map reads the map's own iterators (the enum arm below), never a
+            // boxed escape (a produced map keeps its `Dict` handle: retyping it would deep-copy at the declaration)
+            if (prediction && isCallExpression(parent) && parent.arguments.some((a: any) => a === n) && (produced || this.bearerEnumArg(parent) !== n)) {
                 // A collection/JSON reader prints its own receiver text (`Object.keys(x)`,
                 // `JSON.stringify(x)`), so passing through the box would only add a clone.
                 if (this.nativeReadCallee(parent)) return false;

@@ -24237,3 +24237,24 @@ describe('ral-84b: a built list shared into an object literal before its pushes 
         expect(out).toContain('std::sync::Arc::make_mut(&mut subscriptionArgs).push(');
     });
 });
+
+describe('ral-84b: a prediction literal map read by Object.keys is a native map', () => {
+    const files: Record<string, string> = {
+        'ts/src/base/Exchange.ts': "export default class Exchange {\n    safeString (obj: any, key: any, d: any = undefined): string { return obj[key]; }\n    keep (x: any): any { return x; }\n}\n",
+        'ts/src/prediction/venue.ts': "import Exchange from '../base/Exchange.js';\nexport default class venue extends Exchange {\n    handleBook (rows: any[]) {\n        const updated: any = {};\n        for (let i = 0; i < rows.length; i++) {\n            const symbol = this.safeString (rows[i], 'symbol');\n            if (symbol !== undefined) {\n                updated[symbol] = true;\n            }\n        }\n        const updatedSymbols = Object.keys (updated);\n        return this.keep (updatedSymbols);\n    }\n}\n",
+    };
+    let out: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-84b3-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = transpiler.transpileRustByPath(path.join (root, 'ts/src/prediction/venue.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test('myriad handleOrderBook updated: IndexMap, Object.keys reads its own keys', () => {
+        expect(out).toContain('let mut updated: indexmap::IndexMap<String, Value> = ');
+        expect(out).not.toContain('let mut updated: Value');
+    });
+});
