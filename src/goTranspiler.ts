@@ -34049,3 +34049,79 @@ GoTranspiler.prototype.printVariableDeclarationList = function (node, identation
                 || ((n.parent?.kind === SyntaxKind.PropertyAssignment) && (n.parent.name === n))) === 'bool';
     };
 }
+// C. `let xs = this.safeList (c, k[, []])` rebound only as `xs = this.arrayConcat (..)` (BaseExchange.ArrayConcat
+// returns a []any) and otherwise read as a list (length, element and accessor index reads) or handed to
+// arrayConcat: a []any local. ArrayConcat concatenates a nil slice exactly like the empty default the box held,
+// so dropping the `[]` default (SafeListTyped answers nil) changes no answer; a nil test, a copy or any other
+// hand-out keeps the box. At least one native read (length / element) is required.
+{
+    const listUnbox = GoTranspiler.prototype.goSafeListLocalUnbox;
+    const isConcat = (call: any): boolean => (call?.kind === SyntaxKind.CallExpression) && (call.expression?.kind === SyntaxKind.PropertyAccessExpression)
+        && (call.expression.expression?.kind === SyntaxKind.ThisKeyword) && (call.expression.name?.text === 'arrayConcat') && (call.arguments.length === 2);
+    GoTranspiler.prototype.goSafeListLocalUnbox = function (declaration) {
+        const shipped = listUnbox.call(this, declaration);
+        if ((shipped !== undefined) || (declaration?.kind !== SyntaxKind.VariableDeclaration) || (declaration.name?.kind !== SyntaxKind.Identifier)
+            || (declaration.parent?.parent?.kind !== SyntaxKind.FirstStatement) || (this.goSafeListLocalArgs(declaration.initializer) === undefined)) {
+            return shipped;
+        }
+        const scope: any = this.goEnclosingFunction(declaration);
+        if (scope === undefined) {
+            return undefined;
+        }
+        let rebinds = 0;
+        let natives = 0;
+        const reads = (n: any): boolean => {
+            const outer = ccxtGoSafeCollectionTypeOnlyWrapper(n);
+            const parent: any = outer.parent;
+            if ((parent?.kind === SyntaxKind.BinaryExpression) && (parent.left === outer) && (parent.operatorToken?.kind === SyntaxKind.EqualsToken)) {
+                if (isConcat(parent.right)) {
+                    rebinds++;
+                    return true;
+                }
+                return false;
+            }
+            if ((parent?.kind === SyntaxKind.CallExpression) && (parent.expression !== outer) && isConcat(parent)) {
+                return true; // handed to arrayConcat: a nil slice concatenates like the empty default
+            }
+            if (((parent?.kind === SyntaxKind.PropertyAccessExpression) && (parent.expression === outer) && (parent.name?.text === 'length'))
+                || ((parent?.kind === SyntaxKind.ElementAccessExpression) && (parent.expression === outer))) {
+                if (!ccxtGoSafeCollectionUseReads(this, outer, 'list', true)) {
+                    return false;
+                }
+                natives++;
+                return true;
+            }
+            return ccxtGoSafeCollectionUseReads(this, outer, 'list', true);
+        };
+        const typed = this.goDeclaredLocalTypeIfSafe(declaration, GO_SAFE_LIST_LOCAL_TYPE, reads,
+            (n: any) => ((n.parent?.kind === SyntaxKind.PropertyAccessExpression) && (n.parent.name === n))
+                || ((n.parent?.kind === SyntaxKind.PropertyAssignment) && (n.parent.name === n)));
+        if ((typed === undefined) || (rebinds === 0) || (natives === 0)) {
+            return undefined;
+        }
+        // an element read prints `xs[i]` bare only when the checker proves object elements (no pointer to deref)
+        const elementRead = this.hasNodeWhere(scope, (n: any) => (n.kind === SyntaxKind.ElementAccessExpression)
+            && (ccxtGoUnwrapTypeOnly(n.expression)?.kind === SyntaxKind.Identifier) && (ccxtGoUnwrapTypeOnly(n.expression).text === declaration.name.text));
+        if (elementRead) {
+            const checker: any = this.checkerOrUndefined();
+            try {
+                const type: any = checker?.getTypeAtLocation(declaration.name);
+                const element: any = ((type !== undefined) && checker.isArrayType(type)) ? checker.getIndexTypeOfType(type, IndexKind.Number) : undefined;
+                const parts: any[] = (element === undefined) ? [] : (((typeof element.isUnionType === 'function') && element.isUnionType()) ? element.getTypes().slice() : [element]);
+                if ((parts.length === 0) || !parts.every((p: any) => (p.flags & TypeFlags.Object) !== 0)) {
+                    return undefined;
+                }
+            } catch (e) {
+                return undefined;
+            }
+        }
+        return typed;
+    };
+}
+function ccxtGoUnwrapTypeOnly (node) {
+    let current = node;
+    while ((current?.kind === SyntaxKind.ParenthesizedExpression) || (current?.kind === SyntaxKind.AsExpression) || (current?.kind === SyntaxKind.NonNullExpression)) {
+        current = current.expression;
+    }
+    return current;
+}

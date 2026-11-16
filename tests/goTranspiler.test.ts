@@ -14394,4 +14394,15 @@ describe ('ral-84g2 reader-result locals', () => {
         expect(run(body.replace('snap === true', 'snap === 3'), 'ts/src/pro')).not.toContain('var snap bool');
         expect(run(body.replace(': Bool', ': number'), 'ts/src/pro')).not.toContain('var snap bool');
     });
+    test('C: a list local rebound only through arrayConcat and read natively is a []any', () => {
+        const pre = '    arrayConcat (a: any, b: any): any[] { return a; }\n';
+        const body = pre + '    f (raw: Dict, more: Dict[]): any {\n        let xs: Dict[] = this.safeList (raw, "list", []);\n        xs = this.arrayConcat (more, xs);\n        let n = 0;\n        for (let i = 0; i < xs.length; i++) {\n            n = n + 1;\n        }\n        return n;\n    }\n';
+        const out = run(body, 'ts/src');
+        expect(out).toContain('var xs []any = SafeListTyped(raw, "list")');
+        expect(out).toContain('len(xs)');
+        // a nil test sees the dropped default: keep the box
+        expect(run(body.replace('return n;', 'return (xs === undefined) ? 0 : n;'), 'ts/src')).not.toContain('var xs []any');
+        // another rebinding keeps the box
+        expect(run(body.replace('this.arrayConcat (more, xs)', 'more'), 'ts/src')).not.toContain('var xs []any');
+    });
 });
