@@ -14415,3 +14415,39 @@ describe ('84g1 nil-declared *string slot handed to an optional parameter', () =
         expect(out).toContain('var marginMode *string = nil');
     });
 });
+
+describe ('84g1 guards', () => {
+    const PRELUDE = 'type Dict = { [key: string]: any };\n'
+        + 'type Str = string | undefined;\n'
+        + 'class Base {\n'
+        + '    handleOptionBoolAndParams (params: Dict, m: string, k: string, d: boolean = false): [boolean, Dict] { return [ d, params ]; }\n'
+        + '    handleMarginModeAndParams (m: string, params: Dict = {}, d: Str = undefined): [Str, Dict] { return [ d, params ]; }\n'
+        + '    omit (a: any, ...k: any[]): any { return a; }\n'
+        + '}\n';
+    const go = (body: string): string => {
+        const t = new Transpiler({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        installCcxtGoHooks(t.goTranspiler);
+        return t.transpileGo(PRELUDE + 'class V extends Base {\n' + body + '}\n').content;
+    };
+    test('a self-omit bag returned in a tuple keeps the box', () => {
+        const out = go('    f (params: Dict = {}): any {\n'
+            + '        let p = undefined;\n'
+            + '        let rest = undefined;\n'
+            + "        [ p, rest ] = this.handleOptionBoolAndParams (params, 'f', 'p', false);\n"
+            + "        rest = this.omit (rest, 'k');\n"
+            + '        return [ p, rest ];\n'
+            + '    }\n');
+        expect(out).toContain('var rest any = nil');
+    });
+    test('a literal-written *string handed to an optional slot keeps the box', () => {
+        const out = go('    g (a: boolean = false, mode: Str = undefined): Str { return mode; }\n'
+            + '    f (params: Dict = {}): any {\n'
+            + '        let mode: Str = undefined;\n'
+            + "        if (params['x']) {\n"
+            + "            mode = 'cursor';\n"
+            + '        }\n'
+            + '        return this.g (true, mode);\n'
+            + '    }\n');
+        expect(out).not.toContain('var mode *string = nil');
+    });
+});
