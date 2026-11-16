@@ -57836,7 +57836,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (/[/]test[/]/.test(String(_nullishCoalesce(_optionalChain([node, 'access', _9081 => _9081.getSourceFile, 'optionalCall', _9082 => _9082(), 'optionalAccess', _9083 => _9083.fileName]), () => ( "")))))
       return void 0;
     const local = this.rustOptContainerOf(node.expression);
-    if (local === void 0 || local.kind !== "dict")
+    const record = local === void 0 && (this.rustOptMarketLocalOf(node.expression) !== void 0 || this.rustMarketSlotParamOf(node.expression) !== void 0 || this.rustCurrencySlotParamOf(node.expression) !== void 0 || this.rustCurrencyLocalOf(node.expression) !== void 0);
+    if (!record && (local === void 0 || local.kind !== "dict"))
       return void 0;
     const read = this.printNode(node, 0).trim();
     if (!/^(?:crate|ccxt)::value::KeyRead::key_read\(&{1,2}[A-Za-z_][A-Za-z0-9_]*, "[A-Za-z]+"\)$/.test(read))
