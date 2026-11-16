@@ -23498,4 +23498,10 @@ describe('ral-76b: declared-endpoint responses seeded undefined and handed on wh
         expect(out).toContain('let mut rows: Option<crate::value::List> = None;');
         expect(out).toContain('rows.map_or(Value::Null, Value::Arr)');
     });
+    test('R2 a plain map literal written beside declared Promise<Dict> endpoints builds into Some, the local stays optional', () => {
+        const out = write ('ral-76b-r2', "    async three (key: string, params: Dict = {}) {\n        let response = undefined;\n        if (key === 'a') {\n            response = await this.privatePostA (params);\n        } else if (key === 'b') {\n            response = await this.privatePostB (params);\n        } else {\n            response = { 'code': -4046, 'msg': 'none' };\n        }\n        if (response === undefined) {\n            return this.hold (0);\n        }\n        return response;\n    }\n");
+        expect(out).toContain('let mut response: Option<crate::value::Dict> = None;');
+        expect(out).toContain('response = Some(crate::value::Dict::new(');
+        expect(out).toContain('response.is_none()');
+    });
 });

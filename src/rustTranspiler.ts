@@ -2285,7 +2285,7 @@ export class RustTranspiler extends BaseTranspiler {
         const marketWrite = isAssign ? this.printTypedMarketWrite(left, right) : undefined;
         if (marketWrite !== undefined) return marketWrite;
         if (isAssign && this.rustTypedListField(left)) return `${this.printNode(left, 0)} = ${this.printNode(right, 0).trim()}.into_list()`;
-        const optContainerWrite = isAssign && isIdentifier(left) ? this.printOptContainerWrite(left, right) ?? this.printOptListWrite(left, right) ?? this.printExtendReuseWrite(left, right) ?? this.printSbAliasWrite(node, left, right) : undefined;
+        const optContainerWrite = isAssign && isIdentifier(left) ? this.printOptContainerWrite(left, right, identation) ?? this.printOptListWrite(left, right) ?? this.printExtendReuseWrite(left, right) ?? this.printSbAliasWrite(node, left, right) : undefined;
         if (optContainerWrite !== undefined) return optContainerWrite;
         const nilMapWrite = isAssign && isIdentifier(left) ? this.printNilMapWrite(left, right, identation) : undefined; if (nilMapWrite !== undefined) return nilMapWrite;
         // ral-ra: a reassigned handed map takes the written map back (`omit (x, k)` of itself moves the map through the call)
@@ -22825,6 +22825,7 @@ export class RustTranspiler extends BaseTranspiler {
         let castLengths = 0;
         let nullWrites = 0;
         let endpointBoxes = 0;
+        let literal76bWrites = 0;
         let plainReads = 0;
         let aliasBoxes = 0;
         let optAliasWrites = 0;
@@ -22912,6 +22913,14 @@ export class RustTranspiler extends BaseTranspiler {
                     if (from !== undefined && from !== venueKind) mixed = true;
                     from = from ?? venueKind;
                     return String(rhs.getText()).split('\n')[0].length <= 240;
+                }
+                // ral-76b R2: a tag-free plain map literal written into a nil local filled otherwise by declared `Promise<Dict>`
+                // endpoints (binance setMarginMode `{ code, msg }`): a map on its path, `Some` in the optional form, like an endpoint map
+                if (nilDeclared && (from === undefined || from === 'dict') && this.rustSameKindRewrite(rhs, 'dict') && isObjectLiteralExpression(rhs) && rhs.properties.length > 0) {
+                    declaredEndpointWrites++;
+                    literal76bWrites++;
+                    from = 'dict';
+                    return true;
                 }
                 const kind = this.rustNilResponseWriteKind(rhs, nilDeclared, declaration);
                 const declaredWrite = nilDeclared && this.rustDeclaredEndpointWrite(rhs);
@@ -23096,6 +23105,8 @@ export class RustTranspiler extends BaseTranspiler {
         // ral-va: the same for an all-declared `Promise<List>` endpoint local: a null test reads the optional list (`is_none()`)
         const declaredListTested = nilDeclared && from === 'list' && !mixed && nullTests > 0 && declaredEndpointWrites > 0 && declaredEndpointWrites + nullWrites === writes
             && !this.rustNilResponseLocals.has(declaration) && lengths === 0 && castLengths === 0;
+        // ral-76b R2: the literal joins only next to a real declared endpoint write (else the map-literal rules own the local)
+        if (literal76bWrites > 0 && declaredEndpointWrites === literal76bWrites) return undefined;
         const endpointBoxOnly = endpointBoxes > 0 && (nullTests === 0 || declaredDictOnly) && declaredEndpointWrites > 0 && declaredEndpointWrites + nullWrites === writes
             && !this.rustNilResponseLocals.has(declaration) && boxedElementUses.every((u: any) => this.rustBoxLineOk(u));
         if (endpointBoxes > 0 && !endpointBoxOnly) return undefined;
@@ -25193,12 +25204,14 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     /** `x = None` / `x = <container read>.into_opt_dict()` for the optional form. */
-    printOptContainerWrite(left: any, right: any): string | undefined {
+    printOptContainerWrite(left: any, right: any, identation = 0): string | undefined {
         const local = this.rustOptContainerOf(left);
         if (local === undefined) return undefined;
         const name = super.transformIdentifier(left, this.ReservedKeywordsReplacements[left.text] ?? left.text);
         const rhs: any = this.rustSkipWrappers(right);
         if (this.literalKindOfNode(rhs) === 'null') return `${name} = None`;
+        // ral-76b R2: a plain map literal builds the map straight into `Some` (no box and convert)
+        if (local.kind === 'dict' && isObjectLiteralExpression(rhs) && rhs.properties.length > 0 && this.rustSameKindRewrite(rhs, 'dict')) return `${name} = Some(crate::value::Dict::new(${this.rustObjectLiteralBlock(rhs, identation)}))`;
         // ral-43f: an optional source of the same kind is handed over as is (moved at its last use, else an Arc bump)
         const src = this.rustOptContainerOf(rhs);
         if (src !== undefined && src.kind === local.kind && this.rustPrintedOptional.has(src.declaration)) {
