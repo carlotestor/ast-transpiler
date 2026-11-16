@@ -41836,7 +41836,14 @@ GoTranspiler.prototype.goClientFutureReadKey = function(initializer) {
   if (key.kind === SyntaxKind5.StringLiteral || key.kind === SyntaxKind5.Identifier && this.goIsStringKeyExpression(key)) {
     return key;
   }
+  if (key.kind === SyntaxKind5.Identifier && this.goClientFutureCheckerStringKey(key)) {
+    return key;
+  }
   return void 0;
+};
+GoTranspiler.prototype.goClientFutureCheckerStringKey = function(key) {
+  const type = this.checkerOrUndefined()?.getTypeAtLocation(key);
+  return type !== void 0 && (type.flags & TypeFlags4.String) !== 0;
 };
 GoTranspiler.prototype.goClientFutureLocal = function(declaration) {
   if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier || declaration.parent?.parent?.kind !== SyntaxKind5.FirstStatement || declaration.type !== void 0 || /promise$/i.test(declaration.name.text)) {
@@ -41893,6 +41900,9 @@ GoTranspiler.prototype.goClientFutureLocal = function(declaration) {
     if (node?.declarations?.length === 1 && this.goClientFutureLocal(declaration)) {
       const key = this.goClientFutureReadKey(declaration.initializer);
       if (this.getGoLocalType(declaration, "") === "*Future") {
+        if (key.kind !== SyntaxKind5.StringLiteral && !this.goIsStringKeyExpression(key)) {
+          return `${this.getIden(identation)}var ${this.printNode(declaration.name, 0)} *Future = client.(ClientInterface).FutureTyped(${this.printNode(key, 0)})`;
+        }
         return `${this.getIden(identation)}var ${this.printNode(declaration.name, 0)} *Future = client.Futures[${this.printNode(key, 0)}]`;
       }
     }
