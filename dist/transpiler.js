@@ -41015,6 +41015,56 @@ GoTranspiler.prototype.goBaseCacheInitText = function(node) {
   }
   return `${this.printNode(node.left, 0)} = ${this.goWsCacheEmptyLiteral(node.left) ?? "map[string]any"}{}`;
 };
+var ral77g6ShippedTypeOfInitializer = GoTranspiler.prototype.goTypeOfInitializer;
+GoTranspiler.prototype.goTypeOfInitializer = function(initializer, printedValue) {
+  const known = ral77g6ShippedTypeOfInitializer.call(this, initializer, printedValue);
+  return known !== void 0 ? known : ral77g6CopiedParameterType(this, initializer);
+};
+function ral77g6CopiedParameterType(goTranspiler, node) {
+  if (node?.kind !== SyntaxKind5.Identifier) {
+    return void 0;
+  }
+  const decl = goTranspiler.checkerOrUndefined()?.getSymbolAtLocation(node)?.valueDeclaration?.resolve();
+  if (decl?.kind !== SyntaxKind5.Parameter) {
+    return void 0;
+  }
+  return goTranspiler.goGetArgParameterType(decl) === GO_SAFE_DICT_LOCAL_TYPE ? GO_SAFE_DICT_LOCAL_TYPE : void 0;
+}
+function ral77g6IsOmitOfMap(goTranspiler, node) {
+  while (node?.kind === SyntaxKind5.ParenthesizedExpression) {
+    node = node.expression;
+  }
+  const callee = node?.expression;
+  return node?.kind === SyntaxKind5.CallExpression && node.questionDotToken === void 0 && callee?.kind === SyntaxKind5.PropertyAccessExpression && callee.expression?.kind === SyntaxKind5.ThisKeyword && callee.name?.text === "omit" && node.arguments?.length >= 2 && !node.arguments.some((a) => a.kind === SyntaxKind5.SpreadElement) && ccxtGoProducerArgIsMap(goTranspiler, node.arguments[0]);
+}
+var ral77g6ShippedLocalIsSafeToType = GoTranspiler.prototype.goLocalIsSafeToType;
+GoTranspiler.prototype.goLocalIsSafeToType = function(scope, declaration, varName, goType, stringWriteProven = false) {
+  if (ral77g6ShippedLocalIsSafeToType.call(this, scope, declaration, varName, goType, stringWriteProven)) {
+    return true;
+  }
+  if (goType !== GO_SAFE_DICT_LOCAL_TYPE || scope === void 0 || declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.initializer === void 0) {
+    return false;
+  }
+  let omits = 0;
+  const unsafe = this.hasNodeWhere(scope, (n) => {
+    if (n.kind !== SyntaxKind5.Identifier || n.text !== varName || n === declaration.name) {
+      return false;
+    }
+    const parent = n.parent;
+    if (parent?.kind === SyntaxKind5.BinaryExpression && parent.left === n && parent.operatorToken?.kind === SyntaxKind5.EqualsToken) {
+      if (this.goTypeOfInitializer(parent.right, this.printNode(parent.right, 0)) === goType) {
+        return false;
+      }
+      if (ral77g6IsOmitOfMap(this, parent.right)) {
+        omits += 1;
+        return false;
+      }
+      return true;
+    }
+    return ccxtGoWriteSiteShippedVeto(this, n, parent, goType);
+  });
+  return !unsafe && omits > 0;
+};
 
 // src/javaTranspiler.ts
 init_esm_shims();
