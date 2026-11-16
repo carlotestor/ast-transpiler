@@ -3763,6 +3763,9 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  ral-qa use rule), a non-map row (Null, list, scalar, out of range) reads Null there exactly as the empty map `into_dict()`
      *  leaves; the local owns its map (an Arc bump of the row), so nothing borrows the list while it lives. */
     rustListRowKeyReadSource(init: any): boolean;
+    /** ral-73d: `this.<f>[i]` (a numeric index) where `f` is a field declared only in the base tier as a list of a unified
+     *  record (`accounts!: Account[]`): the row a counter loop binds; read only at literal string keys (ral-42g's use rule). */
+    rust73dBaseRecordFieldRow(init: any): boolean;
     /** `this.safeX (o, '<k>'[, d])`: a base by-reference reader whose container is `o`, at a literal non-index string key. */
     rustSafeValueKeyReaderUse(n: any): boolean;
     private rustVenueContainerDecisions;

@@ -77533,6 +77533,8 @@ ${iden}}`;
    *  ral-qa use rule), a non-map row (Null, list, scalar, out of range) reads Null there exactly as the empty map `into_dict()`
    *  leaves; the local owns its map (an Arc bump of the row), so nothing borrows the list while it lives. */
   rustListRowKeyReadSource(init) {
+    if (this.rust73dBaseRecordFieldRow(init))
+      return true;
     if (!isElementAccessExpression4(init) || !isIdentifier3(init.expression) || this.checkerOrUndefined() === void 0 || this.rustTestTierSource(init))
       return false;
     const key = this.rustSkipWrappers(init.argumentExpression);
@@ -77546,6 +77548,25 @@ ${iden}}`;
       return false;
     const names = (x) => isPropertyAccessExpression3(x) && /^(?:markets|markets_by_id|currencies|currencies_by_id|clients|futures|subscriptions|orderbooks|cache)$/.test(String(x.name.text)) || (x.forEachChild(names) ?? false);
     return !(isVariableDeclaration3(owner) && owner.initializer !== void 0 && names(owner.initializer));
+  }
+  /** ral-73d: `this.<f>[i]` (a numeric index) where `f` is a field declared only in the base tier as a list of a unified
+   *  record (`accounts!: Account[]`): the row a counter loop binds; read only at literal string keys (ral-42g's use rule). */
+  rust73dBaseRecordFieldRow(init) {
+    if (init === void 0 || !isElementAccessExpression4(init) || this.checkerOrUndefined() === void 0 || this.rustTestTierSource(init))
+      return false;
+    const field = this.rustSkipWrappers(init.expression);
+    if (!isPropertyAccessExpression3(field) || field.expression.kind !== SyntaxKind7.ThisKeyword || !isIdentifier3(field.name))
+      return false;
+    const key = this.rustSkipWrappers(init.argumentExpression);
+    if (key === void 0 || !isNumericLiteral4(key) && this.primitiveKindOfType(this.typeOfNodeIfAny(key)) !== "number")
+      return false;
+    const declarations = symbolDeclarations(this.getChecker().getSymbolAtLocation(field.name));
+    if (declarations.length === 0 || !declarations.every((d) => d.kind === SyntaxKind7.PropertyDeclaration && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(d.getSourceFile().fileName))))
+      return false;
+    const listType = this.typeOfNodeIfAny(field);
+    if (listType === void 0 || !this.getChecker().isArrayType(listType) || this.getChecker().isTupleType(listType))
+      return false;
+    return this.rust73dBaseRecordType(this.typeOfNodeIfAny(init));
   }
   /** `this.safeX (o, '<k>'[, d])`: a base by-reference reader whose container is `o`, at a literal non-index string key. */
   rustSafeValueKeyReaderUse(n) {
