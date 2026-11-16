@@ -20244,3 +20244,24 @@ describe('ral-60k: the first key of a two-key write x[k][\'lit\'] = v on a map b
         expect(out).toMatch(/let mut code: Value = /);
     });
 });
+
+describe('ral-60k: a sibling-block currency code handed to a base call whose result is written back to a Dict local (kucoin fetchBalance currencyCode)', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeDict (o: any, k: any, d: any = undefined): Dict | undefined { return o; }\n    safeList (o: any, k: any, d: any = undefined): any[] | undefined { return o; }\n    safeCurrencyCode (currencyId: Str, currency: any = undefined): Str { return currencyId; }\n    mergeBalanceAccount (result: Dict, code: string, account: Dict): Dict { return result; }\n    parseBalanceHelper (x: any): Dict { return {}; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    const body = (decl: string) => "    parse (accounts: Dict[], isIsolated: boolean) {\n        let result" + decl + " = {};\n        if (isIsolated) {\n            for (let i = 0; i < accounts.length; i++) {\n                const currencyEntry = this.safeDict (accounts, i, {});\n                const currencyId = this.safeString (currencyEntry, 'currency');\n                const currencyCode = this.safeCurrencyCode (currencyId);\n                if (currencyCode !== undefined) {\n                    result = this.mergeBalanceAccount (result, currencyCode, this.parseBalanceHelper (currencyEntry));\n                }\n            }\n        } else {\n            for (let i = 0; i < accounts.length; i++) {\n                const currencyEntry = this.safeDict (accounts, i, {});\n                const currencyId = this.safeString (currencyEntry, 'currency');\n                const currencyCode = this.safeCurrencyCode (currencyId);\n                if (currencyCode !== undefined) {\n                    result[currencyCode] = this.parseBalanceHelper (currencyEntry);\n                }\n            }\n        }\n        return result;\n    }\n";
+    test('both bindings are Option<String>; the base-call argument boxes', () => {
+        const out = write ('60k-mba', body (': Dict'));
+        expect(out).not.toContain('let mut currencyCode: Value = ');
+        expect(out).toContain('result = self.mergeBalanceAccount(Value::Dict(result), currencyCode.map(Value::from).unwrap_or(Value::Null), ');
+    });
+    test('negative: an unannotated written local keeps the code a Value', () => {
+        const out = write ('60k-mba-neg', body (''));
+        expect(out).toContain('let mut currencyCode: Value = ');
+    });
+});
