@@ -59904,6 +59904,12 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     return this.rustMarketFieldScalar(this.unwrapParens(declaration.initializer))?.kind === "obool";
   }
+  /** ral-80e: `n` names a single-binding `const` local with an initializer (no later write is possible). */
+  rust80eConstDecl(n) {
+    const d = this.rustDeclaredNode(n);
+    const list = d?.parent;
+    return d !== void 0 && isVariableDeclaration3(d) && d.name !== n && d.initializer !== void 0 && list !== void 0 && (list.flags & NodeFlags4.Const) !== 0 && list.declarations?.length === 1;
+  }
   rustScalarUseFormOwn(n, kind) {
     const parent = n.parent;
     if (parent === void 0)
@@ -59927,6 +59933,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if ((kind === "bool" || kind === "obool") && this.rustIdentifierUseIsCondition(n))
       return "cond";
     if (kind === "obool" && this.rustClimbLogicalWrappers(n) !== n && this.rustConditionBoolSlot(n) && this.rustMarketFlagFieldLocal(n))
+      return "cond";
+    if (kind === "bool" && this.rustClimbLogicalWrappers(n) !== n && this.rust80eConstDecl(n) && this.rustConditionBoolSlot(n))
       return "cond";
     if ((kind === "str" || kind === "ostr") && this.rustPreciseLentOperand(n) && this.rustPreciseLendLocal(n))
       return "parg";

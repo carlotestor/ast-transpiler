@@ -1278,6 +1278,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustPlusEqualsJoinOperand(n: any): boolean;
     /** ral-46d: `n` reads a local declared `const f = m['<opt flag>']` off a loaded market struct (`Option<bool>` field). */
     rustMarketFlagFieldLocal(n: any): boolean;
+    /** ral-80e: `n` names a single-binding `const` local with an initializer (no later write is possible). */
+    rust80eConstDecl(n: any): boolean;
     rustScalarUseFormOwn(n: any, kind: string): string | undefined;
     /** ral-65n: `n` climbed through its parentheses. */
     rust65nClimbParens(n: any): any;
@@ -2961,7 +2963,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     nativeEqualityText(node: any): string;
     unwrapParens(node: any): any;
     hasNativeComparisonOperand(node: any): any;
-    printLogicalInBooleanContext(node: any): string;
+    printLogicalInBooleanContext(node: any): any;
     printWhileStatement(node: any, identation: any): string;
     printIfStatement(node: any, identation: any): string;
     printPostFixUnaryExpression(node: any, identation: any): string;
