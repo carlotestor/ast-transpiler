@@ -5712,6 +5712,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (fresh && this.rustNilElemStrText(node) !== undefined) return 'ostr';
         if (fresh) { const field = this.rustMarketArmStrKind(node); if (field !== undefined) return field; }
         if (fresh && this.rustListLengthInit(node)) return 'int';
+        // ral-84h R2: `c + k` / `c - k` of an always-`Int` for counter (rust76eCounterStep) at a declaration: an `Int` on every path
+        if (fresh && isBinaryExpression(node) && this.rustDeclInitPosition(node) && this.rust76eCounterStep(node)) return 'int';
         // ral-52k: a base credential field declared `string` (`this.apiKey`) as an arm of a ternary initializer: a `Str` or `Null`
         if (fresh && this.rustTernaryArm(node) && this.rustBaseStrFieldRead(node)) return 'ostr';
         // ral-65n: a never-written base-tier parameter declared `Str` / `string` as an arm of a ternary initializer: a `Str` or `Null`

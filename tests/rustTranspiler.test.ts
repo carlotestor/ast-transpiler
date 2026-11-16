@@ -24216,3 +24216,20 @@ describe('ral-84h R1: a defaulted base `Str` parameter as a ternary arm types th
         expect(out).toContain('let mut k: Value');
     });
 });
+describe('ral-84h R2: `i + 1` of an always-Int for counter at a declaration is an i64 local', () => {
+    const base = (methods: string) => "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    id: string = '';\n    verbose: boolean = false;\n    log (...args: any[]) { }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n" + methods + "}\n";
+    const run = (methods: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-84h2-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base(methods));
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        try {
+            return t.transpileRustByPath(path.join(root, 'ts/src/base/Exchange.ts')).content;
+        } finally { fs.rmSync(root, { recursive: true, force: true }); }
+    };
+    test('iteration = (i + 1) read by toString in a concat', () => {
+        const out = run("    pages (maxCalls: number) {\n        for (let i = 0; i < maxCalls; i++) {\n            if (this.verbose) {\n                const iteration = (i + 1);\n                const message = 'call ' + iteration.toString () + ' done';\n                this.log (message);\n            }\n        }\n    }\n");
+        expect(out).toMatch(/let mut iteration: i64 = \(?\(?i \+ 1\)?\)?;/);
+        expect(out).not.toContain('let mut iteration: Value');
+    });
+});
