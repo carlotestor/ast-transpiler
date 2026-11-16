@@ -6368,7 +6368,17 @@ export class JavaTranspiler extends BaseTranspiler {
     // a key proven by the checker to be a string prints as a java String: the read is
     // the same expression, only the key needs the (String) cast the typed put demands
     elementWriteKeyText(key, keyText: string): string {
-        return isStringLiteral(key) ? keyText : `(String)${keyText}`;
+        if (isStringLiteral(key)) {
+            return keyText;
+        }
+        // ral-84j1: `m[(k as string)] = v` where k is a String-declared element local: the assertion
+        // already printed bare (printAsExpression), so the put key needs no checkcast either
+        const inner: any = this.unwrapParenthesized(key);
+        if (inner?.kind === SyntaxKind.AsExpression && inner.type?.kind === SyntaxKind.StringKeyword
+            && this.javaDeclaredStringElementLocal(inner.expression, keyText.replace(/^\((.*)\)$/, '$1'))) {
+            return keyText;
+        }
+        return `(String)${keyText}`;
     }
 
     // Receivers that are a plain java.util.HashMap at runtime, where ".put" and the helper's map branch
