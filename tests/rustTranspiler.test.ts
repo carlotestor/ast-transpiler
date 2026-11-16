@@ -24221,3 +24221,36 @@ describe('ral-84d R1: a list index write keyed by an i64 counter keeps the safeL
         expect(out).toMatch(/let (?:mut )?data: Value = /);
     });
 });
+
+describe('ral-84d R2/R3: a defaulted safeDict copy of this.options (or a native-insert map) written at a key stays a typed Dict', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    options: Dict = {};\n    safeValue (o: any, k: any, d: any = undefined): any { return o; }\n    safeDict (o: any, k: any, d: any = undefined): Dict { return o; }\n    safeList (o: any, k: any, d: any = undefined): any[] { return o; }\n    safeString (o: any, k: any, d: any = undefined): string { return o; }\n    keep (o: any): any { return o; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync (path.join (dir, 'ts/src/pro'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/pro/venue.ts'), "import Exchange from '../base/Exchange.js';\nimport type { Dict } from '../base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        transpiler.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts'));
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/pro/venue.ts')).content;
+    };
+    test('derive watchPositions: variable-key write then stored back into this.options', () => {
+        const out = write ('ral-84d-r2a', "    m (subaccountIdKey: string, fetchSnapshot: boolean) {\n        const loadedSnapshots = this.safeDict (this.options, 'loadedPositionsSnapshots', {});\n        if (fetchSnapshot && !(subaccountIdKey in loadedSnapshots)) {\n            loadedSnapshots[subaccountIdKey] = true;\n            this.options['loadedPositionsSnapshots'] = loadedSnapshots;\n        }\n    }\n");
+        expect(out).toContain('let mut loadedSnapshots: crate::value::Dict = ');
+        expect(out).toContain('std::sync::Arc::make_mut(&mut loadedSnapshots).insert(');
+        expect(out).toContain('Value::Dict(loadedSnapshots)');
+    });
+    test('kraken handleOrders: delete at a string local key', () => {
+        const out = write ('ral-84d-r2b', "    m (first: Dict) {\n        const symbolsByOrderId = this.safeDict (this.options, 'symbolsByOrderId', {});\n        const firstId = this.safeString (first, 'id');\n        if ((firstId !== undefined) && (firstId in symbolsByOrderId)) {\n            delete symbolsByOrderId[firstId];\n        }\n    }\n");
+        expect(out).toContain('let mut symbolsByOrderId: crate::value::Dict = ');
+        expect(out).toContain('if let Some(__k) = firstId.as_deref() { std::sync::Arc::make_mut(&mut symbolsByOrderId).shift_remove(__k); }');
+    });
+    test('coinbaseinternational createOrderWs: literal-key write on a defaulted safeDict of a local', () => {
+        const out = write ('ral-84d-r3a', "    m (result: any) {\n        const order = this.safeDict (result, 'order', {});\n        order['trades'] = this.safeList (result, 'trades', []);\n        return this.keep (order);\n    }\n");
+        expect(out).toContain('let mut order: crate::value::Dict = ');
+        expect(out).toContain('std::sync::Arc::make_mut(&mut order).insert("trades".into(), ');
+    });
+    test('negative: a client.subscriptions copy keeps the helper and the Value local', () => {
+        const out = write ('ral-84d-r2n', "    m (client: any, key: string, hash: string) {\n        const subscriptions = this.safeDict (client.subscriptions, key, {});\n        subscriptions[hash] = true;\n        return this.keep (subscriptions);\n    }\n");
+        expect(out).toMatch(/let (?:mut )?subscriptions: Value = /);
+    });
+});
