@@ -14354,3 +14354,62 @@ describe ('ral-77g8 ws struct parser results', () => {
         expect (out).toContain ('defaultType = *this.SafeString(this.Options, "defaultType", defaultType)');
     });
 });
+
+describe('ral-84g6 omit results and copies of a proven map', () => {
+    const run = (body: string) => {
+        const inst = new Transpiler({ 'verbose': false });
+        installCcxtGoLocalTypes((inst as any).goTranspiler);
+        const input =
+        "type Dict = { [key: string]: any };\n" +
+        "class T {\n" +
+        "    omit (a, ...k) { return a; }\n" +
+        "    extend (...a) { return {}; }\n" +
+        "    safeString (a, b) { return a; }\n" +
+        "    handleOptionIntegerAndParams (params: Dict, m: string, o: string, d: number = undefined): [number, Dict] { return [ d, params ]; }\n" +
+        body +
+        "}\n";
+        return inst.transpileGo(input).content;
+    };
+    test('an omit of a GetArgMap-bound parameter is a map local, read natively', () => {
+        const output = run(
+        "    f (params: Dict = {}) {\n" +
+        "        const [ flag, paramsFlag ] = this.handleOptionIntegerAndParams (params, 'f', 'flag', 2);\n" +
+        "        let query = this.omit (params, 'a');\n" +
+        "        if (flag > 1) {\n" +
+        "            query = this.omit (query, 'b');\n" +
+        "        }\n" +
+        "        if (query === undefined) {\n" +
+        "            return undefined;\n" +
+        "        }\n" +
+        "        return [ this.safeString (query, 'x'), flag ];\n" +
+        "    }\n");
+        expect(output).toContain('var query map[string]any = MapTyped(this.Omit(params, "a"))');
+        expect(output).toContain('query = MapTyped(this.Omit(query, "b"))');
+        expect(output).toContain('if query == nil {');
+    });
+    test('an omit of an untyped value or a foreign write keeps the box', () => {
+        const output = run(
+        "    f (other, params: Dict = {}) {\n" +
+        "        const [ flag, paramsFlag ] = this.handleOptionIntegerAndParams (params, 'f', 'flag', 2);\n" +
+        "        const a = this.omit (other, 'a');\n" +
+        "        const b = this.omit (paramsFlag, 'b');\n" +
+        "        let c = this.omit (paramsFlag, 'c');\n" +
+        "        c = this.extend (c, {});\n" +
+        "        return [ a, ('x' in b), c, flag ];\n" +
+        "    }\n");
+        expect(output).toContain('var a any = this.Omit(other, "a")');
+        expect(output).toContain('var c any = this.Omit(paramsFlag, "c")');
+    });
+    test('a copy of a joined tuple params map is a map local', () => {
+        const output = run(
+        "    f (params: Dict = {}) {\n" +
+        "        const [ flag, paramsFlag ] = this.handleOptionIntegerAndParams (params, 'f', 'flag', 2);\n" +
+        "        let query = paramsFlag;\n" +
+        "        if (flag > 1) {\n" +
+        "            query = params;\n" +
+        "        }\n" +
+        "        return this.safeString (query, 'x');\n" +
+        "    }\n");
+        expect(output).toContain('var query map[string]any = paramsFlag');
+    });
+});
