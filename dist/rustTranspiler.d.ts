@@ -971,6 +971,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustListParamElement(init: any): boolean;
     /** The local's last use is the whole right side of a statement `y = x;`: the boxed local moves there,
      *  a typed one keeps the clone ccxt adds to that write. */
+    /** ral-80h: every bare last-use write `y = x;` of the typed local `x` targets `other`, the compared optional-number local
+     *  (base safeOrder `lastTradeTimeTimestamp = tradeTimestamp` beside `tradeTimestamp > lastTradeTimeTimestamp`): both are
+     *  `Option<i64>` / `Option<f64>` of one kind, so the write copies a Copy value and no clone is ever added. */
+    rust80hCopyWriteInto(node: Node, other: Node): boolean;
     rustScalarBareLastWrite(node: any): boolean;
     /** Some use of the local is the source of an assignment or of another declaration. */
     rustScalarFeedsWrite(declaration: any): boolean;

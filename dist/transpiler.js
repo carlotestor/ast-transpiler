@@ -58275,6 +58275,26 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   /** The local's last use is the whole right side of a statement `y = x;`: the boxed local moves there,
    *  a typed one keeps the clone ccxt adds to that write. */
+  /** ral-80h: every bare last-use write `y = x;` of the typed local `x` targets `other`, the compared optional-number local
+   *  (base safeOrder `lastTradeTimeTimestamp = tradeTimestamp` beside `tradeTimestamp > lastTradeTimeTimestamp`): both are
+   *  `Option<i64>` / `Option<f64>` of one kind, so the write copies a Copy value and no clone is ever added. */
+  rust80hCopyWriteInto(node, other) {
+    const declaration = isIdentifier3(node) ? this.rustDeclaredNode(node) : void 0;
+    const target = isIdentifier3(other) ? this.rustDeclaredNode(other) : void 0;
+    if (declaration === void 0 || target === void 0 || !isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name))
+      return false;
+    const kind = this.rustScalarLocalOf(node)?.kind;
+    if (kind !== "oint" && kind !== "onum" || this.rustScalarLocalOf(other)?.kind !== kind)
+      return false;
+    let ok = true;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      const up = n.parent;
+      if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && isIdentifier3(up.left) && up.parent?.kind === SyntaxKind7.ExpressionStatement && this.rustLocalLastUse(n, declaration) && this.rustDeclaredNode(up.left) !== target)
+        ok = false;
+      return true;
+    });
+    return ok;
+  }
   rustScalarBareLastWrite(node) {
     const declaration = isIdentifier3(node) ? this.rustDeclaredNode(node) : void 0;
     if (declaration === void 0 || !isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name))
@@ -63629,7 +63649,7 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
         return void 0;
       if (!isIdentifier3(left) || !isIdentifier3(right))
         return `matches!((${text(lk, left)}, ${text(rk, right)}), (Some(__l), Some(__r)) if (__l as f64) ${sign} (__r as f64))`;
-      if (/ts[\\/]src[\\/]base[\\/]/.test(String(node.getSourceFile?.()?.fileName ?? "")) && (this.rustScalarBareLastWrite(left) || this.rustScalarBareLastWrite(right)))
+      if (/ts[\\/]src[\\/]base[\\/]/.test(String(node.getSourceFile?.()?.fileName ?? "")) && (this.rustScalarBareLastWrite(left) && !this.rust80hCopyWriteInto(left, right) || this.rustScalarBareLastWrite(right) && !this.rust80hCopyWriteInto(right, left)))
         return void 0;
       return `(${text(lk, left)}.is_some() && ${text(rk, right)}.is_some() && ${text(lk, left)} ${sign} ${text(rk, right)})`;
     }
