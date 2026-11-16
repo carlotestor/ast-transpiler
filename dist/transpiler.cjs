@@ -62217,6 +62217,8 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
     const param = this.rustArithParamKind(inner);
     if (param !== void 0)
       return param;
+    if (this.rustArithTypedIntCall(inner) !== void 0)
+      return "oint";
     return _is.isCallExpression.call(void 0, inner) && this.rustScalarValueKind(inner, true) === "int" && this.rustScalarNativeText("int", inner) !== void 0 ? "int" : void 0;
   }
   /** zb: an arithmetic side's kind: a typed scalar shape, else a typed-signature numeric parameter read
@@ -62349,7 +62351,7 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       const sides = Array.from(node.arguments).map((a, i) => {
         const k = this.rustArithOperandKind(a);
         if (k === "oint" || k === "onum")
-          return { opt: this.rustScalarOperandText(k, a), bind: `__m${i}`, use: base === "num" && k === "oint" ? `(__m${i} as f64)` : `__m${i}` };
+          return { opt: this.rustArithTypedIntCall(a) !== void 0 ? this.rustBaseTypedBareText(this.unwrapParens(a)) : this.rustScalarOperandText(k, a), bind: `__m${i}`, use: base === "num" && k === "oint" ? `(__m${i} as f64)` : `__m${i}` };
         return { use: this.rustScalarOperandText(base, a) };
       });
       const opts = sides.filter((x) => x.opt !== void 0);
