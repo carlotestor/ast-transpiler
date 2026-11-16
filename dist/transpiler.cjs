@@ -66961,7 +66961,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     if (expr.expression.kind === _ast.SyntaxKind.SuperKeyword && (/ts[/]src[/]pro[/]/.test(String(node.getSourceFile().fileName)) || /^network(?:CodeToId|IdToCode)$/.test(expr.name.text))) {
       return _nullishCoalesce(_nullishCoalesce(this.printRuntimeVariadicCall(node, "super", expr.name.text, identation), () => ( this.printTranspiledVariadicCall(node, "super", expr.name.text, identation))), () => ( this.printSuperMarketSlotCall(node, expr.name.text, identation)));
     }
-    const optNameArity = { safeString: 2, safeString2: 3, safeStringN: 2, safeStringLower: 2, safeStringUpper: 2 };
+    const optNameArity = { safeString: 2, safeString2: 3, safeStringN: 2, safeStringLower: 2, safeStringUpper: 2, safeStringLower2: 3, safeStringUpper2: 3, safeStringLowerN: 2, safeStringUpperN: 2 };
     if (expr.expression.kind === _ast.SyntaxKind.ThisKeyword) {
       const methodName = expr.name.text;
       const sig = this.methodSignatures[methodName];
@@ -67017,12 +67017,12 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     if (args.length < fixed || args.length > 0 && args[args.length - 1].startsWith("&[") && !this.rustOmitLiteralKeys(node))
       return void 0;
     const params = this.rustCalleeParams(node);
-    const optName = receiver === "self" && this.rustOptReaderPrint.has(node) ? this.rustOptReaderName(node) : void 0;
+    const optName = this.rustOptReaderPrint.has(node) ? this.rustOptReaderName(node) : void 0;
     const cloned = args.map((a, at) => at >= node.arguments.length || this.rustVenueStrSlot(params, at) !== void 0 || this.rustMarketSlot(params, at) || this.rustCurrencySlot(params, at) ? a : this.rustWsWatchSlot(node, at) ? this.rustWsWatchSlotText(node.arguments[at], a) : at === 0 && this.printExtendHeadArg(node.arguments[0], a) !== void 0 ? a : at < fixed && this.rustOwnedArgText(node.arguments[at], a) !== a ? `${a}` : this.rustSliceArgText(a));
     if (optName !== void 0) {
       this.rustOptReaderPrinted.add(node);
       const head = optName.key !== void 0 ? [cloned[0], optName.key] : cloned.slice(0, fixed);
-      return `self.${optName.name}(${head.join(", ")}, &[${cloned.slice(fixed).join(", ")}])`;
+      return `${receiver}.${optName.name}(${head.join(", ")}, &[${cloned.slice(fixed).join(", ")}])`;
     }
     const callArgs = `${cloned.slice(0, fixed).join(", ")}${fixed > 0 ? ", " : ""}&[${cloned.slice(fixed).join(", ")}]`;
     return _nullishCoalesce((receiver === "self" || receiver === "super" ? this.rustSlotCallHead(node, callArgs) : void 0), () => ( `${receiver}.${methodName}(${callArgs})`));
@@ -76960,9 +76960,12 @@ ${iden}}`;
   /** The twin's name for a base reader call (and the `&str` key text of a `_k` twin), else undefined. */
   rustOptReaderName(node) {
     const callee = _optionalChain([node, 'optionalAccess', _10481 => _10481.expression]);
-    if (!_is.isCallExpression.call(void 0, node) || !_is.isPropertyAccessExpression.call(void 0, callee) || callee.expression.kind !== _ast.SyntaxKind.ThisKeyword)
+    if (!_is.isCallExpression.call(void 0, node) || !_is.isPropertyAccessExpression.call(void 0, callee))
       return void 0;
-    const twins = _RustTranspiler.RUST_OPT_READERS[String(callee.name.text)];
+    const onSelf = callee.expression.kind === _ast.SyntaxKind.ThisKeyword;
+    if (!onSelf && !(_is.isIdentifier.call(void 0, callee.expression) && this.rustCallsTestExchange(node)))
+      return void 0;
+    const twins = (onSelf ? _RustTranspiler.RUST_OPT_READERS : _RustTranspiler.RUST_TEST_OPT_READERS)[String(callee.name.text)];
     if (twins === void 0 || node.arguments.length < 2 || !this.rustCalleeIsRuntimeBase(node))
       return void 0;
     const key = node.arguments[1];
@@ -88947,8 +88950,17 @@ _RustTranspiler.RUST_OPT_READERS = {
   safeString: { k: "safe_string_k_opt", any: "safe_string_opt" },
   safeString2: { any: "safe_string2_opt" },
   safeStringN: { any: "safe_string_n_opt" },
-  safeStringLower: { k: "safe_string_lower_k_opt" },
-  safeStringUpper: { k: "safe_string_upper_k_opt" }
+  safeStringLower: { k: "safe_string_lower_k_opt", any: "safe_string_lower_opt" },
+  safeStringUpper: { k: "safe_string_upper_k_opt", any: "safe_string_upper_opt" },
+  safeStringLower2: { any: "safe_string_lower2_opt" },
+  safeStringUpper2: { any: "safe_string_upper2_opt" },
+  safeStringLowerN: { any: "safe_string_lower_n_opt" },
+  safeStringUpperN: { any: "safe_string_upper_n_opt" }
+};
+// ral-65o: the test crate's `ExchangeOps` surface (rust/tests test_helpers.rs) has these twins only, Value keys
+_RustTranspiler.RUST_TEST_OPT_READERS = {
+  safeString: { any: "safe_string_opt" },
+  safeStringN: { any: "safe_string_n_opt" }
 };
 // ── typed list fields (rustTypedListField / printTypedListFieldRead) ──
 // Base `Exchange` fields declared `string[]` are held as `crate::value::List`: a write converts once

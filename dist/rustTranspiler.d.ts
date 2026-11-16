@@ -3653,6 +3653,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBorrowedDictReader(call: any): string | undefined;
     private static readonly RUST_OPT_K_READERS;
     private static readonly RUST_OPT_READERS;
+    private static readonly RUST_TEST_OPT_READERS;
     private rustOptReaderPrint;
     private rustOptReaderPrinted;
     /** The twin's name for a base reader call (and the `&str` key text of a `_k` twin), else undefined. */
