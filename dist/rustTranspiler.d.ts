@@ -734,6 +734,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustParseNumberOfString(call: any): boolean;
     private static readonly RUST_BASE_STR_FIELDS;
     /** ral-52k: `this.<field>` of the table whose declaration is the base-tier `string` property (no venue redeclares it). */
+    /** ral-65n: `p` is a parameter of a base-tier method, annotated `Str` (or `string`), whose checker type is a string
+     *  (or string | undefined), printed as a `Value` binding (no typed signature slot) and never written in its function.
+     *  Its box holds a `Str` or `Null`, so the arm reads it once as an `Option<String>` (the same conversion the base
+     *  `Str` call arm next to it takes). */
+    rust65nBaseStrParamArm(node: any): boolean;
     rustBaseStrFieldRead(node: any): boolean;
     /** ral-53k: a ternary whose arms are each a checker-typed string or a unified string key of an `Option<Dict>` local (one at least). */
     rustOptDictStrKeyTernary(init: any): boolean;
@@ -1181,6 +1186,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-46d: `n` reads a local declared `const f = m['<opt flag>']` off a loaded market struct (`Option<bool>` field). */
     rustMarketFlagFieldLocal(n: any): boolean;
     rustScalarUseFormOwn(n: any, kind: string): string | undefined;
+    /** ral-65n: `n` climbed through its parentheses. */
+    rust65nClimbParens(n: any): any;
+    /** ral-65n: `t` is the whole initializer (through parentheses) of a `const` whose current scalar decision is `ostr`. */
+    rust65nOstrTernaryArmOfOstrLocal(t: any): boolean;
     private static readonly RUST_WS_CLIENT_VALUE_METHODS;
     rustWsClientCallArg(call: any, kind: string): boolean;
     rustWsClientOnlyUse(declaration: any): boolean;
