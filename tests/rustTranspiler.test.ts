@@ -24194,3 +24194,30 @@ describe('ral-80a: a non-boolean settle under an unknown hash keeps the tuple sl
         expect(out).toMatch(/let mut candles: Value = get_value\(/);
     });
 });
+
+describe('ral-84d R1: a list index write keyed by an i64 counter keeps the safeList local typed', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    safeDict (o: any, k: any, d: any = undefined): Dict { return o; }\n    safeList (o: any, k: any, d: any = undefined): any[] { return o; }\n    keep (o: any): any { return o; }\n    parseOrders (o: any, m: any = undefined): any[] { return o; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        transpiler.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts'));
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('bybit createOrders: `data[i] = f (data[i])` in a counter loop', () => {
+        const out = write ('ral-84d-r1a', "    m (result: Dict, codes: string[]) {\n        const data = this.safeList (result, 'list', []);\n        for (let i = 0; i < codes.length; i++) {\n            const code = codes[i];\n            if (code !== undefined) {\n                data[i] = this.keep (data[i]);\n            }\n        }\n        return this.parseOrders (data);\n    }\n");
+        expect(out).toContain('let mut data: crate::value::List = ');
+        expect(out).toContain('add_element_to_object(&mut data, &Value::Int(i), __be_tmp)');
+        expect(out).not.toMatch(/let (?:mut )?data: Value = /);
+    });
+    test('coinbase fetchAccounts: `xs[lastIndex] = ..` with `const lastIndex = length - 1`', () => {
+        const out = write ('ral-84d-r1b', "    m (response: Dict, cursor: string) {\n        const accounts: Dict[] = this.safeList (response, 'data', []);\n        const length = accounts.length;\n        const lastIndex = length - 1;\n        if (cursor !== undefined) {\n            accounts[lastIndex] = this.keep (this.safeDict (accounts, lastIndex, {}));\n        }\n        return this.parseOrders (accounts);\n    }\n");
+        expect(out).toContain('let mut accounts: crate::value::List = ');
+        expect(out).toContain('add_element_to_object(&mut accounts, &Value::from(lastIndex), __be_tmp)');
+    });
+    test('negative: a string-keyed write keeps the local Value', () => {
+        const out = write ('ral-84d-r1n', "    m (result: Dict, k: string) {\n        const data = this.safeList (result, 'list', []);\n        data[k] = 1;\n        return this.parseOrders (data);\n    }\n");
+        expect(out).toMatch(/let (?:mut )?data: Value = /);
+    });
+});

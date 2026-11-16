@@ -23828,7 +23828,14 @@ export class RustTranspiler extends BaseTranspiler {
         if (isElementAccessExpression(use) && use.argumentExpression === top) return false;
         // a primitive local initialised from the element keeps its element-read scalar rule (reads the boxed receiver)
         if (isVariableDeclaration(use) && use.initializer === top && this.primitiveKindOfType(this.typeOfNodeIfAny(use.name)) !== undefined) return false;
-        if ((this.isWriteBackBindRead(up) && !(top === up && this.rustExplicitWriteBackBind(up))) || !this.isNativeAccessPositionSafe(up) || (top !== up && (this.isWriteBackBindRead(top) || !this.isNativeAccessPositionSafe(top)))) return false;
+        // ral-84d R1: a read inside the value of a list index write on the same local (`xs[i] = f (xs[i])`): that write prints
+        // its value into `__be_tmp` before `add_element_to_object(&mut xs, ..)`, so the read sees the list unchanged
+        let ownWrite: any = undefined;
+        for (let at: any = up.parent; at !== undefined && !isStatement(at); at = at.parent) {
+            if (isBinaryExpression(at) && at.operatorToken.kind === SyntaxKind.EqualsToken && isElementAccessExpression(at.left) && isIdentifier(at.left.expression)
+                && at.left.expression.text === n.text && this.isNodeInsideNode(up, at.right) && this.rustListIndexLiteralWrite(at.left.expression)) ownWrite = at;
+        }
+        if ((this.isWriteBackBindRead(up) && !(top === up && this.rustExplicitWriteBackBind(up))) || !this.isNativeAccessPositionSafe(up, ownWrite) || (top !== up && (this.isWriteBackBindRead(top) || !this.isNativeAccessPositionSafe(top, ownWrite)))) return false;
         const key: any = this.rustSkipWrappers(up.argumentExpression);
         if (key === undefined || isStringLiteralLikeNode(key)) return false;
         if (isNumericLiteral(key)) return Number.isInteger(Number(key.text)) && Number(key.text) >= 0;
@@ -24630,7 +24637,11 @@ export class RustTranspiler extends BaseTranspiler {
         if (!isElementAccessExpression(access) || access.expression !== n || !isBinaryExpression(write) || write.left !== access
             || write.operatorToken.kind !== SyntaxKind.EqualsToken || write.parent?.kind !== SyntaxKind.ExpressionStatement) return false;
         const key: any = this.rustSkipWrappers(access.argumentExpression);
-        return key !== undefined && this.rustListIndexIntKey(key) && String(write.getText()).split('\n')[0].length <= 240;
+        if (key === undefined || String(write.getText()).split('\n')[0].length > 240) return false;
+        // ral-84d R1: or an i64 scalar local / `+` `-` of them (a loop counter `i`, `lastIndex = length - 1`): the key prints as
+        // the `Int` the boxed counter held, and `impl AddTarget for List` runs the boxed `Value::Arr` arm on it (same padding,
+        // same no-op for a non-integer key)
+        return this.rustListIndexIntKey(key) || (isIdentifier(key) && (this.rustScalarLocalOf(key)?.kind === 'int' || this.rustValueIntCounter(key)));
     }
 
     /** ral-52e: a list index key proved i64: an integer literal, or `+` / `-` over integer literals and i64 scalar locals (at least one literal);
