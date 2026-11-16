@@ -83060,7 +83060,7 @@ ${iden}}`;
     if (this.rustOptListNilInit(declaration))
       return `${indent}let mut ${varName}: Option<crate::value::List> = None`;
     if (this.rust80dSplitLocals.has(declaration)) {
-      return `${indent}let (mut ${varName}, ${varName}__map): (Option<crate::value::List>, Option<crate::value::Dict>) = match ${this.printNode(declaration.initializer, 0).trim()} { Value::Arr(__l) => (Some(__l), None), __v => (None, __v.into_opt_dict()) }`;
+      return `${indent}let (mut ${varName}, ${varName}__map): (Option<crate::value::List>, Option<crate::value::Dict>) = (match ${this.printNode(declaration.initializer, 0).trim()} { Value::Arr(__l) => (Some(__l), None), __v => (None, __v.into_opt_dict()) })`;
     }
     return `${indent}let mut ${varName}: Option<crate::value::List> = ${this.printNode(declaration.initializer, 0).trim()}.into_opt_list()`;
   }
