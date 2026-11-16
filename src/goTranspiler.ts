@@ -3884,8 +3884,28 @@ export function ccxtGoFamilyCallType (goTranspiler, initializer, printedValue) {
     if (value.substring (0, open) !== expectedCallee) {
         return undefined; // renamed / delegated call: not this class's own method
     }
-    const methodNode = findClassMethod (enclosingClassDeclaration (initializer), name);
+    const methodNode = findClassMethod (enclosingClassDeclaration (initializer), name) ?? ccxtGoInheritedVenueMethod (goTranspiler, initializer);
     return ccxtGoFamilyMethodReturnType (goTranspiler, methodNode);
+}
+
+// ral-87g4: a ws / prediction class calling a method its REST parent declares (`this.getSubAccountId (..)`
+// in pro/grvt.ts) binds in Go to the embedded parent's method, whose emitted signature the same predicate
+// decides on the REST run. Resolved through the checker; base-class declarations are left to their own rules.
+function ccxtGoInheritedVenueMethod (goTranspiler, initializer) {
+    let declaration;
+    try {
+        declaration = goTranspiler.getChecker ().getResolvedSignature (initializer)?.declaration?.resolve ();
+    } catch (e) {
+        return undefined;
+    }
+    if (declaration?.kind !== ts.SyntaxKind.MethodDeclaration) {
+        return undefined;
+    }
+    const fileName = String (declaration.getSourceFile?. ()?.fileName ?? '');
+    if (!/(^|[\\/])ts[\\/]src[\\/][^\\/]+\.ts$/.test (fileName)) {
+        return undefined; // only a REST venue file: base / pro / prediction declarations keep their own rules
+    }
+    return declaration;
 }
 
 // ---------------------------------------------------------------------------
