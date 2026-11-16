@@ -3995,6 +3995,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustNnListHandOff(n: any, declaration: any): boolean;
     /** ral-62i: `y = x` is the only statement of the then-branch of `if (x !== undefined)` (or `!=`). */
     rustNnGuardedWrite(write: any, x: any): boolean;
+    private rustOptMapDefaultTernaries;
+    /** ral-62i: n is the `whenFalse` arm of `(n === undefined) ? {} : n` (or `!== undefined` with the arms swapped). */
+    rustOptMapDefaultTernaryArm(n: any, declaration: any): boolean;
+    /** ral-62i: the print of a ternary admitted by rustOptMapDefaultTernaryArm once its local holds `Option<Dict>`. */
+    printOptMapDefaultTernary(node: any, bare?: boolean): string | undefined;
     rustBuiltListOf(node: any): any;
     /** ral-tf: a bare element local read nowhere after the literal (no loop or closure between): it moves into the element slot. */
     rustBuiltListMovedElement(e: any): boolean;
