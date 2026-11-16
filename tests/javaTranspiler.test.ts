@@ -10425,3 +10425,52 @@ describe('ral-77j3 primitive base numeric fields in comparisons', () => {
         expect(out).not.toContain('(this.other > 0)');
     });
 });
+
+describe('ral-84j1: a local declared String takes String methods, keys and String args with no checkcast', () => {
+    // build/java-local-types.js publishes `String k` for element locals whose TS type is a plain string
+    // and whose list holds only Strings; every String-method receiver, delete key and String core
+    // argument on it then prints the bare local. Without a resolver the casts stay byte-identically.
+    const input = `
+class T {
+    keep (s: string): string { return s; }
+    run (m: any, keys: string[]) {
+        for (let i = 0; i < keys.length; i++) {
+            const k = keys[i];
+            if (k.startsWith ('a') && k.indexOf ('b') >= 0 && k.length > 2) {
+                delete m[k];
+            }
+            const u = k.toUpperCase ();
+            const parts = k.split (':');
+        }
+    }
+}
+`;
+    const withResolver = (resolver: any, body: () => void) => {
+        const printer: any = (transpiler as any).javaTranspiler;
+        const previous = printer.javaDeclaredLocalTypeResolver;
+        printer.javaDeclaredLocalTypeResolver = resolver;
+        try {
+            body();
+        } finally {
+            printer.javaDeclaredLocalTypeResolver = previous;
+        }
+    };
+    test('declared String local prints native receivers and key', () => {
+        withResolver((d: any) => (d?.name?.text === 'k' ? 'String' : undefined), () => {
+            const out = transpiler.transpileJava(input).content;
+            expect(out).toContain('k.startsWith(');
+            expect(out).toContain('k.toUpperCase()');
+            expect(out).toContain('k.length()');
+            expect(out).toContain('.remove(k)');
+            expect(out).not.toContain('((String)k)');
+            expect(out).not.toContain('(String)k)');
+        });
+    });
+    test('an undeclared local keeps every cast', () => {
+        withResolver(() => undefined, () => {
+            const out = transpiler.transpileJava(input).content;
+            expect(out).toContain('((String)k).toUpperCase()');
+            expect(out).toContain('.remove((String)k)');
+        });
+    });
+});
