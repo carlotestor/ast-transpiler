@@ -1322,6 +1322,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustNestedWriteKeyPosition(key: any): boolean;
     /** ral-53i: `n` keys a bucket seed `x[n] = {}` or a write `x[k1][k2] = v` of a typed two-level local map `x`. */
     rustNestedBearerKeySlot(n: any): boolean;
+    /** ral-65b: `n` is a direct operand of a `+` chain forming the whole right side of `this.f['lit'] = ..` (a statement)
+     *  and that chain prints as one `Value::Str(format!(..))`. */
+    rust65bThisFieldConcatOperand(n: any): boolean;
+    /** ral-65b: `n` is the receiver of a no-argument `.toString()` reached through a parenthesised `as string` cast. */
+    rust65bCastToStringRecv(n: any): boolean;
     rustScalarInNestedWrite(n: any, boxUse?: boolean): boolean;
     /** ral-41f: a local whose kind the nested-write text passes never decide: declared with an initializer that is
      *  not a safe* reader call, not `undefined` / another identifier (nil-declared and alias locals keep their own
@@ -1682,6 +1687,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** td: the left operand of a `k in obj` test that is `k` itself or `k` under parens / `as` casts, else undefined. */
     rustInKeyTop(n: any): any;
     /** The key local of an `in` test has a non-null initializer (nil-declared locals are left to their own rule). */
+    /** ral-65b: `k in client.subscriptions|futures` keyed by a typed `Option<String>` reader local (rust65bWsInKey): the
+     *  dict-shaped membership test of the client field read, with the key boxed as the `Value` local held it (a `None` key
+     *  is `Null`, which never matches a `Str` key: the `in_op` answer) */
+    print65bWsInKey(left: any, right: any): string | undefined;
+    /** ral-65b: `n` is the bare key of `n in client.subscriptions|futures` on a ws `Client` that the handle does not print. */
+    rust65bWsInKey(n: any): boolean;
     rustInKeyInitialised(n: any): boolean;
     /** qf: a typed local against an untyped `Value` partner (a local or parameter) that the checker types like the local:
      *  the `Value` pair printed `a.<payload>() == p.<payload>()` (PAYLOAD_ACCESSORS by checker kind), and the typed local

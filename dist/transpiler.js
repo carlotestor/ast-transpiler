@@ -53795,7 +53795,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     if (op === SyntaxKind7.InKeyword) {
       const shadow = this.rustParamShadowOf(right);
-      return this.printWsBookMapHas(left, right) ?? this.printWsCacheMapHas(left, right) ?? this.printBorrowedInOp(left, right) ?? this.printFieldKeyInOp(left, right) ?? this.printElemKeyInOp(left, right) ?? this.printClientHandleInOp(left, right, false) ?? (shadow !== void 0 ? this.printShadowInOperator(shadow, left) : void 0) ?? this.bearerInOp(left, right) ?? this.printNativeInOperator(left, right) ?? this.literalInOp(left, right) ?? this.provenDictFieldInOp(left, right) ?? this.rustDictInOp(left, right) ?? `Value::Bool(in_op(&${this.printNode(right, 0)}, &${this.printNode(left, 0)}))`;
+      return this.printWsBookMapHas(left, right) ?? this.printWsCacheMapHas(left, right) ?? this.printBorrowedInOp(left, right) ?? this.printFieldKeyInOp(left, right) ?? this.printElemKeyInOp(left, right) ?? this.printClientHandleInOp(left, right, false) ?? (shadow !== void 0 ? this.printShadowInOperator(shadow, left) : void 0) ?? this.print65bWsInKey(left, right) ?? this.bearerInOp(left, right) ?? this.printNativeInOperator(left, right) ?? this.literalInOp(left, right) ?? this.provenDictFieldInOp(left, right) ?? this.rustDictInOp(left, right) ?? `Value::Bool(in_op(&${this.printNode(right, 0)}, &${this.printNode(left, 0)}))`;
     }
     if ((op === SyntaxKind7.PlusEqualsToken || op === SyntaxKind7.MinusEqualsToken) && left.kind !== SyntaxKind7.ElementAccessExpression) {
       const isPlus = op === SyntaxKind7.PlusEqualsToken;
@@ -59505,6 +59505,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "mkey";
     if ((kind === "str" || kind === "ostr") && this.rust62kLocalNestedLastKey(n))
       return "mkey";
+    if (kind === "str" && this.rust65bThisFieldConcatOperand(n))
+      return "concat";
+    if (kind === "ostr" && this.rust65bCastToStringRecv(n))
+      return "concat";
     if (this.rustScalarInNestedWrite(n))
       return void 0;
     if (kind === "str" && this.rustScalarInsertKeyUse(n))
@@ -59533,6 +59537,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "kin";
     if ((kind === "str" || kind === "ostr") && this.rustInitKeyLocal(n) && !this.rustTestTierSource(n) && this.rust59pDeleteKeyUse(n))
       return "dkey";
+    if (kind === "ostr" && this.rust65bWsInKey(n) && this.rust64bReaderLocal(this.rustDeclaredNode(n)))
+      return "box";
     if ((kind === "str" || kind === "ostr") && this.rustInKeyTop(n) !== void 0 && !this.rustTestTierSource(n) && this.rustInKeyInitialised(n))
       return "inbox";
     if (isCallExpression6(parent) && parent.expression !== n && this.rustArithCombinator(parent) && this.rustArithCallKind(parent) !== void 0)
@@ -60532,6 +60538,30 @@ ${binding(plan.indent)}` : ""), head: "" };
       return false;
     const access = this.rustKeyWrapped(n).parent;
     return isIdentifier3(access.expression) && this.rustNestedDictBearerDeclaration(access.expression) !== void 0;
+  }
+  /** ral-65b: `n` is a direct operand of a `+` chain forming the whole right side of `this.f['lit'] = ..` (a statement)
+   *  and that chain prints as one `Value::Str(format!(..))`. */
+  rust65bThisFieldConcatOperand(n) {
+    let top = n;
+    while (isBinaryExpression5(top.parent) && top.parent.operatorToken.kind === SyntaxKind7.PlusToken)
+      top = top.parent;
+    if (top === n)
+      return false;
+    const write = top.parent;
+    if (!isBinaryExpression5(write) || write.right !== top || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const left = write.left;
+    if (!isElementAccessExpression4(left) || !isStringLiteral3(left.argumentExpression) || !this.rustThisFieldTarget(left.expression))
+      return false;
+    return this.printNode(n.parent, 0).trim().startsWith("Value::Str(format!(");
+  }
+  /** ral-65b: `n` is the receiver of a no-argument `.toString()` reached through a parenthesised `as string` cast. */
+  rust65bCastToStringRecv(n) {
+    const cast = n.parent;
+    if (cast?.kind !== SyntaxKind7.AsExpression || cast.expression !== n || !isParenthesizedExpression3(cast.parent))
+      return false;
+    const access = cast.parent.parent;
+    return isPropertyAccessExpression3(access) && access.expression === cast.parent && String(access.name.text) === "toString" && isCallExpression6(access.parent) && access.parent.expression === access && access.parent.arguments.length === 0;
   }
   rustScalarInNestedWrite(n, boxUse) {
     let current = n;
@@ -62913,6 +62943,26 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
     return isBinaryExpression5(up) && up.left === top && up.operatorToken.kind === SyntaxKind7.InKeyword ? top : void 0;
   }
   /** The key local of an `in` test has a non-null initializer (nil-declared locals are left to their own rule). */
+  /** ral-65b: `k in client.subscriptions|futures` keyed by a typed `Option<String>` reader local (rust65bWsInKey): the
+   *  dict-shaped membership test of the client field read, with the key boxed as the `Value` local held it (a `None` key
+   *  is `Null`, which never matches a `Str` key: the `in_op` answer) */
+  print65bWsInKey(left, right) {
+    if (!isIdentifier3(left) || this.rustScalarLocalOf(left)?.kind !== "ostr" || this.rustScalarUseForms.get(left) !== "box" || !this.rust65bWsInKey(left))
+      return void 0;
+    const recv = this.unwrapParens(right);
+    if (!isIdentifier3(recv.expression))
+      return void 0;
+    const field = `get_value(&${this.printNode(recv.expression, 0).trim()}, &Value::Str(${this.quotedStringLiteral(String(recv.name.text))}.into()))`;
+    return `Value::Bool(matches!((&${field}, &${this.printNode(left, 0).trim()}), (Value::Dict(__d), Value::Str(__k)) if __d.contains_key(__k.as_ref())))`;
+  }
+  /** ral-65b: `n` is the bare key of `n in client.subscriptions|futures` on a ws `Client` that the handle does not print. */
+  rust65bWsInKey(n) {
+    const parent = n.parent;
+    if (!isBinaryExpression5(parent) || parent.operatorToken.kind !== SyntaxKind7.InKeyword || parent.left !== n || this.rustClientHandleIsInTest(parent))
+      return false;
+    const recv = this.unwrapParens(parent.right);
+    return isPropertyAccessExpression3(recv) && (recv.name.text === "subscriptions" || recv.name.text === "futures") && this.rustIsWsClientType(this.typeOfNodeIfAny(recv.expression));
+  }
   rustInKeyInitialised(n) {
     const recv = this.unwrapParens(this.rustInKeyTop(n).parent.right);
     if (isPropertyAccessExpression3(recv) && /^(?:subscriptions|futures)$/.test(String(recv.name.text)) && this.rustIsWsClientType(this.typeOfNodeIfAny(recv.expression)))
@@ -71005,6 +71055,11 @@ ${this.getIden(identation)}}`;
     return this.printNativeToFixed(node, name) ?? `to_fixed(&${name}, &${parsedArg})`;
   }
   printToStringCall(node, identation, name = void 0) {
+    const recv65b = this.unwrapParens(node?.expression?.expression);
+    const cast65b = recv65b?.kind === SyntaxKind7.AsExpression ? recv65b.expression : void 0;
+    if (cast65b !== void 0 && isIdentifier3(cast65b) && this.rustScalarUseForms.get(cast65b) === "concat" && this.rust65bCastToStringRecv(cast65b)) {
+      return this.rustRecordFormatToString(node, `${super.printIdentifier(cast65b)}.as_deref().unwrap_or("null")`);
+    }
     return this.printRustVenueIntToString(node, name) ?? this.printRustNativeToString(node, name) ?? this.printRustToString(node, name) ?? `to_string_val(&${name})`;
   }
   printToUpperCaseCall(node, identation, name = void 0) {
