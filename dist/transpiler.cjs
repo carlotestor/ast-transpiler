@@ -74538,7 +74538,7 @@ ${iden}}`;
     const extendReuse = from === void 0 && init !== void 0 && this.rustExtendReuseLiteral(declaration, init);
     if (extendReuse)
       from = "dict";
-    const keyReadOnly = from === void 0 && !nilDeclared && init !== void 0 && (this.rustSafeValueKeyReadSource(init) || this.rustKeyReadTernarySource(init));
+    const keyReadOnly = from === void 0 && !nilDeclared && init !== void 0 && (this.rustSafeValueKeyReadSource(init) || this.rustKeyReadTernarySource(init) || this.rust80gParseJsonKeyReadSource(init));
     if (keyReadOnly)
       from = "dict";
     const elemKeyReadOnly = from === void 0 && !nilDeclared && init !== void 0 && this.rustListRowKeyReadSource(init);
@@ -78013,6 +78013,17 @@ ${iden}}`;
       return false;
     const names = (x) => _is.isPropertyAccessExpression.call(void 0, x) && /^(?:markets|markets_by_id|currencies|currencies_by_id|clients|futures|subscriptions|orderbooks|cache)$/.test(String(x.name.text)) || (_nullishCoalesce(x.forEachChild(names), () => ( false)));
     return !names(call.arguments[0]);
+  }
+  /** ral-80g: `const o = this.parseJson (s)` (base `parseJson`, one argument): its answer is whatever JSON the text holds
+   *  (a map, a list, a scalar) or Null. Under ral-qa's use rule (literal string-key base reads only) a non-map answer reads
+   *  Null at every key exactly as the empty map `into_dict()` leaves, and a parsed value carries no store tag. */
+  rust80gParseJsonKeyReadSource(call) {
+    if (!_is.isCallExpression.call(void 0, call) || !_is.isPropertyAccessExpression.call(void 0, call.expression) || call.expression.expression.kind !== _ast.SyntaxKind.ThisKeyword)
+      return false;
+    if (String(call.expression.name.text) !== "parseJson" || call.arguments.length !== 1 || this.rustTestTierSource(call))
+      return false;
+    const declaration = this.rustScalarCallee(call);
+    return declaration !== void 0 && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile().fileName));
   }
   /** ral-45g: `c ? a : b` whose arms are each a local / parameter, a numeric-index row, an empty map literal or a ral-qa
    *  `safeValue` source: whatever kind each arm holds, a string-key read of a non-map answers Null exactly as the empty map
