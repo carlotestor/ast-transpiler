@@ -66334,7 +66334,7 @@ ${i1}}`;
       return false;
     if (empty)
       return writes > 0 || fromOpt ? "opt" : false;
-    return fieldReads > 0 || (slotUses > 0 || keyReads > 0) && valueUses === 0 ? "struct" : false;
+    return fieldReads > 0 || slotUses > 0 || keyReads > 0 && valueUses === 0 ? "struct" : false;
   }
   // ── rustOptMarketKeyRead / printOptMarketKeyRead: literal-key reads on an `Option<Market>` local ──
   // `KeyRead` for `&Option<Market>` reads the market's own map (Null when empty), as the boxed local did.
@@ -67474,6 +67474,8 @@ ${i1}}`;
         return `&${super.printIdentifier(node)}`;
       if (this.rustSmktAliasValueUse(node))
         return `crate::Value::from(${super.printIdentifier(node)})`;
+      if (this.rustSmktAliasSource(declaration) === void 0 && this.rust76jSmktValueArg(node))
+        return `crate::Value::from(&${super.printIdentifier(node)})`;
       return void 0;
     }
     if (declaration === void 0 || this.rustMarketReadKey(node) !== void 0)
@@ -88461,38 +88463,64 @@ ${this.getIden(identation)}}`;
     const scope = this.rustEnclosingFunction(declaration);
     if (scope === void 0 || isSourceFile5(scope) || !this.rustDictKeyReadLineOk(declaration, name))
       return false;
-    return this.rustMarketLocalUsesAll(declaration, name, (n) => {
-      if (this.rustEnclosingFunction(n) !== scope)
-        return false;
-      const up = n.parent;
-      if (alias) {
-        if (!isCallExpression6(up) || up.expression === n)
-          return false;
-        const at2 = Array.from(up.arguments).indexOf(n);
-        if (at2 < 0)
-          return false;
-        return this.rustMarketSlot(this.rustCalleeParams(up), at2) || this.rustSmktAliasValueUse(n);
-      }
-      if (isBinaryExpression5(up) && up.left === n && up.operatorToken.kind === SyntaxKind7.EqualsToken) {
-        return up.parent?.kind === SyntaxKind7.ExpressionStatement && this.rustIsSafeMarketCall(up.right);
-      }
-      if (this.rustDictKeyReadUse(n))
-        return true;
-      if (up?.kind === SyntaxKind7.VariableDeclaration && up.initializer === n && this.rustSmktAliasSource(up) === declaration && this.rustSafeMarketLocalOk(up, true))
-        return true;
-      if (this.rustMarketKeyOfLookup(n))
-        return true;
-      if (isReturnStatement4(up) && up.expression === n && this.rustReturnsMarket(findAncestor(up.parent, isFunctionLike)))
-        return true;
-      if (this.rustIsNullTestOf(n) && this.rustNullTestIsCondition(n))
-        return true;
+    let valueArgs = 0;
+    let otherUses = 0;
+    const ok = this.rustMarketLocalUsesAll(declaration, name, (n) => {
+      const r = this.rust76jSmktUse(declaration, n, scope, alias);
+      if (r === "value")
+        valueArgs++;
+      else if (r)
+        otherUses++;
+      return r !== false;
+    });
+    return ok && (valueArgs === 0 || otherUses > 0);
+  }
+  rust76jSmktUse(declaration, n, scope, alias) {
+    if (this.rustEnclosingFunction(n) !== scope)
+      return false;
+    const up = n.parent;
+    if (alias) {
       if (!isCallExpression6(up) || up.expression === n)
         return false;
-      const at = Array.from(up.arguments).indexOf(n);
-      if (at === 0 && (this.rustBorrowedDictReader(up) !== void 0 || this.rustBorrowedAnyKeyReader(up)))
-        return true;
-      return at >= 0 && this.rustMarketSlot(this.rustCalleeParams(up), at);
-    });
+      const at2 = Array.from(up.arguments).indexOf(n);
+      if (at2 < 0)
+        return false;
+      return this.rustMarketSlot(this.rustCalleeParams(up), at2) || this.rustSmktAliasValueUse(n);
+    }
+    if (isBinaryExpression5(up) && up.left === n && up.operatorToken.kind === SyntaxKind7.EqualsToken) {
+      return up.parent?.kind === SyntaxKind7.ExpressionStatement && this.rustIsSafeMarketCall(up.right);
+    }
+    if (this.rustDictKeyReadUse(n))
+      return true;
+    if (up?.kind === SyntaxKind7.VariableDeclaration && up.initializer === n && this.rustSmktAliasSource(up) === declaration && this.rustSafeMarketLocalOk(up, true))
+      return true;
+    if (this.rustMarketKeyOfLookup(n))
+      return true;
+    if (isReturnStatement4(up) && up.expression === n && this.rustReturnsMarket(findAncestor(up.parent, isFunctionLike)))
+      return true;
+    if (this.rustIsNullTestOf(n) && this.rustNullTestIsCondition(n))
+      return true;
+    if (!isCallExpression6(up) || up.expression === n)
+      return false;
+    const at = Array.from(up.arguments).indexOf(n);
+    if (at === 0 && (this.rustBorrowedDictReader(up) !== void 0 || this.rustBorrowedAnyKeyReader(up)))
+      return true;
+    if (at >= 0 && this.rustMarketSlot(this.rustCalleeParams(up), at))
+      return true;
+    return at >= 0 && !alias && this.rust76jSmktValueArg(n) ? "value" : false;
+  }
+  /** ral-76j: `this.m (.., s, ..)` with a `safeMarket` struct local at a plain `Value` slot of a self method: the
+   *  boxed local was copied there (`s.clone()`); `crate::Value::from(&s)` shares the record's `raw` the same way. */
+  rust76jSmktValueArg(n) {
+    const up = n.parent;
+    if (up === void 0 || !isCallExpression6(up) || up.expression === n || !isPropertyAccessExpression3(up.expression) || up.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    const at = Array.from(up.arguments).indexOf(n);
+    if (at < 0 || this.rustMarketSlot(this.rustCalleeParams(up), at))
+      return false;
+    if (at === 0 && (this.rustBorrowedDictReader(up) !== void 0 || this.rustBorrowedAnyKeyReader(up)))
+      return false;
+    return this.rustCalleeParams(up) !== void 0;
   }
   /** A use of a `safeMarket` struct local. */
   rustSafeMarketLocalOf(node) {

@@ -5154,6 +5154,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-46i: a whole-value hand-off of a `safeMarket` alias that is neither a lent market slot nor a reader's record. */
     rustSmktAliasValueUse(n: any): boolean;
     rustSafeMarketLocalOk(declaration: any, alias?: boolean): boolean;
+    rust76jSmktUse(declaration: any, n: any, scope: any, alias: boolean): boolean | 'value';
+    /** ral-76j: `this.m (.., s, ..)` with a `safeMarket` struct local at a plain `Value` slot of a self method: the
+     *  boxed local was copied there (`s.clone()`); `crate::Value::from(&s)` shares the record's `raw` the same way. */
+    rust76jSmktValueArg(n: any): boolean;
     /** A use of a `safeMarket` struct local. */
     rustSafeMarketLocalOf(node: any): any;
     /** Argument text for a lent market slot: a typed market lends itself, any other value decodes once. */
