@@ -33434,7 +33434,20 @@ GoTranspiler.prototype.goSafeListEmptyDefaultLocals = new WeakSet<object>();
             || (fallback?.kind !== SyntaxKind.ArrayLiteralExpression) || (fallback.elements.length !== 0)) {
             return undefined;
         }
-        const typed = this.goDeclaredLocalTypeIfSafe(declaration, GO_SAFE_LIST_LOCAL_TYPE, (n) => this.goListLocalSinkReadsAsList(n, true));
+        // a copy target that is itself index-read would join to []any and print the bounds-checked
+        // element read (a closure per read) where the box printed GetValue: keep the box then
+        const scope: any = this.goEnclosingFunction(declaration);
+        const indexReadTarget = (n: any): boolean => {
+            const parent: any = n.parent;
+            if ((parent?.kind !== SyntaxKind.BinaryExpression) || (parent.right !== n) || (parent.operatorToken?.kind !== SyntaxKind.EqualsToken)
+                || (parent.left?.kind !== SyntaxKind.Identifier)) {
+                return false;
+            }
+            const target = parent.left.text;
+            return this.hasNodeWhere(scope, (m: any) => (m.kind === SyntaxKind.ElementAccessExpression)
+                && (m.expression?.kind === SyntaxKind.Identifier) && (m.expression.text === target));
+        };
+        const typed = this.goDeclaredLocalTypeIfSafe(declaration, GO_SAFE_LIST_LOCAL_TYPE, (n) => !indexReadTarget(n) && this.goListLocalSinkReadsAsList(n, true));
         if (typed !== undefined) {
             this.goSafeListEmptyDefaultLocals.add(declaration);
         }
@@ -33448,5 +33461,45 @@ GoTranspiler.prototype.goSafeListEmptyDefaultLocals = new WeakSet<object>();
         }
         const args: any = this.goSafeListLocalArgs(declaration.initializer);
         return `SafeListTypedDefault(${this.printNode(args.container, identation)}, ${this.printNode(args.key, 0)}, []any{})`;
+    };
+}
+// R4. `const x = this.handleOption (m, o[, d])` read only as `x === true` / `x == true` / `x !== true`
+// is a Go bool: BaseExchange.HandleOption returns the boxed option, and each of those reads is the
+// interface comparison with the true constant, so the declaration takes that comparison once
+// (`var x bool = this.HandleOption(..) == true`) and every use compares a bool with the same answer.
+// A rebinding, any other read, or a shadowing binding keeps the box.
+export interface GoTranspiler {
+    goHandleOptionTrueLocal(declaration): boolean;
+}
+GoTranspiler.prototype.goHandleOptionTrueLocal = function (declaration) {
+    const call: any = declaration?.initializer;
+    if ((declaration?.kind !== SyntaxKind.VariableDeclaration) || (declaration.name?.kind !== SyntaxKind.Identifier)
+        || (declaration.parent?.parent?.kind !== SyntaxKind.FirstStatement) || (declaration.type !== undefined)
+        || (call?.kind !== SyntaxKind.CallExpression) || (call.expression?.kind !== SyntaxKind.PropertyAccessExpression)
+        || (call.expression.expression?.kind !== SyntaxKind.ThisKeyword) || (call.expression.name?.text !== 'handleOption')
+        || (call.arguments.length < 2) || (call.arguments.length > 3)) {
+        return false;
+    }
+    const comparesWithTrue = (n: any): boolean => {
+        const parent: any = n.parent;
+        const op = parent?.operatorToken?.kind;
+        if ((parent?.kind !== SyntaxKind.BinaryExpression) || ((op !== SyntaxKind.EqualsEqualsEqualsToken) && (op !== SyntaxKind.EqualsEqualsToken)
+            && (op !== SyntaxKind.ExclamationEqualsEqualsToken) && (op !== SyntaxKind.ExclamationEqualsToken))) {
+            return false;
+        }
+        return (((parent.left === n) ? parent.right : parent.left)?.kind === SyntaxKind.TrueKeyword);
+    };
+    return this.goDeclaredLocalTypeIfSafe(declaration, 'bool', comparesWithTrue,
+        (n: any) => ((n.parent?.kind === SyntaxKind.PropertyAccessExpression) && (n.parent.name === n))
+            || ((n.parent?.kind === SyntaxKind.PropertyAssignment) && (n.parent.name === n))) === 'bool';
+};
+{
+    const marketLocal = GoTranspiler.prototype.goMarketLocalUnbox;
+    GoTranspiler.prototype.goMarketLocalUnbox = function (declaration) {
+        return this.goHandleOptionTrueLocal(declaration) ? 'bool' : marketLocal.call(this, declaration);
+    };
+    const marketValue = GoTranspiler.prototype.goMarketUnboxValue;
+    GoTranspiler.prototype.goMarketUnboxValue = function (declaration, parsedValue) {
+        return this.goHandleOptionTrueLocal(declaration) ? `${parsedValue.trim()} == true` : marketValue.call(this, declaration, parsedValue);
     };
 }

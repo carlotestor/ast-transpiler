@@ -13023,7 +13023,7 @@ describe ('goTypeKeyedMapLocals', () => {
         });
         test('a rebinding to anything else, an assertion-like use, an address or a non-nil compare keep the box', () => {
             for (const body of [
-                'd = this.extend (d, {});\n return 1;',
+                'd = this.safeString (p, "x");\n return 1;', // ral-77g2 R2: an extend rebinding now keeps the map (was `d = this.extend (d, {})`)
                 'const q = d.foo; return q;',
                 'if (d === p) { return 1; }\n return 2;',
                 'const q = typeof d; return q;',
@@ -13063,7 +13063,9 @@ describe ('goTypeKeyedMapLocals', () => {
         });
         test('prediction and base sources keep the box', () => {
             const body = '    f (p: Dict): any {\n        const d = this.safeDict (p, "data", {});\n        return this.extend (d, {});\n    }\n';
-            expect(run(body, 'ts/src/prediction')).not.toContain('SafeDictMap');
+            // ral-77g2 R1: prediction sources now take the rule (ws container checks); base Exchange still keeps the box
+            expect(run(body, 'ts/src/prediction')).toContain('SafeDictMap');
+            expect(run(body, 'ts/src/base')).not.toContain('SafeDictMap');
             expect(run(body, 'ts/src')).toContain('SafeDictMap');
         });
     });
@@ -14152,5 +14154,18 @@ describe ('ral-77g2 reader-result locals', () => {
         const member = '    f (raw: Dict): any {\n        const xs = this.safeList (raw, "data", []);\n        const out = xs;\n        return xs.join (",");\n    }\n';
         expect(run(member, 'ts/src')).not.toContain('var xs []any');
         expect(run(body, 'ts/src/pro')).not.toContain('SafeListTypedDefault');
+        // the copy target is index-read later: keep the box (no bounds-checked read on the target)
+        const indexed = body.replace('return out;', 'return out[0];');
+        expect(run(indexed, 'ts/src')).not.toContain('SafeListTypedDefault');
+    });
+    test('R4: a handleOption local read only against true is a Go bool', () => {
+        const pre = '    handleOption (m: string, o: string, d: any = undefined): any { return d; }\n';
+        const body = pre + '    f (): any {\n        const snap = this.handleOption ("watchPositions", "fetchPositionsSnapshot", true);\n        if (snap === true) {\n            return 1;\n        }\n        return 2;\n    }\n';
+        const out = run(body, 'ts/src/pro');
+        expect(out).toContain('var snap bool = this.HandleOption("watchPositions", "fetchPositionsSnapshot", true) == true');
+        expect(out).not.toContain('var snap any');
+        // a value read or a rebinding keeps the box
+        expect(run(body.replace('if (snap === true)', 'if (snap)'), 'ts/src/pro')).toContain('var snap any');
+        expect(run(body.replace('if (snap === true) {', 'if (snap === true) {\n            snap = false;'), 'ts/src/pro')).toContain('var snap any');
     });
 });
