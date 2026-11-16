@@ -15067,9 +15067,23 @@ export class RustTranspiler extends BaseTranspiler {
         else if (isPropertyAccessExpression(parent) && parent.expression === n && isIdentifier(parent.name)) key = String(parent.name.text);
         if (key === undefined || key === 'length') return undefined;
         const outer: any = parent.parent;
+        // ral-87rh R1: `m['precision']['k']` (a literal key, read only) reads the nested map off the record's own `raw`
+        // (`KeyRead` for `&Market`), the very map the boxed `m['precision']` read held
+        if (key === 'precision' && this.rust87rhPrecisionRead(outer, parent)) return key;
         if (outer !== undefined && (isCallExpression(outer) || isPropertyAccessExpression(outer) || isElementAccessExpression(outer)) && outer.expression === parent) return undefined;
         if (outer !== undefined && (isDeleteExpression(outer) || (isBinaryExpression(outer) && outer.left === parent && rustIsAssignmentOperator(outer.operatorToken.kind)))) return undefined;
         return key;
+    }
+
+    /** ral-87rh R1: `outer` is a plain read `<inner>['k']` (string-literal key) of `inner`: no write target, update, delete,
+     *  call or deeper chain link. */
+    rust87rhPrecisionRead(outer: Node | undefined, inner: Node | undefined): boolean {
+        if (outer === undefined || !isElementAccessExpression(outer) || outer.expression !== inner || !isStringLiteralLikeNode(outer.argumentExpression)) return false;
+        const up: Node | undefined = outer.parent;
+        if (up === undefined || ((isCallExpression(up) || isPropertyAccessExpression(up) || isElementAccessExpression(up)) && up.expression === outer)) return false;
+        if (isDeleteExpression(up) || isPrefixUnaryExpression(up) || isPostfixUnaryExpression(up)) return false;
+        if (isBinaryExpression(up) && up.left === outer && rustIsAssignmentOperator(up.operatorToken.kind)) return false;
+        return true;
     }
 
     /** The listed field a `this.safeString|safeBool (m, 'k')` call reads (no default, or a `false` default for a flag). */
@@ -19440,6 +19454,11 @@ export class RustTranspiler extends BaseTranspiler {
         if (isIdentifier(receiverNode) && this.rustOptMarketLocalOf(receiverNode) !== undefined && RustTranspiler.rustBearerKeyTextOk(keyText)) {
             return `crate::value::KeyRead::key_read(&&${receiverText}, "${this.escapeRustStringLiteral(keyText)}")`;
         }
+        // ral-87rh R1: `m['precision']` under a literal-key read off a loaded market struct local: the record's own `raw` map
+        if (keyText === 'precision' && isIdentifier(receiverNode) && this.rust87rhPrecisionRead(receiverNode.parent?.parent, receiverNode.parent)) {
+            const declaration = this.rustTypedMarketLocalOf(receiverNode);
+            if (declaration !== undefined && this.rustMarketLocalKind(declaration) === 'struct') return `crate::value::KeyRead::key_read(&&${receiverText}, "precision")`;
+        }
         // `client.url` on a ws `Client`: the handle's own accessor, no map closure.
         if (keyText === 'url' && this.rustIsWsClientType(this.getCheckedTypeOf(receiverNode))) return `${receiverText}.url()`;
         // A native-map parameter is an `&mut IndexMap` too.
@@ -23031,6 +23050,8 @@ export class RustTranspiler extends BaseTranspiler {
 
     rustReadBearerKindOfDeclaration(declaration: any): 'list' | 'map' | false {
         if (declaration?.kind !== SyntaxKind.VariableDeclaration || this.rustCurrencyLocalKind(declaration) !== false) return false;
+        // ral-87rh R1: a `this.market (..)` local the market rule holds as its struct is never also a read-only map bearer
+        if (this.rustIsTypedMarketCall(declaration.initializer) && this.rustMarketLocalKind(declaration) === 'struct') return false;
         let decision = this.rustReadBearerDecisions.get(declaration);
         if (decision === undefined) {
             this.rustReadBearerDecisions.set(declaration, false); // re-entrancy guard
