@@ -1312,6 +1312,9 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  string `stringify_param` made of the boxed local, `"null"` for `None`); a value reading `self` is bound first. Over
      *  the line budget the helper chain takes the key as a `Value` (`From<Option<&str>>`, the one allocation). */
     printNestedFieldUpperKeyWrite(left: any, acc: string, value: string): string | undefined;
+    /** ral-61k: `n` keys a middle hop of a statement write `this.balance|options[..][n][..] = v`: an element read whose
+     *  receiver is itself an element read and which is itself the receiver of the outermost written element access. */
+    rust61kNestedFieldMiddleKey(n: any): boolean;
     /** `this.f` (one level, no element read in between). */
     rustThisFieldTarget(node: any): boolean;
     /** `n` is (inside) an argument of a call that lies within `root`, the call itself not being `n`. */
@@ -1722,6 +1725,12 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  insert never sees a `None` key, so the key text is the `Str` the boxed key held (removeRepeatedTradesFromArray `id`). */
     rust55xGuardedSafeStringKey(n: any, local: any): boolean;
     rustScalarOptKeyUse(n: any): boolean;
+    /** ral-61k: `n` keys a read `m[n]` inside `v` of the statement write `m[n] = v` (same map and key bindings) on a typed
+     *  one-level map bearer. */
+    rust61kSelfReassignRead(n: any): boolean;
+    /** ral-61k: `n` keys a statement write `m[n] = v` and every element read of the map `m` (declared by `declaration`) keyed
+     *  by `n`'s own binding sits inside `v` of a write `m[n] = v` (the `m[k] = f(m[k])` self-reassign). */
+    rust61kSelfReassignOnlyRead(declaration: any, name: string, n: any): boolean;
     rustScalarOptKeyArg(key: any): string | undefined;
     rustScalarOptKeyCount(declaration: any): number;
     rustScalarOptKeyCostly(declaration: any, kind: string): boolean;

@@ -59346,6 +59346,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (deep === "later")
         return "box";
     }
+    if ((kind === "str" || kind === "ostr") && this.rustInitKeyLocal(n) && this.rust61kSelfReassignRead(n))
+      return "okey";
+    if ((kind === "str" || kind === "ostr") && this.rust61kNestedFieldMiddleKey(n))
+      return "mkey";
     if (this.rustScalarInNestedWrite(n))
       return void 0;
     if (kind === "str" && this.rustScalarInsertKeyUse(n))
@@ -60528,6 +60532,24 @@ ${binding(plan.indent)}` : ""), head: "" };
     }
     return insert;
   }
+  /** ral-61k: `n` keys a middle hop of a statement write `this.balance|options[..][n][..] = v`: an element read whose
+   *  receiver is itself an element read and which is itself the receiver of the outermost written element access. */
+  rust61kNestedFieldMiddleKey(n) {
+    const keyNode = this.rustKeyWrapped(n);
+    const access = keyNode.parent;
+    if (!isElementAccessExpression4(access) || access.argumentExpression !== keyNode || !isElementAccessExpression4(access.expression))
+      return false;
+    const below = access.parent;
+    if (!isElementAccessExpression4(below) || below.expression !== access)
+      return false;
+    let outer = below;
+    while (isElementAccessExpression4(outer.parent) && outer.parent.expression === outer)
+      outer = outer.parent;
+    const write = outer.parent;
+    if (!isBinaryExpression5(write) || write.left !== outer || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    return this.rustNestedFieldChain(outer);
+  }
   /** `this.f` (one level, no element read in between). */
   rustThisFieldTarget(node) {
     return isPropertyAccessExpression3(node) && node.expression.kind === SyntaxKind7.ThisKeyword;
@@ -61173,6 +61195,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       return `Value::from(${super.printIdentifier(node)}.as_deref())`;
     if (form === "key" && local.kind === "ostr")
       return `${super.printIdentifier(node)}${this.rustLocalLastUse(node, local.declaration) ? "" : ".clone()"}.map(Value::from).unwrap_or(Value::Null)`;
+    if (form === "mkey")
+      return local.kind === "ostr" ? `Value::from(${super.printIdentifier(node)}.as_deref())` : `Value::from(${super.printIdentifier(node)}.as_str())`;
     if (form === "dkey")
       return local.kind === "ostr" ? `Value::from(${super.printIdentifier(node)}.as_deref())` : `Value::from(${super.printIdentifier(node)}.as_str())`;
     if (form === "cond" && local.kind === "obool")
@@ -63524,11 +63548,63 @@ ${ind}];`;
       });
       if (enumerated && this.rustSafeCurrencyCodeInit(local.initializer))
         return this.rustScalarInsertKeyUse(n);
+      if (enumerated && keyRead && isElementAccessExpression4(this.rustSkipWrappers(local.initializer)) && this.rust61kSelfReassignOnlyRead(declaration, name, n))
+        return this.rustScalarInsertKeyUse(n);
       if (enumerated)
         return !keyRead && (isElementAccessExpression4(this.rustSkipWrappers(local.initializer)) || this.rustTbNetworkCodeInit(local.initializer) || this.rust55xGuardedSafeStringKey(n, local)) && this.rustScalarInsertKeyUse(n);
       return this.rustBearerWriteKeyOk(n, name) || this.rustScalarInsertKeyUse(n);
     }
     return this.rustScalarInsertKeyUse(n);
+  }
+  /** ral-61k: `n` keys a read `m[n]` inside `v` of the statement write `m[n] = v` (same map and key bindings) on a typed
+   *  one-level map bearer. */
+  rust61kSelfReassignRead(n) {
+    const keyNode = this.rustKeyWrapped(n);
+    const read = keyNode.parent;
+    if (!isElementAccessExpression4(read) || read.argumentExpression !== keyNode || !isIdentifier3(read.expression))
+      return false;
+    if (isElementAccessExpression4(read.parent) && read.parent.expression === read)
+      return false;
+    let up = read.parent;
+    while (up !== void 0 && !isStatement(up) && !(isBinaryExpression5(up) && up.operatorToken.kind === SyntaxKind7.EqualsToken))
+      up = up.parent;
+    if (up === void 0 || isStatement(up) || up.parent?.kind !== SyntaxKind7.ExpressionStatement || !isElementAccessExpression4(up.left) || !this.isNodeInsideNode(read, up.right))
+      return false;
+    const wk = this.rustSkipWrappers(up.left.argumentExpression);
+    if (!isIdentifier3(up.left.expression) || this.rustSymbolOf(up.left.expression) !== this.rustSymbolOf(read.expression) || wk === void 0 || !isIdentifier3(wk) || this.rustSymbolOf(wk) !== this.rustSymbolOf(n))
+      return false;
+    const md = this.rustDeclarationOfIdentifier(read.expression);
+    return md !== void 0 && isVariableDeclaration3(md) && isObjectLiteralExpression4(this.rustSkipWrappers(md.initializer)) && !this.rustLocalReassigned(md);
+  }
+  /** ral-61k: `n` keys a statement write `m[n] = v` and every element read of the map `m` (declared by `declaration`) keyed
+   *  by `n`'s own binding sits inside `v` of a write `m[n] = v` (the `m[k] = f(m[k])` self-reassign). */
+  rust61kSelfReassignOnlyRead(declaration, name, n) {
+    const own = this.rustSymbolOf(n);
+    const sameKey = (k) => {
+      const kk = this.rustSkipWrappers(k);
+      return kk !== void 0 && isIdentifier3(kk) && this.rustSymbolOf(kk) === own;
+    };
+    let ok = true;
+    this.rustLocalUsesAll(declaration, name, false, (u) => {
+      const acc = u.parent;
+      if (!isElementAccessExpression4(acc) || acc.expression !== u)
+        return true;
+      if (isBinaryExpression5(acc.parent) && acc.parent.left === acc || this.isNativeWriteTargetBase(u))
+        return true;
+      if (!sameKey(acc.argumentExpression)) {
+        const other = this.rustSkipWrappers(acc.argumentExpression);
+        if (other === void 0 || !isIdentifier3(other) || String(other.text) !== String(n.text))
+          ok = false;
+        return true;
+      }
+      let up = acc.parent;
+      while (up !== void 0 && !isStatement(up) && !(isBinaryExpression5(up) && up.operatorToken.kind === SyntaxKind7.EqualsToken && isElementAccessExpression4(up.left)))
+        up = up.parent;
+      if (up === void 0 || isStatement(up) || up.parent?.kind !== SyntaxKind7.ExpressionStatement || !isIdentifier3(up.left.expression) || this.rustSymbolOf(up.left.expression) !== this.rustSymbolOf(u) || !sameKey(up.left.argumentExpression) || !this.isNodeInsideNode(acc, up.right))
+        ok = false;
+      return true;
+    });
+    return ok;
   }
   rustScalarOptKeyArg(key) {
     if (!isIdentifier3(key) || String(key.text) === "self")
