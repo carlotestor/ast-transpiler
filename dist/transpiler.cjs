@@ -63311,6 +63311,13 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
         const test = lk === void 0 ? `${value2} ${sign} (__p as f64)` : `(__p as f64) ${sign} ${value2}`;
         return `matches!(${text(k, typed)}, Some(__p) if ${test})`;
       }
+      if (k === "int" && own !== void 0 && this.rustIntReaderLitDefault(own.declaration) && this.rust76eCounterStep(other)) {
+        if (dry)
+          return "_";
+        const value2 = `${this.printNode(other, 0).trim()}.as_f64().unwrap_or(f64::NAN)`;
+        const mine2 = `(${text(k, typed)} as f64)`;
+        return lk === void 0 ? `${value2} ${sign} ${mine2}` : `${mine2} ${sign} ${value2}`;
+      }
       if (k !== "int" && k !== "num" || own === void 0 || !(this.rustRdOwnInit(own.declaration) || k === "int" && this.rustIntReaderLitDefault(own.declaration)) || !this.rustScalarValueNumber(other))
         return void 0;
       if (dry)
@@ -64848,6 +64855,19 @@ ${ind}];`;
     }
     return (incr.kind === _ast.SyntaxKind.PostfixUnaryExpression || incr.kind === _ast.SyntaxKind.PrefixUnaryExpression) && (incr.operator === _ast.SyntaxKind.PlusPlusToken || incr.operator === _ast.SyntaxKind.MinusMinusToken) && _is.isIdentifier.call(void 0, incr.operand) && this.rustSymbolOf(incr.operand) === symbol;
   }
+  /** ral-76e: `c`, `c + k` or `c - k` (parentheses skipped) where `c` is an always-`Int` for counter (rustValueIntCounter) and
+   *  `k` an int literal: the runtime value is an `Int` on every path. */
+  rust76eCounterStep(node) {
+    const inner = this.unwrapParens(node);
+    if (inner === void 0)
+      return false;
+    if (_is.isIdentifier.call(void 0, inner))
+      return this.rustValueIntCounter(inner);
+    if (!_is.isBinaryExpression.call(void 0, inner) || inner.operatorToken.kind !== _ast.SyntaxKind.PlusToken && inner.operatorToken.kind !== _ast.SyntaxKind.MinusToken)
+      return false;
+    const left = this.unwrapParens(inner.left);
+    return _is.isIdentifier.call(void 0, left) && this.rustValueIntCounter(left) && this.rustScalarIntLiteral(this.unwrapParens(inner.right)) !== void 0;
+  }
   /** tb: `const b = this.parseToInt (..)` (an `Int`-or-`Null` producer, `i64` / `Option<i64>`). */
   rustTbParseToIntInit(declaration) {
     const init = declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) ? void 0 : this.unwrapParens(declaration.initializer);
@@ -65120,6 +65140,8 @@ ${ind}];`;
       if (kind === "int" && this.rust56nTernaryCounterBound(parent, n))
         return "native";
       if (kind === "onum" && this.rust56nCeilCounterCompare(parent) !== void 0)
+        return "native";
+      if (kind === "int" && !this.isEqualityOp(op) && _RustTranspiler.NATIVE_COMPARISON_OPERATORS[op] !== void 0 && this.rust76eCounterStep(parent.left === n ? parent.right : parent.left) && this.rustIntReaderLitDefault(this.rustDeclaredNode(n)))
         return "native";
       if (this.rustScalarValueOperandUse(parent, n, kind))
         return "xbox";
