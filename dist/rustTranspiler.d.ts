@@ -792,6 +792,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-53k: `c['code']` (a unified string key of a market / currency record) on an `Option<Dict>` local, printed as the
      *  owned `KeyRead::key_read(&&c, "code")` temporary moved into its string (`into_opt_string`: `None` for a missing key). */
     rustOptDictStrKeyText(node: any): string | undefined;
+    /** ral-84e: an optional market / currency record (`Option<Market>` local, lent `Option<&Market>` / currency slot, currency
+     *  local): its `KeyRead` reads the record's own map and answers `Null` when absent, the same `Value` the boxed read held. */
+    rust84eOptRecordRecv(recv: any): boolean;
+    /** ral-84e: a ternary initializer with an arm `r['k']` read off such a record (rust84eOptRecordRecv). */
+    rust84eRecordArmTernary(init: any): boolean;
     /** True when `node` (through parens) is the `whenTrue`/`whenFalse` arm of a ternary that initialises a declaration. */
     rustTernaryArm(node: any): boolean;
     /** `node` (through parens and ternary arms) is a variable declaration's initializer. */

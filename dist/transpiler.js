@@ -57192,6 +57192,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const strKind = kind === "str" || kind === "ostr";
     const handOff = nativeUses === 0 && boxed >= 1 && (copied === 0 || !strKind || !this.rustStrNoLend && (this.rustStrLendSites(declaration) || kind === "str" && this.rustClockString(this.unwrapParens(declaration.initializer)) && this.rustReaderLendBoxes(declaration) || this.rustScOwnSelfCall(declaration.initializer) && !this.rustOdExcludedCallee(declaration.initializer) && !this.rustVenueLocalHandedOn(declaration) && this.rustReaderLendBoxes(declaration))) && !this.rust66s3StrReturnedVeto(declaration, scope);
     const storeOnly = guarded && nativeUses === 0 && boxed === 1 && !handOff;
+    if (ok && nativeUses === 0 && kind === "ostr" && this.rust84eRecordArmTernary(declaration.initializer))
+      return void 0;
     const unused = typedUses === 0 && !handOff && this.rustScalarNeedsNativeUse(declaration.initializer) && !this.rustVenueIntReboxed(declaration, kind, boxed);
     const clientOnce = nativeUses === 0 && boxed === 1 && this.rustWsClientOnlyUse(declaration);
     if (anyLength && typedUses === 0)
@@ -57837,13 +57839,27 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (/[/]test[/]/.test(String(node.getSourceFile?.()?.fileName ?? "")))
       return void 0;
     const local = this.rustOptContainerOf(node.expression);
-    const record = local === void 0 && (this.rustOptMarketLocalOf(node.expression) !== void 0 || this.rustMarketSlotParamOf(node.expression) !== void 0 || this.rustCurrencySlotParamOf(node.expression) !== void 0 || this.rustCurrencyLocalOf(node.expression) !== void 0);
-    if (!record && (local === void 0 || local.kind !== "dict"))
+    if ((local === void 0 || local.kind !== "dict") && !this.rust84eOptRecordRecv(node.expression))
       return void 0;
     const read = this.printNode(node, 0).trim();
     if (!/^(?:crate|ccxt)::value::KeyRead::key_read\(&{1,2}[A-Za-z_][A-Za-z0-9_]*, "[A-Za-z]+"\)$/.test(read))
       return void 0;
     return `${read}.into_opt_string()`;
+  }
+  /** ral-84e: an optional market / currency record (`Option<Market>` local, lent `Option<&Market>` / currency slot, currency
+   *  local): its `KeyRead` reads the record's own map and answers `Null` when absent, the same `Value` the boxed read held. */
+  rust84eOptRecordRecv(recv) {
+    return this.rustOptContainerOf(recv) === void 0 && (this.rustOptMarketLocalOf(recv) !== void 0 || this.rustMarketSlotParamOf(recv) !== void 0 || this.rustCurrencySlotParamOf(recv) !== void 0 || this.rustCurrencyLocalOf(recv) !== void 0);
+  }
+  /** ral-84e: a ternary initializer with an arm `r['k']` read off such a record (rust84eOptRecordRecv). */
+  rust84eRecordArmTernary(init) {
+    const node = this.unwrapParens(init);
+    if (node === void 0 || !isConditionalExpression4(node))
+      return false;
+    return [node.whenTrue, node.whenFalse].some((a) => {
+      const arm = this.unwrapParens(a);
+      return isElementAccessExpression4(arm) && this.rust84eOptRecordRecv(arm.expression);
+    });
   }
   /** True when `node` (through parens) is the `whenTrue`/`whenFalse` arm of a ternary that initialises a declaration. */
   rustTernaryArm(node) {
