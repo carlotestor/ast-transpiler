@@ -3134,6 +3134,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-62n: the reader's default (after its key arguments) is absent, `undefined` or an object literal: a map default. */
     rust62nMapOrNullDefault(call: any): boolean;
     static readonly RUST_NEVER_NULL_TEST_READERS: Set<string>;
+    /** ral-63i: base map readers whose result prints as a `Value` (the other arm of a boxed ternary arm). */
+    static readonly RUST_63I_DICT_READERS: Set<string>;
     private rustNeverNullTests;
     /** ral-60n: the reader's default is the empty literal of the local's kind (`[]` for a list, `{}` for a map). */
     rustEmptyContainerLiteral(node: any, from: string): boolean;
@@ -3469,6 +3471,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustDeclaredEndpointWholeBox(n: any): boolean;
     /** ral-53a: a plain `Value` argument slot of a `this.` method (not extend / omit, not a lent slot, no loop between). */
     rustSbAliasValueSlot(n: any): boolean;
+    /** ral-63i: `this.m (..)` whose resolved declaration is a method of the calling venue's own source file (not the base
+     *  tier, not an abstract endpoint), so its argument slots print from that declaration. */
+    rust63iSameFileMethod(call: any): boolean;
     rustDeclaredEndpointBoxUse(n: any): boolean;
     /** `this.F` for a checker dict-shaped field (`fundingRates: Dictionary<FundingRate>`) the native insert writes
      *  (`printNativeDictInsert`: `rustFieldStaysDict`). The insert stores whatever handle it is given, so a built map

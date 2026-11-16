@@ -74576,6 +74576,8 @@ ${iden}}`;
       return false;
     if (up.kind === SyntaxKind7.PropertyAssignment)
       return up.initializer === n;
+    if (isArrayLiteralExpression4(up) && this.rustDictElementSource(init) && this.rust62nListLiteralSink(up))
+      return true;
     if (isCallExpression6(up) && isPropertyAccessExpression3(up.expression) && isIdentifier3(up.expression.expression) && up.arguments.length === 1 && up.arguments[0] === n && String(up.expression.name.text) === "push")
       return !this.rustIdentifierRefersToDeclaration(up.expression.expression, this.rustDeclarationOfIdentifier(n));
     if (isCallExpression6(up) && isPropertyAccessExpression3(up.expression) && isIdentifier3(up.expression.expression) && up.arguments.length === 1 && up.arguments[0] === n && String(up.expression.name.text) === "append" && this.rustDictElementSource(init)) {
@@ -75676,6 +75678,15 @@ ${iden}}`;
   // ── rustDeclaredEndpointBoxUse (ral-ld): a declared-endpoint optional container handed on whole ──
   // `{ 'info': response }` / `return response`: the box `x.map_or(Value::Null, Value::Dict|Arr)` gives back the
   // answer of the declared shape, Null for an unset local.
+  /** ral-63i: `this.m (..)` whose resolved declaration is a method of the calling venue's own source file (not the base
+   *  tier, not an abstract endpoint), so its argument slots print from that declaration. */
+  rust63iSameFileMethod(call) {
+    const declaration = this.rustScalarCallee(call);
+    if (declaration?.kind !== SyntaxKind7.MethodDeclaration || declaration.body === void 0)
+      return false;
+    const file = declaration.getSourceFile?.();
+    return file !== void 0 && file === call.getSourceFile?.() && !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(file.fileName));
+  }
   rustDeclaredEndpointBoxUse(n) {
     const up = n.parent;
     if (up === void 0 || this.rustScalarInNestedWrite(n, true))
@@ -75684,9 +75695,15 @@ ${iden}}`;
       return up.initializer === n && isObjectLiteralExpression4(up.parent) && !this.rustInDestructureWrite(n);
     if (isReturnStatement4(up))
       return up.expression === n;
+    if (isCallExpression6(up) && up.expression !== n && isPropertyAccessExpression3(up.expression) && up.expression.expression.kind === SyntaxKind7.ThisKeyword && this.rust63iSameFileMethod(up) && !this.rustLentResponseSlot(up, n) && !this.rustLentListSlot(up, n) && !this.rustLentHelperSlot(up, n, "dict")) {
+      return this.rustNilBoxSlotOk(up, Array.from(up.arguments).indexOf(n));
+    }
     if (up.kind === SyntaxKind7.ConditionalExpression && up.condition !== n) {
       const other = this.unwrapParens(up.whenTrue === n ? up.whenFalse : up.whenTrue);
-      return isObjectLiteralExpression4(other) || this.literalKindOfNode(other) !== void 0;
+      if (isObjectLiteralExpression4(other) || this.literalKindOfNode(other) !== void 0)
+        return true;
+      const otherCall = this.rustSkipWrappers(other);
+      return isCallExpression6(otherCall) && this.rustBaseCallNamed(otherCall, _RustTranspiler.RUST_63I_DICT_READERS);
     }
     if (this.rustSafeDictDefaultUse(n) && isIdentifier3(this.rustSkipWrappers(up.arguments[0]))) {
       const head = this.rustSkipWrappers(up.arguments[0]);
@@ -88336,6 +88353,8 @@ _RustTranspiler.RUST_BORROWED_ANY_KEY_READERS = /^safe(?:Value|String(?:Lower|Up
 // ral-62n: base readers whose body answers a map (`isDictionary`) or the default: no list on any path without a list default
 _RustTranspiler.RUST_62N_DICT_READERS = /* @__PURE__ */ new Set(["safeDict", "safeDict2", "safeDictN"]);
 _RustTranspiler.RUST_NEVER_NULL_TEST_READERS = /* @__PURE__ */ new Set(["safeList", "safeList2", "safeListN", "safeDict", "safeDict2", "safeDictN"]);
+/** ral-63i: base map readers whose result prints as a `Value` (the other arm of a boxed ternary arm). */
+_RustTranspiler.RUST_63I_DICT_READERS = /* @__PURE__ */ new Set(["safeDict", "safeDict2", "safeDictN"]);
 _RustTranspiler.RUST_SELF_EXTEND = /* @__PURE__ */ new Set(["extend"]);
 _RustTranspiler.RUST_REUSE_SAFE_DICT = /* @__PURE__ */ new Set(["safeDict"]);
 _RustTranspiler.RUST_SAFE_LIST_SELF_DEFAULT = /* @__PURE__ */ new Set(["safeList"]);
