@@ -75237,7 +75237,7 @@ ${iden}}`;
     const indexReadUses = [];
     const aeoWriteUses = [];
     let listIndexWrites = 0;
-    const neverNullInit = !nilDeclared && allSlot === void 0 && init !== void 0 && (from === "dict" || from === "list") && this.rustContainerInitNeverNull(init, from === "list" ? "list" : "map") && this.rustBaseCallNamed(init, _RustTranspiler.RUST_NEVER_NULL_TEST_READERS) && this.rustEmptyContainerLiteral(init.arguments[init.arguments.length - 1], from);
+    const neverNullInit = !nilDeclared && allSlot === void 0 && init !== void 0 && (from === "dict" || from === "list") && (this.rustContainerInitNeverNull(init, from === "list" ? "list" : "map") && this.rustBaseCallNamed(init, _RustTranspiler.RUST_NEVER_NULL_TEST_READERS) && this.rustEmptyContainerLiteral(init.arguments[init.arguments.length - 1], from) || isCallExpression6(init) && this.rustBuiltReturnSourceKind(init) === from);
     const neverNullTests = [];
     const dictArrayTests = [];
     const dictReaderInit = !nilDeclared && from === "dict" && init !== void 0 && this.rustBaseCallNamed(init, _RustTranspiler.RUST_62N_DICT_READERS) && this.rust62nMapOrNullDefault(init);
