@@ -70763,6 +70763,9 @@ ${iden}}`;
       const formatted = this.rustStrNativeExpression(exp) ? void 0 : this.rustBoxedFormatInner(printed);
       if (formatted !== void 0)
         return `${idn}return Some(${formatted});`;
+      const optRead = this.rustStrNativeExpression(exp) ? void 0 : this.rustOptReaderCallText(exp);
+      if (optRead !== void 0)
+        return `${idn}return ${optRead};`;
       const suffix = this.rustStrNativeExpression(exp) ? "" : ".as_str().map(str::to_owned)";
       return `${idn}return ${printed}${suffix};`;
     }
