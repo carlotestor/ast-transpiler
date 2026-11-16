@@ -59504,6 +59504,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "okey";
     if ((kind === "str" || kind === "ostr") && this.rust64kBookKeyRead(n))
       return "bkey";
+    if (kind === "str" && this.rust65kTypedResultKey(n))
+      return "bkey";
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustUrlsKeyReadUse(n))
       return "okey";
     if (kind === "str" && this.rustStrLiteralTernaryLocal(n) && this.rustOkeyReadUse(n))
@@ -60740,13 +60742,26 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (this.rustDeclaredLocalEntry(base) !== void 0)
       return false;
     let self = false;
+    const recvSym = this.rustSymbolOf(base);
+    let reads = false;
+    let named = false;
     const visit = (x) => {
-      if (x.kind === SyntaxKind7.ThisKeyword || isFunctionLike(x))
+      if (isFunctionLike(x))
         self = true;
+      if (x.kind === SyntaxKind7.ThisKeyword)
+        reads = true;
+      if (isIdentifier3(x) && recvSym !== void 0 && this.rustSymbolOf(x) === recvSym)
+        named = true;
       x.forEachChild(visit);
     };
     visit(write.right);
-    return !self;
+    return !self && (!reads || !named && this.rust65kThisValueOk(write));
+  }
+  /** ral-65k: the flat helper write `x[k] = v` (rust63kLocalFlatHelperKey) whose value may read `this`: the key is a
+   *  `String` local initialised by a ternary of two string literals, so its lent box is the very `Str` the `Value` held. */
+  rust65kThisValueOk(write) {
+    const key = this.rustSkipWrappers(write.left.argumentExpression);
+    return isIdentifier3(key) && this.rustStrLiteralTernaryLocal(key);
   }
   /** ral-63k: `n` is the last key of a statement write `p[..][n] = v` whose chain root is a plain-Dict parameter. */
   rust63kDictParamNestedKey(n) {
@@ -64104,6 +64119,22 @@ ${ind}];`;
       up = up.parent;
     return isVariableDeclaration3(up.parent) && up.parent.initializer === up;
   }
+  /** ral-65k: `n` is the whole key of `r[n]` where `r` is a const typed `Tickers` / `OHLCVsBySymbol` result local read
+   *  through `KeyRead` (printTypedResultElemRead): both impls answer `read(&Value::Str(k))` with `key_read(k)`, so the
+   *  borrowed `String` key reads the very entry the `Value` key did. */
+  rust65kTypedResultKey(n) {
+    if (!isIdentifier3(n) || this.rustTestTierSource(n))
+      return false;
+    const read = n.parent;
+    if (read === void 0 || !isElementAccessExpression4(read) || read.argumentExpression !== n)
+      return false;
+    const recv = read.expression;
+    const declaration = isIdentifier3(recv) ? this.rustCallLocalOf(recv) : void 0;
+    if (declaration === void 0)
+      return false;
+    const elem = this.rustTypedResultElemKind(declaration.initializer);
+    return (elem === "map" || elem === "map2") && this.rust65kPlainStringKey(n) && this.rustTypedResultElemUse(recv, elem);
+  }
   /** ral-64k: the read of a `bkey` use: `get_value(&<book box>, k.as_str() | k.as_deref())`. */
   print64kBookKeyRead(node) {
     const key = node.argumentExpression;
@@ -65745,7 +65776,13 @@ ${i1}}`;
     const keyDecl = this.rustDeclaredNode(key);
     if (keyDecl === void 0 || !(isVariableDeclaration3(keyDecl) || isParameterDeclaration3(keyDecl)))
       return false;
-    return this.rustScalarLocalOf(key) === void 0;
+    const keyLocal = this.rustScalarLocalOf(key);
+    return keyLocal === void 0 || keyLocal.kind === "str" && this.rust65kPlainStringKey(key);
+  }
+  /** ral-65k: the checker types `k` as plain `string` (no `undefined` / `null` member). */
+  rust65kPlainStringKey(k) {
+    const type = this.getCheckedTypeOf(k);
+    return type !== void 0 && (type.flags & TypeFlags6.String) !== 0 && !(type.flags & TypeFlags6.Union);
   }
   /** `x` is read only: not written, deleted, updated or called. */
   rustTypedResultReadOnlyAt(x) {
@@ -65763,6 +65800,9 @@ ${i1}}`;
       return void 0;
     const name = super.printIdentifier(recv);
     const key = this.rustSkipWrappers(node.argumentExpression);
+    if ((elem === "map" || elem === "map2") && isIdentifier3(key) && this.rustScalarLocalOf(key)?.kind === "str") {
+      return `crate::value::KeyRead::key_read(&&${name}, ${super.printIdentifier(key)}.as_str())`;
+    }
     if (elem === "map" || elem === "map2")
       return `crate::value::KeyRead::read(&&${name}, &${this.printNode(key, 0).trim()})`;
     return `${name}.get(${this.printTypedResultIndex(key)}).map(crate::Value::from).unwrap_or_default()`;
