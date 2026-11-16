@@ -2651,6 +2651,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustI64IndexText(keyNode: any, place: string): string;
     /** A registered `i64` counter as a helper key (`Value::Int(i)`). zf: a read the ccxt write-back binds takes it too
      *  (`writeBackIndexedMutations` matches `get_value(&xs, &Value::Int(i))` and writes back at the same `Int` key). */
+    /** ral-62n: the boxed key text of a typed `String` / `Option<String>` local keying a borrowed index read. */
+    rust62nTypedStrKey(key: any): string | undefined;
     rustI64HelperKeyText(keyNode: any, read?: any): string | undefined;
     /** xb: a use of a registered counter in its own function, outside any scalar scope solve (decisions never see a trial counter). */
     rustI64CounterOperand(node: any): boolean;
@@ -3086,6 +3088,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustOptContainerLocals;
     /** ral-61n: optional map locals whose key-set uses (`Object.keys`, `in`) print off `x.as_deref()`. */
     private rustOptKeySetLocals;
+    static readonly RUST_62N_DICT_READERS: Set<string>;
+    private rust62nDictArrayTests;
+    /** ral-62n: the reader's default (after its key arguments) is absent, `undefined` or an object literal: a map default. */
+    rust62nMapOrNullDefault(call: any): boolean;
     static readonly RUST_NEVER_NULL_TEST_READERS: Set<string>;
     private rustNeverNullTests;
     /** ral-60n: the reader's default is the empty literal of the local's kind (`[]` for a list, `{}` for a map). */
@@ -3315,6 +3321,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  value, so the shared container is boxed there once (moved at its last use, else the Arc bump the `Value` paid). */
     rustLocalKeyPlace(place: any, n: any, castRecv?: boolean): boolean;
     rustOptReaderBoxUse(n: any, init: any): boolean;
+    /** ral-62n: the array literal is the default argument of a base `safeList*` reader, or the whole right side of a
+     *  `x = [..]` / `m[k] = [..]` statement (written into a place, not handed to a call's `Value` slot). */
+    rust62nListLiteralSink(list: any): boolean;
+    static readonly RUST_62N_LIST_READERS: Set<string>;
     /** ral-55h: `n` is a handler argument (not the `this` receiver slot) of `h.call (this, ..)` on an identifier `h` typed
      *  `any` (the by-name ws dispatch the ccxt build turns into `self.dispatch_ws_handler(&h, &[..])`). */
     rustWsDispatchCallArg(n: any): boolean;
