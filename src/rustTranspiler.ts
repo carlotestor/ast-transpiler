@@ -24205,7 +24205,11 @@ export class RustTranspiler extends BaseTranspiler {
         // ral-73d: a row of a list of unified records (`Trade[]`, `Position[]`, `Account[]`: interfaces declared in the base
         // `types.ts`) is a map row the same way: every producer of such a list answers maps (the parse* builders, the base tables)
         if (isNumericLiteral(key) || this.primitiveKindOfType(this.typeOfNodeIfAny(key)) === 'number') {
-            if (this.rust73dBaseRecordType(element)) return true;
+            // (a ral-tg record element handle off a typed `Vec<T>` result keeps its own `Option<&T>` form)
+            let top: any = init;
+            while (top.parent !== undefined && (isParenthesizedExpression(top.parent) || top.parent.kind === SyntaxKind.AsExpression)) top = top.parent;
+            const owner: any = isVariableDeclaration(top.parent) && top.parent.initializer === top ? top.parent : undefined;
+            if (this.rust73dBaseRecordType(element)) return owner === undefined || this.rustRecordElemLocal(owner) === undefined;
         }
         return this.primitiveKindOfType(element) === undefined && this.getChecker().getIndexTypeOfType(element, IndexKind.String) !== undefined
             && !this.getChecker().isArrayType(element);

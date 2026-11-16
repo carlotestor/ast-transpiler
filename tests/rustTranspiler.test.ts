@@ -23210,3 +23210,27 @@ describe('ral-73d: element reads of lists whose checker element type is a unifie
         expect(out).not.toContain('let mut trade: Value');
     });
 });
+
+describe('ral-73d: a typed Vec<record> result row keeps the ral-tg Option<&T> handle', () => {
+    const files: Record<string, string> = {
+        "ts/src/base/types.ts": "export interface Dict { [key: string]: any }\nexport type Strings = string[] | undefined;\nexport interface Position { symbol: string }\n",
+        "ts/src/base/Exchange.ts": "import type { Dict, Strings, Position } from './types.js';\nexport type { Dict, Strings, Position } from './types.js';\nexport default class Exchange {\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    safeNumber (o: any, k: any, d: any = undefined): any { return o[k]; }\n    async fetchPositions (symbols: Strings = undefined, params: Dict = {}): Promise<Position[]> {\n        return [];\n    }\n}\n",
+        "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    async pushOpen (params: Dict = {}) {\n        const positions = await this.fetchPositions (undefined, params);\n        const open = [];\n        for (let i = 0; i < positions.length; i++) {\n            const row = positions[i];\n            if (this.safeNumber (row, 'contracts') !== undefined) {\n                open.push (row);\n            }\n        }\n        return open;\n    }\n}\n"
+    };
+    let out = '';
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-73d2-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        const typed = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['fetchPositions'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        out = typed.transpileRustByPath (path.join (root, 'ts/src/venue.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test('guard: the row stays Option<&Position> and boxes through Value::from (never Value::Dict of the handle)', () => {
+        expect(out).toContain('let mut row: Option<&crate::types::Position> = positions.get(i as usize);');
+        expect(out).toContain('open.push(Value::from(row));');
+        expect(out).not.toContain('Value::Dict(row)');
+    });
+});
