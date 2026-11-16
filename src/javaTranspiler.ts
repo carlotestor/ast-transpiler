@@ -1941,6 +1941,11 @@ export class JavaTranspiler extends BaseTranspiler {
         if (arg.kind === SyntaxKind.NullKeyword) {
             return true;
         }
+        // ral-84j1: an element-read local the embedding layer declares with the parameter's json-box type
+        if (type === JAVA_NATIVE_RETURN_MAP_TYPE && isIdentifier(arg)
+            && String(this.javaDeclaredElementLocalType(arg, arg.text) ?? '').replace(/\s+/g, '').replace(/^java\.util\./, '') === 'Map<String,Object>') {
+            return true;
+        }
         // an object literal prints a `HashMap<String, Object>` instance, already a Map
         if (type === JAVA_NATIVE_RETURN_MAP_TYPE && isObjectLiteralExpression(arg)) {
             return true;
@@ -9553,15 +9558,21 @@ export class JavaTranspiler extends BaseTranspiler {
     // ral-84j1: `k` printed bare, bound to a `const k = xs[..]` element read (the element-read lane's
     // own shape, from the AST) that the embedding layer declares a Java String
     javaDeclaredStringElementLocal(node, printed: string): boolean {
+        return this.javaDeclaredElementLocalType(node, printed) !== undefined && this.javaDeclaredStringType(node);
+    }
+
+    // the declared Java type of a bare-printed `const x = xs[..]` element-read local, as the embedding
+    // layer publishes it (undefined for any other binding or when nothing is published)
+    javaDeclaredElementLocalType(node, printed: string): string | undefined {
         if (node === undefined || !isIdentifier(node) || printed !== node.text) {
-            return false;
+            return undefined;
         }
         const declaration: any = this.javaDeclarationOfIdentifier(node);
         if (declaration === undefined || !isVariableDeclaration(declaration) || declaration.initializer === undefined
             || !isElementAccessExpression(this.unwrapParenthesized(declaration.initializer))) {
-            return false;
+            return undefined;
         }
-        return this.javaDeclaredStringType(node);
+        return this.javaDeclaredTypeOf(node);
     }
 
     // `s.split (<literal>)[<int literal>]` on the native split: the helper's List branch answers

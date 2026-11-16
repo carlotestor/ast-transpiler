@@ -10474,3 +10474,43 @@ class T {
         });
     });
 });
+
+describe('ral-84j1: an element local declared Map<String, Object> is already the json-box argument', () => {
+    // javaNativeArgumentAlreadyTyped decides whether a fixed json-box parameter needs `(Map) (arg)`:
+    // a `const row = rows[i]` local the embedding layer declares Map<String, Object> does not
+    const input = `
+class T {
+    run (rows: any[], m: any) {
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const other = m;
+            this.use (row, other);
+        }
+    }
+    use (a: any, b: any) { return a; }
+}
+`;
+    test('element-read local declared Map is typed; a non-element local and an undeclared one are not', () => {
+        const printer: any = (transpiler as any).javaTranspiler;
+        const previous = printer.javaDeclaredLocalTypeResolver;
+        const seen: any = {};
+        const original = printer.javaNativeArgumentAlreadyTyped.bind(printer);
+        try {
+            printer.javaDeclaredLocalTypeResolver = (d: any) => (['row', 'other'].includes(d?.name?.text) ? 'java.util.Map<String, Object>' : undefined);
+            printer.javaNativeCallParameterTypes = () => ['java.util.Map<String, Object>', 'java.util.Map<String, Object>'];
+            printer.javaNativeArgumentAlreadyTyped = (arg: any, type: string) => {
+                const r = original(arg, type);
+                seen[arg.text] = r;
+                return r;
+            };
+            const out = transpiler.transpileJava(input).content;
+            expect(seen.row).toBe(true);
+            expect(seen.other).toBe(false);
+            expect(out).toContain('this.use(row, (java.util.Map<String, Object>) (other))');
+        } finally {
+            printer.javaDeclaredLocalTypeResolver = previous;
+            delete printer.javaNativeCallParameterTypes;
+            delete printer.javaNativeArgumentAlreadyTyped;
+        }
+    });
+});
