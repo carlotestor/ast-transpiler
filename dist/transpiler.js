@@ -54878,7 +54878,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         return true;
       const selfArg = isCallExpression6(up) && up.expression !== n && isPropertyAccessExpression3(up.expression) && (up.expression.expression.kind === SyntaxKind7.ThisKeyword || up.expression.expression.kind === SyntaxKind7.SuperKeyword);
       const literalSlot = up?.kind === SyntaxKind7.PropertyAssignment && up.initializer === n || this.rustDictWriteValue(n) || isArrayLiteralExpression4(up) && !(isBinaryExpression5(up.parent) && up.parent.left === up);
-      if (isCallExpression6(up) && up.expression !== n && !selfArg || up?.kind === SyntaxKind7.NewExpression)
+      const preciseOperand = isCallExpression6(up) && up.expression !== n && this.rustScalarPreciseCall(up) && this.rustLocalLastUse(n, declaration);
+      if (isCallExpression6(up) && up.expression !== n && !selfArg && !preciseOperand || up?.kind === SyntaxKind7.NewExpression)
         ok = false;
       else if (!selfArg && !literalSlot && !this.rustScalarBoxMoves(n, form, declaration))
         ok = false;
@@ -58445,7 +58446,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         continue;
       const trial = this.rustScalarDecisions.get(declaration);
       const form = this.rustScalarUseForms.get(n);
-      if ((trial === "str" || trial === "ostr") && (form === "box" || form === "xbox" || form === "err" || form === "key") && !this.rustScalarBoxMoves(n, form, declaration) && !(form === "key" && trial === "ostr") && !(form === "box" && trial === "ostr" && this.rustDeepBearerChainKey(n) === "later") && !(form === "box" && this.rustElementReadScalarKind(this.unwrapParens(declaration.initializer)) !== void 0 && this.rustScalarSelfArgBox(n)) && !(form === "box" && trial === "str" && !this.rustStrNoLend && this.rustScalarSelfArgBox(n) && this.rustFormatLendLocal(declaration)) && !(form === "box" && trial === "str" && !this.rustStrNoLend && (this.rustClockString(this.unwrapParens(declaration.initializer)) || this.rustIdString(this.unwrapParens(declaration.initializer))) && this.rustLendSlot(n)) && !(form === "box" && !this.rustStrNoLend && this.rustUdReaderStr(declaration.initializer) && this.rustLendSlot(n) && this.rustUdLent.add(declaration)))
+      if ((trial === "str" || trial === "ostr") && (form === "box" || form === "xbox" || form === "err" || form === "key") && !this.rustScalarBoxMoves(n, form, declaration) && !(form === "key" && trial === "ostr") && !(form === "box" && trial === "ostr" && this.rustDeepBearerChainKey(n) === "later") && !(form === "box" && this.rustElementReadScalarKind(this.unwrapParens(declaration.initializer)) !== void 0 && this.rustScalarSelfArgBox(n)) && !(form === "box" && trial === "str" && !this.rustStrNoLend && this.rustScalarSelfArgBox(n) && this.rustFormatLendLocal(declaration)) && !(form === "box" && trial === "str" && !this.rustStrNoLend && (this.rustClockString(this.unwrapParens(declaration.initializer)) || this.rustIdString(this.unwrapParens(declaration.initializer))) && this.rustLendSlot(n)) && !(form === "box" && !this.rustStrNoLend && this.rustUdReaderStr(declaration.initializer) && this.rustLendSlot(n) && this.rustUdLent.add(declaration)) && !(form === "box" && !this.rustScalarSelfArgBox(n) && this.rustLendSlot(n)) && !(form === "box" && isConditionalExpression4(n.parent) && n.parent.condition !== n && !this.rustLocalLastUse(n, declaration)) && !(form === "xbox" && isCallExpression6(n.parent) && Array.from(n.parent.arguments).includes(n) && this.rustScalarPreciseCall(n.parent)))
         return false;
       if (form === "concat" && (trial === "str" || trial === "ostr"))
         continue;
