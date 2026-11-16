@@ -54711,7 +54711,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (inner === void 0 || !_is.isPrefixUnaryExpression.call(void 0, inner) || inner.operator !== _ast.SyntaxKind.MinusToken || !_is.isIdentifier.call(void 0, inner.operand))
       return void 0;
     const kind = _optionalChain([this, 'access', _8621 => _8621.rustScalarLocalOf, 'call', _8622 => _8622(inner.operand), 'optionalAccess', _8623 => _8623.kind]);
-    return kind === "int" || kind === "oint" ? { kind, name: super.printIdentifier(inner.operand) } : void 0;
+    return kind === "int" || kind === "oint" || kind === "num" || kind === "onum" ? { kind, name: super.printIdentifier(inner.operand) } : void 0;
   }
   /** ral-65p: `n` is x's own operand of the `Math.min|max (x, y)` arm of a `x = (x === undefined) ? y : Math.min|max (x, y)`
    *  statement write that rust64pSelfMinTernaryKind types `oint`. */
@@ -59841,7 +59841,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "native";
     if (kind === "oint" && this.rust65pSelfMinOperand(n))
       return "native";
-    if ((kind === "int" || kind === "oint") && _optionalChain([n, 'access', _9090 => _9090.parent, 'optionalAccess', _9091 => _9091.kind]) === _ast.SyntaxKind.PrefixUnaryExpression && this.rust65pNegatedIntLocal(n.parent) !== void 0)
+    if ((kind === "int" || kind === "oint" || kind === "num" || kind === "onum") && _optionalChain([n, 'access', _9090 => _9090.parent, 'optionalAccess', _9091 => _9091.kind]) === _ast.SyntaxKind.PrefixUnaryExpression && this.rust65pNegatedIntLocal(n.parent) !== void 0)
       return "native";
     if ((kind === "int" || kind === "num" || kind === "oint" || kind === "onum") && this.rustMathMinMaxValueOperand(n) && this.rustInlineIfMatchInit(this.rustDeclaredNode(n)))
       return "box";
@@ -63683,7 +63683,7 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
     const wrap = (t) => own === kind ? t : optional && own === kind.slice(1) ? `Some(${t})` : void 0;
     const negated = this.rust65pNegatedIntLocal(node);
     if (negated !== void 0)
-      return wrap(negated.kind === "int" ? `(-${negated.name})` : `(if let Some(__v) = ${negated.name} { Some(-__v) } else { None })`);
+      return wrap(negated.kind === "int" || negated.kind === "num" ? `(-${negated.name})` : `(if let Some(__v) = ${negated.name} { Some(-__v) } else { None })`);
     if (this.rust51kLitModKind(node) !== void 0) {
       if (own !== kind)
         return void 0;
@@ -71397,7 +71397,7 @@ ${idn}}`;
       return idn + this.PrefixFixOperators[operator] + this.printNode(operand, 0);
     const negated = this.rust65pNegatedIntLocal(node);
     if (negated !== void 0)
-      return idn + (negated.kind === "int" ? `Value::Int(-${negated.name})` : `Value::from((if let Some(__v) = ${negated.name} { Some(-__v) } else { None }))`);
+      return idn + (negated.kind === "int" ? `Value::Int(-${negated.name})` : negated.kind === "num" ? `Value::Float(-${negated.name})` : `Value::from((if let Some(__v) = ${negated.name} { Some(-__v) } else { None }))`);
     const operandText = this.printNode(operand, 0);
     return idn + (_nullishCoalesce(_nullishCoalesce(this.foldNegateLiteral(operandText), () => ( this.printRustNativeNegate(operand, operandText))), () => ( `negate(&${operandText})`)));
   }
