@@ -41648,6 +41648,52 @@ function ccxtGoUnwrapTypeOnly(node) {
   }
   return current;
 }
+{
+  const listReads = GoTranspiler.prototype.goSafeListUseReadsTheList;
+  GoTranspiler.prototype.goSafeListUseReadsTheList = function(node) {
+    if (listReads.call(this, node)) {
+      return true;
+    }
+    const declaration = node?.kind === SyntaxKind5.Identifier ? this.goDeclarationOfIdentifier(node) : void 0;
+    if (declaration?.kind !== SyntaxKind5.VariableDeclaration || this.goSafeListLocalArgs(declaration.initializer) === void 0) {
+      return false;
+    }
+    const outer = ccxtGoSafeCollectionTypeOnlyWrapper(node);
+    const call = outer.parent;
+    return call?.kind === SyntaxKind5.CallExpression && call.arguments.length === 1 && call.arguments[0] === outer && call.expression?.kind === SyntaxKind5.PropertyAccessExpression && call.expression.expression?.kind === SyntaxKind5.ThisKeyword && call.expression.name?.text === "isEmpty";
+  };
+}
+{
+  const listUnbox = GoTranspiler.prototype.goSafeListLocalUnbox;
+  GoTranspiler.prototype.goSafeListLocalUnbox = function(declaration) {
+    const shipped = listUnbox.call(this, declaration);
+    if (shipped !== void 0 || declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier || declaration.parent?.parent?.kind !== SyntaxKind5.FirstStatement || this.goSafeListLocalArgs(declaration.initializer) === void 0 || declaration.initializer.arguments.length !== 2) {
+      return shipped;
+    }
+    let natives = 0;
+    const reads = (n) => {
+      const outer = ccxtGoSafeCollectionTypeOnlyWrapper(n);
+      const parent = outer.parent;
+      if (this.goIsNilComparisonOperand(outer, parent)) {
+        return true;
+      }
+      if (!this.goSafeListUseReadsTheList(n)) {
+        return false;
+      }
+      if (parent?.kind === SyntaxKind5.PropertyAccessExpression && parent.name?.text === "length" || parent?.kind === SyntaxKind5.ElementAccessExpression) {
+        natives++;
+      }
+      return true;
+    };
+    const typed = this.goDeclaredLocalTypeIfSafe(
+      declaration,
+      GO_SAFE_LIST_LOCAL_TYPE,
+      reads,
+      (n) => n.parent?.kind === SyntaxKind5.PropertyAccessExpression && n.parent.name === n || n.parent?.kind === SyntaxKind5.PropertyAssignment && n.parent.name === n
+    );
+    return typed !== void 0 && natives > 0 ? typed : void 0;
+  };
+}
 
 // src/javaTranspiler.ts
 init_esm_shims();
