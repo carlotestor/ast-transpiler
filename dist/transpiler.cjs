@@ -84842,7 +84842,7 @@ ${this.getIden(identation)}}`;
       return true;
     if (_is.isPropertyAccessExpression.call(void 0, inner) || _is.isElementAccessExpression.call(void 0, inner))
       return true;
-    return _is.isCallExpression.call(void 0, inner) && _is.isPropertyAccessExpression.call(void 0, inner.expression) && inner.expression.expression.kind === _ast.SyntaxKind.ThisKeyword && Array.from(inner.arguments).every((a) => this.literalKindOfNode(this.unwrapParens(a)) !== void 0 || _is.isIdentifier.call(void 0, this.unwrapParens(a)));
+    return _is.isCallExpression.call(void 0, inner) && _is.isPropertyAccessExpression.call(void 0, inner.expression) && inner.expression.expression.kind === _ast.SyntaxKind.ThisKeyword && Array.from(inner.arguments).every((a) => this.literalKindOfNode(this.unwrapParens(a)) !== void 0 || _is.isIdentifier.call(void 0, this.unwrapParens(a)) || _is.isPropertyAccessExpression.call(void 0, this.unwrapParens(a)) && this.unwrapParens(a).expression.kind === _ast.SyntaxKind.ThisKeyword);
   }
   /** The argument node lands in a per-venue string slot of its call. */
   rustVenueStrArgSlot(arg) {
