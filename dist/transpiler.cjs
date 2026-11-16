@@ -46103,7 +46103,8 @@ var JavaTranspiler = class extends BaseTranspiler {
       )})`;
     }
     if (type.kind === _ast.SyntaxKind.StringKeyword) {
-      return `((String)${this.printNode(node.expression, identation)})`;
+      const operand = this.printNode(node.expression, identation);
+      return this.javaDeclaredStringElementLocal(node.expression, operand) ? operand : `((String)${operand})`;
     }
     if (type.kind === _ast.SyntaxKind.ArrayType) {
       const element = type.elementType.kind === _ast.SyntaxKind.AnyKeyword ? "Object" : type.elementType.kind === _ast.SyntaxKind.StringKeyword ? "String" : void 0;
