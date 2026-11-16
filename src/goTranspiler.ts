@@ -35014,3 +35014,85 @@ GoTranspiler.prototype.goTernaryJoinDeclaration = function (statement, declarati
     const iden = this.getIden(identation);
     return `${iden}var ${name} ${parts.goType}\n${iden}if ${this.goStripControlClauseParens(condition)} {\n${iden}\t${name} = ${whenTrue}\n${iden}} else {\n${iden}\t${name} = ${whenFalse}\n${iden}}`;
 };
+
+// ------------------------- 87g1: nil-seed joins (round 87) -------------------------
+// R1: slot 0 of a statement `[ x, p ] = this.handlePostOnly (..)` that resolves to base Exchange.ts.
+// Its transpiled Go body returns `[]any{true, paramsOmitted}` / `[]any{false, params}`, so the slot is
+// always a Go bool and a nil-seeded x joins as a bool write (read as GetValueBool(h, 0, false)).
+function ccxtGo87PostOnlySlotWrite (goTranspiler, node) {
+    const pattern = node?.parent;
+    const assignment = pattern?.parent;
+    if ((pattern?.kind !== SyntaxKind.ArrayLiteralExpression) || (pattern.elements[0] !== node) || (pattern.elements.length !== 2)
+        || !pattern.elements.every ((e) => e.kind === SyntaxKind.Identifier)
+        || (assignment?.kind !== SyntaxKind.BinaryExpression) || (assignment.left !== pattern)
+        || (assignment.operatorToken.kind !== SyntaxKind.EqualsToken) || (assignment.parent?.kind !== SyntaxKind.ExpressionStatement)) {
+        return false;
+    }
+    const call = assignment.right;
+    const callee = call?.expression;
+    if ((call?.kind !== SyntaxKind.CallExpression) || (callee?.kind !== SyntaxKind.PropertyAccessExpression)
+        || (callee.expression?.kind !== SyntaxKind.ThisKeyword) || (callee.name?.text !== 'handlePostOnly')) {
+        return false;
+    }
+    let fileName = '';
+    try {
+        fileName = goTranspiler.getChecker ().getResolvedSignature (call)?.declaration?.resolve ()?.getSourceFile?.()?.fileName ?? '';
+    } catch (e) {
+        return false;
+    }
+    return CCXT_GO_ELEMENT_1_BASE_FILE.test (fileName);
+}
+
+const goNilValueBoolSlotWrite87 = GoNilDeclaredValueAssignmentScan.prototype.boolSlotWrite;
+GoNilDeclaredValueAssignmentScan.prototype.boolSlotWrite = function (node) {
+    const shipped = goNilValueBoolSlotWrite87.call (this, node);
+    if ((shipped !== undefined) || this.inNestedFunction (node) || !ccxtGo87PostOnlySlotWrite (this.goTranspiler, node)) {
+        return shipped;
+    }
+    this.sawWrite = true;
+    if ((this.joinType !== undefined) && (this.joinType !== 'bool')) {
+        this.rejected = true;
+        return false;
+    }
+    this.joinType = 'bool';
+    return true;
+};
+
+// the nil-seeded declaration of `target` when the value join types it bool (the same proof the declaration printer uses)
+function ccxtGo87BoolJoinDeclaration (goTranspiler, target) {
+    let declaration;
+    try {
+        declaration = goTranspiler.getChecker ().getSymbolAtLocation (target)?.valueDeclaration?.resolve ();
+    } catch (e) {
+        return undefined;
+    }
+    if ((declaration?.kind !== SyntaxKind.VariableDeclaration) || !ts.isIdentifier (declaration.name)
+        || !isNilDeclaredInitializer (declaration.initializer) || (declaration.parent?.parent?.kind !== SyntaxKind.VariableStatement)
+        || (declaration.parent.declarations.length !== 1) || (NIL_DECLARED_GUARD_NAMES.indexOf (declaration.name.text) >= 0)) {
+        return undefined;
+    }
+    goTranspiler.ccxtGo87BoolJoins ??= new WeakMap ();
+    const cache = goTranspiler.ccxtGo87BoolJoins;
+    if (!cache.has (declaration)) {
+        cache.set (declaration, false);
+        const scan = new GoNilDeclaredValueAssignmentScan (goTranspiler, declaration, declaration.name.text);
+        cache.set (declaration, scan.run () && (scan.joinType === 'bool')
+            && !goTranspiler.goTypeNameIsShadowed?.(goTranspiler.goEnclosingFunction (declaration), 'bool'));
+    }
+    return cache.get (declaration) ? declaration : undefined;
+}
+
+const goPrintCustomBinary87 = GoTranspiler.prototype.printCustomBinaryExpressionIfAny;
+GoTranspiler.prototype.printCustomBinaryExpressionIfAny = function (node, identation) {
+    const printed = goPrintCustomBinary87.call (this, node, identation);
+    const target = node?.left?.elements?.[0];
+    if ((typeof printed !== 'string') || (target === undefined) || !ccxtGo87PostOnlySlotWrite (this, target)
+        || (ccxtGo87BoolJoinDeclaration (this, target) === undefined)) {
+        return printed;
+    }
+    const name = this.printNode (target, 0);
+    return printed.split ('\n').map ((line) => {
+        const m = /^(\s*)(\w+) = GetValue\((\w+), 0\)$/.exec (line);
+        return ((m !== null) && (m[2] === name)) ? (m[1] + name + ' = GetValueBool(' + m[3] + ', 0, false)') : line;
+    }).join ('\n');
+};

@@ -15014,3 +15014,47 @@ describe('84g7 R2 int64 pointer arm next to an int arm', () => {
         expect(out).toContain('var since *int64 = GetArgInt64Ptr(optionalArgs, 0, nil)');
     });
 });
+
+describe('87g1 nil-seed joins', () => {
+    const BASE = 'export type Dict = { [key: string]: any };\n'
+        + 'export type Str = string | undefined;\n'
+        + 'export default class Exchange {\n'
+        + '    handlePostOnly (a: boolean, b: boolean, p: Dict = {}): [ boolean, Dict ] { return [ false, p ]; }\n'
+        + '    safeString (a: any, k: any, d: any = undefined): Str { return a; }\n'
+        + '}\n';
+    const run = (members: string): string => {
+        const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'g87-'));
+        try {
+            fs.mkdirSync(path.join(tmp, 'ts/src/base'), { recursive: true });
+            fs.writeFileSync(path.join(tmp, 'ts/src/base/Exchange.ts'), BASE);
+            const file = path.join(tmp, 'ts/src/x.ts');
+            fs.writeFileSync(file, "import Exchange, { Dict, Str } from './base/Exchange.js';\ntype Bool = boolean | undefined;\nclass X extends Exchange {\n" + members + '}\n');
+            const t = new Transpiler({ verbose: false, go: { parser: { NUM_LINES_END_FILE: 0 } } });
+            installCcxtGoHooks(t.goTranspiler);
+            return t.transpileGoByPath(file).content;
+        } finally {
+            fs.rmSync(tmp, { recursive: true, force: true });
+        }
+    };
+    test('R1: a nil-seeded handlePostOnly slot 0 joins as bool and reads natively', () => {
+        const out = run('    f (type: string, params: Dict = {}): any {\n'
+            + '        const request: Dict = {};\n'
+            + '        let postOnly: Bool = undefined;\n'
+            + "        [ postOnly, params ] = this.handlePostOnly (type === 'market', false, params);\n"
+            + '        if (postOnly) {\n'
+            + "            request['postOnly'] = true;\n"
+            + '        }\n'
+            + '        return request;\n'
+            + '    }\n');
+        expect(out).toContain('var postOnly bool\n');
+        expect(out).toContain('\tif postOnly {\n');
+    });
+    test('R1: a nil test on the slot keeps the box', () => {
+        const out = run('    f (type: string, params: Dict = {}): any {\n'
+            + '        let postOnly: Bool = undefined;\n'
+            + "        [ postOnly, params ] = this.handlePostOnly (type === 'market', false, params);\n"
+            + '        return (postOnly === undefined);\n'
+            + '    }\n');
+        expect(out).toContain('var postOnly any = nil');
+    });
+});
