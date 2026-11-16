@@ -6068,14 +6068,14 @@ export class RustTranspiler extends BaseTranspiler {
     /** ral-84b: the append `.. + x` / `t += x` writes a local the printer already holds as a native string (a scalar
      *  `String` / `Option<String>` decision or the url-builder `String` let): the append prints the same `format!` operand
      *  whatever this local's type, so typing it retypes nothing. */
-    rust84bAppendTargetString(parent: any): boolean {
-        let assign: any = parent;
+    rust84bAppendTargetString(parent): boolean {
+        let assign = parent;
         while (assign !== undefined && !(isBinaryExpression(assign) && rustIsAssignmentOperator(assign.operatorToken.kind))) {
             if (!(isBinaryExpression(assign) && assign.operatorToken.kind === SyntaxKind.PlusToken) && !isParenthesizedExpression(assign)) return false;
             assign = assign.parent;
         }
         if (assign === undefined || !isIdentifier(assign.left)) return false;
-        const target: any = this.rustDeclaredNode(assign.left);
+        const target = this.rustDeclaredNode(assign.left);
         if (target === undefined || !isVariableDeclaration(target)) return false;
         const kind = this.rustScalarDecisions.get(target);
         return kind === 'str' || kind === 'ostr';
@@ -13369,7 +13369,7 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     /** ral-84b: a nil-declared `let` whose current scalar decision (same scope solve) is a string kind. */
-    rust84bStrNilPartner(d: any): boolean {
+    rust84bStrNilPartner(d): boolean {
         const kind = this.rustScalarDecisions.get(d);
         return kind === 'ostr' || kind === 'str';
     }
@@ -30180,14 +30180,6 @@ export class RustTranspiler extends BaseTranspiler {
                     handOffs++;
                     return true;
                 }
-                // ral-84b: an object-literal value before the list's later pushes (aster `{ 'params': subscriptionArgs }` then a push
-                // loop) shares the list there: `Value::Arr(x.clone())` is the Arc bump the boxed `x.clone()` made, and each later push
-                // copies on write exactly as the boxed `make_mut` push did (the literal keeps the list as it was when it was built)
-                if (up?.kind === SyntaxKind.PropertyAssignment && up.initializer === n && short(n) && this.rust84bLiteralValueShared(n, declaration)) {
-                    boxes.push([n, 'clone']);
-                    handOffs++;
-                    return true;
-                }
                 // ral-56s: copied whole into another nil-declared `Value` local (`info = x`, statement): the `Value` box was
                 // `x.clone()` (an Arc bump); `Value::Arr(x.clone())` is the same bump (later writes to `x` copy-on-write as before)
                 if (this.rustBuiltListValueAliasWrite(n, declaration) && short(n)) {
@@ -30326,18 +30318,6 @@ export class RustTranspiler extends BaseTranspiler {
             }
         }
         return true;
-    }
-
-    /** ral-84b: the literal value `n` of a built list sits in the list's own block nesting (no loop or closure between the
-     *  declaration and it), and the object literal holding it is not itself the list's own write. */
-    rust84bLiteralValueShared(node: any, declaration: any): boolean {
-        if (this.rustTestTierSource(node)) return false;
-        for (let up: any = node.parent; up !== undefined && !(up.pos <= declaration.pos && declaration.end <= up.end); up = up.parent) {
-            if (isFunctionLike(up) || up.kind === SyntaxKind.ForStatement || up.kind === SyntaxKind.ForOfStatement || up.kind === SyntaxKind.ForInStatement
-                || up.kind === SyntaxKind.WhileStatement || up.kind === SyntaxKind.DoStatement) return false;
-        }
-        const literal: any = node.parent?.parent;
-        return isObjectLiteralExpression(literal) && !(isBinaryExpression(literal.parent) && isIdentifier(literal.parent.left) && this.rustIdentifierRefersToDeclaration(literal.parent.left, declaration));
     }
 
     /** `this.inArray (needle, x)` (haystack), `this.arrayConcat (a, b)` (either operand) on the base helpers, or the row of a
