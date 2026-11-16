@@ -31388,6 +31388,18 @@ export class RustTranspiler extends BaseTranspiler {
         if (!isVariableDeclaration(declaration)) return false;
         const init: any = this.rustSkipWrappers(declaration.initializer);
         if (init !== undefined && this.rustOmitOfDict(init) && this.rustOmitDeclLineFits(declaration)) return true;
+        // ral-80g R2: `c ? this.omit (p, k) : p` where every arm answers a map: an omit of a proven map, an always-map base
+        // helper, or the proven-map params parameter itself (rustProvenMapParam)
+        if (init !== undefined && isConditionalExpression(init) && this.rustDictTernaryInit(init)) {
+            const arm = (x: any): boolean => {
+                const a: any = this.rustSkipWrappers(x);
+                if (a !== undefined && isCallExpression(a)) return this.rustBaseCallNamed(a, RustTranspiler.RUST_ALWAYS_MAP_HELPERS) || (this.rustOmitOfDict(a) && this.rustOmitLineFits(a));
+                if (a === undefined || !isIdentifier(a)) return false;
+                const d: any = this.rustDeclarationOfIdentifier(a);
+                return d !== undefined && d !== a && isParameterDeclaration(d) && this.rustProvenMapParam(d) && !this.rustLocalIsReassigned(d, String(a.text));
+            };
+            return arm(init.whenTrue) && arm(init.whenFalse) && String(declaration.initializer.getText()).split('\n')[0].length <= 240;
+        }
         return init !== undefined && (this.rustBaseCallNamed(init, RustTranspiler.RUST_ALWAYS_MAP_HELPERS) || (this.rustOmitOfDict(init) && this.rustOmitLineFits(init)))
             && String(declaration.initializer.getText()).split('\n')[0].length <= 240;
     }
