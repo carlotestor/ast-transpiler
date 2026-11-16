@@ -513,6 +513,8 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  read, checker `string | undefined`): under a `: Str` signature it is the payload itself, so the method prints
      *  `-> Option<String>` and its callers' string locals read it natively. Decided from the AST and the local's own rule. */
     rust76aOptStrReturnLocal(n: any, fn: any): boolean;
+    /** ral-76a S1: the method prints `-> Option<String>` only because a return is its own reader local (rust76aOptStrReturnLocal). */
+    rust76aOptStrReturnMethod(fn: any): boolean;
     rust56xStrReturnText(exp: any, fn: any): string | undefined;
     /** ral-56x K1: a `+` partner that is itself a concat (or a `.toString()`) the printer already prints as a boxed `Value::Str(format!(..))`
      *  (always a `Str`, never `Null`), so the optional string joins the same `format!` with its `as_deref().unwrap_or("null")` text. */

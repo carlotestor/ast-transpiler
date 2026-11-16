@@ -55076,7 +55076,40 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     if (this.rustVenueKeptStrArm(fn))
       return false;
-    return this.rustScalarLocalOf(n)?.kind === "ostr";
+    if (this.rustScalarLocalOf(n)?.kind !== "ostr")
+      return false;
+    let ok = true;
+    const visit = (m) => {
+      if (!ok || m !== fn.body && isFunctionLike(m))
+        return;
+      if (isReturnStatement4(m)) {
+        const e = this.unwrapParensNode(m.expression);
+        if (e !== void 0 && isIdentifier3(e) && e.text !== "undefined" && e !== n && this.rustScalarLocalOf(e)?.kind !== "ostr") {
+          ok = false;
+          return;
+        }
+      }
+      m.forEachChild(visit);
+    };
+    fn.body?.forEachChild(visit);
+    return ok;
+  }
+  /** ral-76a S1: the method prints `-> Option<String>` only because a return is its own reader local (rust76aOptStrReturnLocal). */
+  rust76aOptStrReturnMethod(fn) {
+    if (fn === void 0 || fn.kind !== SyntaxKind7.MethodDeclaration || fn.body === void 0 || this.rustNativeStrReturnKind(fn) !== "str")
+      return false;
+    let hit = false;
+    const visit = (n) => {
+      if (hit || n !== fn.body && isFunctionLike(n))
+        return;
+      if (isReturnStatement4(n) && this.rust76aOptStrReturnLocal(this.unwrapParensNode(n.expression), fn)) {
+        hit = true;
+        return;
+      }
+      n.forEachChild(visit);
+    };
+    fn.body.forEachChild(visit);
+    return hit;
   }
   rust56xStrReturnText(exp, fn) {
     if (this.rust76aOptStrReturnLocal(exp, fn))
@@ -65849,6 +65882,8 @@ ${classMethods}
     if (ret === "ostr" && this.rustBaseNativeStrMethod(node))
       ret = "keptostr";
     if (ret === "ostr" && this.rustVenueKeptStrArm(node))
+      ret = "keptostr";
+    if (ret === "ostr" && this.rust76aOptStrReturnMethod(node))
       ret = "keptostr";
     if (ret === "struct" && returnType === "crate::types::Market" && isMethodDeclaration5(node) && isIdentifier3(node.name) && String(node.name.text) !== "safeMarket")
       ret = "keptstruct";
