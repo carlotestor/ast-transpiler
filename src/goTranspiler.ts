@@ -34125,3 +34125,56 @@ function ccxtGoUnwrapTypeOnly (node) {
     }
     return current;
 }
+// D. `this.isEmpty (xs)` on a list local: BaseExchange.IsEmpty answers true for the nil box, a nil []any and an
+// empty []any alike (reflect length 0), so the typed slice gives the same answer as the box, defaulted or not.
+{
+    const listReads = GoTranspiler.prototype.goSafeListUseReadsTheList;
+    GoTranspiler.prototype.goSafeListUseReadsTheList = function (node) {
+        if (listReads.call(this, node)) {
+            return true;
+        }
+        const declaration: any = (node?.kind === SyntaxKind.Identifier) ? this.goDeclarationOfIdentifier(node) : undefined;
+        if ((declaration?.kind !== SyntaxKind.VariableDeclaration) || (this.goSafeListLocalArgs(declaration.initializer) === undefined)) {
+            return false; // only a safeList-seeded local: another producer would need a conversion at the declaration
+        }
+        const outer = ccxtGoSafeCollectionTypeOnlyWrapper(node);
+        const call: any = outer.parent;
+        return (call?.kind === SyntaxKind.CallExpression) && (call.arguments.length === 1) && (call.arguments[0] === outer)
+            && (call.expression?.kind === SyntaxKind.PropertyAccessExpression) && (call.expression.expression?.kind === SyntaxKind.ThisKeyword)
+            && (call.expression.name?.text === 'isEmpty');
+    };
+}
+// E. `const xs = this.safeList (c, k)` (no default) read as a list (length, element, accessor index, isEmpty) and
+// compared with undefined: SafeListTyped answers nil exactly where the box held the untyped nil, and the typed
+// local's `xs == nil` is the native slice test with that same answer. Every other use keeps the box, and at least
+// one native read (length / element) is required.
+{
+    const listUnbox = GoTranspiler.prototype.goSafeListLocalUnbox;
+    GoTranspiler.prototype.goSafeListLocalUnbox = function (declaration) {
+        const shipped = listUnbox.call(this, declaration);
+        if ((shipped !== undefined) || (declaration?.kind !== SyntaxKind.VariableDeclaration) || (declaration.name?.kind !== SyntaxKind.Identifier)
+            || (declaration.parent?.parent?.kind !== SyntaxKind.FirstStatement) || (this.goSafeListLocalArgs(declaration.initializer) === undefined)
+            || (declaration.initializer.arguments.length !== 2)) {
+            return shipped;
+        }
+        let natives = 0;
+        const reads = (n: any): boolean => {
+            const outer = ccxtGoSafeCollectionTypeOnlyWrapper(n);
+            const parent: any = outer.parent;
+            if (this.goIsNilComparisonOperand(outer, parent)) {
+                return true;
+            }
+            if (!this.goSafeListUseReadsTheList(n)) {
+                return false;
+            }
+            if (((parent?.kind === SyntaxKind.PropertyAccessExpression) && (parent.name?.text === 'length')) || (parent?.kind === SyntaxKind.ElementAccessExpression)) {
+                natives++;
+            }
+            return true;
+        };
+        const typed = this.goDeclaredLocalTypeIfSafe(declaration, GO_SAFE_LIST_LOCAL_TYPE, reads,
+            (n: any) => ((n.parent?.kind === SyntaxKind.PropertyAccessExpression) && (n.parent.name === n))
+                || ((n.parent?.kind === SyntaxKind.PropertyAssignment) && (n.parent.name === n)));
+        return ((typed !== undefined) && (natives > 0)) ? typed : undefined;
+    };
+}

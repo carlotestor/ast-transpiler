@@ -14405,4 +14405,16 @@ describe ('ral-84g2 reader-result locals', () => {
         // another rebinding keeps the box
         expect(run(body.replace('this.arrayConcat (more, xs)', 'more'), 'ts/src')).not.toContain('var xs []any');
     });
+    test('D/E: a no-default list local nil-tested, isEmpty-tested and read natively is a []any', () => {
+        const pre = '    isEmpty (a: any): boolean { return true; }\n';
+        const body = pre + '    f (raw: Dict): any {\n        const xs: Dict[] = this.safeList (raw, "fees");\n        let n = 0;\n        if ((xs !== undefined) && !this.isEmpty (xs)) {\n            for (let i = 0; i < xs.length; i++) {\n                n = n + 1;\n            }\n        }\n        return n;\n    }\n';
+        const out = run(body, 'ts/src/pro');
+        expect(out).toContain('var xs []any = SafeListTyped(raw, "fees")');
+        expect(out).toContain('xs != nil');
+        expect(out).toContain('len(xs)');
+        // without a native read the local keeps the box
+        expect(run(body.replace('xs.length', '3'), 'ts/src/pro')).not.toContain('var xs []any');
+        // a copy out keeps the box
+        expect(run(body.replace('return n;', 'const ys = xs;\n        return [ n, ys ];'), 'ts/src/pro')).not.toContain('var xs []any');
+    });
 });
