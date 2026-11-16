@@ -62699,7 +62699,8 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
         const l = this.unwrapParens(inner.left);
         const r = this.unwrapParens(inner.right);
         const lit = (n2) => this.literalKindOfNode(n2) === "string" || this.literalKindOfNode(n2) === "null";
-        return leaf(l) && lit(r) || lit(l) && leaf(r);
+        const boolLit = (n2) => this.literalKindOfNode(n2) === "boolean";
+        return leaf(l) && (lit(r) || boolLit(r)) || (lit(l) || boolLit(l)) && leaf(r);
       }
       return _is.isBinaryExpression.call(void 0, inner) && this.isLogicalOp(inner.operatorToken.kind) && leaf(inner.left) && leaf(inner.right);
     };
