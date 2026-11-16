@@ -14354,3 +14354,24 @@ describe ('ral-77g8 ws struct parser results', () => {
         expect (out).toContain ('defaultType = *this.SafeString(this.Options, "defaultType", defaultType)');
     });
 });
+
+describe('ral-77g4: omitZero results are *string locals', () => {
+    test('a local initialised by this.omitZero (this.safeString (..)) prints *string and reads natively', () => {
+        const x = new Transpiler({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        installCcxtGoLocalTypes (x.goTranspiler);
+        const ts = 'class X {\n'
+            + '    safeString (o: any, k: string): string | undefined { return o[k]; }\n'
+            + '    omitZero (s: string | undefined): string | undefined { return s; }\n'
+            + '    f (order: any) {\n'
+            + '        const remaining = this.omitZero (this.safeString (order, \'remaining\'));\n'
+            + '        if (remaining !== undefined) {\n'
+            + '            return remaining;\n'
+            + '        }\n'
+            + '        return undefined;\n'
+            + '    }\n'
+            + '}\n';
+        const out = x.transpileGo (ts).content;
+        expect (out).toContain ('var remaining *string = this.OmitZero(this.SafeString(order, "remaining"))');
+        expect (out).not.toContain ('var remaining any');
+    });
+});
