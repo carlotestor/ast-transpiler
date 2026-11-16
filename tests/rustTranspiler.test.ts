@@ -24243,3 +24243,17 @@ describe('ral-84e: a ternary of an optional market record field and undefined is
         expect(out).toContain('let mut symbolResolved: Value');
     });
 });
+describe('ral-84e: a boolean ternary whose arms are native equality tests is a bool', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    options: Dict = {};\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeBool (o: any, k: any, d: any = undefined): boolean { return o; }\n    hold (m: any): any { return m; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('lighter parseTrade isMaker', () => {
+        const out = write ('ral-84e-b1', "    p (t: Dict) {\n        const trade = this.hold (t);\n        const side = this.safeString (trade, 'side');\n        const isMakerAsk = this.safeBool (trade, 'is_maker_ask');\n        const isMaker = (side === 'sell') ? (isMakerAsk === true) : (isMakerAsk === false);\n        return { 'takerOrMaker': isMaker ? 'maker' : 'taker' };\n    }\n");
+        expect(out).toContain('let mut isMaker: bool = (if (side.as_deref() == Some(\"sell\")) { (isMakerAsk == Some(true)) } else { (isMakerAsk == Some(false)) });');
+    });
+});

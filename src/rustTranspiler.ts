@@ -11476,8 +11476,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (isIdentifier(node)) return this.rustScalarIdentifierKind(node);
         if (isConditionalExpression(node)) {
             const narrowed = this.rustOptParamDefault(node)?.kind; if (narrowed !== undefined) return narrowed;
-            const a = this.rustScalarValueKind(node.whenTrue, true) ?? this.rustOptParamKind(node.whenTrue);
-            const b = this.rustScalarValueKind(node.whenFalse, true) ?? this.rustOptParamKind(node.whenFalse);
+            const a = this.rustScalarValueKind(node.whenTrue, true) ?? this.rustOptParamKind(node.whenTrue) ?? this.rust84eBoolArmKind(node.whenTrue);
+            const b = this.rustScalarValueKind(node.whenFalse, true) ?? this.rustOptParamKind(node.whenFalse) ?? this.rust84eBoolArmKind(node.whenFalse);
             const joined = this.rustScalarJoinKinds(a, b, true);
             return joined === 'null' ? undefined : joined;
         }
@@ -16130,6 +16130,17 @@ export class RustTranspiler extends BaseTranspiler {
         if (kind !== 'struct') return undefined;
         const value = this.printTypedMarketValue(declaration.initializer);
         return value === undefined ? undefined : `${indent}let mut ${varName}: crate::types::Market = ${value}`;
+    }
+
+    /** ral-84e: an equality arm (`m['inverse'] === true`, `t === 'inverse'`) of a ternary initializer of a `boolean` local whose
+     *  native text exists: the arm prints that `bool` (rustScalarNativeText's ternary arm), the very `Bool` its box held. */
+    rust84eBoolArmKind(arm: any): string | undefined {
+        const node: any = this.unwrapParens(arm);
+        if (node === undefined || !isBinaryExpression(node) || !this.isEqualityOp(node.operatorToken.kind) || !this.rustTernaryArm(node)) return undefined;
+        let top: any = node;
+        while (isParenthesizedExpression(top.parent) || (isConditionalExpression(top.parent) && top.parent.condition !== top)) top = top.parent;
+        if (!isVariableDeclaration(top.parent) || !isIdentifier(top.parent.name) || this.primitiveKindOfType(this.typeOfNodeIfAny(top.parent.name)) !== 'boolean') return undefined;
+        return this.nativeEqualityText(node) !== undefined ? 'bool' : undefined;
     }
 
     /** A `const x = <comparison>` initializer whose native text exists and whose local's checker type is `boolean`. */
