@@ -34096,3 +34096,83 @@ GoTranspiler.prototype.goDeclaredLocalTypeIfSafe = function (declaration, goType
     return goType;
 };
 // ===== ral-84g8 (end) =====
+// ===== ral-84g8 R2 (begin): inherited string-mapper results =====
+// `const status = this.parseOrderStatus (..)` in a pro / derived class whose callee lives in the
+// REST parent class: ccxtGoFamilyCallType only looks at the enclosing class, so the local stays
+// `any`. The checker's resolved declaration is the method the Go call promotes to (the pro struct
+// embeds the REST one); when ccxtGoFamilyMethodReturnType proves that method's emitted signature is
+// `*string`, the local holds exactly that pointer.
+function goInheritedFamilyCallType84g8(goTranspiler, initializer, printedValue: string): string | undefined {
+    const callee: any = initializer?.expression;
+    if ((initializer?.kind !== SyntaxKind.CallExpression) || (initializer.questionDotToken !== undefined)
+        || (callee?.kind !== SyntaxKind.PropertyAccessExpression) || (callee.expression?.kind !== SyntaxKind.ThisKeyword)
+        || !CCXT_GO_FAMILY_METHOD.test(String(callee.name?.text ?? ''))) {
+        return undefined;
+    }
+    const name = callee.name.text as string;
+    const value = (printedValue ?? '').trim();
+    const open = value.indexOf('(');
+    if ((open <= 0) || !goTranspiler.isWholePrintedCall(value, open)
+        || (value.substring(0, open) !== 'this.' + name.charAt(0).toUpperCase() + name.slice(1))) {
+        return undefined;
+    }
+    let resolved: any = undefined;
+    try {
+        resolved = goTranspiler.getChecker().getResolvedSignature(initializer)?.declaration?.resolve();
+    } catch (e) {
+        return undefined;
+    }
+    const owner: any = resolved?.parent;
+    if ((resolved?.kind !== SyntaxKind.MethodDeclaration) || (owner?.kind !== SyntaxKind.ClassDeclaration)
+        || (owner === enclosingClassDeclaration(initializer)) || (['Exchange', 'BaseExchange'].indexOf(String(owner.name?.text ?? '')) >= 0)) {
+        return undefined;
+    }
+    return (ccxtGoFamilyMethodReturnType(goTranspiler, resolved) === CCXT_GO_FAMILY_RETURN_TYPE) ? CCXT_GO_FAMILY_RETURN_TYPE : undefined;
+}
+const goTypeOfInitializerBase84g8R2 = GoTranspiler.prototype.goTypeOfInitializer;
+GoTranspiler.prototype.goTypeOfInitializer = function (initializer, printedValue: string) {
+    const known = goTypeOfInitializerBase84g8R2.call(this, initializer, printedValue);
+    return (known !== undefined) ? known : goInheritedFamilyCallType84g8(this, initializer, printedValue);
+};
+// ===== ral-84g8 R2 (end) =====
+// ===== ral-84g8 R3 (begin): inherited annotated-method results =====
+// Same shape as R2 for any other venue method the parent class's Go signature already names
+// (`createSubaccount` -> string, a REST `editOrderRequest` -> map[string]any): the signature comes
+// from ccxtGoFamilyMethodReturnType (printMethodDefinition is rewritten with exactly that
+// predicate), so the child's local holds that type. Only plain value types are taken; the usual
+// write / use scan of getGoLocalType still runs on the result.
+const GO_84G8_INHERITED_RESULT_TYPES = [ 'string', '*string', 'map[string]any' ];
+function goInheritedAnnotatedCallType84g8(goTranspiler, initializer, printedValue: string): string | undefined {
+    const callee: any = initializer?.expression;
+    if ((initializer?.kind !== SyntaxKind.CallExpression) || (initializer.questionDotToken !== undefined)
+        || (callee?.kind !== SyntaxKind.PropertyAccessExpression) || (callee.expression?.kind !== SyntaxKind.ThisKeyword)
+        || (typeof callee.name?.text !== 'string') || CCXT_GO_FAMILY_METHOD.test(callee.name.text)) {
+        return undefined;
+    }
+    const name = callee.name.text as string;
+    const value = (printedValue ?? '').trim();
+    const open = value.indexOf('(');
+    if ((open <= 0) || !goTranspiler.isWholePrintedCall(value, open)
+        || (value.substring(0, open) !== 'this.' + name.charAt(0).toUpperCase() + name.slice(1))) {
+        return undefined;
+    }
+    let resolved: any = undefined;
+    try {
+        resolved = goTranspiler.getChecker().getResolvedSignature(initializer)?.declaration?.resolve();
+    } catch (e) {
+        return undefined;
+    }
+    const owner: any = resolved?.parent;
+    if ((resolved?.kind !== SyntaxKind.MethodDeclaration) || (owner?.kind !== SyntaxKind.ClassDeclaration)
+        || (owner === enclosingClassDeclaration(initializer)) || (['Exchange', 'BaseExchange', 'PredictionExchange'].indexOf(String(owner.name?.text ?? '')) >= 0)) {
+        return undefined;
+    }
+    const goType = ccxtGoFamilyMethodReturnType(goTranspiler, resolved);
+    return (GO_84G8_INHERITED_RESULT_TYPES.indexOf(goType) >= 0) ? goType : undefined;
+}
+const goTypeOfInitializerBase84g8R3 = GoTranspiler.prototype.goTypeOfInitializer;
+GoTranspiler.prototype.goTypeOfInitializer = function (initializer, printedValue: string) {
+    const known = goTypeOfInitializerBase84g8R3.call(this, initializer, printedValue);
+    return (known !== undefined) ? known : goInheritedAnnotatedCallType84g8(this, initializer, printedValue);
+};
+// ===== ral-84g8 R3 (end) =====
