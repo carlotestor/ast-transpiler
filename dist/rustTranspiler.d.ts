@@ -4032,6 +4032,12 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  element at the slot's index is a cache: the slot holds that cache. Any other matching resolve (another kind,
      *  a value read through a helper parameter, a Null settle, an unknown hash) leaves the slot `Value`. */
     rustWsTupleCacheSlot(element: any): boolean;
+    /** ral-84a: a slot of a proven watch tuple whose element at the slot's index is checker-typed `string` in every
+     *  matching resolve (the ohlcv `[ symbol, timeframe, stored ]` tuples): the slot holds that string or Null. */
+    rustWsTupleStrSlot(element: any): boolean;
+    rustWsTupleSlotProof(element: any, want: 'cache' | 'str'): boolean;
+    /** ral-84a: a resolved tuple element the checker types `string` (`market['symbol']`, a `Str` reader result). */
+    rustWsResolvedStr(x: any): boolean;
     /** ral-55w: a resolved value that is a plain map, never a cache / book marker: a fresh or proven map, or an entry of
      *  the base `balance` field (balances are plain maps), so a numeric slot read off it is Null. */
     rustWsPlainMapResolve(x: any): boolean;
@@ -4040,6 +4046,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     printWsCacheLength(node: any): string | undefined;
     /** ral-54w: a watched tuple's cache slot: the runtime's marker test converts the slot once. */
     printWsTupleCacheSlot(element: any, printedName: string, read: string, nativeList: boolean, indent: string): string | undefined;
+    /** ral-84a: a watched tuple's string slot reads its text once. */
+    printWsTupleStrSlot(element: any, printedName: string, read: string, nativeList: boolean, indent: string): string | undefined;
     printWsCacheLocalDeclaration(declaration: any, varName: string, indent: string): string | undefined;
     /** A use of a typed cache local: the handle itself, or boxed once at a `Value` hand-off. */
     printWsCacheLocalUse(node: any): string | undefined;

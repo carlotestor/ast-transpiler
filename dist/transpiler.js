@@ -54419,7 +54419,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
 ` : `${indent}let mut ${syntheticName} = ${this.printNode(declaration.initializer, 0)};
 `;
       const untypedRead = (idx) => nativeList ? this.printTypedVecElementRead(syntheticName, idx) : `get_value(&${syntheticName}, &Value::Int(${idx}))`;
-      const lines = parsedElements.map((e, idx) => this.printWsTupleCacheSlot(declaration.name.elements[idx], e, untypedRead(idx), nativeList, indent) ?? this.printRustTupleSlotLocal(declaration.name.elements[idx], e, syntheticName, idx, nativeList, indent) ?? this.printRustHandedDictSlot(declaration.name.elements[idx], e, untypedRead(idx), indent) ?? this.printPromiseAllListSlot(declaration.name.elements[idx], e, untypedRead(idx), indent) ?? `${indent}let mut ${e}: Value = ${untypedRead(idx)}`);
+      const lines = parsedElements.map((e, idx) => this.printWsTupleCacheSlot(declaration.name.elements[idx], e, untypedRead(idx), nativeList, indent) ?? this.printWsTupleStrSlot(declaration.name.elements[idx], e, untypedRead(idx), nativeList, indent) ?? this.printRustTupleSlotLocal(declaration.name.elements[idx], e, syntheticName, idx, nativeList, indent) ?? this.printRustHandedDictSlot(declaration.name.elements[idx], e, untypedRead(idx), indent) ?? this.printPromiseAllListSlot(declaration.name.elements[idx], e, untypedRead(idx), indent) ?? `${indent}let mut ${e}: Value = ${untypedRead(idx)}`);
       return head + lines.join(";\n");
     }
     const varName = this.printNode(declaration.name, 0);
@@ -69582,7 +69582,10 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
       return void 0;
     if (element.dotDotDotToken !== void 0 || element.initializer !== void 0 || !isIdentifier3(element.name))
       return void 0;
-    if (declaration.initializer === void 0 || !this.rustNativeListSource(declaration.initializer))
+    if (declaration.initializer === void 0)
+      return void 0;
+    const ws = !this.rustNativeListSource(declaration.initializer);
+    if (ws && !this.rustWsTupleStrSlot(element))
       return void 0;
     const source = element.getSourceFile?.()?.fileName;
     if (typeof source === "string" && /[\\/]test[\\/]/.test(source))
@@ -69591,7 +69594,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     if (fn === void 0 || isSourceFile5(fn))
       return void 0;
     const name = String(element.name.text);
-    const kind = this.rustSlotPrimitiveKind(element);
+    const kind = ws ? "string" : this.rustSlotPrimitiveKind(element);
     if (kind !== "string" && kind !== "boolean")
       return void 0;
     let nativeUses = 0;
@@ -69606,7 +69609,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
         concats++;
         return true;
       }
-      const ok = kind === "string" ? this.rustStringLocalUseIsNative(n) || this.rustVenueStrArgSlot(n) : this.rustIdentifierUseIsCondition(n) || this.rustBoolSlotTrueTest(n) || this.rustBoolSlotLogicalUse(n);
+      const ok = kind === "string" ? this.rustStringLocalUseIsNative(n) || this.rustVenueStrArgSlot(n) || ws && this.rustLimitArgUse(n, "ostr") : this.rustIdentifierUseIsCondition(n) || this.rustBoolSlotTrueTest(n) || this.rustBoolSlotLogicalUse(n);
       if (ok)
         nativeUses++;
       const box = !ok && kind === "string" && this.rustStrSlotBoxUse(n) && (isCallExpression6(n.parent) || isReturnStatement4(n.parent) || this.rustStrSlotThrownConcat(n) || this.rustSlotUseOutsideLoop(n, element) || (rust66s1 = true));
@@ -69621,6 +69624,8 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     if (!safe && concats > 0)
       this.rustScalarSolved.delete(fn);
     if (safe && kind === "string" && (rust66s1 || nativeUses === 0 && copies > 0) && !this.rust66s1StrSlotCopyBoxesOk(element, fn))
+      return void 0;
+    if (ws && (nativeUses === 0 || concats > 0))
       return void 0;
     return safe && (nativeUses > 0 || kind === "string") ? kind === "string" ? "str" : "bool" : void 0;
   }
@@ -79975,6 +79980,14 @@ ${iden}}`;
    *  element at the slot's index is a cache: the slot holds that cache. Any other matching resolve (another kind,
    *  a value read through a helper parameter, a Null settle, an unknown hash) leaves the slot `Value`. */
   rustWsTupleCacheSlot(element) {
+    return this.rustWsTupleSlotProof(element, "cache");
+  }
+  /** ral-84a: a slot of a proven watch tuple whose element at the slot's index is checker-typed `string` in every
+   *  matching resolve (the ohlcv `[ symbol, timeframe, stored ]` tuples): the slot holds that string or Null. */
+  rustWsTupleStrSlot(element) {
+    return this.rustWsTupleSlotProof(element, "str");
+  }
+  rustWsTupleSlotProof(element, want) {
     const pattern = element.parent;
     const declaration = pattern?.parent;
     if (pattern?.kind !== SyntaxKind7.ArrayBindingPattern || declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.name !== pattern)
@@ -80022,11 +80035,16 @@ ${iden}}`;
       const e = t?.elements[index];
       if (e === void 0 || e.kind === SyntaxKind7.SpreadElement || t.elements.some((x) => x.kind === SyntaxKind7.SpreadElement))
         return false;
-      if (this.rustWsResolvedKind(e) !== "cache")
+      if (want === "cache" ? this.rustWsResolvedKind(e) !== "cache" : !this.rustWsResolvedStr(e))
         return false;
       matched++;
     }
     return matched > 0;
+  }
+  /** ral-84a: a resolved tuple element the checker types `string` (`market['symbol']`, a `Str` reader result). */
+  rustWsResolvedStr(x) {
+    const n = this.rustStripWrappers(x);
+    return n !== void 0 && !isArrayLiteralExpression4(n) && this.primitiveKindOfType(this.typeOfNodeIfAny(n)) === "string";
   }
   /** ral-55w: a resolved value that is a plain map, never a cache / book marker: a fresh or proven map, or an entry of
    *  the base `balance` field (balances are plain maps), so a numeric slot read off it is Null. */
@@ -80057,6 +80075,12 @@ ${iden}}`;
     if (nativeList || element?.kind !== SyntaxKind7.BindingElement || this.rustWsCacheLocal(element) !== "opt")
       return void 0;
     return `${indent}let mut ${printedName}: Option<crate::${_RustTranspiler.RUST_CACHE_TYPE}> = ${read}.into()`;
+  }
+  /** ral-84a: a watched tuple's string slot reads its text once. */
+  printWsTupleStrSlot(element, printedName, read, nativeList, indent) {
+    if (nativeList || element?.kind !== SyntaxKind7.BindingElement || this.rustTupleSlotKind(element) !== "str")
+      return void 0;
+    return `${indent}let mut ${printedName}: Option<String> = ${read}.as_str().map(str::to_owned)`;
   }
   printWsCacheLocalDeclaration(declaration, varName, indent) {
     const kind = this.rustWsCacheLocal(declaration);
