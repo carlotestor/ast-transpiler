@@ -14446,4 +14446,26 @@ describe('84g7 R2 int64 pointer arm next to an int arm', () => {
         expect(out).toContain('\tvar requestedLimit int64\n\tif limit == nil {\n\t\trequestedLimit = int64(defaultLimit)\n\t} else {\n\t\trequestedLimit = *limit\n\t}');
         expect(out).toContain('\tvar limitResolved int64\n');
     });
+    test('a widened join read by a write of a parameter copy keeps the box and the parameter keeps its pointer twin', () => {
+        const x = new Transpiler({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        installCcxtGoLocalTypes(x.goTranspiler);
+        const src = 'type Int = number | undefined;\n'
+            + 'class X {\n'
+            + '    milliseconds (): number { return 1; }\n'
+            + '    f (since: Int = undefined, limit: Int = undefined) {\n'
+            + '        const request = {};\n'
+            + '        const defaultMaxLimit = 1000;\n'
+            + '        const limitValue: Int = (limit === undefined) ? defaultMaxLimit : limit;\n'
+            + '        const nowMs = this.milliseconds ();\n'
+            + '        let sinceValue: Int = since;\n'
+            + '        if (sinceValue === undefined) {\n'
+            + '            sinceValue = nowMs - limitValue * 60;\n'
+            + '        }\n'
+            + '        request[\'start_time\'] = sinceValue;\n'
+            + '        return request;\n'
+            + '    }\n'
+            + '}\n';
+        const out = x.transpileGo(src).content;
+        expect(out).toContain('var since *int64 = GetArgInt64Ptr(optionalArgs, 0, nil)');
+    });
 });

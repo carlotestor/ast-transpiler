@@ -34089,7 +34089,9 @@ interface GoTernaryJoinIntParts { goType: string, derefTrue: boolean, derefFalse
 const goTernaryJoinR1PartsUncached = GoTranspiler.prototype.goTernaryJoinPartsUncached;
 GoTranspiler.prototype.goTernaryJoinPartsUncached = function (declaration) {
     const known = goTernaryJoinR1PartsUncached.call(this, declaration);
-    if (known !== undefined) {
+    // inside a parameter's GetArg scan the widened join is not offered: that scan decided the
+    // parameter's twin before this rule existed, and a provisional answer is not memoised (R1)
+    if ((known !== undefined) || this.goTernaryJoinProvisional()) {
         return known;
     }
     const ternary: any = this.goUnwrapParenthesizedNode(declaration?.initializer);
@@ -34106,6 +34108,11 @@ GoTranspiler.prototype.goTernaryJoinPartsUncached = function (declaration) {
         return (armType === '*int64') && (otherType === 'int') && (arm?.kind === SyntaxKind.Identifier)
             && this.goTernaryJoinConditionDefines(ternary.condition, arm.text, outcome);
     };
+    // a write of a parameter's copy (`sinceValue = now - n * d` after `let sinceValue = since`) reading the
+    // local would turn native and change that parameter's GetArg proof: keep the box there
+    if (this.goTernaryJoinFeedsParameterCopy(declaration)) {
+        return undefined;
+    }
     if (pointerArm(ternary.whenTrue, whenTrue, whenFalse, true)) {
         return { goType: 'int64', derefTrue: true, derefFalse: false, widenFalse: true } as GoTernaryJoinIntParts;
     }
@@ -34113,6 +34120,29 @@ GoTranspiler.prototype.goTernaryJoinPartsUncached = function (declaration) {
         return { goType: 'int64', derefTrue: false, derefFalse: true, widenTrue: true } as GoTernaryJoinIntParts;
     }
     return undefined;
+};
+
+export interface GoTranspiler {
+    goTernaryJoinFeedsParameterCopy(declaration): boolean;
+}
+
+GoTranspiler.prototype.goTernaryJoinFeedsParameterCopy = function (declaration): boolean {
+    const scope = this.goEnclosingFunction(declaration);
+    const name = declaration.name.text;
+    const checker: any = this.checkerOrUndefined();
+    if ((scope === undefined) || (checker === undefined)) {
+        return true;
+    }
+    return this.hasNodeWhere(scope, (n: any) => {
+        if ((n.kind !== SyntaxKind.BinaryExpression) || (n.operatorToken?.kind !== SyntaxKind.EqualsToken) || (n.left?.kind !== SyntaxKind.Identifier)
+            || !this.hasNodeWhere(n.right, (r: any) => (r.kind === SyntaxKind.Identifier) && (r.text === name))) {
+            return false;
+        }
+        const target: any = checker.getSymbolAtLocation(n.left)?.valueDeclaration?.resolve();
+        const source: any = this.goUnwrapParenthesizedNode(target?.initializer);
+        return (target?.kind === SyntaxKind.VariableDeclaration) && (source?.kind === SyntaxKind.Identifier)
+            && (checker.getSymbolAtLocation(source)?.valueDeclaration?.resolve()?.kind === SyntaxKind.Parameter);
+    });
 };
 
 const goTernaryJoinR1Declaration = GoTranspiler.prototype.goTernaryJoinDeclaration;
