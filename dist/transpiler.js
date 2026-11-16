@@ -41618,6 +41618,64 @@ GoTranspiler.prototype.goDeclaredLocalTypeIfSafe = function(declaration, goType,
   }
   return goType;
 };
+function goInheritedFamilyCallType84g8(goTranspiler, initializer, printedValue) {
+  const callee = initializer?.expression;
+  if (initializer?.kind !== SyntaxKind5.CallExpression || initializer.questionDotToken !== void 0 || callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword || !CCXT_GO_FAMILY_METHOD.test(String(callee.name?.text ?? ""))) {
+    return void 0;
+  }
+  const name = callee.name.text;
+  const value = (printedValue ?? "").trim();
+  const open = value.indexOf("(");
+  if (open <= 0 || !goTranspiler.isWholePrintedCall(value, open) || value.substring(0, open) !== "this." + name.charAt(0).toUpperCase() + name.slice(1)) {
+    return void 0;
+  }
+  let resolved = void 0;
+  try {
+    resolved = goTranspiler.getChecker().getResolvedSignature(initializer)?.declaration?.resolve();
+  } catch (e) {
+    return void 0;
+  }
+  const owner = resolved?.parent;
+  if (resolved?.kind !== SyntaxKind5.MethodDeclaration || owner?.kind !== SyntaxKind5.ClassDeclaration || owner === enclosingClassDeclaration(initializer) || ["Exchange", "BaseExchange"].indexOf(String(owner.name?.text ?? "")) >= 0) {
+    return void 0;
+  }
+  return ccxtGoFamilyMethodReturnType(goTranspiler, resolved) === CCXT_GO_FAMILY_RETURN_TYPE ? CCXT_GO_FAMILY_RETURN_TYPE : void 0;
+}
+var goTypeOfInitializerBase84g8R2 = GoTranspiler.prototype.goTypeOfInitializer;
+GoTranspiler.prototype.goTypeOfInitializer = function(initializer, printedValue) {
+  const known = goTypeOfInitializerBase84g8R2.call(this, initializer, printedValue);
+  return known !== void 0 ? known : goInheritedFamilyCallType84g8(this, initializer, printedValue);
+};
+var GO_84G8_INHERITED_RESULT_TYPES = ["string", "*string", "map[string]any"];
+function goInheritedAnnotatedCallType84g8(goTranspiler, initializer, printedValue) {
+  const callee = initializer?.expression;
+  if (initializer?.kind !== SyntaxKind5.CallExpression || initializer.questionDotToken !== void 0 || callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword || typeof callee.name?.text !== "string" || CCXT_GO_FAMILY_METHOD.test(callee.name.text)) {
+    return void 0;
+  }
+  const name = callee.name.text;
+  const value = (printedValue ?? "").trim();
+  const open = value.indexOf("(");
+  if (open <= 0 || !goTranspiler.isWholePrintedCall(value, open) || value.substring(0, open) !== "this." + name.charAt(0).toUpperCase() + name.slice(1)) {
+    return void 0;
+  }
+  let resolved = void 0;
+  try {
+    resolved = goTranspiler.getChecker().getResolvedSignature(initializer)?.declaration?.resolve();
+  } catch (e) {
+    return void 0;
+  }
+  const owner = resolved?.parent;
+  if (resolved?.kind !== SyntaxKind5.MethodDeclaration || owner?.kind !== SyntaxKind5.ClassDeclaration || owner === enclosingClassDeclaration(initializer) || ["Exchange", "BaseExchange", "PredictionExchange"].indexOf(String(owner.name?.text ?? "")) >= 0) {
+    return void 0;
+  }
+  const goType = ccxtGoFamilyMethodReturnType(goTranspiler, resolved);
+  return GO_84G8_INHERITED_RESULT_TYPES.indexOf(goType) >= 0 ? goType : void 0;
+}
+var goTypeOfInitializerBase84g8R3 = GoTranspiler.prototype.goTypeOfInitializer;
+GoTranspiler.prototype.goTypeOfInitializer = function(initializer, printedValue) {
+  const known = goTypeOfInitializerBase84g8R3.call(this, initializer, printedValue);
+  return known !== void 0 ? known : goInheritedAnnotatedCallType84g8(this, initializer, printedValue);
+};
 
 // src/javaTranspiler.ts
 init_esm_shims();
