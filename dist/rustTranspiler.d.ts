@@ -2095,6 +2095,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustTypedResultReadOnlyAt(x: any): boolean;
     /** Element-access hook: the native read of a typed result element, boxed through its shared record handle. */
     printTypedResultElemRead(node: any): string | undefined;
+    /** `n` is the list argument of a base-tier `this.safeDict (n, i[, d])` whose index is an int literal, an i64 counter,
+     *  an int scalar local or a number local seeded with an int literal. */
+    rust67gSafeDictElemUse(n: any): boolean;
+    rust67gIndexText(key: any, mark: boolean): string | undefined;
+    /** Call hook: the native `safeDict` read of a typed result row. */
+    printTyped67gSafeDict(node: any, identation: number): string | undefined;
     printTypedResultIndex(key: any): string;
     private rustRecordElemDecisions;
     rustRecordElemLocal(declaration: any): string | undefined;
