@@ -57637,6 +57637,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     if (fresh && this.rustListLengthInit(node))
       return "int";
+    if (fresh && isBinaryExpression5(node) && this.rustDeclInitPosition(node) && this.rust76eCounterStep(node))
+      return "int";
     if (fresh && this.rustTernaryArm(node) && this.rustBaseStrFieldRead(node))
       return "ostr";
     if (fresh && this.rustTernaryArm(node) && this.rust65nBaseStrParamArm(node))
