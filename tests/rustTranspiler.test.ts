@@ -20720,3 +20720,32 @@ describe('ral-61p: getSupportedMapping over a literal map of string literals is 
         expect(out).toContain('let mut typeId: Value = ');
     });
 });
+
+describe('ral-62p: a client.subscriptions key read by a typed indexOf with a cast needle', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return d; }\n    keep (o: any): any { return o; }\n}\n";
+    const client = "export default class Client {\n    subscriptions: Dict = {};\n}\ninterface Dict { [key: string]: any }\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base/ws'), { recursive: true });
+        fs.mkdirSync (path.join (dir, 'ts/src/pro'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/base/ws/Client.ts'), client);
+        fs.writeFileSync (path.join (dir, 'ts/src/pro/venue.ts'), "import Exchange from '../base/Exchange.js';\nimport type { Dict } from '../base/Exchange.js';\nimport Client from '../base/ws/Client.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        return path.join (dir, 'ts/src/pro/venue.ts');
+    };
+    const loop = (needle: string) => "    m (client: Client, message: Dict) {\n        const topicSymbol = this.safeString (message, 'symbol');\n        const subscriptions = Object.keys (client.subscriptions);\n        let subscription = undefined;\n        for (let i = 0; i < subscriptions.length; i++) {\n            const key = subscriptions[i];\n            if (key.indexOf (" + needle + ") >= 0) {\n                subscription = client.subscriptions[key];\n                break;\n            }\n        }\n        return this.keep (subscription);\n    }\n";
+    test('the key is an Option<String> found natively and lent to the subscription read (kucoin pro handleOrderBook)', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-62p-subkey-cast', loop ('(topicSymbol as string)'))).content;
+        expect(out).toContain('let mut key: Option<String> = subscriptions.get(i as usize).and_then(Value::as_str).map(str::to_owned);');
+        expect(out).toContain('if let (Some(__h), Some(__n)) = (key.as_deref(), ');
+        expect(out).toContain('get_subscription(key.as_deref())');
+    });
+    test('the same without the cast', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-62p-subkey-plain', loop ('topicSymbol'))).content;
+        expect(out).toContain('let mut key: Option<String> = subscriptions.get(i as usize).and_then(Value::as_str).map(str::to_owned);');
+    });
+    test('negative: a key that is the needle of a find on a Value stays Value', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-62p-subkey-neg', loop ('(topicSymbol as string)').replace ('key.indexOf (', 'this.keep (message).indexOf (key, '))).content;
+        expect(out).toContain('let mut key: Value = ');
+    });
+});

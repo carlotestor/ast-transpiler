@@ -10187,7 +10187,8 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** `indexOf` needle as an `Option<&str>`: a non-empty literal, a typed string local, or a string-typed `Value` expression. */
     rustStrFindNeedle(node, syntactic: boolean): string | undefined {
-        const inner: any = this.unwrapParens(node);
+        // ral-62p: `(x as string)`: a type assertion prints nothing and never changes the runtime value, the needle is `x`
+        const inner: any = this.rustStripWrappers(node);
         if (inner === undefined) return undefined;
         const lit = this.rustNativeStringLiteralArg(inner);
         if (lit !== undefined) return inner.text === '' ? undefined : `Some("${lit}")`;
