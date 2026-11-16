@@ -12167,8 +12167,21 @@ export class RustTranspiler extends BaseTranspiler {
         const recv: any = this.unwrapParens(this.rustInKeyTop(n).parent.right);
         if (isPropertyAccessExpression(recv) && /^(?:subscriptions|futures)$/.test(String(recv.name.text)) && this.rustIsWsClientType(this.typeOfNodeIfAny(recv.expression))) return false;
         const declaration: any = this.rustDeclaredNode(n);
+        if (declaration !== undefined && isVariableDeclaration(declaration) && this.rust84cNilStrInKey(declaration)) return true;
         return declaration !== undefined && isVariableDeclaration(declaration) && declaration.initializer !== undefined
             && this.literalKindOfNode(this.unwrapParens(declaration.initializer)) !== 'null';
+    }
+
+    /** ral-84c R1: a nil-declared `let k: Str = undefined` (one declarator, a `let` statement) keys an `in` test too: the
+     *  nil-scalar rule types it `Option<String>`, and the `inbox` key reads `None` as a miss exactly as `in_op` read the
+     *  `Null` the `Value` local held (latoken parseTicker / parseTrade / parseOrder `symbol in this.markets`). */
+    rust84cNilStrInKey(declaration: VariableDeclaration): boolean {
+        const init = declaration.initializer;
+        if (init !== undefined && this.literalKindOfNode(this.unwrapParens(init)) !== 'null') return false;
+        const list = declaration.parent;
+        if (!isIdentifier(declaration.name) || !isVariableDeclarationList(list) || list.declarations.length !== 1
+            || (list.flags & NodeFlags.Const) !== 0 || list.parent?.kind !== SyntaxKind.VariableStatement) return false;
+        return declaration.type !== undefined && this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name)) === 'string';
     }
 
     /** qf: a typed local against an untyped `Value` partner (a local or parameter) that the checker types like the local:

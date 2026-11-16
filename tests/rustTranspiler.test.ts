@@ -24194,3 +24194,25 @@ describe('ral-80a: a non-boolean settle under an unknown hash keeps the tuple sl
         expect(out).toMatch(/let mut candles: Value = get_value\(/);
     });
 });
+
+describe('ral-84c R1: a nil-declared Str local written once from a concatenation keys an in test natively', () => {
+    const files: Record<string, string> = {
+        "ts/src/base/Exchange.ts": "export interface Dictionary<T> { [key: string]: T }\nexport type Str = string | undefined;\nexport default class Exchange {\n    markets: Dictionary<any> = undefined;\n    safeString (obj: any, key: any, defaultValue: string = undefined): string { return obj[key]; }\n    safeTicker (t: any): any { return t; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n",
+        "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parseTicker (ticker: any, market: any = undefined): any {\n        const base = this.safeString (ticker, 'b');\n        const quote = this.safeString (ticker, 'q');\n        let symbol: Str = undefined;\n        if ((base !== undefined) && (quote !== undefined)) {\n            symbol = base + '/' + quote;\n        }\n        const known = (symbol !== undefined) && (this.markets !== undefined) && (symbol in this.markets);\n        return this.safeTicker ({ 'symbol': symbol, 'known': known });\n    }\n}\n"
+    };
+    let out: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-84c1-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = transpiler.transpileRustByPath(path.join (root, 'ts/src/venue.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test('the local is an Option<String> and the in test reads its as_deref key', () => {
+        expect(out).toMatch(/let mut symbol: Option<String> = None;/);
+        expect(out).toMatch(/symbol\.as_deref\(\)/);
+        expect(out).not.toMatch(/let mut symbol: Value/);
+    });
+});
