@@ -3990,6 +3990,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** Every write to the local (`x = ..`) sits at or before `write` in source order. */
     rustWritesAllBefore(declaration: any, write: any): boolean;
     rustDefaultedAliasMove(write: any): any;
+    private rustNnListHandOffs;
+    /** ral-62i: `y = x` (statement), y a built list local of x's function (not x itself): the never-null list x hands over. */
+    rustNnListHandOff(n: any, declaration: any): boolean;
+    /** ral-62i: `y = x` is the only statement of the then-branch of `if (x !== undefined)` (or `!=`). */
+    rustNnGuardedWrite(write: any, x: any): boolean;
     rustBuiltListOf(node: any): any;
     /** ral-tf: a bare element local read nowhere after the literal (no loop or closure between): it moves into the element slot. */
     rustBuiltListMovedElement(e: any): boolean;

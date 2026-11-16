@@ -51905,6 +51905,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
      *  (an initializer from such a call keeps its own decision). */
     this.rustDeclaredArrayProof = false;
     this.rustArrayGuardedCopies = /* @__PURE__ */ new WeakSet();
+    this.rustNnListHandOffs = /* @__PURE__ */ new WeakSet();
     // ── ral-59i: nil-declared list local assigned before any read ──
     // `let x = undefined;` (or `let x: T;`, a plain `let`, one declarator) whose every write is `x = await this.<endpoint> (..)`
     // with the abstract declaration spelling `Promise<List>` (rustDeclaredListProducer: `.into_list()` moves the answer), and
@@ -72841,6 +72842,8 @@ ${iden}}`;
         return ++lentNullable > 0 && ++reads > 0;
       if (nilDeclared && from === "dict" && this.rustEndpointAliasSourceUse(n, declaration))
         return ++reads > 0;
+      if (neverNullInit && from === "list" && this.rustNnListHandOff(n, declaration))
+        return ++reads > 0;
       if (!nilDeclared && (from === "dict" || from === "list") && this.rustNnAliasSourceUse(n, from))
         return ++reads > 0;
       if (this.rustContainerAliasInit(n, declaration))
@@ -80108,13 +80111,62 @@ ${iden}}`;
       return void 0;
     if (this.rustEnclosingFunction(declaration) !== this.rustEnclosingFunction(write) || this.rustLocalIsReassigned(declaration, String(y.text)))
       return void 0;
-    if (!this.rustDefaultedListValue(declaration, y))
+    const nnList = this.rustDefaultedListRead(this.rustSkipWrappers(declaration.initializer)) && (this.rustBorrowedPending.has(declaration) || this.rustBorrowedLocalKind(declaration) === "list");
+    if (!nnList && !this.rustDefaultedListValue(declaration, y))
       return void 0;
     let branch = write.parent?.parent;
     if (!isBlock4(branch))
       branch = write.parent;
     const guard = branch?.parent?.kind === SyntaxKind7.IfStatement && branch.parent.thenStatement === branch ? branch.parent : void 0;
     return this.rustLocalLastUse(y, declaration) || guard !== void 0 && this.rustGuardedBranchLastUse(y, declaration, guard) ? declaration : void 0;
+  }
+  /** ral-62i: `y = x` (statement), y a built list local of x's function (not x itself): the never-null list x hands over. */
+  rustNnListHandOff(n, declaration) {
+    const up = n.parent;
+    if (!isBinaryExpression5(up) || up.right !== n || up.operatorToken.kind !== SyntaxKind7.EqualsToken || up.parent?.kind !== SyntaxKind7.ExpressionStatement || !isIdentifier3(up.left))
+      return false;
+    const target = this.rustDeclarationOfIdentifier(up.left);
+    if (target === void 0 || target === declaration || target.name === up.left || !isVariableDeclaration3(target) || this.rustBorrowedPending.has(target))
+      return false;
+    if (this.rustEnclosingFunction(target) !== this.rustEnclosingFunction(declaration) || this.rustBuiltListOf(up.left) === void 0)
+      return false;
+    if (!this.rustNnGuardedWrite(up, n))
+      return false;
+    if (this.rustDefaultedAliasMove(up) === void 0)
+      return false;
+    const guardIf = findAncestor(up, (a) => a.kind === SyntaxKind7.IfStatement);
+    const guardTest = this.rustSkipWrappers(guardIf?.expression);
+    const scope = this.rustEnclosingFunction(declaration);
+    for (const m of this.rustScopeNameNodes(scope, String(declaration.name.text))) {
+      if (m === n || m === declaration.name || !isIdentifier3(m) || this.rustIdentifierIsPropertyName(m) || !this.rustIdentifierRefersToDeclaration(m, declaration))
+        continue;
+      if (m.parent !== guardTest)
+        return false;
+    }
+    this.rustNnListHandOffs.add(up);
+    return true;
+  }
+  /** ral-62i: `y = x` is the only statement of the then-branch of `if (x !== undefined)` (or `!=`). */
+  rustNnGuardedWrite(write, x) {
+    const statement = write.parent;
+    let branch = statement?.parent;
+    if (isBlock4(branch)) {
+      if (branch.statements.length !== 1)
+        return false;
+    } else
+      branch = statement;
+    const guard = branch?.parent;
+    if (guard === void 0 || guard.kind !== SyntaxKind7.IfStatement || guard.thenStatement !== branch)
+      return false;
+    const test = this.rustSkipWrappers(guard.expression);
+    if (!isBinaryExpression5(test) || test.operatorToken.kind !== SyntaxKind7.ExclamationEqualsEqualsToken && test.operatorToken.kind !== SyntaxKind7.ExclamationEqualsToken)
+      return false;
+    const l = this.rustSkipWrappers(test.left);
+    const r = this.rustSkipWrappers(test.right);
+    const tested = isIdentifier3(l) && l.text === x.text ? l : isIdentifier3(r) && r.text === x.text ? r : void 0;
+    if (tested === void 0 || this.rustDeclarationOfIdentifier(tested) !== this.rustDeclarationOfIdentifier(x))
+      return false;
+    return this.literalKindOfNode(tested === l ? r : l) === "null";
   }
   rustBuiltListOf(node) {
     if (node === void 0 || !isIdentifier3(node))
@@ -80329,6 +80381,11 @@ ${iden}}`;
     if (this.rustBuiltListOf(left) === void 0)
       return void 0;
     const rhs = this.rustSkipWrappers(right);
+    if (isIdentifier3(rhs) && isBinaryExpression5(rhs.parent) && this.rustNnListHandOffs.has(rhs.parent)) {
+      const src = this.rustDeclarationOfIdentifier(rhs);
+      if (src !== void 0 && this.rustBorrowedLocalKind(src) === "list")
+        return `${this.printNode(left, 0).trim()} = ${this.rustOptListName(rhs)}`;
+    }
     const guarded = isIdentifier3(rhs) && isBinaryExpression5(rhs.parent) ? this.rustOptListGuardedMove(rhs.parent) : void 0;
     if (guarded !== void 0)
       return `${this.printNode(left, 0).trim()} = ${rhs.text}.${this.rustDefaultedListValue(guarded, rhs) ? "into_list" : "unwrap_or_default"}()`;
