@@ -86817,7 +86817,9 @@ _RustTranspiler.RUST_BASE_SCALAR_RETURNS = {
   marketId: "ostr",
   currencyId: "ostr",
   milliseconds: "oint",
-  seconds: "oint"
+  seconds: "oint",
+  // ral-62p: the hand-written `parse_date` answers `Value::Int` (epoch ms) or `Value::Null`, the TS `number | undefined`
+  parseDate: "oint"
 };
 // ral-52k: credential fields of the base class, declared `string` (each holds a `Str` or `Null` in the runtime struct)
 _RustTranspiler.RUST_BASE_STR_FIELDS = /* @__PURE__ */ new Set(["apiKey", "secret", "uid", "password", "privateKey", "walletAddress"]);
