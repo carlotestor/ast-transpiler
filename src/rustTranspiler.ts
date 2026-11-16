@@ -8044,6 +8044,13 @@ export class RustTranspiler extends BaseTranspiler {
         // `add_element_to_object(get_value_mut(&mut x, ..), &<box>, v)` lends the box; ccxt's field-chain passes read
         // only `self.balance|ohlcvs|options` receivers
         if ((kind === 'str' || kind === 'ostr') && this.rust62kLocalNestedLastKey(n)) return 'mkey';
+        // ral-65b: a `String` operand of the `+` chain that is the whole value of a one-level `this.<field>['lit'] = ..`
+        // statement: the printer's own insert takes the `format!` text (apex pro getWs*Url `wsEndpoint`; ccxt's
+        // narrowStrSinkLocals pass did this)
+        if (kind === 'str' && this.rust65bThisFieldConcatOperand(n)) return 'concat';
+        // ral-65b: `(x as string).toString()` of an `Option<String>` local: the text the `Value` box displayed (`null` for
+        // `Null`), read in place (cryptocom cancelOrdersForSymbols `id`; ccxt's narrowStrSinkLocals pass did this)
+        if (kind === 'ostr' && this.rust65bCastToStringRecv(n)) return 'concat';
         // a nested `a[k1][k2] = ..` write is rewritten by ccxt text passes keyed on its boxed operands
         if (this.rustScalarInNestedWrite(n)) return undefined;
         if (kind === 'str' && this.rustScalarInsertKeyUse(n)) return 'key';
@@ -9052,6 +9059,28 @@ export class RustTranspiler extends BaseTranspiler {
         if (!this.rustNestedWriteKeyPosition(n)) return false;
         const access: any = this.rustKeyWrapped(n).parent;
         return isIdentifier(access.expression) && this.rustNestedDictBearerDeclaration(access.expression) !== undefined;
+    }
+
+    /** ral-65b: `n` is a direct operand of a `+` chain forming the whole right side of `this.f['lit'] = ..` (a statement)
+     *  and that chain prints as one `Value::Str(format!(..))`. */
+    rust65bThisFieldConcatOperand(n): boolean {
+        let top: any = n;
+        while (isBinaryExpression(top.parent) && top.parent.operatorToken.kind === SyntaxKind.PlusToken) top = top.parent;
+        if (top === n) return false;
+        const write: any = top.parent;
+        if (!isBinaryExpression(write) || write.right !== top || write.operatorToken.kind !== SyntaxKind.EqualsToken || write.parent?.kind !== SyntaxKind.ExpressionStatement) return false;
+        const left: any = write.left;
+        if (!isElementAccessExpression(left) || !isStringLiteral(left.argumentExpression) || !this.rustThisFieldTarget(left.expression)) return false;
+        return this.printNode(n.parent, 0).trim().startsWith('Value::Str(format!(');
+    }
+
+    /** ral-65b: `n` is the receiver of a no-argument `.toString()` reached through a parenthesised `as string` cast. */
+    rust65bCastToStringRecv(n): boolean {
+        const cast: any = n.parent;
+        if (cast?.kind !== SyntaxKind.AsExpression || cast.expression !== n || !isParenthesizedExpression(cast.parent)) return false;
+        const access: any = cast.parent.parent;
+        return isPropertyAccessExpression(access) && access.expression === cast.parent && String(access.name.text) === 'toString'
+            && isCallExpression(access.parent) && access.parent.expression === access && access.parent.arguments.length === 0;
     }
 
     rustScalarInNestedWrite(n, boxUse?: boolean): boolean {
@@ -19600,6 +19629,13 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     printToStringCall(node, identation, name = undefined) {
+        // ral-65b: `(x as string).toString()` of an `Option<String>` local (rust65bCastToStringRecv): the `Str` box of the
+        // text the `Value` local displayed (`null` for `Null`), the same `Value::Str(format!("{}", ..))` the boxed form made
+        const recv65b: any = this.unwrapParens(node?.expression?.expression);
+        const cast65b: any = recv65b?.kind === SyntaxKind.AsExpression ? recv65b.expression : undefined;
+        if (cast65b !== undefined && isIdentifier(cast65b) && this.rustScalarUseForms.get(cast65b) === 'concat' && this.rust65bCastToStringRecv(cast65b)) {
+            return this.rustRecordFormatToString(node, `${super.printIdentifier(cast65b)}.as_deref().unwrap_or("null")`);
+        }
         return this.printRustVenueIntToString(node, name) ?? this.printRustNativeToString(node, name) ?? this.printRustToString(node, name) ?? `to_string_val(&${name})`;
     }
 

@@ -22133,4 +22133,17 @@ describe('ral-65b: build-pass locals typed by the printer (second round)', () =>
         expect(out).toContain('__ch.remove_subscription(id.as_deref());');
         expect(out).not.toContain('let mut id: Value');
     });
+    test('apex wsEndpoint (`+` operand of a this.options literal-key store) is String; cryptocom `(id as string).toString ()` reads the Option<String> in place', () => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-65b2-'));
+        const f2: Record<string, string> = { ...files, 'ts/src/pro/venue.ts': "import Exchange from '../base/Exchange.js';\nimport type { Dict, Str } from '../base/Exchange.js';\nexport default class venue extends Exchange {\n    urls: Dict = {};\n    milliseconds (): number { return 1; }\n    getWsPublicUrl (): string {\n        let url = this.safeString (this.options, 'wsPublicUrl');\n        if (url === undefined) {\n            const timeStamp = this.milliseconds ().toString ();\n            const wsEndpoint: Str = this.safeString (this.urls['api']['ws'], 'public', '');\n            this.options['wsPublicUrl'] = wsEndpoint + '&timestamp=' + timeStamp;\n            url = this.safeString (this.options, 'wsPublicUrl', '');\n        }\n        return url;\n    }\n    cancelFor (orders: Dict[]) {\n        const out: Dict[] = [];\n        for (let i = 0; i < orders.length; i++) {\n            const order = this.safeDict (orders, i);\n            const id = this.safeString (order, 'id');\n            const item: Dict = {\n                'order_id': (id as string).toString (),\n            };\n            out.push (item);\n        }\n        return out;\n    }\n}\n" };
+        for (const [rel, text] of Object.entries (f2)) { fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true }); fs.writeFileSync (path.join (root, rel), text); }
+        transpiler.transpileRustByPath(path.join (root, 'ts/src/base/Exchange.ts'));
+        const o = transpiler.transpileRustByPath(path.join (root, 'ts/src/pro/venue.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+        expect(o).toContain('let mut wsEndpoint: String = ');
+        expect(o).toContain('insert("wsPublicUrl".into(), Value::Str(format!("{}{}", Value::Str(format!("{}{}", wsEndpoint, "&timestamp=").into()), timeStamp).into()));');
+        expect(o).not.toContain('let mut wsEndpoint: Value');
+        expect(o).toContain('let mut id: Option<String> = self.safe_string_k_opt(&order, "id", &[]);');
+        expect(o).toContain('m.insert("order_id".to_string(), Value::Str(format!("{}", id.as_deref().unwrap_or("null")).into()));');
+    });
 });
