@@ -9052,12 +9052,12 @@ export class RustTranspiler extends BaseTranspiler {
      *  ahead of the method's print (a key local's use walk) would otherwise see `declOk` false and refuse every handle
      *  key use; the declaration prints `let mut client: Value = self.client(..)` on one line (the declOk test) when its
      *  initializer is that call over an identifier, string literal or property access argument. Decided from the AST. */
-    rust80bClientDeclPending(plan: any): boolean {
+    rust80bClientDeclPending(plan): boolean {
         if (plan.kind !== 'local' || plan.declSeen) return false;
-        const init: any = this.unwrapParens(plan.decl.initializer);
+        const init = this.unwrapParens(plan.decl.initializer);
         if (!isCallExpression(init) || init.arguments.length !== 1 || !isPropertyAccessExpression(init.expression)
             || init.expression.expression.kind !== SyntaxKind.ThisKeyword || String(init.expression.name.text) !== 'client') return false;
-        const arg: any = init.arguments[0];
+        const arg = init.arguments[0];
         return isIdentifier(arg) || isStringLiteral(arg) || (isPropertyAccessExpression(arg) && isIdentifier(arg.expression));
     }
 
@@ -12077,9 +12077,9 @@ export class RustTranspiler extends BaseTranspiler {
     /** ral-80b: the key of `k in client.subscriptions|futures` the client handle does not serve (read after the method wrote
      *  that field): ccxt's container pass folds that `in_op` into its own membership test only for a bare `Value` key, so a
      *  boxed typed key would leave the helper call. Decided from the AST (the handle plan). */
-    rust80bClientStateInKey(n: any): boolean {
-        const top: any = this.rustInKeyTop(n);
-        const right: any = this.unwrapParens(top?.parent?.right);
+    rust80bClientStateInKey(n): boolean {
+        const top = this.rustInKeyTop(n);
+        const right = this.unwrapParens(top?.parent?.right);
         if (right === undefined || !isPropertyAccessExpression(right) || !isIdentifier(right.expression) || right.expression.text !== 'client'
             || !RustTranspiler.RUST_CLIENT_HANDLE_KEYS.has(String(right.name.text))) return false;
         return this.rustClientHandleAccess(right) === undefined;
