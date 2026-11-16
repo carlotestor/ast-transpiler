@@ -19352,6 +19352,8 @@ export class RustTranspiler extends BaseTranspiler {
             // then sent its `sVal` local back to `Value`)
             const formatted = this.rustStrNativeExpression(exp) ? undefined : this.rustBoxedFormatInner(printed);
             if (formatted !== undefined) return `${idn}return Some(${formatted});`;
+            const optRead = this.rustStrNativeExpression(exp) ? undefined : this.rustOptReaderCallText(exp);
+            if (optRead !== undefined) return `${idn}return ${optRead};`;
             const suffix = this.rustStrNativeExpression(exp) ? '' : '.as_str().map(str::to_owned)';
             return `${idn}return ${printed}${suffix};`;
         }

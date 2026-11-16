@@ -21017,6 +21017,20 @@ describe('ral-62o: an Option<String> reader local prints the `_opt` twin of the 
         expect(out).toMatch(/g = self\.safe_string_k_opt\(o(?:\.clone\(\))?, "h", &\[\]\);/);
         expect(out).not.toMatch(/self\.safe_string(?:_k|_lower_k|2|_n)?\([^;]*\)\.as_str\(\)\.map\(str::to_owned\)/);
     });
+    test('a method declared to return a string returns the twin of the reader it hands back', () => {
+        const dir = path.join (rustFixtureRoot, 'ral62o-ret');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    options: Dict = {};\n"
+            + "    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n"
+            + "    parseStatus (status: Str): Str {\n        const statuses: Dict = { 'a': 'open' };\n        return this.safeString (statuses, status, status);\n    }\n"
+            + "    token (): Str {\n        return this.safeString (this.options, 'token');\n    }\n"
+            + "    use (s: Str): string {\n        return this.parseStatus (s) + this.token ();\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toMatch(/return self\.safe_string_opt\(&?statuses[^;]*\);/);
+        expect(out).toMatch(/return self\.safe_string_k_opt\([^;]*"token", &\[\]\);/);
+        expect(out).not.toMatch(/return self\.safe_string[a-z0-9_]*\([^;]*\)\.as_str\(\)\.map\(str::to_owned\);/);
+    });
     test('guard: a reader with no `_opt` twin (safeStringLower2) keeps its boxed call and the unwrap', () => {
         expect(build ()).toContain('let mut f: Option<String> = self.safeStringLower2(o.clone(), Value::Str("x".into()), Value::Str("y".into()), &[]).as_str().map(str::to_owned);');
     });
