@@ -56600,7 +56600,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       this.rustStrLentLocals.add(declaration);
     else if (this.rustVenueTypedCostly(declaration, kind, copied))
       return void 0;
-    if (typedUses === 0 && this.rustParamAliasSeedKind(declaration) !== void 0 && !_RustTranspiler.RUST_COPY_SCALAR_KINDS.has(kind))
+    if (typedUses === 0 && this.rustParamAliasSeedKind(declaration) !== void 0 && !_RustTranspiler.RUST_COPY_SCALAR_KINDS.has(kind) && !(strKind && copied === 0 && nativeUses > 0 && !this.rust76fSourceMethodWrite(declaration, scope)))
       return void 0;
     if ((boxed > 0 && !this.rustNumParamBoxesOnly(declaration) || expressionUses && !this.rustCompareOnlyNumUses(declaration)) && this.rustReaderIntDefaultNum(declaration.initializer))
       return void 0;
@@ -56858,6 +56858,18 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return true;
     });
     return returned;
+  }
+  /** ral-76f: a write `x = p.m(..)` of a string alias `x = p` calls a method on its own source parameter: the typed
+   *  write would copy the parameter again (a second copy), so such an alias keeps the `Value` binding. */
+  rust76fSourceMethodWrite(declaration, scope) {
+    const source = this.unwrapParens(declaration.initializer);
+    return this.rustScopeNameNodes(scope, String(declaration.name.text)).some((n) => {
+      const up = n.parent;
+      if (n === declaration.name || !_is.isBinaryExpression.call(void 0, up) || up.left !== n || up.operatorToken.kind !== _ast.SyntaxKind.EqualsToken)
+        return false;
+      const rhs = this.unwrapParens(up.right);
+      return _is.isCallExpression.call(void 0, rhs) && _is.isPropertyAccessExpression.call(void 0, rhs.expression) && _is.isIdentifier.call(void 0, rhs.expression.expression) && this.rustDeclaredNode(rhs.expression.expression) === this.rustDeclaredNode(source);
+    });
   }
   rustParamAliasSeedKind(declaration) {
     const init = this.unwrapParens(_optionalChain([declaration, 'optionalAccess', _8811 => _8811.initializer]));

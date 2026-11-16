@@ -740,6 +740,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A local some `return` of a method with a declared string return hands back as-is. */
     rustStrReturnedLocal(declaration: any, scope: any): boolean;
     private static readonly RUST_COPY_SCALAR_KINDS;
+    /** ral-76f: a write `x = p.m(..)` of a string alias `x = p` calls a method on its own source parameter: the typed
+     *  write would copy the parameter again (a second copy), so such an alias keeps the `Value` binding. */
+    rust76fSourceMethodWrite(declaration: any, scope: any): boolean;
     rustParamAliasSeedKind(declaration: any): string | undefined;
     rustLimitCall(expr: any): boolean;
     rustLimitArgUse(n: any, kind: string): boolean;
