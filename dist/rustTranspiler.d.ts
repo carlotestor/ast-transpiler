@@ -2961,7 +2961,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     nativeEqualityText(node: any): string;
     unwrapParens(node: any): any;
     hasNativeComparisonOperand(node: any): any;
-    printLogicalInBooleanContext(node: any): string;
+    printLogicalInBooleanContext(node: any): any;
     printWhileStatement(node: any, identation: any): string;
     printIfStatement(node: any, identation: any): string;
     printPostFixUnaryExpression(node: any, identation: any): string;
@@ -4422,6 +4422,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_OPT_LIST_SOURCES;
     private rustOptListDecisions;
     private rustOptListBoxes;
+    /** ral-80d: optional list locals held in the split list-vs-map-vs-null form (a second `<name>__map` binding). */
+    private rust80dSplitLocals;
     rustOptListLocal(declaration: any): boolean;
     /** A base-tier list source that may return `undefined` (a `safeList*` default must be absent or nullish). */
     rustOptListSource(node: any): boolean;
@@ -4429,6 +4431,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `xs[N]` on a `string[]` parameter the body re-binds as its slice (`xs.get(N)`). */
     rustOptListParamRead(node: any): boolean;
     rustOptListParamInit(init: any): boolean;
+    /** ral-80d: `n` sits in the arm where `Array.isArray (x)` held: the then-branch / true arm of `Array.isArray (x)`, or the
+     *  else-branch / false arm of `!Array.isArray (x)` (an `if` statement or a conditional expression inside `fn`). */
+    rust80dInListArm(n: any, declaration: any, fn: any): boolean;
     /** `Array.isArray`. */
     rustIsArrayIsArrayCallee(call: any): boolean;
     /** The optional list local an identifier reads (never its own declaration name). */

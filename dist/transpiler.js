@@ -51953,6 +51953,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustNilListFirstCache = /* @__PURE__ */ new WeakMap();
     this.rustOptListDecisions = /* @__PURE__ */ new WeakMap();
     this.rustOptListBoxes = /* @__PURE__ */ new WeakMap();
+    /** ral-80d: optional list locals held in the split list-vs-map-vs-null form (a second `<name>__map` binding). */
+    this.rust80dSplitLocals = /* @__PURE__ */ new WeakSet();
     this.rustHandedDictDecisions = /* @__PURE__ */ new WeakMap();
     // ── nil-declared params slots (ral-nd) ──
     // `let p = undefined; [ a, p ] = this.handleXAndParams (.., params, ..);` and later `[ b, p ] = this.handleY (.., p, ..)` /
@@ -82872,7 +82874,8 @@ ${iden}}`;
     if (init?.kind === SyntaxKind7.AwaitExpression)
       init = this.rustSkipWrappers(init.expression);
     const nil = this.rustOptListNilInit(declaration);
-    if (!nil && !this.rustOptListSource(init))
+    const split = !nil && !this.rustOptListSource(init) && (list.flags & NodeFlags4.Const) !== 0 && init !== void 0 && this.rustSafeValueKeyReadSource(init) && String(init.getText()).split("\n")[0].length <= 240;
+    if (!nil && !split && !this.rustOptListSource(init))
       return false;
     const name = String(declaration.name.text);
     const fn = this.rustEnclosingFunction(declaration);
@@ -82883,7 +82886,26 @@ ${iden}}`;
     const boxes = [];
     let natives = 0;
     let writes = 0;
+    let mapReads = 0;
+    let isArrayTests = 0;
     const safe = this.rustLocalUsesAll(declaration, name, false, (n) => {
+      if (split && !this.rustIdentifierIsPropertyName(n) && this.rustIdentifierRefersToDeclaration(n, declaration) && this.rustEnclosingFunction(n) === fn) {
+        const use = n.parent;
+        if (isCallExpression6(use) && use.arguments.length === 1 && use.arguments[0] === n && this.rustIsArrayIsArrayCallee(use)) {
+          isArrayTests++;
+          natives++;
+          return true;
+        }
+        if (this.rustSafeValueKeyReaderUse(n)) {
+          mapReads++;
+          this.rustOptListBoxes.set(n, "map");
+          return true;
+        }
+        if (!this.rust80dInListArm(n, declaration, fn))
+          return false;
+        if (isBinaryExpression5(use) || isPropertyAccessExpression3(use))
+          return false;
+      }
       if (this.rustIdentifierIsPropertyName(n))
         return !(n.parent?.kind === SyntaxKind7.ShorthandPropertyAssignment && n.parent.name === n);
       if (!this.rustIdentifierRefersToDeclaration(n, declaration) || this.rustEnclosingFunction(n) !== fn)
@@ -82899,6 +82921,8 @@ ${iden}}`;
         return true;
       }
       if (isBinaryExpression5(up) && up.left === n && up.operatorToken.kind === SyntaxKind7.EqualsToken) {
+        if (split)
+          return false;
         if (nil)
           writes++;
         return up.parent?.kind === SyntaxKind7.ExpressionStatement && (this.rustOptListSource(up.right) || this.rustOptListLiteralWrite(up.right) || nil && this.rustDefaultedListRead(this.rustSkipWrappers(up.right)));
@@ -82939,8 +82963,10 @@ ${iden}}`;
         boxes.push([n, extra]);
       return extra !== void 0;
     });
-    if (!safe || nil && (writes === 0 || natives === 0))
+    if (!safe || nil && (writes === 0 || natives === 0) || split && isArrayTests === 0)
       return false;
+    if (split && mapReads > 0)
+      this.rust80dSplitLocals.add(declaration);
     const finals = /* @__PURE__ */ new Map();
     for (const [n] of boxes) {
       const ret = findAncestor(n, (a) => isReturnStatement4(a) || isFunctionLike(a));
@@ -82968,6 +82994,34 @@ ${iden}}`;
   rustOptListParamInit(init) {
     const node = this.unwrapParens(init);
     return node !== void 0 && isElementAccessExpression4(node) && isIdentifier3(node.expression) && this.rustOptListParamRead(node);
+  }
+  /** ral-80d: `n` sits in the arm where `Array.isArray (x)` held: the then-branch / true arm of `Array.isArray (x)`, or the
+   *  else-branch / false arm of `!Array.isArray (x)` (an `if` statement or a conditional expression inside `fn`). */
+  rust80dInListArm(n, declaration, fn) {
+    const test = (e) => {
+      e = this.rustSkipWrappers(e);
+      if (e !== void 0 && e.kind === SyntaxKind7.PrefixUnaryExpression && e.operator === SyntaxKind7.ExclamationToken) {
+        const inner = test(e.operand);
+        return inner === void 0 ? void 0 : !inner;
+      }
+      if (e === void 0 || !isCallExpression6(e) || !this.rustIsArrayIsArrayCallee(e) || e.arguments.length !== 1)
+        return void 0;
+      const arg = this.rustSkipWrappers(e.arguments[0]);
+      return isIdentifier3(arg) && this.rustIdentifierRefersToDeclaration(arg, declaration) ? true : void 0;
+    };
+    for (let child = n, at = n.parent; at !== void 0 && at !== fn; child = at, at = at.parent) {
+      if (isIfStatement4(at) && child !== at.expression) {
+        const held = test(at.expression);
+        if (held !== void 0 && (held ? at.thenStatement === child : at.elseStatement === child))
+          return true;
+      }
+      if (isConditionalExpression4(at) && child !== at.condition) {
+        const held = test(at.condition);
+        if (held !== void 0 && (held ? at.whenTrue === child : at.whenFalse === child))
+          return true;
+      }
+    }
+    return false;
   }
   /** `Array.isArray`. */
   rustIsArrayIsArrayCallee(call) {
@@ -83005,6 +83059,9 @@ ${iden}}`;
       return void 0;
     if (this.rustOptListNilInit(declaration))
       return `${indent}let mut ${varName}: Option<crate::value::List> = None`;
+    if (this.rust80dSplitLocals.has(declaration)) {
+      return `${indent}let (mut ${varName}, ${varName}__map): (Option<crate::value::List>, Option<crate::value::Dict>) = match ${this.printNode(declaration.initializer, 0).trim()} { Value::Arr(__l) => (Some(__l), None), __v => (None, __v.into_opt_dict()) }`;
+    }
     return `${indent}let mut ${varName}: Option<crate::value::List> = ${this.printNode(declaration.initializer, 0).trim()}.into_opt_list()`;
   }
   printOptListWrite(left, right) {
@@ -83048,6 +83105,8 @@ ${iden}}`;
       return void 0;
     if (form === "lend")
       return `&${text}`;
+    if (form === "map")
+      return `&${text}__map`;
     return form === "move" ? `${text}.map_or(Value::Null, Value::Arr)` : `${text}.clone().map_or(Value::Null, Value::Arr)`;
   }
   // ── optional list locals: joins, map-literal values, literal writes ─────
