@@ -14413,3 +14413,43 @@ describe('ral-84g6 omit results and copies of a proven map', () => {
         expect(output).toContain('var query map[string]any = paramsFlag');
     });
 });
+
+describe('ral-84g6 map copies rebound by omit or a params-tuple element stay maps', () => {
+    test('a copy of a GetArgMap-bound map re-omitted in a loop is a map local', () => {
+        const inst = new Transpiler({ 'verbose': false });
+        installCcxtGoLocalTypes((inst as any).goTranspiler);
+        const input =
+        "type Dict = { [key: string]: any };\n" +
+        "class T {\n" +
+        "    omit (a, ...k) { return a; }\n" +
+        "    urlencode (a) { return ''; }\n" +
+        "    f (keys: string[], query: Dict = {}) {\n" +
+        "        let remainingQuery = query;\n" +
+        "        for (let i = 0; i < keys.length; i++) {\n" +
+        "            remainingQuery = this.omit (remainingQuery, keys[i]);\n" +
+        "        }\n" +
+        "        return this.urlencode (remainingQuery);\n" +
+        "    }\n" +
+        "}\n";
+        const output = inst.transpileGo(input).content;
+        expect(output).toContain('var remainingQuery map[string]any = query');
+        expect(output).toContain('remainingQuery = MapTyped(this.Omit(remainingQuery, GetValue(keys, i)))');
+    });
+    test('an omit local handed back in a returned tuple keeps the box', () => {
+        const inst = new Transpiler({ 'verbose': false });
+        installCcxtGoLocalTypes((inst as any).goTranspiler);
+        const input =
+        "type Dict = { [key: string]: any };\n" +
+        "class T {\n" +
+        "    omit (a, ...k) { return a; }\n" +
+        "    handleOptionIntegerAndParams (params: Dict, m: string, o: string, d: number = undefined): [number, Dict] { return [ d, params ]; }\n" +
+        "    f (params: Dict = {}) {\n" +
+        "        const [ flag, paramsFlag ] = this.handleOptionIntegerAndParams (params, 'f', 'flag', 2);\n" +
+        "        const rest = this.omit (paramsFlag, 'b');\n" +
+        "        return [ flag, rest ];\n" +
+        "    }\n" +
+        "}\n";
+        const output = inst.transpileGo(input).content;
+        expect(output).toContain('var rest any = this.Omit(paramsFlag, "b")');
+    });
+});

@@ -34024,9 +34024,34 @@ function ral84g6OmitCall(node): any {
 function ral84g6OmitArgIsMap(goTranspiler: GoTranspiler, arg): boolean {
     return ccxtGoProducerArgIsMap(goTranspiler, arg) || ccxtGoJoinedParamsLocal(goTranspiler, arg);
 }
-function ral84g6NameBacksIn(goTranspiler: GoTranspiler, scope, name: string): boolean {
-    return goTranspiler.hasNodeWhere(scope, (n: any) => (n.kind === SyntaxKind.BinaryExpression) && (n.operatorToken?.kind === SyntaxKind.InKeyword)
-        && (n.right?.kind === SyntaxKind.Identifier) && (n.right.text === name));
+// `k in x` on a typed map prints a comma-ok closure (a blob); `return [ .., x ]` makes the slot a typed map, which
+// the tuple-slot reader at every caller then spells `h[i].(map[string]any)` instead of MapTyped(..): both keep the box
+// The veto follows the local's map flow one level per name (depth-bounded): a local whose value is copied or
+// omitted into another local (`y = x`, `y = this.omit (x, ..)`) is vetoed when that local is, since typing x is
+// what proves y a map for the shipped producer rules.
+function ral84g6NameBacksIn(goTranspiler: GoTranspiler, scope, name: string, depth = 0): boolean {
+    if (depth > 4) {
+        return true;
+    }
+    return goTranspiler.hasNodeWhere(scope, (n: any) => {
+        if ((n.kind === SyntaxKind.BinaryExpression) && (n.operatorToken?.kind === SyntaxKind.InKeyword)
+            && (n.right?.kind === SyntaxKind.Identifier) && (n.right.text === name)) {
+            return true;
+        }
+        if ((n.kind !== SyntaxKind.Identifier) || (n.text !== name)) {
+            return false;
+        }
+        const parent: any = n.parent;
+        if ((parent?.kind === SyntaxKind.ArrayLiteralExpression) && (parent.parent?.kind === SyntaxKind.ReturnStatement)) {
+            return true;
+        }
+        const omit: any = ((parent?.kind === SyntaxKind.CallExpression) && (parent.arguments?.[0] === n)) ? ral84g6OmitCall(parent) : undefined;
+        const value: any = (omit !== undefined) ? omit : n;
+        const holder: any = value.parent;
+        const target: any = ((holder?.kind === SyntaxKind.VariableDeclaration) && (holder.initializer === value)) ? holder.name
+            : (((holder?.kind === SyntaxKind.BinaryExpression) && (holder.right === value) && (holder.operatorToken?.kind === SyntaxKind.EqualsToken)) ? holder.left : undefined);
+        return (target?.kind === SyntaxKind.Identifier) && (target.text !== name) && ral84g6NameBacksIn(goTranspiler, scope, target.text, depth + 1);
+    });
 }
 function ral84g6OmitLocalType(goTranspiler: GoTranspiler, declaration): string | undefined {
     if ((declaration?.kind !== SyntaxKind.VariableDeclaration) || (declaration.name?.kind !== SyntaxKind.Identifier)
@@ -34041,7 +34066,8 @@ function ral84g6OmitLocalType(goTranspiler: GoTranspiler, declaration): string |
     let verdict: string | undefined;
     const scope: any = goTranspiler.goEnclosingFunction(declaration);
     if ((call !== undefined) && (scope !== undefined) && ral84g6OmitArgIsMap(goTranspiler, call.arguments[0])
-        && !goTranspiler.goTypeNameIsShadowed(scope, GO_SAFE_DICT_LOCAL_TYPE)) {
+        && !goTranspiler.goTypeNameIsShadowed(scope, GO_SAFE_DICT_LOCAL_TYPE)
+        && !ral84g6NameBacksIn(goTranspiler, scope, declaration.name.text)) {
         const name = declaration.name.text;
         // uses resolved through the checker: a same-named local of a sibling block is another declaration
         const unsafe = goTranspiler.hasNodeWhere(scope, (n: any) => {
@@ -34111,4 +34137,73 @@ GoTranspiler.prototype.goTypeOfInitializer = function (initializer, printedValue
     }
     const scope = this.goEnclosingFunction(parent);
     return ((scope !== undefined) && !ral84g6NameBacksIn(this, scope, target.text)) ? GO_SAFE_DICT_LOCAL_TYPE : undefined;
+};
+// (4) a map local (copy of a proven map) whose other writes are `x = this.omit (x | m, ..)` or element 1
+//     of a base params-tuple helper `[ v, x ] = this.handleX (.., x | m, ..)`: omit of a map is a fresh map,
+//     and every base return path of those helpers hands back the params argument, its omit or an extend,
+//     so the element is a map box; the element-1 printer reads it through MapTyped (identity on a map).
+function ral84g6MapWriteIsMap(goTranspiler: GoTranspiler, declaration, n, parent): boolean {
+    const isSelfOrMap = (arg) => (arg?.kind === SyntaxKind.Identifier)
+        && ((ccxtGoParamDeclarationOf(goTranspiler, arg) === declaration) || ral84g6OmitArgIsMap(goTranspiler, arg));
+    if ((parent?.kind === SyntaxKind.BinaryExpression) && (parent.left === n) && (parent.operatorToken?.kind === SyntaxKind.EqualsToken)) {
+        const write = ral84g6OmitCall(parent.right);
+        return (write !== undefined) && isSelfOrMap(write.arguments[0]);
+    }
+    const assignment: any = parent?.parent;
+    if ((parent?.kind !== SyntaxKind.ArrayLiteralExpression) || (assignment?.kind !== SyntaxKind.BinaryExpression)
+        || (assignment.left !== parent) || (assignment.operatorToken?.kind !== SyntaxKind.EqualsToken)
+        || (parent.elements.length !== 2) || (parent.elements.indexOf(n) !== 1)) {
+        return false;
+    }
+    const call: any = assignment.right;
+    const callee: any = call?.expression;
+    if ((call?.kind !== SyntaxKind.CallExpression) || (call.questionDotToken !== undefined)
+        || (callee?.kind !== SyntaxKind.PropertyAccessExpression) || (callee.expression?.kind !== SyntaxKind.ThisKeyword)) {
+        return false;
+    }
+    const slot = CCXT_GO_ELEMENT_1_PARAMS_SLOT[String(callee.name?.text ?? '')];
+    let signature: any;
+    try {
+        signature = goTranspiler.getChecker().getResolvedSignature(call)?.declaration?.resolve();
+    } catch (e) {
+        return false;
+    }
+    return (slot !== undefined) && CCXT_GO_ELEMENT_1_BASE_FILE.test(signature?.getSourceFile?.()?.fileName ?? '')
+        && isSelfOrMap(call.arguments[slot]);
+}
+const ral84g6ShippedLocalIsSafeToType = GoTranspiler.prototype.goLocalIsSafeToType;
+GoTranspiler.prototype.goLocalIsSafeToType = function (scope, declaration, varName: string, goType: string, stringWriteProven = false): boolean {
+    if (ral84g6ShippedLocalIsSafeToType.call(this, scope, declaration, varName, goType, stringWriteProven)) {
+        return true;
+    }
+    if ((goType !== GO_SAFE_DICT_LOCAL_TYPE) || (scope === undefined) || (declaration?.kind !== SyntaxKind.VariableDeclaration)
+        || (declaration.initializer?.kind !== SyntaxKind.Identifier) || ral84g6NameBacksIn(this, scope, varName)) {
+        return false;
+    }
+    let rebinds = 0;
+    const unsafe = this.hasNodeWhere(scope, (n: any) => {
+        if ((n.kind !== SyntaxKind.Identifier) || (n.text !== varName) || (n === declaration.name)) {
+            return false;
+        }
+        const parent: any = n.parent;
+        if (((parent?.kind === SyntaxKind.PropertyAccessExpression) && (parent.name === n))
+            || ((parent?.kind === SyntaxKind.PropertyAssignment) && (parent.name === n))) {
+            return false;
+        }
+        const target: any = ccxtGoParamDeclarationOf(this, n);
+        if (target !== declaration) {
+            return target === undefined;
+        }
+        if ((parent?.kind === SyntaxKind.BinaryExpression) && (parent.left === n) && (parent.operatorToken?.kind === SyntaxKind.EqualsToken)) {
+            if (this.goTypeOfInitializer(parent.right, this.printNode(parent.right, 0)) === goType) {
+                return false;
+            }
+        }
+        if (ral84g6MapWriteIsMap(this, declaration, n, parent)) {
+            rebinds += 1;
+            return false;
+        }
+        return ccxtGoProducerUseRebinds(n) || isDestructuringTarget(n) || ccxtGoWriteSiteShippedVeto(this, n, parent, goType);
+    });
+    return !unsafe && (rebinds > 0);
 };
