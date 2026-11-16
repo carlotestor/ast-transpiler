@@ -51792,6 +51792,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustSbAliasReask = /* @__PURE__ */ new WeakSet();
     this.rustBorrowedKinds = /* @__PURE__ */ new WeakMap();
     this.rustOptContainerLocals = /* @__PURE__ */ new WeakSet();
+    this.rustNeverNullTests = /* @__PURE__ */ new WeakMap();
     // ── ral-wh: index / variable-key reads on held Dict / List locals (rustBorrowedIndexReadUse) ──
     // `KeyRead::read(&&x, &k)` is `get_map_value` / `get_list_value`, the arm `get_value` takes for that variant.
     this.rustBorrowedIndexReads = /* @__PURE__ */ new WeakSet();
@@ -52628,6 +52629,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const counterTest = isBinaryExpression5(left?.parent) && left.parent.right === right ? this.printI64CounterCompare(left.parent) : void 0;
     if (counterTest !== void 0)
       return counterTest.startsWith("Value::Bool(") ? counterTest.slice("Value::Bool(".length, -1) : counterTest;
+    const neverNull = this.printNeverNullContainerTest(left, op);
+    if (neverNull !== void 0)
+      return neverNull;
     const presence = this.printPresenceFlagTest(left, right, op);
     if (presence !== void 0)
       return presence;
@@ -72643,6 +72647,8 @@ ${iden}}`;
     const indexReadUses = [];
     const aeoWriteUses = [];
     let listIndexWrites = 0;
+    const neverNullInit = !nilDeclared && allSlot === void 0 && init !== void 0 && (from === "dict" || from === "list") && this.rustContainerInitNeverNull(init, from === "list" ? "list" : "map") && this.rustBaseCallNamed(init, _RustTranspiler.RUST_NEVER_NULL_TEST_READERS) && this.rustEmptyContainerLiteral(init.arguments[init.arguments.length - 1], from);
+    const neverNullTests = [];
     const accept = (n) => {
       if (this.rustIdentifierIsPropertyName(n))
         return !(n.parent?.kind === SyntaxKind7.ShorthandPropertyAssignment && n.parent.name === n);
@@ -72652,6 +72658,8 @@ ${iden}}`;
       if (isBinaryExpression5(up) && this.isEqualityOp(up.operatorToken.kind)) {
         if (this.literalKindOfNode(this.unwrapParens(up.left === n ? up.right : up.left)) !== "null")
           return false;
+        if (neverNullInit)
+          return neverNullTests.push(up) > 0;
         nullTests++;
         return true;
       }
@@ -72827,6 +72835,9 @@ ${iden}}`;
     } finally {
       this.rustOwnNameSkip = ownNameSkip;
     }
+    if (neverNullTests.length > 0 && writes > 0)
+      nullTests += neverNullTests.length;
+    const constTests = writes === 0 ? neverNullTests : [];
     const builtBoxOnly = reads === 0 && boxedElementUses.length > 0 && nullTests === 0 && writes === 0 && init !== void 0 && isCallExpression6(init) && (this.rustBuiltReturnSourceKind(init) !== void 0 || paramsBoxes === boxedElementUses.length && this.rustOmitOfDict(init) || optionalBoxes === 0 && paramsBoxes === 0 && boxedElementUses.every((u) => this.rustDefaultedContainerBoxUse(u, init)) || optionalBoxes === boxedElementUses.length && nullTests === 0 && writes === 0 && this.rustOptReaderBoxUse(boxedElementUses[0], init) || optionalBoxes === 0 && paramsBoxes === 0 && this.rustVenueContainerReturnKind(init)?.nullable === false && boxedElementUses.every((u) => this.rustBuiltReturnBoxUse(u, init)));
     const boxOnly = reads === 0 && boxedElementUses.length > 0 && (this.rustDictElementSource(init) || this.rustListElementSource(init)) && nullTests === 0 && writes === 0;
     const declaredDictOnly = nilDeclared && from === "dict" && !mixed && declaredEndpointWrites > 0 && declaredEndpointWrites + nullWrites === writes && !this.rustNilResponseLocals.has(declaration);
@@ -72901,6 +72912,8 @@ ${iden}}`;
         return void 0;
       this.rustOptContainerLocals.add(declaration);
     }
+    for (const t of constTests)
+      this.rustNeverNullTests.set(t, declaration);
     for (const n of boxedElementUses)
       this.rustDictElementBoxes.set(n, this.rustLocalLastUse(n, declaration) || n.parent?.kind === SyntaxKind7.ConditionalExpression && this.rustOwnedLastUse(n, declaration) ? "move" : "share");
     if (extendReuse || neverNullRewrites)
@@ -72908,6 +72921,24 @@ ${iden}}`;
     for (const w of reuseProducerWrites)
       this.rustReuseProducerWrites.add(w);
     return from === "list" ? "list" : "dict";
+  }
+  /** ral-60n: the reader's default is the empty literal of the local's kind (`[]` for a list, `{}` for a map). */
+  rustEmptyContainerLiteral(node, from) {
+    const d = this.rustSkipWrappers(node);
+    if (d === void 0)
+      return false;
+    return from === "list" ? isArrayLiteralExpression4(d) && d.elements.length === 0 : isObjectLiteralExpression4(d) && d.properties.length === 0;
+  }
+  /** `true` / `false` for a null test the never-null rule recorded on a local that kept its plain container form. */
+  printNeverNullContainerTest(left, op) {
+    const test = left?.parent;
+    if (test === void 0 || !isBinaryExpression5(test))
+      return void 0;
+    const declaration = this.rustNeverNullTests.get(test);
+    if (declaration === void 0 || this.rustBorrowedLocalKind(declaration) === void 0 || this.rustOptContainerLocals.has(declaration))
+      return void 0;
+    const equal = op === SyntaxKind7.EqualsEqualsToken || op === SyntaxKind7.EqualsEqualsEqualsToken;
+    return equal ? "false" : "true";
   }
   // ── ral-43f: optional-container alias fixed point ──
   // `let t: NullableDict = undefined; .. t = s;` where `s` is `const s = this.safeDict (o, k)` (nullable default) in the
@@ -87553,6 +87584,12 @@ _RustTranspiler.RUST_BORROWED_DICT_SOURCES = /* @__PURE__ */ new Set(["safeDict"
 _RustTranspiler.RUST_BORROWED_LIST_SOURCES = /* @__PURE__ */ new Set(["safeList", "safeList2", "safeListN"]);
 // Hand-written readers whose container argument takes a map or list by reference, any key.
 _RustTranspiler.RUST_BORROWED_ANY_KEY_READERS = /^safe(?:Value|String(?:Lower|Upper)?|Integer|Float|Timestamp|IntegerProduct)(?:2|N)?$/;
+// ── ral-60n: null test of a never-null container local ──
+// `const x = this.safeList (o, k, [])` / `this.safeDict (o, k, {})` (base reader, literal container default, x never
+// rewritten): the reader answers a `Value::Arr` / `Value::Dict` on every path (the read when it is that container, else
+// the default), so the boxed `x != Value::Null` was always true and `x == Value::Null` always false. Truth table in the
+// jest test 'ral-60n ... truth table'. The test prints that constant; the local keeps the plain container form.
+_RustTranspiler.RUST_NEVER_NULL_TEST_READERS = /* @__PURE__ */ new Set(["safeList", "safeList2", "safeListN", "safeDict", "safeDict2", "safeDictN"]);
 _RustTranspiler.RUST_SELF_EXTEND = /* @__PURE__ */ new Set(["extend"]);
 _RustTranspiler.RUST_REUSE_SAFE_DICT = /* @__PURE__ */ new Set(["safeDict"]);
 _RustTranspiler.RUST_UNTIL_LIST_WRITE = /* @__PURE__ */ new Set(["handleUntilOption"]);

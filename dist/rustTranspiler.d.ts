@@ -3056,6 +3056,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustBorrowedKinds;
     rustBorrowedLocalKindUncached(declaration: any): 'dict' | 'list' | undefined;
     private rustOptContainerLocals;
+    static readonly RUST_NEVER_NULL_TEST_READERS: Set<string>;
+    private rustNeverNullTests;
+    /** ral-60n: the reader's default is the empty literal of the local's kind (`[]` for a list, `{}` for a map). */
+    rustEmptyContainerLiteral(node: any, from: string): boolean;
+    /** `true` / `false` for a null test the never-null rule recorded on a local that kept its plain container form. */
+    printNeverNullContainerTest(left: any, op: any): string | undefined;
     rustOptAliasSourceKind(rhs: any, fn: any): 'dict' | 'list' | undefined;
     /** The source side: `t = n` (statement) whose target `t` holds the optional form of n's kind through rustOptAliasSourceKind. */
     rustOptAliasTargetUse(n: any, declaration: any, fn: any): boolean;
