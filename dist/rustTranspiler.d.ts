@@ -4041,6 +4041,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustOptExtendOperandUse(n: any): boolean;
     /** `self.extend(a, &[&x])` / `self.omit(&x, keys, &[])` lending a handed dict local. */
     printHandedDictExtend(node: any, identation: number): string | undefined;
+    /** ral-59a: a base `this.omit (x, k1, k2, ..)` with literal extra keys and no spread: the call keeps its printed
+     *  `optional_args` slice, only the head is lent (`OmitSource for &Dict`). */
+    rustHandedRestOmit(call: any): boolean;
     /** `let mut x: crate::value::Dict = <slot read>.into_dict()` for a handed params slot. */
     printRustHandedDictSlot(element: any, printedName: string, read: string, indent: string): string | undefined;
     /** `n` is the first operand of a two-operand base `this.extend (n, x)`. */
@@ -4208,6 +4211,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** The call a slot destructures, past parentheses, casts and one `await`. */
     rustAwaitedCall(node: any): any;
     rustHandedSlotBoxUse(n: any, declaration: any): boolean;
+    /** ral-59a: a local initialised or rewritten whole from another identifier (`let x = y` / `x = y`): handing it to a
+     *  `Value` slot moved its source before; typing it would copy the source at the write instead. */
+    rustRewrittenFromLocal(declaration: any): boolean;
+    /** ral-59a: a single-binding, never-reassigned `const x = this.omit (m, k)` whose head is a proven map. */
+    rustOmitAliasSource(declaration: any): boolean;
     /** ral-53a: no loop or closure between the source's declaration and the alias declaration. */
     rustAliasInitOutsideLoop(alias: any, declaration: any): boolean;
     /** No loop or closure between the destructure and this use: a box there copies the slot once. */

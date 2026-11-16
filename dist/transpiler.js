@@ -67318,12 +67318,15 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     if (!isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword)
       return false;
     const name = String(call.expression.name.text);
-    if (!/^(?:handle\w+|fetchPaginatedCall\w+)$/.test(name))
+    const wide = !/^(?:handle\w+|fetchPaginatedCall\w+)$/.test(name);
+    if (wide && (this.rustTypedUnified.has(name) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword || !isIdentifier3(arg) || this.rustRewrittenFromLocal(this.rustDeclarationOfIdentifier(arg))))
       return false;
     const at = Array.from(call.arguments ?? []).indexOf(arg);
     const params = at < 0 ? void 0 : this.rustTranspiledCalleeParams(call, name);
     const param = params?.[at];
-    if (param === void 0 || param.dotDotDotToken !== void 0 || param.initializer === void 0 || !isIdentifier3(param.name) || param.name.text !== "params")
+    if (param === void 0 || param.dotDotDotToken !== void 0 || param.initializer === void 0 || !isIdentifier3(param.name) || !wide && param.name.text !== "params")
+      return false;
+    if (wide && (at !== params.length - 1 || !isObjectLiteralExpression4(param.initializer) || param.initializer.properties.length !== 0 || params.some((p) => p.dotDotDotToken !== void 0)))
       return false;
     return String(param.type?.getText?.() ?? "").replace(/\s+/g, "") === "Dict";
   }
@@ -67334,7 +67337,8 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     const declaration = this.rustDeclarationOfIdentifier(node);
     if (declaration === void 0 || declaration === node || declaration.name === node || !this.rustHandedDictLocal(declaration))
       return void 0;
-    return `Value::from(&${text})`;
+    const wide = !/^(?:handle\w+|fetchPaginatedCall\w+)$/.test(String(node.parent.expression.name.text));
+    return wide && this.rustLocalLastUse(node, declaration) ? `Value::Dict(${text})` : `Value::from(&${text})`;
   }
   /** `let mut a: Option<String> | bool = <temp>.get(i)..` for a typed tuple slot, else undefined. */
   printRustTupleSlotLocal(element, printedName, temp, index, nativeList, indent) {
@@ -80355,7 +80359,7 @@ ${iden}}`;
           boxes++;
         return mutable !== void 0 || this.rustHandedSlotBoxUse(n, declaration);
       }
-      const ok = call.arguments[0] === n && this.rustBorrowedDictReader(call) !== void 0 || call.arguments[0] === n && call.arguments.length === 2 && this.rustBaseCallNamed(call, _RustTranspiler.RUST_HANDED_DICT_OMIT) || this.rustHandedDictExtendOperand(call) === n || this.rustLentParamsSlot(call, n) || this.rustExtendHeadUse(n) || (rewritten || this.rustOmitOfDictInit(declaration)) && call.arguments[0] === n && !this.rustTestTierSource(call) && this.rustBorrowedAnyKeyReader(call);
+      const ok = call.arguments[0] === n && this.rustBorrowedDictReader(call) !== void 0 || call.arguments[0] === n && call.arguments.length === 2 && this.rustBaseCallNamed(call, _RustTranspiler.RUST_HANDED_DICT_OMIT) || call.arguments[0] === n && this.rustHandedRestOmit(call) || this.rustHandedDictExtendOperand(call) === n || this.rustLentParamsSlot(call, n) || this.rustExtendHeadUse(n) || (rewritten || this.rustOmitOfDictInit(declaration)) && call.arguments[0] === n && !this.rustTestTierSource(call) && this.rustBorrowedAnyKeyReader(call);
       if (ok)
         uses++;
       const boxed = this.rustOptionalParamsSlot(call, n) || this.rustHandedSlotBoxUse(n, declaration);
@@ -80670,6 +80674,10 @@ ${iden}}`;
     if (node.arguments.length === 2 && isIdentifier3(first) && this.rustBaseCallNamed(node, _RustTranspiler.RUST_HANDED_DICT_OMIT) && lentDict(first)) {
       return `self.omit(${lent(first)}, ${this.printNode(node.arguments[1], identation).trim()}, &[])`;
     }
+    if (this.rustHandedRestOmit(node) && isIdentifier3(first) && lentDict(first)) {
+      const rest = Array.from(node.arguments).slice(2).map((a) => this.printNode(a, identation).trim()).join(", ");
+      return `self.omit(${lent(first)}, ${this.printNode(node.arguments[1], identation).trim()}, &[${rest}])`;
+    }
     const operand = this.rustHandedDictExtendOperand(node);
     const optOperand = (n) => {
       const d = this.rustDeclarationOfIdentifier(n);
@@ -80680,6 +80688,13 @@ ${iden}}`;
     const head = this.printNode(first, identation).trim();
     const method = this.toSnakeCaseName(String(node.expression.name.text));
     return `self.${method}(${isIdentifier3(first) && this.printExtendHeadArg(first, head) !== void 0 ? head : _RustTranspiler.cloneIfBareLocal(head)}, &[${lent(operand)}])`;
+  }
+  /** ral-59a: a base `this.omit (x, k1, k2, ..)` with literal extra keys and no spread: the call keeps its printed
+   *  `optional_args` slice, only the head is lent (`OmitSource for &Dict`). */
+  rustHandedRestOmit(call) {
+    if (!isCallExpression6(call) || call.arguments.length < 3 || !this.rustBaseCallNamed(call, _RustTranspiler.RUST_HANDED_DICT_OMIT))
+      return false;
+    return Array.from(call.arguments).slice(1).every((a) => isStringLiteral3(a));
   }
   /** `let mut x: crate::value::Dict = <slot read>.into_dict()` for a handed params slot. */
   printRustHandedDictSlot(element, printedName, read, indent) {
@@ -81743,6 +81758,14 @@ ${iden}}`;
   }
   rustHandedSlotBoxUse(n, declaration) {
     const up = n.parent;
+    if (up !== void 0 && this.rustOmitAliasSource(declaration)) {
+      if (isVariableDeclaration3(up) && up.initializer === n)
+        return this.rustEnclosingFunction(up) === this.rustEnclosingFunction(declaration) && this.rustAliasInitOutsideLoop(up, declaration) && this.rustSlotTargetStaysValue(up);
+      if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && isIdentifier3(up.left)) {
+        const target = this.rustDeclaredNode(up.left);
+        return target !== void 0 && target !== up.left && isVariableDeclaration3(target) && target !== declaration && this.rustEnclosingFunction(up) === this.rustEnclosingFunction(declaration) && this.rustAliasInitOutsideLoop(up, declaration) && this.rustSlotTargetStaysValue(target);
+      }
+    }
     if (declaration?.kind !== SyntaxKind7.BindingElement && !this.rustHandedTernaryLocal(declaration) && !this.rustNilSlotDictCandidate(declaration) && !this.rustHandedReassignedMap(declaration) || up === void 0 || this.rustScalarInNestedWrite(n, true))
       return false;
     if (up.kind === SyntaxKind7.PropertyAssignment)
@@ -81766,6 +81789,28 @@ ${iden}}`;
       return true;
     return this.rustNilBoxSlotOk(up, Array.from(up.arguments).indexOf(n));
   }
+  /** ral-59a: a local initialised or rewritten whole from another identifier (`let x = y` / `x = y`): handing it to a
+   *  `Value` slot moved its source before; typing it would copy the source at the write instead. */
+  rustRewrittenFromLocal(declaration) {
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name))
+      return true;
+    const init = declaration.initializer === void 0 ? void 0 : this.rustSkipWrappers(declaration.initializer);
+    if (init !== void 0 && isIdentifier3(init))
+      return true;
+    let fromLocal = false;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), true, (n) => {
+      const up = n.parent;
+      const rhs = isBinaryExpression5(up) && up.left === n && up.operatorToken.kind === SyntaxKind7.EqualsToken ? this.rustSkipWrappers(up.right) : void 0;
+      if (rhs !== void 0 && isIdentifier3(rhs))
+        fromLocal = true;
+      return true;
+    });
+    return fromLocal;
+  }
+  /** ral-59a: a single-binding, never-reassigned `const x = this.omit (m, k)` whose head is a proven map. */
+  rustOmitAliasSource(declaration) {
+    return isVariableDeclaration3(declaration) && isIdentifier3(declaration.name) && declaration.parent?.declarations?.length === 1 && !this.rustNilSlotDictCandidate(declaration) && this.rustOmitOfDictInit(declaration) && !this.rustLocalIsReassigned(declaration, String(declaration.name.text));
+  }
   /** ral-53a: no loop or closure between the source's declaration and the alias declaration. */
   rustAliasInitOutsideLoop(alias, declaration) {
     for (let p = alias.parent; p !== void 0 && !(p.pos <= declaration.pos && declaration.end <= p.end); p = p.parent) {
@@ -81788,7 +81833,7 @@ ${iden}}`;
     if (!isIdentifier3(node))
       return void 0;
     const declaration = this.rustDeclarationOfIdentifier(node);
-    const local = declaration !== void 0 && isVariableDeclaration3(declaration) && declaration.name !== node && (this.rustDictTernaryArmPlace(node, declaration) || (this.rustHandedTernaryLocal(declaration) || this.rustNilSlotDictCandidate(declaration) || this.rustHandedReassignedMap(declaration)) && this.rustHandedSlotBoxUse(node, declaration));
+    const local = declaration !== void 0 && isVariableDeclaration3(declaration) && declaration.name !== node && (this.rustDictTernaryArmPlace(node, declaration) || (this.rustHandedTernaryLocal(declaration) || this.rustNilSlotDictCandidate(declaration) || this.rustHandedReassignedMap(declaration) || this.rustOmitAliasSource(declaration)) && this.rustHandedSlotBoxUse(node, declaration));
     if (!local && (declaration?.kind !== SyntaxKind7.BindingElement || declaration.name === node || !(this.rustHandedSlotBoxUse(node, declaration) || this.rustMutableSlotUse(node, declaration) === "box")))
       return void 0;
     if (!this.rustHandedDictLocal(declaration))
