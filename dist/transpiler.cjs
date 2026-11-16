@@ -75609,8 +75609,12 @@ ${iden}}`;
     if (element === void 0 || (element.flags & (_sync.TypeFlags.Any | _sync.TypeFlags.Unknown | _sync.TypeFlags.Union)) !== 0)
       return false;
     if (_is.isNumericLiteral.call(void 0, key) || this.primitiveKindOfType(this.typeOfNodeIfAny(key)) === "number") {
+      let top = init;
+      while (top.parent !== void 0 && (_is.isParenthesizedExpression.call(void 0, top.parent) || top.parent.kind === _ast.SyntaxKind.AsExpression))
+        top = top.parent;
+      const owner = _is.isVariableDeclaration.call(void 0, top.parent) && top.parent.initializer === top ? top.parent : void 0;
       if (this.rust73dBaseRecordType(element))
-        return true;
+        return owner === void 0 || this.rustRecordElemLocal(owner) === void 0;
     }
     return this.primitiveKindOfType(element) === void 0 && this.getChecker().getIndexTypeOfType(element, _sync.IndexKind.String) !== void 0 && !this.getChecker().isArrayType(element);
   }

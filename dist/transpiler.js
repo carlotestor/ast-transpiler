@@ -75610,8 +75610,12 @@ ${iden}}`;
     if (element === void 0 || (element.flags & (TypeFlags6.Any | TypeFlags6.Unknown | TypeFlags6.Union)) !== 0)
       return false;
     if (isNumericLiteral4(key) || this.primitiveKindOfType(this.typeOfNodeIfAny(key)) === "number") {
+      let top = init;
+      while (top.parent !== void 0 && (isParenthesizedExpression3(top.parent) || top.parent.kind === SyntaxKind7.AsExpression))
+        top = top.parent;
+      const owner = isVariableDeclaration3(top.parent) && top.parent.initializer === top ? top.parent : void 0;
       if (this.rust73dBaseRecordType(element))
-        return true;
+        return owner === void 0 || this.rustRecordElemLocal(owner) === void 0;
     }
     return this.primitiveKindOfType(element) === void 0 && this.getChecker().getIndexTypeOfType(element, IndexKind4.String) !== void 0 && !this.getChecker().isArrayType(element);
   }
