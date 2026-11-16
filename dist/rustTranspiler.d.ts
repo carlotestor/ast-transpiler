@@ -3320,6 +3320,14 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustNilMapLocal(declaration: any): boolean;
     rustNilMapLocalUncached(declaration: any): boolean;
     private rustNilListLocals;
+    /** ral-67c: `x = this.extend (x, y)` (base `extend`, y not naming x) on a `let` whose declared type node is `NullableDict` / `Dict`. */
+    rust67cNilMapExtendWrite(n: any, declaration: any): boolean;
+    private static readonly RUST_67C_MAP_TYPES;
+    /** ral-67c: `x = y` where y is a `const y = { .. }` (plain map literal, never rebound) of x's function that no typed rule takes
+     *  (y prints `Value` and holds a map on every path): x takes it back with `.into_opt_dict()` (moved at y's last use). */
+    rust67cMapLocalSource(rhs: any, declaration: any): any;
+    /** ral-67c: the head `x` of `x = this.extend (x, y)` on a nil map local: the optional map moves out (`x.take()`) and is written back. */
+    rust67cNilMapExtendHead(node: any, declaration: any): boolean;
     /** og: the nil-declared map local a declaration aliases whole (`const x = y`, same function, no closure between). */
     rustNilMapAliasSource(declaration: any): any;
     /** og: `y` as the whole initializer of a nil-map alias: the handle moves at y's last use, else an Arc bump. */

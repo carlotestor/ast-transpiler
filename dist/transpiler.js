@@ -74508,6 +74508,13 @@ ${iden}}`;
         const rhs = this.unwrapParens(parent.right);
         if (this.literalKindOfNode(rhs) === "null")
           return true;
+        if (this.rust67cNilMapExtendWrite(n, declaration) || this.rust67cMapLocalSource(rhs, declaration) !== void 0) {
+          if (kind !== void 0 && kind !== "dict")
+            return false;
+          kind = "dict";
+          writes++;
+          return true;
+        }
         const k = isObjectLiteralExpression4(rhs) && !rhs.properties.some((p) => p.kind !== SyntaxKind7.PropertyAssignment) ? "dict" : isArrayLiteralExpression4(rhs) && this.rustNilListLiteralOk(rhs) ? "list" : void 0;
         if (k === void 0 || kind !== void 0 && kind !== k)
           return false;
@@ -74515,6 +74522,8 @@ ${iden}}`;
         writes++;
         return true;
       }
+      if (this.rust67cNilMapExtendHead(n, declaration))
+        return true;
       if (this.rustNilMapKeyWrite(n, declaration) || this.rustNilMapExtraBox(n)) {
         if (!this.rustNilMapKeyWrite(n, declaration))
           boxes++;
@@ -74538,6 +74547,44 @@ ${iden}}`;
     if (kind === "dict" && this.rustNilMapHasKeyWrite(declaration) && this.rustNilMapLetBoundAlias(declaration))
       return false;
     return true;
+  }
+  /** ral-67c: `x = this.extend (x, y)` (base `extend`, y not naming x) on a `let` whose declared type node is `NullableDict` / `Dict`. */
+  rust67cNilMapExtendWrite(n, declaration) {
+    const type = declaration?.type;
+    if (type === void 0 || type.kind !== SyntaxKind7.TypeReference || !isIdentifier3(type.typeName) || (type.typeArguments?.length ?? 0) > 0 || !_RustTranspiler.RUST_67C_MAP_TYPES.has(String(type.typeName.text)))
+      return false;
+    return this.rustSelfExtendWrite(n, declaration);
+  }
+  /** ral-67c: `x = y` where y is a `const y = { .. }` (plain map literal, never rebound) of x's function that no typed rule takes
+   *  (y prints `Value` and holds a map on every path): x takes it back with `.into_opt_dict()` (moved at y's last use). */
+  rust67cMapLocalSource(rhs, declaration) {
+    const type = declaration?.type;
+    if (rhs === void 0 || !isIdentifier3(rhs) || type === void 0 || type.kind !== SyntaxKind7.TypeReference || !isIdentifier3(type.typeName) || !_RustTranspiler.RUST_67C_MAP_TYPES.has(String(type.typeName.text)))
+      return void 0;
+    const source = this.rustDeclarationOfIdentifier(rhs);
+    if (source === void 0 || source === declaration || source.name === rhs || !isVariableDeclaration3(source) || !isIdentifier3(source.name))
+      return void 0;
+    const list = source.parent;
+    if (list?.kind !== SyntaxKind7.VariableDeclarationList || (list.flags & NodeFlags4.Const) === 0 || list.declarations.length !== 1)
+      return void 0;
+    const init = source.initializer === void 0 ? void 0 : this.unwrapParens(source.initializer);
+    if (init === void 0 || !isObjectLiteralExpression4(init) || init.properties.some((p) => p.kind !== SyntaxKind7.PropertyAssignment))
+      return void 0;
+    if (this.rustEnclosingFunction(source) !== this.rustEnclosingFunction(declaration))
+      return void 0;
+    if (this.rustNilLocalKind(source) !== void 0 || this.rustScalarLocalKind(source) !== void 0 || this.rustBorrowedLocalKind(source) !== void 0 || this.rustDictLocalIsTyped(source) || this.rustVecLocalIsTyped(source) || this.rustMarketLocalKind(source) !== false || this.rustOptListLocal(source) || this.rustNilMapLocal(source))
+      return void 0;
+    return source;
+  }
+  /** ral-67c: the head `x` of `x = this.extend (x, y)` on a nil map local: the optional map moves out (`x.take()`) and is written back. */
+  rust67cNilMapExtendHead(node, declaration) {
+    const call = node?.parent;
+    if (!isCallExpression6(call) || call.arguments[0] !== node)
+      return false;
+    const assign = call.parent;
+    if (!isBinaryExpression5(assign) || assign.right !== call || !isIdentifier3(assign.left))
+      return false;
+    return this.rustIdentifierRefersToDeclaration(assign.left, declaration) && this.rust67cNilMapExtendWrite(assign.left, declaration);
   }
   /** og: the nil-declared map local a declaration aliases whole (`const x = y`, same function, no closure between). */
   rustNilMapAliasSource(declaration) {
@@ -74637,6 +74684,13 @@ ${iden}}`;
     const rhs = this.unwrapParens(right);
     if (this.literalKindOfNode(rhs) === "null")
       return `${name} = None`;
+    const mapSource = this.rust67cMapLocalSource(rhs, this.rustNilMapOf(left));
+    if (mapSource !== void 0) {
+      const s = super.transformIdentifier(rhs, this.ReservedKeywordsReplacements[rhs.text] ?? rhs.text);
+      return `${name} = ${this.rustLocalLastUse(rhs, mapSource) ? s : `${s}.clone()`}.into_opt_dict()`;
+    }
+    if (this.rust67cNilMapExtendWrite(left, this.rustNilMapOf(left)))
+      return `${name} = Some(${this.printNode(right, identation).trim()}.into_dict())`;
     if (isArrayLiteralExpression4(rhs))
       return `${name} = Some(${this.printBuiltListLiteral(rhs)})`;
     return `${name} = Some(crate::value::Dict::new(${this.rustObjectLiteralBlock(rhs, identation)}))`;
@@ -74654,6 +74708,9 @@ ${iden}}`;
   /** The `Value` hand-off: the map moved at the last use, else the Arc bump; `None` is `Value::Null`. */
   printNilMapBox(node, text) {
     const parent = node?.parent;
+    const extendHeadOf = this.rustNilMapOf(node);
+    if (extendHeadOf !== void 0 && this.rust67cNilMapExtendHead(node, extendHeadOf))
+      return `${text}.take()`;
     if (parent === void 0 || !(parent.kind === SyntaxKind7.PropertyAssignment && parent.initializer === node || isReturnStatement4(parent) && parent.expression === node || this.rustNilMapExtraBox(node)))
       return void 0;
     const declaration = this.rustNilMapOf(node);
@@ -88856,6 +88913,7 @@ _RustTranspiler.RUST_LENT_OPTIONAL_HELPERS = /* @__PURE__ */ new Set([
   // exactly as the boxed Null passed through, `Some(m)` drops keys from the shared map (copy-on-write)
   "omit"
 ]);
+_RustTranspiler.RUST_67C_MAP_TYPES = /* @__PURE__ */ new Set(["NullableDict", "Dict"]);
 _RustTranspiler.RUST_62N_LIST_READERS = /* @__PURE__ */ new Set(["safeList", "safeList2", "safeListN"]);
 // ── rustParamReadsByReference / rustReaderTakesContainerByReference: generated readers lend their container ──
 // A generated base reader whose container parameter is only handed to by-reference readers declares it
