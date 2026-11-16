@@ -20495,3 +20495,26 @@ describe('ral-60i: a nil-assigned declared list used as its own safeList default
         expect(out).not.toContain('let mut response: crate::value::List');
     });
 });
+
+describe('ral-61i: an optional endpoint map handed over whole to a typed reuse map (endpoint alias write)', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type List = any[];\nexport default class Exchange {\n    safeDict (o: any, k: any, d: any = undefined): Dict { return o; }\n    safeString (o: any, k: any, d: any = undefined): string | undefined { return o; }\n    keep (o: any): any { return o; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync (path.join (dir, 'ts/src/abstract'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/abstract/venue.ts'), "import Exchange from '../base/Exchange.js';\nimport type { Dict, List } from '../base/Exchange.js';\nexport default abstract class venueApi extends Exchange {\n    publicGetA (params = {}): Promise<Dict> { return this.keep (params); }\n    publicGetB (params = {}): Promise<Dict> { return this.keep (params); }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import venueApi from './abstract/venue.js';\nimport type { Dict, List } from './base/Exchange.js';\nexport default class venue extends venueApi {\n    async m (flag: boolean, params: Dict = {}) {\n        let response = undefined;\n        let data: Dict = {};\n        if (flag) {\n            response = await this.publicGetA (params);\n            data = response;\n        } else {\n            response = await this.publicGetB (params);\n            data = this.safeDict (response, 'data', {});\n        }\n" + body + "    }\n}\n");
+        return path.join (dir, 'ts/src/venue.ts');
+    };
+    test('the endpoint alias write takes the optional map over', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-61i-pos', "        const status = this.safeString (data, 'status');\n        return { 'status': status, 'info': response };\n")).content;
+        expect(out).toContain('let mut response: Option<crate::value::Dict> = None;');
+        expect(out).toContain('data = response.clone().unwrap_or_default();');
+        expect(out).toContain('response.map_or(Value::Null, Value::Dict)');
+    });
+    test('a source read again as a plain Value keeps its box', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-61i-neg', "        return this.keep (response);\n")).content;
+        expect(out).not.toContain('let mut response: Option<crate::value::Dict>');
+    });
+});

@@ -21459,6 +21459,10 @@ export class RustTranspiler extends BaseTranspiler {
             if (this.rustOptAliasTargetUse(n, declaration, fn)) return ++lentNullable > 0 && ++reads > 0;
             // ral-45f: the source of `let t = x` whose target holds the optional form through the initialised alias rule
             if (this.rustOptAliasInitTargetUse(n, declaration, fn)) return ++lentNullable > 0 && ++reads > 0;
+            // ral-61i: the source of an endpoint alias write `t = x` (rustEndpointAliasWrite: x was just written from a declared
+            // `Promise<Dict>` endpoint) whose target is a typed reuse map: the optional map hands its map over
+            // (`x.clone().unwrap_or_default()`), the empty map for `None` exactly as the boxed `x.clone().into_dict()` did
+            if (nilDeclared && from === 'dict' && this.rustEndpointAliasSourceUse(n, declaration)) return ++reads > 0;
             // ral-40h: `const|let y = x` of a container local (phase 1): the alias takes the container whole
             // ral-53n: the initializer / a whole write of a never-null alias of this kind is lent (`Value::from(&x)` shares the Arc)
             if (!nilDeclared && (from === 'dict' || from === 'list') && this.rustNnAliasSourceUse(n, from)) return ++reads > 0;
@@ -21814,6 +21818,16 @@ export class RustTranspiler extends BaseTranspiler {
         return this.rustReuseEndpointWrite(producer.right) ? producer : undefined;
     }
 
+    /** ral-61i: `n` is the bare source of `t = n` (rustEndpointAliasWrite) and `t` another local that holds a typed reuse map. */
+    rustEndpointAliasSourceUse(n: any, declaration: any): boolean {
+        const up: any = n.parent;
+        if (!isBinaryExpression(up) || up.right !== n || !isIdentifier(up.left) || this.rustEndpointAliasWrite(up) === undefined) return false;
+        const t: any = this.rustDeclarationOfIdentifier(up.left);
+        if (t === undefined || t === declaration || !isVariableDeclaration(t) || t.name === up.left || this.rustBorrowedPending.has(t)) return false;
+        if (this.rustEnclosingFunction(t) !== this.rustEnclosingFunction(n)) return false;
+        return this.rustBorrowedLocalKind(t) === 'dict' && this.rustExtendReuseLocals.has(t) && this.rustReuseProducerWrites.has(up);
+    }
+
     /** The producer of a reuse write builds from untagged operands only: `extend` / `omit` operands proven plain
      *  (`rustUntaggedMapOperand`), `indexBy` / `groupBy` fresh maps, a REST `safeDict` read off a local (parsed JSON). */
     rustReuseProducerUntagged(n: any, rhs: any): boolean {
@@ -22041,6 +22055,10 @@ export class RustTranspiler extends BaseTranspiler {
         if (source !== undefined && isIdentifier(source) && this.rustEndpointAliasWrite(left.parent) !== undefined) {
             const sourceDeclaration: any = this.rustDeclaredNode(source);
             const moved = sourceDeclaration !== undefined && this.rustLocalLastUse(source, sourceDeclaration);
+            // ral-61i: an optional-map source (rustEndpointAliasSourceUse) hands its map over, the empty map for `None`
+            if (sourceDeclaration !== undefined && this.rustOptContainerLocals.has(sourceDeclaration) && this.rustBorrowedLocalKind(sourceDeclaration) === 'dict') {
+                return `${name} = ${String(source.text)}${moved ? '' : '.clone()'}.unwrap_or_default()`;
+            }
             return `${name} = ${this.printNode(right, 0).trim()}${moved ? '' : '.clone()'}.into_dict()`;
         }
         return `${name} = ${this.printNode(right, 0).trim()}.into_dict()`;
