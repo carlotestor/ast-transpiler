@@ -3071,6 +3071,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `true` / `false` for a null test the never-null rule recorded on a local that kept its plain container form. */
     printNeverNullContainerTest(left: any, op: any): string | undefined;
     rustOptAliasSourceKind(rhs: any, fn: any): 'dict' | 'list' | undefined;
+    /** ral-61i: `let x = undefined` / `let x: T;` (a statement, one declarator) written only as statements `x = await this.<endpoint> (..)`
+     *  of REST endpoints declared `Promise<Dict>` (or `x = undefined`): the optional map the declared-endpoint rule holds. */
+    rustDeclaredDictEndpointLet(d: any): boolean;
     /** The source side: `t = n` (statement) whose target `t` holds the optional form of n's kind through rustOptAliasSourceKind. */
     rustOptAliasTargetUse(n: any, declaration: any, fn: any): boolean;
     /** ral-45f: the source side of `let t = n` whose target holds the optional form through the initialised alias rule. */
@@ -3114,6 +3117,8 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  `x = y.clone().into_dict()` (the form a declared-endpoint write prints; a non-map answer is the empty map there too).
      *  Answers the endpoint write. */
     rustEndpointAliasWrite(write: any): any;
+    /** ral-61i: `n` is the bare source of `t = n` (rustEndpointAliasWrite) and `t` another local that holds a typed reuse map. */
+    rustEndpointAliasSourceUse(n: any, declaration: any): boolean;
     /** The producer of a reuse write builds from untagged operands only: `extend` / `omit` operands proven plain
      *  (`rustUntaggedMapOperand`), `indexBy` / `groupBy` fresh maps, a REST `safeDict` read off a local (parsed JSON). */
     rustReuseProducerUntagged(n: any, rhs: any): boolean;

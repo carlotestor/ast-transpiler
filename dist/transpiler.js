@@ -72839,6 +72839,8 @@ ${iden}}`;
         return ++lentNullable > 0 && ++reads > 0;
       if (this.rustOptAliasInitTargetUse(n, declaration, fn))
         return ++lentNullable > 0 && ++reads > 0;
+      if (nilDeclared && from === "dict" && this.rustEndpointAliasSourceUse(n, declaration))
+        return ++reads > 0;
       if (!nilDeclared && (from === "dict" || from === "list") && this.rustNnAliasSourceUse(n, from))
         return ++reads > 0;
       if (this.rustContainerAliasInit(n, declaration))
@@ -72986,6 +72988,8 @@ ${iden}}`;
     if (d === void 0 || !isVariableDeclaration3(d) || d.name === rhs || !isIdentifier3(d.name) || this.rustEnclosingFunction(d) !== fn)
       return void 0;
     const list = d.parent;
+    if (list?.kind === SyntaxKind7.VariableDeclarationList && list.declarations?.length === 1 && (list.flags & NodeFlags4.Const) === 0 && this.rustDeclaredDictEndpointLet(d))
+      return "dict";
     if (list?.kind !== SyntaxKind7.VariableDeclarationList || list.declarations?.length !== 1 || (list.flags & NodeFlags4.Const) === 0)
       return void 0;
     const init = this.rustSkipWrappers(d.initializer);
@@ -73001,6 +73005,51 @@ ${iden}}`;
     if (String(init.getText()).split("\n")[0].length > 240)
       return void 0;
     return kind;
+  }
+  /** ral-61i: `let x = undefined` / `let x: T;` (a statement, one declarator) written only as statements `x = await this.<endpoint> (..)`
+   *  of REST endpoints declared `Promise<Dict>` (or `x = undefined`): the optional map the declared-endpoint rule holds. */
+  rustDeclaredDictEndpointLet(d) {
+    const init = this.rustSkipWrappers(d.initializer);
+    if (init !== void 0 && this.literalKindOfNode(init) !== "null")
+      return false;
+    if (d.parent?.parent?.kind !== SyntaxKind7.VariableStatement || this.rustTestTierSource(d))
+      return false;
+    const fn = this.rustEnclosingFunction(d);
+    if (fn === void 0 || isSourceFile5(fn))
+      return false;
+    const name = String(d.name.text);
+    let writes = 0;
+    let ok = true;
+    const visit = (n) => {
+      if (!ok)
+        return;
+      if (isIdentifier3(n) && String(n.text) === name && n !== d.name && !this.rustIdentifierIsPropertyName(n) && this.rustIdentifierRefersToDeclaration(n, d)) {
+        const up = n.parent;
+        if (isBinaryExpression5(up) && up.left === n) {
+          if (up.operatorToken.kind !== SyntaxKind7.EqualsToken || up.parent?.kind !== SyntaxKind7.ExpressionStatement) {
+            ok = false;
+            return;
+          }
+          const rhs = this.rustSkipWrappers(up.right);
+          if (this.literalKindOfNode(rhs) === "null")
+            return;
+          if (rhs?.kind !== SyntaxKind7.AwaitExpression || !this.rustDeclaredEndpointWrite(rhs)) {
+            ok = false;
+            return;
+          }
+          const call = this.rustSkipWrappers(rhs.expression);
+          if (this.rustDeclaredEndpointKind(call) !== "dict") {
+            ok = false;
+            return;
+          }
+          writes++;
+        }
+        return;
+      }
+      n.forEachChild(visit);
+    };
+    visit(fn);
+    return ok && writes > 0;
   }
   /** The source side: `t = n` (statement) whose target `t` holds the optional form of n's kind through rustOptAliasSourceKind. */
   rustOptAliasTargetUse(n, declaration, fn) {
@@ -73193,6 +73242,18 @@ ${iden}}`;
     if (producer === void 0 || !isBinaryExpression5(producer) || producer.operatorToken.kind !== SyntaxKind7.EqualsToken || !isIdentifier3(producer.left) || producer.left.text !== source.text || this.rustDeclaredNode(producer.left) !== this.rustDeclaredNode(source))
       return void 0;
     return this.rustReuseEndpointWrite(producer.right) ? producer : void 0;
+  }
+  /** ral-61i: `n` is the bare source of `t = n` (rustEndpointAliasWrite) and `t` another local that holds a typed reuse map. */
+  rustEndpointAliasSourceUse(n, declaration) {
+    const up = n.parent;
+    if (!isBinaryExpression5(up) || up.right !== n || !isIdentifier3(up.left) || this.rustEndpointAliasWrite(up) === void 0)
+      return false;
+    const t = this.rustDeclarationOfIdentifier(up.left);
+    if (t === void 0 || t === declaration || !isVariableDeclaration3(t) || t.name === up.left || this.rustBorrowedPending.has(t))
+      return false;
+    if (this.rustEnclosingFunction(t) !== this.rustEnclosingFunction(n))
+      return false;
+    return this.rustBorrowedLocalKind(t) === "dict" && this.rustExtendReuseLocals.has(t) && this.rustReuseProducerWrites.has(up);
   }
   /** The producer of a reuse write builds from untagged operands only: `extend` / `omit` operands proven plain
    *  (`rustUntaggedMapOperand`), `indexBy` / `groupBy` fresh maps, a REST `safeDict` read off a local (parsed JSON). */
@@ -73427,6 +73488,9 @@ ${iden}}`;
     if (source !== void 0 && isIdentifier3(source) && this.rustEndpointAliasWrite(left.parent) !== void 0) {
       const sourceDeclaration = this.rustDeclaredNode(source);
       const moved = sourceDeclaration !== void 0 && this.rustLocalLastUse(source, sourceDeclaration);
+      if (sourceDeclaration !== void 0 && this.rustOptContainerLocals.has(sourceDeclaration) && this.rustBorrowedLocalKind(sourceDeclaration) === "dict") {
+        return `${name} = ${String(source.text)}${moved ? "" : ".clone()"}.unwrap_or_default()`;
+      }
       return `${name} = ${this.printNode(right, 0).trim()}${moved ? "" : ".clone()"}.into_dict()`;
     }
     return `${name} = ${this.printNode(right, 0).trim()}.into_dict()`;
