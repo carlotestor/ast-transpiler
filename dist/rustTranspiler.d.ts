@@ -3064,6 +3064,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustBorrowedKinds;
     rustBorrowedLocalKindUncached(declaration: any): 'dict' | 'list' | undefined;
     private rustOptContainerLocals;
+    /** ral-61n: optional map locals whose key-set uses (`Object.keys`, `in`) print off `x.as_deref()`. */
+    private rustOptKeySetLocals;
     static readonly RUST_NEVER_NULL_TEST_READERS: Set<string>;
     private rustNeverNullTests;
     /** ral-60n: the reader's default is the empty literal of the local's kind (`[]` for a list, `{}` for a map). */
@@ -3286,7 +3288,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustValueWriteOpen;
     /** ral-ra: `m['k'] = x` / `m.k = x` one level on another local `m` (not `x` itself): the store takes the value by
      *  value, so the shared container is boxed there once (moved at its last use, else the Arc bump the `Value` paid). */
-    rustLocalKeyPlace(place: any, n: any): boolean;
+    rustLocalKeyPlace(place: any, n: any, castRecv?: boolean): boolean;
     rustOptReaderBoxUse(n: any, init: any): boolean;
     /** ral-55h: `n` is a handler argument (not the `this` receiver slot) of `h.call (this, ..)` on an identifier `h` typed
      *  `any` (the by-name ws dispatch the ccxt build turns into `self.dispatch_ws_handler(&h, &[..])`). */
@@ -3307,8 +3309,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustStrKeyParam(declaration: any): boolean;
     rustBorrowedStrKeyTest(name: string, node: any): string;
     rustBorrowedDictName(node: any): string | undefined;
+    /** ral-61n: the printed name of an optional map local admitted for key-set uses (see rustOptKeySetLocals). */
+    rustOptKeySetDictName(node: any): string | undefined;
     printBorrowedKeys(node: any, kind: 'keys' | 'values'): string | undefined;
     printBorrowedInOp(key: any, obj: any): string | undefined;
+    /** The `contains_key` test of `key` on the map printed as `name` (boxed `Value::Bool(..)` when `boxed`). */
+    printBorrowedInOpOn(name: string | undefined, key: any, boxed?: boolean): string | undefined;
     /** A read of `n['literal']` / `n.name` (not a write target, call receiver, length or digit key). */
     rustDictKeyReadUse(n: any): boolean;
     /** The typed declaration line (`: crate::value::Dict = .. .into_dict()`, about 40 chars more) stays within 400 chars. */

@@ -51792,6 +51792,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustSbAliasReask = /* @__PURE__ */ new WeakSet();
     this.rustBorrowedKinds = /* @__PURE__ */ new WeakMap();
     this.rustOptContainerLocals = /* @__PURE__ */ new WeakSet();
+    /** ral-61n: optional map locals whose key-set uses (`Object.keys`, `in`) print off `x.as_deref()`. */
+    this.rustOptKeySetLocals = /* @__PURE__ */ new WeakSet();
     this.rustNeverNullTests = /* @__PURE__ */ new WeakMap();
     // ── ral-wh: index / variable-key reads on held Dict / List locals (rustBorrowedIndexReadUse) ──
     // `KeyRead::read(&&x, &k)` is `get_map_value` / `get_list_value`, the arm `get_value` takes for that variant.
@@ -72913,7 +72915,10 @@ ${iden}}`;
     if (paramsBoxes > 0 && (optional || from !== "dict"))
       return void 0;
     const onlySafeDictWrites = keyWrites > 0 && safeDictKeyWrites === keyWrites && keySets === 0;
-    if ((keySets > 0 || keyWrites > 0) && (from !== "dict" || optional && !onlySafeDictWrites || init !== void 0 && !extendReuse && this.rustInitReadsTaggedStore(init)))
+    const optKeySetsOnly = keySets > 0 && keyWrites === 0 && writes === 0 && !nilDeclared && nullTests > 0 && from === "dict" && this.rustNullTestedDictLocal(init, nullTests, writes);
+    if (optKeySetsOnly)
+      this.rustOptKeySetLocals.add(declaration);
+    if ((keySets > 0 || keyWrites > 0) && (from !== "dict" || optional && !onlySafeDictWrites && !optKeySetsOnly || init !== void 0 && !extendReuse && this.rustInitReadsTaggedStore(init)))
       return void 0;
     if (keyWriteUses.some((n) => !this.rustBuiltKeyWriteLineOk(n, optional ? 30 : 0)))
       return void 0;
@@ -74383,8 +74388,8 @@ ${iden}}`;
   }
   /** ral-ra: `m['k'] = x` / `m.k = x` one level on another local `m` (not `x` itself): the store takes the value by
    *  value, so the shared container is boxed there once (moved at its last use, else the Arc bump the `Value` paid). */
-  rustLocalKeyPlace(place, n) {
-    const recv = place.expression;
+  rustLocalKeyPlace(place, n, castRecv = false) {
+    const recv = castRecv ? this.rustSkipWrappers(place.expression) : place.expression;
     if (!_is.isIdentifier.call(void 0, recv) || recv.text === n.text || _is.isElementAccessExpression.call(void 0, recv) || _is.isPropertyAccessExpression.call(void 0, recv))
       return false;
     if (_is.isElementAccessExpression.call(void 0, place) && !_is.isStringLiteralLikeNode.call(void 0, this.rustSkipWrappers(place.argumentExpression)))
@@ -74502,26 +74507,46 @@ ${iden}}`;
       return void 0;
     return super.transformIdentifier(recv, _nullishCoalesce(this.ReservedKeywordsReplacements[recv.text], () => ( recv.text)));
   }
+  /** ral-61n: the printed name of an optional map local admitted for key-set uses (see rustOptKeySetLocals). */
+  rustOptKeySetDictName(node) {
+    const recv = this.rustSkipWrappers(node);
+    const opt = recv === void 0 ? void 0 : this.rustOptContainerOf(recv);
+    if (opt === void 0 || opt.kind !== "dict" || !this.rustOptKeySetLocals.has(opt.declaration))
+      return void 0;
+    return super.transformIdentifier(recv, _nullishCoalesce(this.ReservedKeywordsReplacements[recv.text], () => ( recv.text)));
+  }
   printBorrowedKeys(node, kind) {
     const arg = this.bearerEnumArg(node);
+    const opt = arg === void 0 ? void 0 : this.rustOptKeySetDictName(arg);
+    if (opt !== void 0)
+      return kind === "keys" ? `Value::Array(${opt}.as_deref().into_iter().flat_map(crate::value::HashMap::keys).cloned().map(Value::from).collect())` : `Value::Array(${opt}.as_deref().into_iter().flat_map(crate::value::HashMap::values).cloned().collect())`;
     const name = arg === void 0 ? void 0 : this.rustBorrowedDictName(arg);
     if (name === void 0)
       return void 0;
     return kind === "keys" ? `Value::Array(${name}.keys().cloned().map(Value::from).collect())` : `Value::Array(${name}.values().cloned().collect())`;
   }
   printBorrowedInOp(key, obj) {
-    const name = this.rustBorrowedDictName(obj);
+    const opt = this.rustOptKeySetDictName(obj);
+    if (opt !== void 0) {
+      const inner = this.printBorrowedInOpOn("__d", key);
+      return inner === void 0 ? void 0 : `Value::Bool(matches!(${opt}.as_deref(), Some(__d) if ${inner}))`;
+    }
+    return this.printBorrowedInOpOn(this.rustBorrowedDictName(obj), key, true);
+  }
+  /** The `contains_key` test of `key` on the map printed as `name` (boxed `Value::Bool(..)` when `boxed`). */
+  printBorrowedInOpOn(name, key, boxed = false) {
+    const wrap = (t) => boxed ? `Value::Bool(${t})` : t;
     const k = name === void 0 ? void 0 : this.rustBorrowedInOpKey(key);
     if (k === void 0)
       return void 0;
     if (k.literal)
-      return `Value::Bool(${name}.contains_key(${k.text}))`;
+      return wrap(`${name}.contains_key(${k.text})`);
     const inner = this.rustSkipWrappers(key);
     if (this.bearerInOpKeyText(key) === void 0 && _is.isIdentifier.call(void 0, inner))
-      return `Value::Bool(${this.rustBorrowedStrKeyTest(name, inner)})`;
+      return wrap(this.rustBorrowedStrKeyTest(name, inner));
     if (_is.isIdentifier.call(void 0, inner) && this.rustInKeyTypedText(key) !== void 0)
-      return `Value::Bool(${this.rustBorrowedStrKeyTest(name, inner)})`;
-    return `Value::Bool(matches!(&${k.text}, Value::Str(__k) if ${name}.contains_key(__k.as_ref())))`;
+      return wrap(this.rustBorrowedStrKeyTest(name, inner));
+    return wrap(`matches!(&${k.text}, Value::Str(__k) if ${name}.contains_key(__k.as_ref()))`);
   }
   // ── rustDictKeyReadUse / printDictKeyRead: direct literal-key reads (`m['k']`, `m.k`) on a dict local ──
   // The shared map (or its optional form) reads through the reader trait the `safe_*_k` readers use:
@@ -80536,7 +80561,7 @@ ${iden}}`;
     }
     if (_is.isBinaryExpression.call(void 0, up) && up.right === n && up.operatorToken.kind === _ast.SyntaxKind.EqualsToken && _optionalChain([up, 'access', _10719 => _10719.parent, 'optionalAccess', _10720 => _10720.kind]) === _ast.SyntaxKind.ExpressionStatement && !this.rustScalarInNestedWrite(n, true) && !this.rustInDestructureWrite(n)) {
       const place = up.left;
-      const keyed = (_is.isElementAccessExpression.call(void 0, place) || _is.isPropertyAccessExpression.call(void 0, place)) && (this.rustThisRootedPlace(place) || this.rustLocalKeyPlace(place, n));
+      const keyed = (_is.isElementAccessExpression.call(void 0, place) || _is.isPropertyAccessExpression.call(void 0, place)) && (this.rustThisRootedPlace(place) || this.rustLocalKeyPlace(place, n, true));
       const alias = _is.isIdentifier.call(void 0, place) && place.text !== n.text && this.rustOptListAliasTarget(place);
       if (keyed || alias)
         return this.rustLocalLastUse(n, declaration) ? "move" : "clone";
