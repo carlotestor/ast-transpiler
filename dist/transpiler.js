@@ -42356,6 +42356,73 @@ ${iden}} else {
 ${iden}	${name} = ${whenFalse}
 ${iden}}`;
 };
+function go87g8BlockScoped(decl) {
+  const list = decl?.parent;
+  return list?.kind === SyntaxKind5.VariableDeclarationList && (list.flags & (ts.NodeFlags.Let | ts.NodeFlags.Const)) !== 0 && decl.name?.kind === SyntaxKind5.Identifier;
+}
+function go87g8EnclosingBlock(node) {
+  let current = node?.parent;
+  while (current !== void 0 && current.kind !== SyntaxKind5.Block && current.kind !== SyntaxKind5.SourceFile) {
+    current = current.parent;
+  }
+  return current;
+}
+function go87g8Contains(outer, inner) {
+  for (let current = inner; current !== void 0; current = current.parent) {
+    if (current === outer) {
+      return true;
+    }
+  }
+  return false;
+}
+var goDeclaredLocalTypeIfSafeBase87g8 = GoTranspiler.prototype.goDeclaredLocalTypeIfSafe;
+GoTranspiler.prototype.goDeclaredLocalTypeIfSafe = function(declaration, goType, readsTheValue, skipUse) {
+  const shipped = goDeclaredLocalTypeIfSafeBase87g8.call(this, declaration, goType, readsTheValue, skipUse);
+  if (shipped !== void 0 || goType !== GO_MARKET_LOCAL_TYPE || skipUse === void 0 || !go87g8BlockScoped(declaration)) {
+    return shipped;
+  }
+  const sourceName = declaration.name.text;
+  const scope = this.goEnclosingFunction(declaration);
+  const ownBlock = go87g8EnclosingBlock(declaration);
+  if (scope === void 0 || ownBlock === void 0 || ownBlock === scope) {
+    return void 0;
+  }
+  let siblings = 0;
+  let nilTests = 0;
+  const unsafe = this.hasNodeWhere(scope, (n) => {
+    if (n.kind === SyntaxKind5.Parameter && n.name?.kind === SyntaxKind5.Identifier && n.name.text === sourceName) {
+      return true;
+    }
+    if (n.kind === SyntaxKind5.VariableDeclaration && n !== declaration && n.name?.kind === SyntaxKind5.Identifier && n.name.text === sourceName) {
+      const otherBlock = go87g8EnclosingBlock(n);
+      if (!go87g8BlockScoped(n) || otherBlock === void 0 || otherBlock === scope || go87g8Contains(otherBlock, ownBlock) || go87g8Contains(ownBlock, otherBlock)) {
+        return true;
+      }
+      siblings += 1;
+      return false;
+    }
+    if (n.kind !== SyntaxKind5.Identifier || n.text !== sourceName || n === declaration.name) {
+      return false;
+    }
+    if (n.parent?.kind === SyntaxKind5.VariableDeclaration && n.parent.name === n) {
+      return false;
+    }
+    if (skipUse(n)) {
+      return false;
+    }
+    if (!go87g8Contains(ownBlock, n)) {
+      return true;
+    }
+    if (this.goIsNilComparisonOperand(n, n.parent)) {
+      nilTests += 1;
+    }
+    return !readsTheValue(n);
+  });
+  if (unsafe || siblings === 0 || nilTests === 0 || this.goTypeNameIsShadowed(scope, goType)) {
+    return void 0;
+  }
+  return goType;
+};
 
 // src/javaTranspiler.ts
 init_esm_shims();
