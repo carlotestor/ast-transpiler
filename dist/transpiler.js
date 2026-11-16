@@ -41593,6 +41593,59 @@ GoTranspiler.prototype.goDeclaredTypeOfIdentifier = function(node) {
   this.goLocalSafeVerdicts.delete(owner);
   return answer;
 };
+var goTernaryJoinR1PartsUncached = GoTranspiler.prototype.goTernaryJoinPartsUncached;
+GoTranspiler.prototype.goTernaryJoinPartsUncached = function(declaration) {
+  const known = goTernaryJoinR1PartsUncached.call(this, declaration);
+  if (known !== void 0) {
+    return known;
+  }
+  const ternary = this.goUnwrapParenthesizedNode(declaration?.initializer);
+  if (ternary?.kind !== SyntaxKind5.ConditionalExpression) {
+    return void 0;
+  }
+  const whenTrue = this.goTernaryJoinArmType(ternary.whenTrue);
+  const whenFalse = this.goTernaryJoinArmType(ternary.whenFalse);
+  if (this.goWithExprDepth(1, () => this.printCondition(ternary.condition, 0)).includes("\n")) {
+    return void 0;
+  }
+  const pointerArm = (armNode, armType, otherType, outcome) => {
+    const arm = this.goUnwrapParenthesizedNode(armNode);
+    return armType === "*int64" && otherType === "int" && arm?.kind === SyntaxKind5.Identifier && this.goTernaryJoinConditionDefines(ternary.condition, arm.text, outcome);
+  };
+  if (pointerArm(ternary.whenTrue, whenTrue, whenFalse, true)) {
+    return { goType: "int64", derefTrue: true, derefFalse: false, widenFalse: true };
+  }
+  if (pointerArm(ternary.whenFalse, whenFalse, whenTrue, false)) {
+    return { goType: "int64", derefTrue: false, derefFalse: true, widenTrue: true };
+  }
+  return void 0;
+};
+var goTernaryJoinR1Declaration = GoTranspiler.prototype.goTernaryJoinDeclaration;
+GoTranspiler.prototype.goTernaryJoinDeclaration = function(statement, declaration, identation) {
+  const parts = goTernaryJoinOwner(declaration?.initializer) === declaration ? this.goTernaryJoinParts(declaration) : void 0;
+  if (parts === void 0 || !parts.widenTrue && !parts.widenFalse) {
+    return goTernaryJoinR1Declaration.call(this, statement, declaration, identation);
+  }
+  if (statement?.parent?.kind !== SyntaxKind5.FirstStatement || statement.declarations?.length !== 1 || this.getGoLocalType(declaration, this.printNode(declaration.initializer, identation)) !== parts.goType) {
+    return void 0;
+  }
+  const ternary = this.goUnwrapParenthesizedNode(declaration.initializer);
+  const condition = this.goWithExprDepth(1, () => this.printCondition(ternary.condition, 0));
+  const arm = (node, deref, widen) => {
+    const printed = this.goPrintTernaryBranch(node, 1).trim();
+    return deref ? "*" + printed : widen ? "int64(" + printed + ")" : printed;
+  };
+  const whenTrue = arm(ternary.whenTrue, parts.derefTrue, parts.widenTrue === true);
+  const whenFalse = arm(ternary.whenFalse, parts.derefFalse, parts.widenFalse === true);
+  const name = this.printNode(declaration.name, 0);
+  const iden = this.getIden(identation);
+  return `${iden}var ${name} ${parts.goType}
+${iden}if ${this.goStripControlClauseParens(condition)} {
+${iden}	${name} = ${whenTrue}
+${iden}} else {
+${iden}	${name} = ${whenFalse}
+${iden}}`;
+};
 
 // src/javaTranspiler.ts
 init_esm_shims();
