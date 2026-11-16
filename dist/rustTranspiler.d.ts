@@ -4547,6 +4547,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustVenueStrParamType(param: any): string | undefined;
     rustVenueStrParamTypeUncached(param: any): string | undefined;
     private static readonly RUST_BASE_SCALAR_PARAM_METHODS;
+    private static readonly RUST_BASE_ASYNC_SCALAR_PARAM_METHODS;
     private static readonly RUST_OVERRIDE_GROUP_STR_PARAMS;
     private rustOverrideGroupAgreeByRoot;
     /** The first parameter of a listed override group when ALL declarations (base, prediction base, every venue,

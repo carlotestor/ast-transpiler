@@ -84608,10 +84608,10 @@ ${this.getIden(identation)}}`;
    *  signature: every call resolves to this one body, so typing its parameter changes no other declaration. */
   rustBaseOnlyMethod(method, file) {
     const at = file.search(/(?:^|\/)ts\/src\/base\/(?:Exchange|\.__ExchangeNoOverloads)\.ts$/);
-    if (at < 0 || this.isAsyncFunction(method))
+    if (at < 0)
       return false;
     const name = String(method.name.text);
-    if (!_RustTranspiler.RUST_BASE_SCALAR_PARAM_METHODS.includes(name))
+    if (!(this.isAsyncFunction(method) ? _RustTranspiler.RUST_BASE_ASYNC_SCALAR_PARAM_METHODS : _RustTranspiler.RUST_BASE_SCALAR_PARAM_METHODS).includes(name))
       return false;
     if (this.toSnakeCaseName(name) in (this.rustVirtualDispatch ?? {}) || this.rustNonVirtualShims?.has(this.toSnakeCaseName(name)))
       return false;
@@ -87504,6 +87504,9 @@ _RustTranspiler.PARAMS_SLOT_ARG = {
 // Base methods whose scalar parameters print typed (measured one by one: each frees more locals than it adds
 // conversions at its callers); a method listed here must have no venue override and no hand-written body.
 _RustTranspiler.RUST_BASE_SCALAR_PARAM_METHODS = ["convertExpireDate", "convertExpireDateToMarketIdDate", "convertMarketIdExpireDate"];
+// ral-59e: async base methods typed the same way (no venue override, no trait slot); every caller in ts/src passes
+// its own unwritten `since: Int` / `symbol: Str` / `limit: Int` parameter (52 call sites of fetchPaginatedCallDeterministic)
+_RustTranspiler.RUST_BASE_ASYNC_SCALAR_PARAM_METHODS = ["fetchPaginatedCallDeterministic"];
 // Trait-slot override groups typed together: method -> its first parameter, printed `&str` by the base, every
 // override, the `DerivedExchange` slot (rustDispatch.isSlotStr) and every forwarder.
 _RustTranspiler.RUST_OVERRIDE_GROUP_STR_PARAMS = { "sign": "path" };
