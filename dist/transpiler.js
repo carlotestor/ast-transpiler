@@ -12108,6 +12108,9 @@ function tupleJoinPairResultWriteType(right, index) {
   return GO_TUPLE_JOIN_TYPE;
 }
 function tupleJoinIndexWriteType(goTranspiler, right) {
+  if (tupleJoinIsSelfOmit(right)) {
+    return GO_TUPLE_JOIN_TYPE;
+  }
   if (right?.kind !== ts.SyntaxKind.ElementAccessExpression || right.expression?.kind !== ts.SyntaxKind.Identifier) {
     return void 0;
   }
@@ -12123,6 +12126,11 @@ function tupleJoinIndexWriteType(goTranspiler, right) {
     return void 0;
   }
   return holderType.substring(2) === GO_TUPLE_JOIN_TYPE ? GO_TUPLE_JOIN_TYPE : void 0;
+}
+function tupleJoinIsSelfOmit(right) {
+  const target = right?.parent;
+  const callee = right?.expression;
+  return right?.kind === ts.SyntaxKind.CallExpression && right.questionDotToken === void 0 && target?.kind === ts.SyntaxKind.BinaryExpression && target.right === right && target.operatorToken.kind === ts.SyntaxKind.EqualsToken && target.left?.kind === ts.SyntaxKind.Identifier && callee?.kind === ts.SyntaxKind.PropertyAccessExpression && callee.expression?.kind === ts.SyntaxKind.ThisKeyword && callee.name?.text === "omit" && right.arguments.length >= 2 && !right.arguments.some((a) => a.kind === ts.SyntaxKind.SpreadElement) && right.arguments[0]?.kind === ts.SyntaxKind.Identifier && right.arguments[0].text === target.left.text;
 }
 function tupleJoinPrintedCallee(goTranspiler, call) {
   if (call?.kind !== ts.SyntaxKind.CallExpression) {
@@ -19108,6 +19116,9 @@ function ccxtGoTupleStringWriteNeedsLift(goTranspiler, right) {
   return goTranspiler.goTypeOfInitializer(right, goTranspiler.printNode(right, 0)) === "string";
 }
 function ccxtGoTupleStringReadIsSafe(goTranspiler, node) {
+  if (node.parent?.kind === ts.SyntaxKind.CallExpression && node.parent.expression !== node && ccxtGoNilJoinArgumentSeesAbsent(goTranspiler, node.parent, node.parent.arguments.indexOf(node))) {
+    return true;
+  }
   let current = node;
   while (current.parent?.kind === ts.SyntaxKind.ParenthesizedExpression) {
     current = current.parent;
