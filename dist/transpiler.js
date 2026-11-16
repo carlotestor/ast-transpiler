@@ -54458,6 +54458,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "cond";
     if (kind === "bool" && this.rustClimbLogicalWrappers(n) !== n && this.rustConditionBoolSlot(n))
       return "cond";
+    if (kind === "str" && this.rustPreciseLentOperand(n))
+      return "lend";
     if (isCallExpression6(parent) && parent.expression !== n && parent.arguments.some((a) => a === n)) {
       return this.rustNilBoxCallOk(parent, parent.arguments.indexOf(n)) ? "box" : void 0;
     }
@@ -54548,6 +54550,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const form = local === void 0 ? void 0 : this.rustNilReadForm(node, local.kind);
     if (form === "cond")
       return `(${super.printIdentifier(node)} == Some(true))`;
+    if (form === "lend")
+      return super.printIdentifier(node);
     if (form !== "box")
       return void 0;
     const name = super.printIdentifier(node);
@@ -54785,7 +54789,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (this.rustIdentifierIsPropertyName(n) && n.parent?.kind !== SyntaxKind7.ShorthandPropertyAssignment)
         return true;
       const form = this.rustScalarUseForms.get(n);
-      if (form === "slot" || form === "test")
+      if (form === "slot" || form === "test" || form === "parg")
         return true;
       const parent = n.parent;
       if (isBinaryExpression5(parent) && parent.left === n && parent.operatorToken.kind === SyntaxKind7.EqualsToken) {
@@ -57374,7 +57378,37 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   /** vd: only a local declared with a value (nil-declared locals keep their own box rules). */
   rustPreciseLendLocal(n) {
     const declaration = this.rustDeclaredNode(n);
-    return declaration !== void 0 && isVariableDeclaration3(declaration) && declaration.initializer !== void 0 && this.literalKindOfNode(this.unwrapParens(declaration.initializer)) !== "null";
+    if (declaration === void 0 || !isVariableDeclaration3(declaration))
+      return false;
+    if (declaration.initializer !== void 0 && this.literalKindOfNode(this.unwrapParens(declaration.initializer)) !== "null")
+      return true;
+    return this.rust67aNilStrLend(declaration);
+  }
+  /** ral-67a: a `let x: Str = undefined` local (declared string type, no value) lends at a Precise operand too: the
+   *  runtime takes `&impl PreciseArg`, and `&Option<String>` reads `None` as the `Null` box and `Some(s)` as its `Str`. */
+  rust67aNilStrLend(declaration) {
+    if (declaration.type === void 0 || !isIdentifier3(declaration.name))
+      return false;
+    const list = declaration.parent;
+    if (list?.kind !== SyntaxKind7.VariableDeclarationList || (list.flags & NodeFlags4.Const) !== 0 || list.declarations.length !== 1)
+      return false;
+    if (this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name)) === "string")
+      return true;
+    return this.rust67aStrTypeNode(declaration.type);
+  }
+  /** ral-67a: `string` / `Str` / a union of those with `undefined`, read from the type node. */
+  rust67aStrTypeNode(type) {
+    if (type === void 0)
+      return false;
+    if (type.kind === SyntaxKind7.StringKeyword)
+      return true;
+    if (type.kind === SyntaxKind7.TypeReference)
+      return isIdentifier3(type.typeName) && String(type.typeName.text) === "Str" && (type.typeArguments?.length ?? 0) === 0;
+    if (type.kind !== SyntaxKind7.UnionType)
+      return false;
+    const parts = Array.from(type.types ?? []);
+    const isUndefined = (p) => p.kind === SyntaxKind7.UndefinedKeyword || p.kind === SyntaxKind7.LiteralType && p.literal?.kind === SyntaxKind7.UndefinedKeyword;
+    return parts.some((p) => !isUndefined(p)) && parts.every((p) => isUndefined(p) || this.rust67aStrTypeNode(p));
   }
   /** vd: `n` is a direct string operand (one of the first two, the third of `stringDiv` is the precision) of a lent
    *  `Precise.<op>(..)` call. */
@@ -88367,7 +88401,7 @@ _RustTranspiler.RUST_NIL_BOOL_HELPERS = { safeBool: 2, safeBool2: 3, safeBoolN: 
 _RustTranspiler.RUST_NIL_PRECISE_STR = /^string(?:Add|Sub|Mul|Div|Mod|Abs|Neg|Min|Max)$/;
 // An empty local the literal rule above rejects can still join the scalar rule: its writes
 // are exact scalar sources, every use is a scalar use form, and at least one use is native.
-_RustTranspiler.RUST_NIL_SCALAR_NATIVE_FORMS = /* @__PURE__ */ new Set(["test", "cond", "concat", "native", "targ"]);
+_RustTranspiler.RUST_NIL_SCALAR_NATIVE_FORMS = /* @__PURE__ */ new Set(["test", "cond", "concat", "native", "targ", "parg"]);
 // ── native-typed locals ───────────────────────────────────────────────────
 //
 // A local is declared `bool` (instead of `Value`) when its initializer is

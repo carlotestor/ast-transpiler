@@ -823,6 +823,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_PRECISE_LENT;
     /** vd: only a local declared with a value (nil-declared locals keep their own box rules). */
     rustPreciseLendLocal(n: any): boolean;
+    /** ral-67a: a `let x: Str = undefined` local (declared string type, no value) lends at a Precise operand too: the
+     *  runtime takes `&impl PreciseArg`, and `&Option<String>` reads `None` as the `Null` box and `Some(s)` as its `Str`. */
+    rust67aNilStrLend(declaration: any): boolean;
+    /** ral-67a: `string` / `Str` / a union of those with `undefined`, read from the type node. */
+    rust67aStrTypeNode(type: any): boolean;
     /** vd: `n` is a direct string operand (one of the first two, the third of `stringDiv` is the precision) of a lent
      *  `Precise.<op>(..)` call. */
     rustPreciseLentOperand(n: any): boolean;
