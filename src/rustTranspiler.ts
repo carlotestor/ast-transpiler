@@ -15905,6 +15905,7 @@ export class RustTranspiler extends BaseTranspiler {
             if (up?.kind === SyntaxKind.VariableDeclaration && up.initializer === node && this.rustSmktAliasSource(up) === declaration
                 && this.rustMarketLocalKind(up) === 'smkt') return `&${super.printIdentifier(node)}`;
             if (this.rustSmktAliasValueUse(node)) return `crate::Value::from(${super.printIdentifier(node)})`;
+            if (this.rustSmktAliasSource(declaration) === undefined && this.rust76jSmktValueArg(node)) return `crate::Value::from(&${super.printIdentifier(node)})`;
             return undefined;
         }
         if (declaration === undefined || this.rustMarketReadKey(node) !== undefined) return undefined;
@@ -36449,34 +36450,57 @@ export class RustTranspiler extends BaseTranspiler {
         const name = String(declaration.name.text);
         const scope = this.rustEnclosingFunction(declaration);
         if (scope === undefined || isSourceFile(scope) || !this.rustDictKeyReadLineOk(declaration, name)) return false;
-        return this.rustMarketLocalUsesAll(declaration, name, (n: any) => {
-            if (this.rustEnclosingFunction(n) !== scope) return false;
-            const up: any = n.parent;
-            // ral-46i: a borrowed alias is only lent to a market slot or boxed into a `Value` argument
-            if (alias) {
-                if (!isCallExpression(up) || up.expression === n) return false;
-                const at = Array.from(up.arguments).indexOf(n);
-                if (at < 0) return false;
-                return this.rustMarketSlot(this.rustCalleeParams(up), at) || this.rustSmktAliasValueUse(n);
-            }
-            if (isBinaryExpression(up) && up.left === n && up.operatorToken.kind === SyntaxKind.EqualsToken) {
-                return up.parent?.kind === SyntaxKind.ExpressionStatement && this.rustIsSafeMarketCall(up.right);
-            }
-            if (this.rustDictKeyReadUse(n)) return true;
-            // ral-46i: the initializer of a `const a: Market = m` alias whose own uses all take the struct
-            if (up?.kind === SyntaxKind.VariableDeclaration && up.initializer === n && this.rustSmktAliasSource(up) === declaration
-                && this.rustSafeMarketLocalOk(up, true)) return true;
-            // `m['symbol']` keying another lookup reads the struct's own field (a `Value` key either way)
-            if (this.rustMarketKeyOfLookup(n)) return true;
-            // ral-43e: handed back whole from a market-returning venue method
-            if (isReturnStatement(up) && up.expression === n && this.rustReturnsMarket(findAncestor(up.parent, isFunctionLike))) return true;
-            // `safeMarket` always hands back a record: a null test of it is constant
-            if (this.rustIsNullTestOf(n) && this.rustNullTestIsCondition(n)) return true;
+        // ral-76j: `Value` hand-offs alone would only move the box from the declaration to each use
+        let valueArgs = 0;
+        let otherUses = 0;
+        const ok = this.rustMarketLocalUsesAll(declaration, name, (n: any) => {
+            const r = this.rust76jSmktUse(declaration, n, scope, alias);
+            if (r === 'value') valueArgs++; else if (r) otherUses++;
+            return r !== false;
+        });
+        return ok && (valueArgs === 0 || otherUses > 0);
+    }
+
+    rust76jSmktUse(declaration: any, n: any, scope: any, alias: boolean): boolean | 'value' {
+        if (this.rustEnclosingFunction(n) !== scope) return false;
+        const up: any = n.parent;
+        // ral-46i: a borrowed alias is only lent to a market slot or boxed into a `Value` argument
+        if (alias) {
             if (!isCallExpression(up) || up.expression === n) return false;
             const at = Array.from(up.arguments).indexOf(n);
-            if (at === 0 && (this.rustBorrowedDictReader(up) !== undefined || this.rustBorrowedAnyKeyReader(up))) return true;
-            return at >= 0 && this.rustMarketSlot(this.rustCalleeParams(up), at);
-        });
+            if (at < 0) return false;
+            return this.rustMarketSlot(this.rustCalleeParams(up), at) || this.rustSmktAliasValueUse(n);
+        }
+        if (isBinaryExpression(up) && up.left === n && up.operatorToken.kind === SyntaxKind.EqualsToken) {
+            return up.parent?.kind === SyntaxKind.ExpressionStatement && this.rustIsSafeMarketCall(up.right);
+        }
+        if (this.rustDictKeyReadUse(n)) return true;
+        // ral-46i: the initializer of a `const a: Market = m` alias whose own uses all take the struct
+        if (up?.kind === SyntaxKind.VariableDeclaration && up.initializer === n && this.rustSmktAliasSource(up) === declaration
+            && this.rustSafeMarketLocalOk(up, true)) return true;
+        // `m['symbol']` keying another lookup reads the struct's own field (a `Value` key either way)
+        if (this.rustMarketKeyOfLookup(n)) return true;
+        // ral-43e: handed back whole from a market-returning venue method
+        if (isReturnStatement(up) && up.expression === n && this.rustReturnsMarket(findAncestor(up.parent, isFunctionLike))) return true;
+        // `safeMarket` always hands back a record: a null test of it is constant
+        if (this.rustIsNullTestOf(n) && this.rustNullTestIsCondition(n)) return true;
+        if (!isCallExpression(up) || up.expression === n) return false;
+        const at = Array.from(up.arguments).indexOf(n);
+        if (at === 0 && (this.rustBorrowedDictReader(up) !== undefined || this.rustBorrowedAnyKeyReader(up))) return true;
+        if (at >= 0 && this.rustMarketSlot(this.rustCalleeParams(up), at)) return true;
+        return at >= 0 && !alias && this.rust76jSmktValueArg(n) ? 'value' : false;
+    }
+
+    /** ral-76j: `this.m (.., s, ..)` with a `safeMarket` struct local at a plain `Value` slot of a self method: the
+     *  boxed local was copied there (`s.clone()`); `crate::Value::from(&s)` shares the record's `raw` the same way. */
+    rust76jSmktValueArg(n: any): boolean {
+        const up: any = n.parent;
+        if (up === undefined || !isCallExpression(up) || up.expression === n || !isPropertyAccessExpression(up.expression)
+            || up.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
+        const at = Array.from(up.arguments).indexOf(n);
+        if (at < 0 || this.rustMarketSlot(this.rustCalleeParams(up), at)) return false;
+        if (at === 0 && (this.rustBorrowedDictReader(up) !== undefined || this.rustBorrowedAnyKeyReader(up))) return false;
+        return this.rustCalleeParams(up) !== undefined;
     }
 
     /** A use of a `safeMarket` struct local. */
