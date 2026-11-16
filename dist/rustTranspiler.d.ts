@@ -3346,6 +3346,9 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  `KeyRead::read` on the held map / list is the arm `get_value` dispatches to for every key kind). */
     rustValueKeyType(key: any): boolean;
     rustBorrowedIndexReadUse(n: any): boolean;
+    /** ral-73e A: `x[k]` (x the held container local `n`) is a plain one-link read: not the head of a chain (whose outer links
+     *  keep their own printed forms) and outside the test tier. */
+    rust73eStrKeyRead(n: any): boolean;
     private rustExtendReuseLocals;
     /** A plain map literal (outside the test tier): every `x = ..` write must be `x = this.extend (x, y)`; the
      *  existing borrowed-dict use rules decide the rest. The `IndexMap` bearer rule claims its locals first. */

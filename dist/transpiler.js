@@ -74683,7 +74683,15 @@ ${iden}}`;
     const keyScalar = this.rustScalarLocalOf(key);
     if (keyScalar !== void 0 && (keyScalar.kind === "str" || keyScalar.kind === "ostr") && keyDecl.initializer !== void 0 && this.rustOwnKeysElementKey(n, key))
       return true;
+    if (keyScalar !== void 0 && (keyScalar.kind === "str" || keyScalar.kind === "ostr") && this.rust73eStrKeyRead(n))
+      return true;
     return keyScalar === void 0 && this.rustNilLocalKind(keyDecl) === void 0 && !this.rustWsUrlLocal(keyDecl) && this.rustBorrowedLocalKind(keyDecl) === void 0 && !this.rustLentListLocal(keyDecl);
+  }
+  /** ral-73e A: `x[k]` (x the held container local `n`) is a plain one-link read: not the head of a chain (whose outer links
+   *  keep their own printed forms) and outside the test tier. */
+  rust73eStrKeyRead(n) {
+    const up = n.parent;
+    return !this.rustTestTierSource(n) && !(isElementAccessExpression4(up.parent) && up.parent.expression === up);
   }
   /** A plain map literal (outside the test tier): every `x = ..` write must be `x = this.extend (x, y)`; the
    *  existing borrowed-dict use rules decide the rest. The `IndexMap` bearer rule claims its locals first. */
