@@ -51231,7 +51231,7 @@ ${this.getIden(identation)}}}`;
 // src/rustTranspiler.ts
 init_esm_shims();
 import { NodeFlags as NodeFlags4, SyntaxKind as SyntaxKind7 } from "typescript/unstable/ast";
-import { isArrayBindingPattern, isArrayLiteralExpression as isArrayLiteralExpression4, isArrowFunction as isArrowFunction5, isAsExpression as isAsExpression3, isBinaryExpression as isBinaryExpression5, isBindingElement, isBlock as isBlock4, isCallExpression as isCallExpression6, isClassDeclaration as isClassDeclaration4, isClassExpression as isClassExpression2, isConditionalExpression as isConditionalExpression4, isDeleteExpression as isDeleteExpression2, isElementAccessExpression as isElementAccessExpression4, isForInStatement as isForInStatement2, isForOfStatement as isForOfStatement2, isIdentifier as isIdentifier3, isIfStatement as isIfStatement4, isMethodDeclaration as isMethodDeclaration5, isNoSubstitutionTemplateLiteral, isNonNullExpression as isNonNullExpression2, isNumericLiteral as isNumericLiteral4, isObjectLiteralExpression as isObjectLiteralExpression4, isParameterDeclaration as isParameterDeclaration3, isParenthesizedExpression as isParenthesizedExpression3, isPostfixUnaryExpression as isPostfixUnaryExpression3, isPrefixUnaryExpression as isPrefixUnaryExpression3, isPropertyAccessExpression as isPropertyAccessExpression3, isReturnStatement as isReturnStatement4, isShorthandPropertyAssignment as isShorthandPropertyAssignment2, isSourceFile as isSourceFile5, isStatement, isStringLiteral as isStringLiteral3, isStringLiteralLikeNode as isStringLiteralLikeNode4, isTypeAssertion as isTypeAssertion3, isVariableDeclaration as isVariableDeclaration3, isVariableDeclarationList as isVariableDeclarationList2 } from "typescript/unstable/ast/is";
+import { isArrayBindingPattern, isArrayLiteralExpression as isArrayLiteralExpression4, isArrowFunction as isArrowFunction5, isAsExpression as isAsExpression3, isBinaryExpression as isBinaryExpression5, isBindingElement, isBlock as isBlock4, isCallExpression as isCallExpression6, isClassDeclaration as isClassDeclaration4, isClassExpression as isClassExpression2, isConditionalExpression as isConditionalExpression4, isDeleteExpression as isDeleteExpression2, isElementAccessExpression as isElementAccessExpression4, isForInStatement as isForInStatement2, isForOfStatement as isForOfStatement2, isIdentifier as isIdentifier3, isIfStatement as isIfStatement4, isMethodDeclaration as isMethodDeclaration5, isNewExpression, isNoSubstitutionTemplateLiteral, isNonNullExpression as isNonNullExpression2, isNumericLiteral as isNumericLiteral4, isObjectLiteralExpression as isObjectLiteralExpression4, isParameterDeclaration as isParameterDeclaration3, isParenthesizedExpression as isParenthesizedExpression3, isPostfixUnaryExpression as isPostfixUnaryExpression3, isPrefixUnaryExpression as isPrefixUnaryExpression3, isPropertyAccessExpression as isPropertyAccessExpression3, isPropertyAssignment as isPropertyAssignment2, isReturnStatement as isReturnStatement4, isShorthandPropertyAssignment as isShorthandPropertyAssignment2, isSourceFile as isSourceFile5, isStatement, isStringLiteral as isStringLiteral3, isStringLiteralLikeNode as isStringLiteralLikeNode4, isTypeAssertion as isTypeAssertion3, isVariableDeclaration as isVariableDeclaration3, isVariableDeclarationList as isVariableDeclarationList2 } from "typescript/unstable/ast/is";
 import { IndexKind as IndexKind4, ObjectFlags, SignatureKind as SignatureKind2, SymbolFlags as SymbolFlags3, TypeFlags as TypeFlags6 } from "typescript/unstable/sync";
 import * as fs3 from "fs";
 import * as tsSync2 from "typescript/unstable/sync";
@@ -59575,7 +59575,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   /** ral-70f: the identifier under `(x as string)` / parentheses (or `n` itself). */
   rust70fCastBase(n) {
     let at = n;
-    while (at !== void 0 && (isParenthesizedExpression3(at) || at.kind === SyntaxKind7.AsExpression && at.type?.kind === SyntaxKind7.StringKeyword))
+    while (at !== void 0 && (isParenthesizedExpression3(at) || isAsExpression3(at) && at.type?.kind === SyntaxKind7.StringKeyword))
       at = at.expression;
     return isIdentifier3(at) ? at : void 0;
   }
@@ -59591,7 +59591,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (!isIdentifier3(n) || !this.rust70fReaderLocal(this.rustDeclaredNode(n), true))
       return false;
     let top = n;
-    while (isParenthesizedExpression3(top.parent) || top.parent?.kind === SyntaxKind7.AsExpression && top.parent.type?.kind === SyntaxKind7.StringKeyword)
+    while (isParenthesizedExpression3(top.parent) || isAsExpression3(top.parent) && top.parent.type?.kind === SyntaxKind7.StringKeyword)
       top = top.parent;
     return isElementAccessExpression4(top.parent) && top.parent.argumentExpression === top && this.rust70fWriteTargetKey(top.parent);
   }
@@ -59627,16 +59627,16 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (!isIdentifier3(n) || this.rustIdentifierIsPropertyName(n) || !this.rust70fReaderLocal(this.rustDeclaredNode(n), true))
       return false;
     let top = n;
-    while (isParenthesizedExpression3(top.parent) || top.parent?.kind === SyntaxKind7.AsExpression && top.parent.type?.kind === SyntaxKind7.StringKeyword)
+    while (isParenthesizedExpression3(top.parent) || isAsExpression3(top.parent) && top.parent.type?.kind === SyntaxKind7.StringKeyword)
       top = top.parent;
     const up = top.parent;
     if (up === void 0)
       return false;
-    if ((isCallExpression6(up) || up.kind === SyntaxKind7.NewExpression) && up.expression !== top)
-      return (up.arguments ?? []).includes(top);
+    if ((isCallExpression6(up) || isNewExpression(up)) && up.expression !== top)
+      return (up.arguments ?? []).some((arg) => arg === top);
     if (isBinaryExpression5(up) && up.right === top && up.operatorToken.kind === SyntaxKind7.EqualsToken)
       return true;
-    if (up.kind === SyntaxKind7.PropertyAssignment)
+    if (isPropertyAssignment2(up))
       return up.initializer === top;
     if (isElementAccessExpression4(up) && up.argumentExpression === top && this.rust70fWriteTargetKey(up))
       return false;
@@ -61015,7 +61015,7 @@ ${binding(plan.indent)}` : ""), head: "" };
     let init = this.unwrapParens(declaration.initializer);
     if (cast && init !== void 0 && isAsExpression3(init) && init.type?.kind === SyntaxKind7.StringKeyword)
       init = this.unwrapParens(init.expression);
-    if (!this.rustUdReaderStr(init) || String(init.expression.name.text) === "safeCurrencyCode")
+    if (!this.rustUdReaderStr(init) || !isCallExpression6(init) || !isPropertyAccessExpression3(init.expression) || String(init.expression.name.text) === "safeCurrencyCode")
       return false;
     const name = String(init.expression.name.text);
     if (init.arguments.length !== 2 || name !== "safeString" && name !== "safeStringLower" && name !== "safeStringUpper")
@@ -61029,7 +61029,7 @@ ${binding(plan.indent)}` : ""), head: "" };
     const own = this.rustSymbolOf(declaration.name);
     if (scope === void 0 || own === void 0)
       return true;
-    for (const n of this.rustScopeNameNodes(scope, String(declaration.name.text))) {
+    for (const n of this.rustScopeNameNodes(scope, String(isIdentifier3(declaration.name) ? declaration.name.text : void 0))) {
       if (n === declaration.name || !isIdentifier3(n) || this.rustIdentifierIsPropertyName(n) || this.rustSymbolOf(n) !== own)
         continue;
       let top = n;
@@ -61383,8 +61383,10 @@ ${binding(plan.indent)}` : ""), head: "" };
     const upper = this.rustNestedFieldEntryKey(left);
     if (upper === void 0 || !isIdentifier3(upper) || this.rustScalarLocalOf(upper)?.kind !== "ostr" || !this.rust70fReaderLocal(this.rustDeclaredNode(upper), true))
       return void 0;
+    if (!isElementAccessExpression4(left.expression) || !isPropertyAccessExpression3(left.expression.expression))
+      return void 0;
     const field = String(left.expression.expression.name.text);
-    if (acc !== `get_value_mut(&mut self.${field}, &${this.printNode(upper, 0).trim()})` || this.rustValueBorrowsSelf(left.parent?.right))
+    if (acc !== `get_value_mut(&mut self.${field}, &${this.printNode(upper, 0).trim()})` || this.rustValueBorrowsSelf(isBinaryExpression5(left.parent) ? left.parent.right : void 0))
       return void 0;
     const last = this.rustSkipWrappers(left.argumentExpression);
     const lastText = isStringLiteral3(last) ? `${JSON.stringify(String(last.text))}.to_string()` : isIdentifier3(last) && this.rustScalarLocalOf(last) === void 0 && this.rustPlainValueBinding(last) ? `crate::runtime::stringify_param(&${super.printIdentifier(last)})` : void 0;

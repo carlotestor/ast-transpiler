@@ -1,5 +1,5 @@
 import { BaseTranspiler } from "./baseTranspiler.js";
-import { type Block, type CallExpression, type Declaration, type Identifier, type Node, type ParameterDeclaration, type VariableDeclaration } from "typescript/unstable/ast";
+import { type BinaryExpression, type Block, type CallExpression, type Declaration, type ElementAccessExpression, type Identifier, type Node, type ParameterDeclaration, type VariableDeclaration } from "typescript/unstable/ast";
 import { type Symbol as TsSymbol, type Type } from "typescript/unstable/sync";
 /** A ts/src index scan reads real `*.ts` sources and this process's own stripped base copy only: no `.d.ts`, no
  *  dot-file temp copy, no other process's `*.nooverloads.<pid>.ts` (it can vanish or change mid-scan). */
@@ -1063,7 +1063,7 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  `let` / `const` (bitget fetchTickers `market = this.market (symbol)` under the typed `market (&str)` signature): the
      *  argument prints `x.as_deref().unwrap_or_default()` whatever the target, the text ccxt's narrowStrNullLocals pass
      *  printed there. A parameter target (untyped `any`) keeps the refusal. */
-    rust70fTargLocalWrite(write: any): boolean;
+    rust70fTargLocalWrite(write: BinaryExpression): boolean;
     /** ral-64n: a typed-signature argument (`targ`: printed `x.as_deref().unwrap_or_default()` / `x.as_deref()` / the Copy
      *  payload, never a boxed operand) of the call that is the whole source of a write to a typed scalar local (bitflyer
      *  `expiry = this.parseExpiryDate (expiryDate)` with `expiryDate` declared in two sibling blocks): the written local
@@ -1221,18 +1221,18 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  converts the `Str` / `Null` the boxed reader held, cloned unless it is the last use (ccxt's narrowStrNullLocals pass
      *  printed exactly `x[.clone()].map(Value::from).unwrap_or(Value::Null)` there). */
     /** ral-70f: the identifier under `(x as string)` / parentheses (or `n` itself). */
-    rust70fCastBase(n: any): any;
+    rust70fCastBase(n: Node): Identifier | undefined;
     /** ral-70f: `access` is (through parentheses) the target of an assignment or update, or a `delete` operand. */
-    rust70fWriteTargetKey(access: any): boolean;
+    rust70fWriteTargetKey(access: Node): boolean;
     /** ral-70f: `n` reads a ral-70f reader local and is (through parentheses / `as string`) the whole key of a write target. */
-    rust70fWriteKey(n: any): boolean;
+    rust70fWriteKey(n: Node): boolean;
     /** ral-70f: `x[0] === 'c'` / `!==` (one-character literal, either side) on a ral-70f reader local: the boxed element read was
      *  the first character of the `Str` (`Null` for `None`, empty or out of range), so the test is
      *  `x.as_deref().unwrap_or("").starts_with("c")` (ccxt's narrowStrNullLocals pass printed this). */
-    rust70fFirstCharTest(node: any): string | undefined;
+    rust70fFirstCharTest(node: BinaryExpression): string | undefined;
     /** ral-70f: `n` sits inside the left side (target chain) of an assignment. */
-    rust70fInWriteTarget(n: any): boolean;
-    rust70fOperandBox(n: any): boolean;
+    rust70fInWriteTarget(n: Node): boolean;
+    rust70fOperandBox(n: Node): boolean;
     /** sb: a Copy number local (`i64` / `f64` / `Option<..>`) initialised from a typed base call that the `Value` local only boxed
      *  (`Value::from(self.parse_to_int(..))`) keeps the typed value and boxes it at any plain read no other rule prints natively:
      *  `Value::from(x)` is the Int / Float / Null the `Value` local held (the same conversion the initialiser did), and a Copy
@@ -1418,8 +1418,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rust68fNewArgCast(n: any): boolean;
     /** ral-70f: a non-test local declared `this.safeString (o, k)` (any key) or `this.safeStringLower|Upper (o, 'lit')`, two
      *  arguments, base reader (rust64bReaderLocal): the boxed reader is `Str` or `Null`, exactly its `_opt` twin. */
-    rust70fReaderLocal(declaration: any, cast?: boolean): boolean;
-    rust70fWritten(declaration: any): boolean;
+    rust70fReaderLocal(declaration: Node, cast?: boolean): boolean;
+    rust70fWritten(declaration: VariableDeclaration): boolean;
     /** ral-64b: a local declared from a base safeString-family reader with no default argument (its box is `Str` or `Null`). */
     rust64bReaderLocal(declaration: any): boolean;
     rustThisFieldLiteralWrite(n: any): boolean;
@@ -1481,7 +1481,7 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  `this.balance[tradingAccountId]['info'] = message`): the bucket entry ccxt's plain-dict pass printed of the r05 insert
      *  when the key was the boxed local (`entry(stringify_param(&k1))`, narrowed by narrowStrNullLocals to the local's own
      *  text). A value reading `self` keeps the helper chain. */
-    print70fUpperEntryWrite(left: any, acc: string, value: string): string | undefined;
+    print70fUpperEntryWrite(left: ElementAccessExpression, acc: string, value: string): string | undefined;
     /** ral-56f: the bucket entry of a `ukey` upper key (rustNestedFieldUpperKeyUse), keyed by the local's own text (the
      *  string `stringify_param` made of the boxed local, `"null"` for `None`); a value reading `self` is bound first. Over
      *  the line budget the helper chain takes the key as a `Value` (`From<Option<&str>>`, the one allocation). */
@@ -2961,7 +2961,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     nativeEqualityText(node: any): string;
     unwrapParens(node: any): any;
     hasNativeComparisonOperand(node: any): any;
-    printLogicalInBooleanContext(node: any): string;
+    printLogicalInBooleanContext(node: any): any;
     printWhileStatement(node: any, identation: any): string;
     printIfStatement(node: any, identation: any): string;
     printPostFixUnaryExpression(node: any, identation: any): string;
@@ -3277,7 +3277,7 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  and no ws client-handle triple, so `get_value`'s store routes cannot fire and
      *  the read is the map lookup. */
     /** ral-70f: `key` is the whole key of a statement `m[key].push (v)` and reads an `Option<String>` ral-70f reader local. */
-    rust70fPushKey(key: any): boolean;
+    rust70fPushKey(key: Node): boolean;
     rustDictBearerKeyOk(keyNode: any): boolean;
     /** ral-xf: a book-meta-named key place (`symbol`, `timestamp`, `datetime`, `nonce`, `checksum`) indexing a map-literal
      *  local. `get_value` / `set_value` route such a key to the book store only on a map holding `__book_id`; a literal
