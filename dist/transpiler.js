@@ -56825,6 +56825,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (optionKind !== void 0)
         return optionKind;
     }
+    if (fresh && this.rustSupportedMappingStr(node))
+      return "str";
     if (this.rustParseNumberOfString(node) && this.rustTernaryArm(node))
       return "onum";
     if (_RustTranspiler.RUST_STRING_LOCAL_HELPERS.has(name)) {
@@ -56845,6 +56847,21 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (fresh && boolBase !== void 0)
       return args.length === boolBase + 1 && this.literalKindOfNode(args[boolBase]) === "boolean" ? "bool" : void 0;
     return void 0;
+  }
+  /** ral-61p: base `this.getSupportedMapping (key, { 'k': 'v', .. })` at a declaration whose mapping is an object literal of
+   *  string-literal values: the base body throws unless `key in mapping` and then answers `mapping[key]`, so the result
+   *  is always one of those literals (a `String`, never `Null`). */
+  rustSupportedMappingStr(expr) {
+    const node = this.unwrapParens(expr);
+    if (node === void 0 || !isCallExpression6(node) || !isPropertyAccessExpression3(node.expression) || node.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(node.expression.name.text) !== "getSupportedMapping" || node.arguments.length !== 2 || !this.rustDeclInitPosition(node))
+      return false;
+    const declaration = this.rustScalarCallee(node);
+    if (declaration === void 0 || !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile?.()?.fileName ?? "")))
+      return false;
+    const mapping = this.unwrapParens(node.arguments[1]);
+    if (mapping?.kind !== SyntaxKind7.ObjectLiteralExpression || mapping.properties.length === 0)
+      return false;
+    return Array.from(mapping.properties).every((p) => p.kind === SyntaxKind7.PropertyAssignment && this.literalKindOfNode(this.unwrapParens(p.initializer)) === "string" && !(this.unwrapParens(p.initializer).text in this.StringLiteralReplacements));
   }
   /** ral-61p: `this.handleOption (m, o, <literal>)` resolved to the base tier: the option value or the default argument.
    *  A string literal default names `ostr` (the runtime answers the stored option or that literal; a stored option of
@@ -61360,6 +61377,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       return `${this.rustBaseTypedBareText(node)}.unwrap_or_default()`;
     if (kind === "int" && (this.rustVenueIntCall(node) || this.rustVenueParseToInt(node)))
       return `${text}.as_i64().unwrap_or_default()`;
+    if (kind === "str" && this.rustSupportedMappingStr(node))
+      return `${text}.as_str().unwrap_or_default().to_string()`;
     if (kind === "str" && defaulted)
       return `${text}.as_str().unwrap_or(${this.quotedStringLiteral(fallback.text)}).to_string()`;
     if (kind === "int" && defaulted)

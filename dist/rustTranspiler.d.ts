@@ -703,6 +703,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** The scalar kind an expression yields exactly (`null` for nullish); `fresh` admits the
      *  non-null literal kinds (`str|int|num|bool`) a declaration may seed. */
     rustScalarValueKind(expr: any, fresh: boolean): string | undefined;
+    /** ral-61p: base `this.getSupportedMapping (key, { 'k': 'v', .. })` at a declaration whose mapping is an object literal of
+     *  string-literal values: the base body throws unless `key in mapping` and then answers `mapping[key]`, so the result
+     *  is always one of those literals (a `String`, never `Null`). */
+    rustSupportedMappingStr(expr: any): boolean;
     /** ral-61p: `this.handleOption (m, o, <literal>)` resolved to the base tier: the option value or the default argument.
      *  A string literal default names `ostr` (the runtime answers the stored option or that literal; a stored option of
      *  another kind reads as `None`, the same miss the `Value` form's `.as_str()` compare made). */
