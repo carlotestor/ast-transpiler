@@ -4165,6 +4165,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A resolved value that is a map on every path: a base record builder call, a sync method of the same class whose
      *  every return is one, or an unreassigned single local bound to one. */
     rustWsResolvedMap(x: any, depth: number): boolean;
+    /** Every return of the method body is a map on every path (rustWsResolvedMap), and there is at least one. */
+    rustWsMapReturns(declaration: any, depth: number): boolean;
+    /** ral-84f: `declaration` is a method body of the REST venue class that the ws class of `site` directly extends
+     *  (`ts/src/pro/<id>.ts` extends the default export of `ts/src/<id>.ts`). The checker resolves `this.m` to the most
+     *  derived declaration, so a ws override would have been answered instead, and a ws class with ws relatives has no
+     *  resolve table at all. */
+    rustWsRestParentMethod(declaration: any, site: any): boolean;
     /** Any write of the local after its declaration (an assignment or an update). */
     rustLocalReassigned(declaration: any): boolean;
     /** ral-53h: set while the resolve table builds its `rpats` (read only by `await client.future (h)`; watch calls keep `pats`). */
