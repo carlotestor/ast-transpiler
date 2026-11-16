@@ -41541,6 +41541,89 @@ GoTranspiler.prototype.printVariableDeclarationList = function(node, identation)
   }
   return goTernaryJoinUpstreamPrintDeclarationList.call(this, node, identation);
 };
+var ral84g6OmitVerdicts = /* @__PURE__ */ new WeakMap();
+function ral84g6OmitCall(node) {
+  while (node?.kind === SyntaxKind5.ParenthesizedExpression) {
+    node = node.expression;
+  }
+  const callee = node?.expression;
+  const ok = node?.kind === SyntaxKind5.CallExpression && node.questionDotToken === void 0 && callee?.kind === SyntaxKind5.PropertyAccessExpression && callee.expression?.kind === SyntaxKind5.ThisKeyword && callee.name?.text === "omit" && node.arguments?.length >= 2 && node.arguments[0]?.kind === SyntaxKind5.Identifier && !node.arguments.some((a) => a.kind === SyntaxKind5.SpreadElement);
+  return ok ? node : void 0;
+}
+function ral84g6OmitArgIsMap(goTranspiler, arg) {
+  return ccxtGoProducerArgIsMap(goTranspiler, arg) || ccxtGoJoinedParamsLocal(goTranspiler, arg);
+}
+function ral84g6NameBacksIn(goTranspiler, scope, name) {
+  return goTranspiler.hasNodeWhere(scope, (n) => n.kind === SyntaxKind5.BinaryExpression && n.operatorToken?.kind === SyntaxKind5.InKeyword && n.right?.kind === SyntaxKind5.Identifier && n.right.text === name);
+}
+function ral84g6OmitLocalType(goTranspiler, declaration) {
+  if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier || declaration.parent?.parent?.kind !== SyntaxKind5.FirstStatement || declaration.parent.declarations?.length !== 1) {
+    return void 0;
+  }
+  if (ral84g6OmitVerdicts.has(declaration)) {
+    return ral84g6OmitVerdicts.get(declaration);
+  }
+  ral84g6OmitVerdicts.set(declaration, void 0);
+  const call = ral84g6OmitCall(declaration.initializer);
+  let verdict;
+  const scope = goTranspiler.goEnclosingFunction(declaration);
+  if (call !== void 0 && scope !== void 0 && ral84g6OmitArgIsMap(goTranspiler, call.arguments[0]) && !goTranspiler.goTypeNameIsShadowed(scope, GO_SAFE_DICT_LOCAL_TYPE)) {
+    const name = declaration.name.text;
+    const unsafe = goTranspiler.hasNodeWhere(scope, (n) => {
+      if (n.kind !== SyntaxKind5.Identifier || n.text !== name || n === declaration.name) {
+        return false;
+      }
+      const parent = n.parent;
+      if (parent?.kind === SyntaxKind5.PropertyAccessExpression && parent.name === n || parent?.kind === SyntaxKind5.PropertyAssignment && parent.name === n) {
+        return false;
+      }
+      const target = ccxtGoParamDeclarationOf(goTranspiler, n);
+      if (target !== declaration) {
+        return target === void 0;
+      }
+      if (parent?.kind === SyntaxKind5.BinaryExpression && parent.left === n && parent.operatorToken?.kind === SyntaxKind5.EqualsToken) {
+        const write = ral84g6OmitCall(parent.right);
+        return write === void 0 || !(ccxtGoParamDeclarationOf(goTranspiler, write.arguments[0]) === declaration || ral84g6OmitArgIsMap(goTranspiler, write.arguments[0]));
+      }
+      if (parent?.kind === SyntaxKind5.BinaryExpression && parent.right === n && parent.operatorToken?.kind === SyntaxKind5.InKeyword) {
+        return true;
+      }
+      const copyTarget = parent?.kind === SyntaxKind5.VariableDeclaration && parent.initializer === n ? parent.name : parent?.kind === SyntaxKind5.BinaryExpression && parent.right === n && parent.operatorToken?.kind === SyntaxKind5.EqualsToken ? parent.left : void 0;
+      if (copyTarget?.kind === SyntaxKind5.Identifier && ral84g6NameBacksIn(goTranspiler, scope, copyTarget.text)) {
+        return true;
+      }
+      return ccxtGoProducerUseRebinds(n) || isDestructuringTarget(n);
+    });
+    verdict = unsafe ? void 0 : GO_SAFE_DICT_LOCAL_TYPE;
+  }
+  ral84g6OmitVerdicts.set(declaration, verdict);
+  return verdict;
+}
+var ral84g6ShippedDictUnbox = GoTranspiler.prototype.goSafeDictLocalUnbox;
+GoTranspiler.prototype.goSafeDictLocalUnbox = function(declaration) {
+  return ral84g6ShippedDictUnbox.call(this, declaration) ?? ral84g6OmitLocalType(this, declaration);
+};
+var ral84g6ShippedDictValue = GoTranspiler.prototype.goSafeDictUnboxValue;
+GoTranspiler.prototype.goSafeDictUnboxValue = function(declaration, identation) {
+  if (ral84g6ShippedDictUnbox.call(this, declaration) === void 0 && ral84g6OmitLocalType(this, declaration) !== void 0) {
+    return "MapTyped(" + this.printNode(declaration.initializer, identation).trimStart() + ")";
+  }
+  return ral84g6ShippedDictValue.call(this, declaration, identation);
+};
+var ral84g6ShippedTypeOfInitializer = GoTranspiler.prototype.goTypeOfInitializer;
+GoTranspiler.prototype.goTypeOfInitializer = function(initializer, printedValue) {
+  const known = ral84g6ShippedTypeOfInitializer.call(this, initializer, printedValue);
+  if (known !== void 0 || initializer?.kind !== SyntaxKind5.Identifier) {
+    return known;
+  }
+  const parent = initializer.parent;
+  const target = parent?.kind === SyntaxKind5.VariableDeclaration && parent.initializer === initializer ? parent.name : parent?.kind === SyntaxKind5.BinaryExpression && parent.right === initializer && parent.operatorToken?.kind === SyntaxKind5.EqualsToken ? parent.left : void 0;
+  if (target?.kind !== SyntaxKind5.Identifier || !ral84g6OmitArgIsMap(this, initializer)) {
+    return void 0;
+  }
+  const scope = this.goEnclosingFunction(parent);
+  return scope !== void 0 && !ral84g6NameBacksIn(this, scope, target.text) ? GO_SAFE_DICT_LOCAL_TYPE : void 0;
+};
 
 // src/javaTranspiler.ts
 init_esm_shims();
