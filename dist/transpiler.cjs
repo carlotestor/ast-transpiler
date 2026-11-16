@@ -56661,7 +56661,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (copied > 0 && (kind === "str" || kind === "ostr") && this.rustStrMethodRecvLocal(declaration)) {
       const aliasLent = kind === "ostr" && !this.rustTestTierSource(declaration) && this.rustReaderLendBoxes(declaration, false, false, true);
-      if (this.rustStrNoLend || !this.rustUdReaderStr(declaration.initializer) || this.rustStrReturnedLocal(declaration, scope) || !(this.rustReaderLendBoxes(declaration) || aliasLent))
+      const strElem = kind === "ostr" && this.rust76cLocalStrListElement(declaration.initializer);
+      if (this.rustStrNoLend || !(this.rustUdReaderStr(declaration.initializer) || strElem) || this.rustStrReturnedLocal(declaration, scope) || !(this.rustReaderLendBoxes(declaration) || aliasLent))
         return void 0;
       this.rustStrLentLocals.add(declaration);
     }
@@ -58548,6 +58549,17 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     const declaration = this.rustCallDeclarations.get(node);
     return declaration !== void 0 && declaration !== null && !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(_nullishCoalesce(_optionalChain([declaration, 'access', _8957 => _8957.getSourceFile, 'optionalCall', _8958 => _8958(), 'optionalAccess', _8959 => _8959.fileName]), () => ( ""))));
+  }
+  /** ral-76c R1: `xs[i]` over a local (never a parameter) whose checker type is an array of `string`, in a non-test source. */
+  rust76cLocalStrListElement(init) {
+    const node = this.unwrapParens(init);
+    if (node === void 0 || !_is.isElementAccessExpression.call(void 0, node) || !_is.isIdentifier.call(void 0, node.expression) || this.rustTestTierSource(node))
+      return false;
+    const owner = this.rustDeclaredNode(node.expression);
+    if (owner === void 0 || !_is.isVariableDeclaration.call(void 0, owner) || !_is.isIdentifier.call(void 0, owner.name))
+      return false;
+    const listType = this.typeOfNodeIfAny(node.expression);
+    return listType !== void 0 && this.getChecker().isArrayType(listType) && this.rustElementReadScalarKind(node) === "ostr" && this.primitiveKindOfType(this.typeOfNodeIfAny(node)) === "string";
   }
   /** ud: a base-tier string reader (`safeString*`, `safeCurrencyCode`) initialiser, with or without a default. */
   rustUdReaderStr(init) {

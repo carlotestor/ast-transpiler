@@ -1015,6 +1015,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustUdOverrideStrSeed(init: any): boolean;
     /** ud: reader strings admitted only through the lending-slot exemption of `rustBlockLocalUsesAll`. */
     private rustUdLent;
+    /** ral-76c R1: `xs[i]` over a local (never a parameter) whose checker type is an array of `string`, in a non-test source. */
+    rust76cLocalStrListElement(init: any): boolean;
     /** ud: a base-tier string reader (`safeString*`, `safeCurrencyCode`) initialiser, with or without a default. */
     rustUdReaderStr(init: any): boolean;
     /** True when the initializer is a reader this block admits (its kind comes from `rustReaderDefaultKind`). */
