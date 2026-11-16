@@ -11642,8 +11642,9 @@ describe('literal and boxed-field locals typed at the declaration', () => {
         // vd lends it to the &impl PreciseArg operand as is
         expect(out).toContain('crate::precise::Precise::stringMul(&leftSide, ');
         expect(out).toContain('let mut leftSide: Option<String> = crate::precise::Precise::stringMul(');
-        // negative: read twice in its write (no last use) keeps its box
-        expect(out).toContain('let mut twice: Value = ');
+        // ral-76h: read twice in its write, both lent (`&twice`): no copy, so it is typed too
+        expect(out).toContain('out = crate::precise::Precise::stringAdd(&twice, &twice).as_str().map(str::to_owned);');
+        expect(out).not.toContain('let mut twice: Value = ');
         expect(out).not.toContain('leftSide.clone()');
     });
     test('wi: a params Dict slot handed back whole in the returned tuple is a Dict, moved there (no copy)', () => {
