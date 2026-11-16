@@ -83661,7 +83661,7 @@ ${iden}}`;
         }
         if (!this.rust80dInListArm(n, declaration, fn))
           return false;
-        if (_is.isBinaryExpression.call(void 0, use) || _is.isPropertyAccessExpression.call(void 0, use))
+        if (_is.isBinaryExpression.call(void 0, use) || _is.isPropertyAccessExpression.call(void 0, use) && !(use.expression === n && String(use.name.text) === "length"))
           return false;
       }
       if (this.rustIdentifierIsPropertyName(n))

@@ -83662,7 +83662,7 @@ ${iden}}`;
         }
         if (!this.rust80dInListArm(n, declaration, fn))
           return false;
-        if (isBinaryExpression5(use) || isPropertyAccessExpression3(use))
+        if (isBinaryExpression5(use) || isPropertyAccessExpression3(use) && !(use.expression === n && String(use.name.text) === "length"))
           return false;
       }
       if (this.rustIdentifierIsPropertyName(n))
