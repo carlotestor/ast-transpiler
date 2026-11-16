@@ -15456,6 +15456,7 @@ function ccxtGoNilDeclaredJoinType(goTranspiler, declaration) {
   let readUnproven = false;
   let parsedNumberWrite = false;
   let elementWriteRead = false;
+  let stringOnlyRead = false;
   const visit = (n) => {
     if (readUnproven) {
       return;
@@ -15473,8 +15474,12 @@ function ccxtGoNilDeclaredJoinType(goTranspiler, declaration) {
         }
         joinType = written;
       } else if (!nilDeclaredReadIsSafe(goTranspiler, n)) {
-        readUnproven = true;
-        return;
+        if (ccxtGoNilDeclaredStringArgumentRead(goTranspiler, n)) {
+          stringOnlyRead = true;
+        } else {
+          readUnproven = true;
+          return;
+        }
       } else if (parent?.kind === ts.SyntaxKind.BinaryExpression && parent.right === n && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
         elementWriteRead = true;
       }
@@ -15491,10 +15496,32 @@ function ccxtGoNilDeclaredJoinType(goTranspiler, declaration) {
   if (NIL_DECLARED_SCALAR_POINTER_TYPES.indexOf(joinType) < 0) {
     return void 0;
   }
+  if (stringOnlyRead && joinType !== "*string") {
+    return void 0;
+  }
   if (goTranspiler.goTypeNameIsShadowed(scope, joinType) || !goTranspiler.goLocalIsSafeToType(scope, declaration, varName, joinType)) {
     return void 0;
   }
   return joinType;
+}
+function ccxtGoNilDeclaredStringArgumentRead(goTranspiler, node) {
+  const call = node.parent;
+  if (call?.kind !== ts.SyntaxKind.CallExpression || call.expression === node) {
+    return false;
+  }
+  const index = call.arguments.indexOf(node);
+  const callee = call.expression;
+  if (index === 0 && callee?.kind === ts.SyntaxKind.PropertyAccessExpression && callee.name?.text === "getLimit" && callee.expression?.kind === ts.SyntaxKind.Identifier && call.arguments.length === 2) {
+    let type;
+    try {
+      type = goTranspiler.getChecker().getTypeAtLocation(callee.expression);
+    } catch (e) {
+      return false;
+    }
+    const text = String(goTranspiler.getChecker().typeToString(type) ?? "");
+    return /^(?:ArrayCache\w*|ArrayCacheBy\w+)(?:\s*\|\s*undefined)?$/.test(text);
+  }
+  return ccxtGoNilJoinArgumentSeesAbsent(goTranspiler, call, index);
 }
 function installNilDeclaredJoin(goTranspiler) {
   const upstream = goTranspiler.printVariableDeclarationList;
@@ -19257,10 +19284,14 @@ function ccxtGoTupleStringJoinTypeUncached(goTranspiler, declaration) {
       } else if (parent?.kind === ts.SyntaxKind.BinaryExpression && parent.left === n && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
         ok = ccxtGoTupleStringWriteIsProven(goTranspiler, parent.right);
         writes += 1;
-      } else if (ccxtGoTupleStringOptionalArgument(goTranspiler, n)) {
-        optionalArgs += 1;
-      } else if (isDestructuringTarget(n) || !ccxtGoTupleStringReadIsSafe(goTranspiler, n)) {
+      } else if (isDestructuringTarget(n)) {
         ok = false;
+      } else if (!ccxtGoTupleStringReadIsSafe(goTranspiler, n)) {
+        if (ccxtGoTupleStringOptionalArgument(goTranspiler, n)) {
+          optionalArgs += 1;
+        } else {
+          ok = false;
+        }
       }
     }
     n?.forEachChild(visit);
