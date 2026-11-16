@@ -3987,6 +3987,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rust64iBaseSliceInit(init: any): boolean;
     /** A base `safeList*` read with an empty `[]` default: a list on every path. */
     rustDefaultedListRead(init: any): boolean;
+    /** ral-87rd R1: some statement `name.push (v)` on this very binding inside its own function. */
+    rust87rdPushedLocal(declaration: VariableDeclaration, name: string): boolean;
     rustLentListLocalUncached(declaration: any): boolean;
     private static readonly RUST_TYPED_LIST_FIELDS;
     rustTypedListField(node: any): boolean;

@@ -80193,6 +80193,18 @@ ${iden}}`;
     const declaration = this.rustScalarCallee(init);
     return declaration !== void 0 && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile().fileName));
   }
+  /** ral-87rd R1: some statement `name.push (v)` on this very binding inside its own function. */
+  rust87rdPushedLocal(declaration, name) {
+    const fn = this.rustEnclosingFunction(declaration);
+    if (fn === void 0 || isSourceFile5(fn))
+      return false;
+    for (const n of this.rustScopeNameNodes(fn, name)) {
+      const up = n.parent;
+      if (up !== void 0 && isIdentifier3(n) && isPropertyAccessExpression3(up) && up.expression === n && String(up.name.text) === "push" && isCallExpression6(up.parent) && up.parent.expression === up && up.parent.parent?.kind === SyntaxKind7.ExpressionStatement && this.rustIdentifierRefersToDeclaration(n, declaration))
+        return true;
+    }
+    return false;
+  }
   rustLentListLocalUncached(declaration) {
     if (declaration.name?.kind !== SyntaxKind7.Identifier)
       return false;
@@ -80210,6 +80222,8 @@ ${iden}}`;
     if (isArrayLiteralExpression4(init))
       return this.rustBuiltListLocal(declaration);
     if (this.rustDefaultedListRead(init) && isIdentifier3(declaration.name) && this.rustLocalIsReassigned(declaration, String(declaration.name.text)))
+      return this.rustBuiltListLocal(declaration);
+    if (this.rustDefaultedListRead(init) && isIdentifier3(declaration.name) && this.rust87rdPushedLocal(declaration, String(declaration.name.text)))
       return this.rustBuiltListLocal(declaration);
     if (this.rustBuiltListConcatInit(init) && isIdentifier3(declaration.name) && this.rustLocalIsReassigned(declaration, String(declaration.name.text)))
       return this.rustBuiltListLocal(declaration);
