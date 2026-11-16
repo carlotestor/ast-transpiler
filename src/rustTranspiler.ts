@@ -8605,6 +8605,8 @@ export class RustTranspiler extends BaseTranspiler {
         if ((kind === 'str' || kind === 'ostr') && this.rust63kLocalFlatHelperKey(n)) return 'mkey';
         // an optional-string local keys a proven map read or an `in` test natively (a `None` key misses, as the `Null` did)
         if (kind === 'ostr' && this.rustInitKeyLocal(n) && this.rustOkeyReadUse(n)) return 'okey';
+        // ral-84c R3: a nil-declared `let k: Str = undefined` keys a proven map read the same way (`None` misses, as `Null` did)
+        if (kind === 'ostr' && this.rust84cNilStrKeyLocal(n) && this.rustOkeyReadUse(n)) return 'okey';
         if (kind === 'ostr' && this.rustInitKeyLocal(n) && this.rust63eChainLinkKeyRead(n)) return 'okey';
         // ral-64k: the key of `const y = book[k]` on a typed ws order-book local is handed to `get_value` as is
         if ((kind === 'str' || kind === 'ostr') && this.rust64kBookKeyRead(n)) return 'bkey';
@@ -12171,6 +12173,12 @@ export class RustTranspiler extends BaseTranspiler {
         if (declaration !== undefined && isVariableDeclaration(declaration) && this.rust84cNilStrInKey(declaration)) return true;
         return declaration !== undefined && isVariableDeclaration(declaration) && declaration.initializer !== undefined
             && this.literalKindOfNode(this.unwrapParens(declaration.initializer)) !== 'null';
+    }
+
+    /** ral-84c R3: `n` names a nil-declared `let k: Str = undefined` local (rust84cNilStrInKey). */
+    rust84cNilStrKeyLocal(n: Node): boolean {
+        const declaration = this.rustDeclaredNode(n);
+        return declaration !== undefined && isVariableDeclaration(declaration) && this.rust84cNilStrInKey(declaration);
     }
 
     /** ral-84c R1: a nil-declared `let k: Str = undefined` (one declarator, a `let` statement) keys an `in` test too: the

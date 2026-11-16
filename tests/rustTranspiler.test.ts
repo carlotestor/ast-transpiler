@@ -24241,3 +24241,24 @@ describe('ral-84c R2: a nil-declared Str local keys an insert into a typed liter
         expect(out).toMatch(/"last"\.to_string\(\), networkCode\.map\(Value::from\)/);
     });
 });
+
+describe('ral-84c R3: a nil-declared Str local keys a read of a typed literal-defaulted map', () => {
+    const files: Record<string, string> = {
+        "ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    options: Dict = {};\n    safeDict (o: any, k: any, d: Dict = undefined): Dict | undefined { return o; }\n    pick (params: Dict): [Str, Dict] { return [ undefined, params ]; }\n    hold (x: any): any { return x; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n",
+        "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    build (params: Dict = {}): any {\n        const request: Dict = {};\n        let marginMode: Str = undefined;\n        let rest: Dict = params;\n        [ marginMode, rest ] = this.pick (rest);\n        if (marginMode === 'cross') {\n            const modes: Dict = this.safeDict (this.options, 'modes', {});\n            request['tradeType'] = modes[marginMode];\n        }\n        return this.hold ([ request, rest ]);\n    }\n}\n"
+    };
+    let out: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-84c3-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = transpiler.transpileRustByPath(path.join (root, 'ts/src/venue.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test('the key local is an Option<String> borrowed by the map read', () => {
+        expect(out).toMatch(/let mut marginMode: Option<String> = None;/);
+        expect(out).toMatch(/modes\.get\(marginMode\.as_deref\(\)\.unwrap_or\(""\)\)/);
+    });
+});
