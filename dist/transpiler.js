@@ -41384,7 +41384,7 @@ GoTranspiler.prototype.goReusableFutureLocal = function(declaration) {
     const operand = node.expression;
     if (operand?.kind === SyntaxKind5.Identifier) {
       const declaration = this.checkerOrUndefined()?.getSymbolAtLocation(operand)?.valueDeclaration?.resolve?.();
-      if (this.goReusableFutureLocal(declaration) && this.goDeclaredTypeOfIdentifier(operand) === "*Future") {
+      if ((this.goReusableFutureLocal(declaration) || this.goClientFutureLocal(declaration)) && this.goDeclaredTypeOfIdentifier(operand) === "*Future") {
         return `(<-${this.printNode(operand, 0)}.Await())`;
       }
     }
@@ -41843,7 +41843,14 @@ GoTranspiler.prototype.goClientFutureReadKey = function(initializer) {
 };
 GoTranspiler.prototype.goClientFutureCheckerStringKey = function(key) {
   const type = this.checkerOrUndefined()?.getTypeAtLocation(key);
-  return type !== void 0 && (type.flags & TypeFlags4.String) !== 0;
+  if (type === void 0) {
+    return false;
+  }
+  if ((type.flags & TypeFlags4.String) !== 0) {
+    return true;
+  }
+  const parts = type.isUnionType() ? type.getTypes() : [];
+  return parts.some((t) => (t.flags & TypeFlags4.String) !== 0) && parts.every((t) => (t.flags & (TypeFlags4.String | TypeFlags4.Undefined | TypeFlags4.Null)) !== 0);
 };
 GoTranspiler.prototype.goClientFutureLocal = function(declaration) {
   if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier || declaration.parent?.parent?.kind !== SyntaxKind5.FirstStatement || declaration.type !== void 0 || /promise$/i.test(declaration.name.text)) {
@@ -41875,6 +41882,9 @@ GoTranspiler.prototype.goClientFutureLocal = function(declaration) {
           return true;
         }
         if (parent?.kind === SyntaxKind5.PropertyAccessExpression && parent.expression === n && (parent.name?.text === "resolve" || parent.name?.text === "reject") && parent.parent?.kind === SyntaxKind5.CallExpression && parent.parent.expression === parent) {
+          return false;
+        }
+        if (parent?.kind === SyntaxKind5.AwaitExpression && parent.expression === n) {
           return false;
         }
         return !this.goIsNilComparisonOperand(n, parent);
