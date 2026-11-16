@@ -75753,7 +75753,12 @@ ${iden}}`;
       return false;
     if (isVariableDeclaration3(use) && use.initializer === top && this.primitiveKindOfType(this.typeOfNodeIfAny(use.name)) !== void 0)
       return false;
-    if (this.isWriteBackBindRead(up) && !(top === up && this.rustExplicitWriteBackBind(up)) || !this.isNativeAccessPositionSafe(up) || top !== up && (this.isWriteBackBindRead(top) || !this.isNativeAccessPositionSafe(top)))
+    let ownWrite = void 0;
+    for (let at = up.parent; at !== void 0 && !isStatement(at); at = at.parent) {
+      if (isBinaryExpression5(at) && at.operatorToken.kind === SyntaxKind7.EqualsToken && isElementAccessExpression4(at.left) && isIdentifier3(at.left.expression) && at.left.expression.text === n.text && this.isNodeInsideNode(up, at.right) && this.rustListIndexLiteralWrite(at.left.expression))
+        ownWrite = at;
+    }
+    if (this.isWriteBackBindRead(up) && !(top === up && this.rustExplicitWriteBackBind(up)) || !this.isNativeAccessPositionSafe(up, ownWrite) || top !== up && (this.isWriteBackBindRead(top) || !this.isNativeAccessPositionSafe(top, ownWrite)))
       return false;
     const key = this.rustSkipWrappers(up.argumentExpression);
     if (key === void 0 || isStringLiteralLikeNode4(key))
@@ -76550,7 +76555,9 @@ ${iden}}`;
     if (!isElementAccessExpression4(access) || access.expression !== n || !isBinaryExpression5(write) || write.left !== access || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
       return false;
     const key = this.rustSkipWrappers(access.argumentExpression);
-    return key !== void 0 && this.rustListIndexIntKey(key) && String(write.getText()).split("\n")[0].length <= 240;
+    if (key === void 0 || String(write.getText()).split("\n")[0].length > 240)
+      return false;
+    return this.rustListIndexIntKey(key) || isIdentifier3(key) && (this.rustScalarLocalOf(key)?.kind === "int" || this.rustValueIntCounter(key));
   }
   /** ral-52e: a list index key proved i64: an integer literal, or `+` / `-` over integer literals and i64 scalar locals (at least one literal);
    *  ral-53e: or, as the whole key of a plain element read, an int / Option<i64> local (rust53eElemReadKey). */
