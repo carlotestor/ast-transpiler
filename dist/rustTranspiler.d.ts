@@ -1821,6 +1821,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** tb: `i OP b` as the condition of `for (let i = <int>; ..; i++)` (the step is the counter's only write, so it is always
      *  an `Int`), `b` a parseToInt `i64` / `Option<i64>` local: the counter operand, else undefined. */
     rustTbCounterBound(cond: any, n: any, kind: string): any;
+    /** ral-63p: `i OP n` as the condition of `for (let i = s; ..; i++)` where `n` is a local initialised by a base
+     *  `this.sum (..)` whose operands the scalar rule proves `i64` (rustArithCallKind 'int': the runtime sum of two `Int`s is
+     *  that `Int`), and the counter `i` starts at an int literal or at an `i64` local (ral-58n) and is written only by its
+     *  step, so it always holds an `Int`. Ordered compares of two `Int` payloads (`is_less_than` / `as_f64`) are the `as f64`
+     *  compare of the two `i64`s, which printTbCounterBound prints (or the i64 counter plan's own `i < n`). */
+    rust63pSumCounterBound(cond: any, n: any): boolean;
     /** tb: a use of the bound outside that for-condition meets another local (an operand, a write, another local's initializer or
      *  assignment source): those partners are other groups' decisions, so the bound keeps its `Value`. */
     rustTbBoundHasPartner(declaration: any, cond: any): boolean;

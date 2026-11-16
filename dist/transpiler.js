@@ -64098,6 +64098,8 @@ ${ind}];`;
       return void 0;
     if (_RustTranspiler.NATIVE_COMPARISON_OPERATORS[cond.operatorToken.kind] === void 0 || this.isEqualityOp(cond.operatorToken.kind))
       return void 0;
+    if (isIdentifier3(n) && kind === "int" && this.rust63pSumCounterBound(cond, n))
+      return cond.left;
     if (!isIdentifier3(n) || !(this.rustTbParseToIntInit(this.rustDeclaredNode(n)) || this.rustTbExactIntSlot(this.rustDeclaredNode(n)) || this.rustIntReaderLitDefault(this.rustDeclaredNode(n))) || this.rustTbBoundHasPartner(this.rustDeclaredNode(n), cond))
       return void 0;
     const counter = cond.left;
@@ -64108,6 +64110,45 @@ ${ind}];`;
     if (d === void 0 || !isVariableDeclaration3(d) || loop?.kind !== SyntaxKind7.ForStatement || loop.condition !== cond)
       return void 0;
     return this.rustValueIntCounter(counter) ? counter : void 0;
+  }
+  /** ral-63p: `i OP n` as the condition of `for (let i = s; ..; i++)` where `n` is a local initialised by a base
+   *  `this.sum (..)` whose operands the scalar rule proves `i64` (rustArithCallKind 'int': the runtime sum of two `Int`s is
+   *  that `Int`), and the counter `i` starts at an int literal or at an `i64` local (ral-58n) and is written only by its
+   *  step, so it always holds an `Int`. Ordered compares of two `Int` payloads (`is_less_than` / `as_f64`) are the `as f64`
+   *  compare of the two `i64`s, which printTbCounterBound prints (or the i64 counter plan's own `i < n`). */
+  rust63pSumCounterBound(cond, n) {
+    if (!isBinaryExpression5(cond) || this.unwrapParens(cond.right) !== n || this.isEqualityOp(cond.operatorToken.kind) || _RustTranspiler.NATIVE_COMPARISON_OPERATORS[cond.operatorToken.kind] === void 0 || this.rustTestTierSource(cond))
+      return false;
+    const bound = this.rustDeclaredNode(n);
+    const init = bound === void 0 || !isVariableDeclaration3(bound) || bound.initializer === void 0 ? void 0 : this.unwrapParens(bound.initializer);
+    if (init === void 0 || !this.rustSumShape(init) || this.rustArithCallKind(init) !== "int")
+      return false;
+    const counter = cond.left;
+    if (!isIdentifier3(counter))
+      return false;
+    const d = this.rustDeclaredNode(counter);
+    const loop = d?.parent?.parent;
+    if (d === void 0 || !isVariableDeclaration3(d) || !isIdentifier3(d.name) || loop?.kind !== SyntaxKind7.ForStatement || loop.condition !== cond)
+      return false;
+    if (this.rustValueIntCounter(counter))
+      return true;
+    const start = d.initializer === void 0 ? void 0 : this.unwrapParens(d.initializer);
+    if (start === void 0 || !isIdentifier3(start) || this.rustScalarLocalOf(start)?.kind !== "int")
+      return false;
+    const incr = loop.incrementor;
+    if (incr === void 0 || !(incr.kind === SyntaxKind7.PostfixUnaryExpression || incr.kind === SyntaxKind7.PrefixUnaryExpression) || incr.operator !== SyntaxKind7.PlusPlusToken && incr.operator !== SyntaxKind7.MinusMinusToken || !isIdentifier3(incr.operand))
+      return false;
+    const symbol = this.rustSymbolOf(d.name);
+    if (symbol === void 0 || this.rustSymbolOf(incr.operand) !== symbol)
+      return false;
+    const uses = this.rustScopeNameNodes(loop, String(d.name.text));
+    for (const m of uses) {
+      if (m === d.name || !isIdentifier3(m) || this.rustSymbolOf(m) !== symbol || this.isNodeInsideNode(m, incr))
+        continue;
+      if (this.rustIdentifierIsWritten(m))
+        return false;
+    }
+    return true;
   }
   /** tb: a use of the bound outside that for-condition meets another local (an operand, a write, another local's initializer or
    *  assignment source): those partners are other groups' decisions, so the bound keeps its `Value`. */
