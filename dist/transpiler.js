@@ -41569,14 +41569,25 @@ GoTranspiler.prototype.goOhlcvsReadCacheType = function(declaration) {
     return void 0;
   }
   const init = this.goUnwrapPrintedAssertions(declaration.initializer);
-  let shape = this.goOhlcvsFlatKeyNode(declaration) !== void 0;
-  if (!shape && init?.kind === SyntaxKind5.ElementAccessExpression) {
-    shape = this.goOhlcvsBookAccess(init.expression) !== void 0;
-  }
-  if (!shape && init?.kind === SyntaxKind5.CallExpression && init.arguments?.length === 2 && init.expression?.kind === SyntaxKind5.PropertyAccessExpression && init.expression.expression?.kind === SyntaxKind5.ThisKeyword && init.expression.name?.text === "safeValue") {
+  const flat = this.goOhlcvsFlatKeyNode(declaration);
+  let shape = false;
+  if (flat !== void 0) {
+    shape = this.goWsKey(flat) !== void 0;
+  } else if (init?.kind === SyntaxKind5.ElementAccessExpression && this.goOhlcvsBookAccess(init.expression) !== void 0) {
+    shape = this.goWsKey(this.goOhlcvsBookAccess(init.expression).argumentExpression) !== void 0 && this.goWsKey(init.argumentExpression) !== void 0;
+  } else if (init?.kind === SyntaxKind5.CallExpression && init.arguments?.length === 2 && init.expression?.kind === SyntaxKind5.PropertyAccessExpression && init.expression.expression?.kind === SyntaxKind5.ThisKeyword && init.expression.name?.text === "safeValue") {
     const source = init.arguments[0];
+    const viaAccess = this.goOhlcvsBookAccess(source);
     const viaCall = this.goOhlcvsBookCall(source);
-    shape = this.goOhlcvsBookAccess(source) !== void 0 || this.goOhlcvsBookLocalOf(source) !== void 0 || viaCall !== void 0 && this.goUnwrapPrintedAssertions(source).expression.name.text === "safeDict";
+    let bookOk = false;
+    if (viaAccess !== void 0) {
+      bookOk = this.goWsKey(viaAccess.argumentExpression) !== void 0;
+    } else if (viaCall !== void 0 && this.goUnwrapPrintedAssertions(source).expression.name.text === "safeDict") {
+      bookOk = this.goWsKey(viaCall.key) !== void 0;
+    } else {
+      bookOk = this.goOhlcvsBookLocalOf(source) !== void 0;
+    }
+    shape = bookOk && this.goWsKey(init.arguments[1]) !== void 0;
   }
   if (!shape) {
     return void 0;
