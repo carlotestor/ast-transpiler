@@ -74035,6 +74035,8 @@ ${iden}}`;
   rustLentOptionalHandOff(call, arg, init, from, nilDeclared) {
     if (from !== "dict" && from !== "list")
       return false;
+    if (!nilDeclared && from === "dict" && init !== void 0 && _is.isIdentifier.call(void 0, init) && this.rustOptAliasSourceKind(init, this.rustEnclosingFunction(call)) === "dict")
+      return this.rustLentResponseSlot(call, arg);
     if (!nilDeclared && !(init !== void 0 && _is.isCallExpression.call(void 0, init) && this.rustOptContainerSourceOk(init, from)))
       return false;
     if (this.rustLentResponseSlot(call, arg))
@@ -75438,6 +75440,12 @@ ${iden}}`;
     if (src !== void 0 && src.kind === kind && this.rustPrintedOptional.has(src.declaration)) {
       const s = super.transformIdentifier(init, _nullishCoalesce(this.ReservedKeywordsReplacements[init.text], () => ( init.text)));
       return `${indent}let mut ${varName}: Option<${type}> = ${this.rustOwnedLastUse(init, src.declaration) ? s : `${s}.clone()`}`;
+    }
+    if (_is.isIdentifier.call(void 0, init)) {
+      const d = this.rustDeclarationOfIdentifier(init);
+      const s = super.transformIdentifier(init, _nullishCoalesce(this.ReservedKeywordsReplacements[init.text], () => ( init.text)));
+      if (d !== void 0 && d !== init && d.name !== init && !this.rustOwnedLastUse(init, d))
+        return `${indent}let mut ${varName}: Option<${type}> = ${s}.clone().into_opt_${kind}()`;
     }
     return `${indent}let mut ${varName}: Option<${type}> = ${_nullishCoalesce(this.rustWsFieldGetText(init, true), () => ( this.printNode(declaration.initializer, 0).trim()))}.into_opt_${kind}()`;
   }
