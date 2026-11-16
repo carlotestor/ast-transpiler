@@ -42356,6 +42356,71 @@ ${iden}} else {
 ${iden}	${name} = ${whenFalse}
 ${iden}}`;
 };
+function ccxtGo87PostOnlySlotWrite(goTranspiler, node) {
+  const pattern = node?.parent;
+  const assignment = pattern?.parent;
+  if (pattern?.kind !== SyntaxKind5.ArrayLiteralExpression || pattern.elements[0] !== node || pattern.elements.length !== 2 || !pattern.elements.every((e) => e.kind === SyntaxKind5.Identifier) || assignment?.kind !== SyntaxKind5.BinaryExpression || assignment.left !== pattern || assignment.operatorToken.kind !== SyntaxKind5.EqualsToken || assignment.parent?.kind !== SyntaxKind5.ExpressionStatement) {
+    return false;
+  }
+  const call = assignment.right;
+  const callee = call?.expression;
+  if (call?.kind !== SyntaxKind5.CallExpression || callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword || callee.name?.text !== "handlePostOnly") {
+    return false;
+  }
+  let fileName = "";
+  try {
+    fileName = goTranspiler.getChecker().getResolvedSignature(call)?.declaration?.resolve()?.getSourceFile?.()?.fileName ?? "";
+  } catch (e) {
+    return false;
+  }
+  return CCXT_GO_ELEMENT_1_BASE_FILE.test(fileName);
+}
+var goNilValueBoolSlotWrite87 = GoNilDeclaredValueAssignmentScan.prototype.boolSlotWrite;
+GoNilDeclaredValueAssignmentScan.prototype.boolSlotWrite = function(node) {
+  const shipped = goNilValueBoolSlotWrite87.call(this, node);
+  if (shipped !== void 0 || this.inNestedFunction(node) || !ccxtGo87PostOnlySlotWrite(this.goTranspiler, node)) {
+    return shipped;
+  }
+  this.sawWrite = true;
+  if (this.joinType !== void 0 && this.joinType !== "bool") {
+    this.rejected = true;
+    return false;
+  }
+  this.joinType = "bool";
+  return true;
+};
+function ccxtGo87BoolJoinDeclaration(goTranspiler, target) {
+  let declaration;
+  try {
+    declaration = goTranspiler.getChecker().getSymbolAtLocation(target)?.valueDeclaration?.resolve();
+  } catch (e) {
+    return void 0;
+  }
+  if (declaration?.kind !== SyntaxKind5.VariableDeclaration || !ts.isIdentifier(declaration.name) || !isNilDeclaredInitializer(declaration.initializer) || declaration.parent?.parent?.kind !== SyntaxKind5.VariableStatement || declaration.parent.declarations.length !== 1 || NIL_DECLARED_GUARD_NAMES.indexOf(declaration.name.text) >= 0) {
+    return void 0;
+  }
+  goTranspiler.ccxtGo87BoolJoins ??= /* @__PURE__ */ new WeakMap();
+  const cache = goTranspiler.ccxtGo87BoolJoins;
+  if (!cache.has(declaration)) {
+    cache.set(declaration, false);
+    const scan = new GoNilDeclaredValueAssignmentScan(goTranspiler, declaration, declaration.name.text);
+    cache.set(declaration, scan.run() && scan.joinType === "bool" && !goTranspiler.goTypeNameIsShadowed?.(goTranspiler.goEnclosingFunction(declaration), "bool"));
+  }
+  return cache.get(declaration) ? declaration : void 0;
+}
+var goPrintCustomBinary87 = GoTranspiler.prototype.printCustomBinaryExpressionIfAny;
+GoTranspiler.prototype.printCustomBinaryExpressionIfAny = function(node, identation) {
+  const printed = goPrintCustomBinary87.call(this, node, identation);
+  const target = node?.left?.elements?.[0];
+  if (typeof printed !== "string" || target === void 0 || !ccxtGo87PostOnlySlotWrite(this, target) || ccxtGo87BoolJoinDeclaration(this, target) === void 0) {
+    return printed;
+  }
+  const name = this.printNode(target, 0);
+  return printed.split("\n").map((line) => {
+    const m = /^(\s*)(\w+) = GetValue\((\w+), 0\)$/.exec(line);
+    return m !== null && m[2] === name ? m[1] + name + " = GetValueBool(" + m[3] + ", 0, false)" : line;
+  }).join("\n");
+};
 
 // src/javaTranspiler.ts
 init_esm_shims();
