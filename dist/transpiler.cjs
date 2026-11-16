@@ -76802,7 +76802,7 @@ ${iden}}`;
       return false;
     if (up.kind === _ast.SyntaxKind.PropertyAssignment)
       return up.initializer === n;
-    if (_is.isArrayLiteralExpression.call(void 0, up) && this.rustDictElementSource(init) && this.rust62nListLiteralSink(up))
+    if (_is.isArrayLiteralExpression.call(void 0, up) && this.rustDictElementSource(init) && (this.rust62nListLiteralSink(up) || this.rust84aListLiteralSelfArg(up)))
       return true;
     if (_is.isCallExpression.call(void 0, up) && _is.isPropertyAccessExpression.call(void 0, up.expression) && _is.isIdentifier.call(void 0, up.expression.expression) && up.arguments.length === 1 && up.arguments[0] === n && String(up.expression.name.text) === "push")
       return !this.rustIdentifierRefersToDeclaration(up.expression.expression, this.rustDeclarationOfIdentifier(n));
@@ -77228,6 +77228,21 @@ ${iden}}`;
     const callee = up.expression;
     const keys = String(callee.name.text) === "safeList2" ? 3 : 2;
     return up.arguments.length === keys + 1;
+  }
+  /** ral-84a: an array literal that is a whole argument of a `this.` / `super.` call at a plain `Value` slot
+   *  (`this.depositWithdrawFee ([ fee ])`): the literal boxes each element, so a map row enters as the shared map. */
+  rust84aListLiteralSelfArg(list) {
+    const up = list.parent;
+    if (!_is.isCallExpression.call(void 0, up) || up.expression === list || !_is.isPropertyAccessExpression.call(void 0, up.expression))
+      return false;
+    const recv = up.expression.expression;
+    if (recv.kind !== _ast.SyntaxKind.ThisKeyword && recv.kind !== _ast.SyntaxKind.SuperKeyword)
+      return false;
+    const callee = String(up.expression.name.text);
+    if (_RustTranspiler.RUST_HANDED_DICT_EXTEND.has(callee) || _RustTranspiler.RUST_HANDED_DICT_OMIT.has(callee))
+      return false;
+    const at = Array.from(up.arguments).indexOf(list);
+    return at >= 0 && this.rustNilBoxSlotOk(up, at);
   }
   /** ral-55h: `n` is a handler argument (not the `this` receiver slot) of `h.call (this, ..)` on an identifier `h` typed
    *  `any` (the by-name ws dispatch the ccxt build turns into `self.dispatch_ws_handler(&h, &[..])`). */

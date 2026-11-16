@@ -3663,6 +3663,9 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  `x = [..]` / `m[k] = [..]` statement (written into a place, not handed to a call's `Value` slot). */
     rust62nListLiteralSink(list: any): boolean;
     static readonly RUST_62N_LIST_READERS: Set<string>;
+    /** ral-84a: an array literal that is a whole argument of a `this.` / `super.` call at a plain `Value` slot
+     *  (`this.depositWithdrawFee ([ fee ])`): the literal boxes each element, so a map row enters as the shared map. */
+    rust84aListLiteralSelfArg(list: any): boolean;
     /** ral-55h: `n` is a handler argument (not the `this` receiver slot) of `h.call (this, ..)` on an identifier `h` typed
      *  `any` (the by-name ws dispatch the ccxt build turns into `self.dispatch_ws_handler(&h, &[..])`). */
     rustWsDispatchCallArg(n: any): boolean;
