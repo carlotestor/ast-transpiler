@@ -23201,8 +23201,8 @@ describe('ral-73c: scalar-literal and typed-expression locals', () => {
         fs.rmSync (root, { recursive: true, force: true });
     });
     test('E1: an error value only settled through client.reject is the typed ExchangeError', () => {
-        expect(out).toContain('let mut error: crate::ExchangeError = (crate::exchange_errors::exchange_error(');
-        expect(out).toContain('let mut failure: crate::ExchangeError = (crate::exchange_errors::network_error(');
+        expect(out).toContain('let mut error: crate::ExchangeError = crate::exchange_errors::exchange_error(');
+        expect(out).toContain('let mut failure: crate::ExchangeError = crate::exchange_errors::network_error(');
         expect(out).toContain('client.reject(error.clone(), &messageHash);');
         expect(out).toContain('client.reject(failure.clone(), None);');
     });
@@ -23474,5 +23474,29 @@ describe('ral-73e: safeDict results read at a typed string key', () => {
     test('A negative: a key that is no typed local (an inline reader call) keeps the local Value', () => {
         const out = write ('ral-73e-a-neg', "    m (market: Dict) {\n        const conflicting = this.safeDict (this.options, 'conflictingMarkets', {});\n        const id = this.safeString (market, 'id');\n        if (id in conflicting) {\n            return this.keep (conflicting[this.safeString (market, 'id')]);\n        }\n        return undefined;\n    }\n");
         expect(out).toMatch(/let (?:mut )?conflicting: Value = /);
+    });
+});
+
+describe('ral-76a: the printer boxes a routed error constructor stored into an untyped local', () => {
+    const files: Record<string, string> = {
+        'ts/src/base/ws/Client.ts': "export default class Client {\n    reject (result: any, messageHash: string = undefined): any { return result; }\n    reset (error: any): void { }\n}\n",
+        'ts/src/base/errors.ts': "class BaseError extends Error { constructor (message: string) { super (message); } }\nclass ExchangeError extends BaseError {}\nclass NetworkError extends BaseError {}\nexport { BaseError, ExchangeError, NetworkError };\n",
+        'ts/src/base/Exchange.ts': "export default class Exchange {\n    id: string = 'x';\n}\n",
+        'ts/src/pro/venue.ts': "import Exchange from '../base/Exchange.js';\nimport Client from '../base/ws/Client.js';\nimport { ExchangeError, NetworkError } from '../base/errors.js';\nexport default class venue extends Exchange {\n    handlePing (client: Client) {\n        const error = new NetworkError (this.id + ' pong failed');\n        client.reset (error);\n    }\n    handleAssign (client: Client, ok: boolean) {\n        let exception = undefined;\n        if (!ok) {\n            exception = new ExchangeError (this.id + ' bad');\n        }\n        client.reset (exception);\n    }\n    handleRejectOnly (client: Client) {\n        const failure = new NetworkError (this.id + ' lost');\n        client.reject (failure);\n    }\n}\n",
+    };
+    let out: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-76a-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = transpiler.transpileRustByPath (path.join (root, 'ts/src/pro/venue.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test('declaration and plain assignment targets get Value::from; the reject-only typed local stays bare', () => {
+        expect(out).toContain('let mut error = Value::from(crate::exchange_errors::network_error(');
+        expect(out).toContain('exception = Value::from(crate::exchange_errors::exchange_error(');
+        expect(out).toContain('let mut failure: crate::ExchangeError = crate::exchange_errors::network_error(');
     });
 });

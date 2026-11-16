@@ -2507,8 +2507,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (borrowedElem !== undefined) return borrowedElem;
         if (node.declarations.length === 1 && this.rustSubscriptionPresenceFlag(declaration, parsedValue)) return `${indent}let ${varName}: bool = ${parsedValue} != Value::Null`;
         // ral-73c E1: an error value only ever settled through a ws `client.reject` is the typed `ExchangeError` the
-        // constructor returns (parenthesised: the ccxt `x = crate::exchange_errors::..;` boxing pass keys on a bare call)
-        if (node.declarations.length === 1 && this.rust73cRejectOnlyError(declaration)) return `${indent}let mut ${varName}: crate::ExchangeError = (${parsedValue})`;
+        // constructor returns (rustErrorCtorValueTarget leaves it unboxed)
+        if (node.declarations.length === 1 && this.rust73cRejectOnlyError(declaration)) return `${indent}let mut ${varName}: crate::ExchangeError = ${parsedValue}`;
         if (declaration.initializer.kind === SyntaxKind.NewExpression) {
             return `${indent}let mut ${varName} = ${parsedValue}`;
         }
@@ -16831,7 +16831,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (typeof expression === 'string' && (errorClassPattern.test(expression) || RustTranspiler.RUST_NAME_VALUE_IMPORTS.has(expression) && /^[A-Z]/.test(expression))) {
             const snake = this.rustErrorConstructorName(expression);
             const args = node.arguments.map((a, index) => this.printErrorConstructorArg(snake, index, a, identation)).join(', ');
-            return `crate::exchange_errors::${snake}(${args})`;
+            const built = `crate::exchange_errors::${snake}(${args})`;
+            return this.rustErrorCtorValueTarget(node) ? `Value::from(${built})` : built;
         }
         // A class picked at runtime (`new table[k](msg)`, or a thrown local class value)
         // constructs by name through `create_error`; a value position keeps it boxed.
@@ -16848,6 +16849,20 @@ export class RustTranspiler extends BaseTranspiler {
             ? node.arguments.map((a, index) => this.printErrorConstructorArg(this.rustErrorConstructorName(expression), index, a, identation)).join(', ')
             : node.arguments.map(a => this.printNode(a, identation)).join(', ');
         return this.rustWsCacheCtorBox(node, `${expression}::new(${args})`);
+    }
+
+    /** ral-76a: a routed error constructor (returns `ExchangeError`) stored straight into an untyped local, by its
+     *  declaration or by a plain `x = new XError (..);` statement, is boxed by the printer: the target is a `Value`. The
+     *  ral-73c reject-only local keeps the bare `ExchangeError`. Decided from the AST parent chain, not printed text. */
+    rustErrorCtorValueTarget(node: any): boolean {
+        const parent: any = node.parent;
+        if (parent !== undefined && isVariableDeclaration(parent) && parent.initializer === node) {
+            const list: any = parent.parent;
+            if (list?.kind !== SyntaxKind.VariableDeclarationList || list.parent?.kind !== SyntaxKind.VariableStatement) return false;
+            return !(list.declarations.length === 1 && this.rust73cRejectOnlyError(parent));
+        }
+        return parent !== undefined && isBinaryExpression(parent) && parent.right === node && isIdentifier(parent.left) && parent.operatorToken.kind === SyntaxKind.EqualsToken
+            && parent.parent?.kind === SyntaxKind.ExpressionStatement;
     }
 
     /** Printed class expression of a `new` whose class is a runtime value, else undefined. */
