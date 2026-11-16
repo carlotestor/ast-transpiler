@@ -1280,6 +1280,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustMarketFlagFieldLocal(n: any): boolean;
     /** ral-80e: `n` names a single-binding `const` local with an initializer (no later write is possible). */
     rust80eConstDecl(n: any): boolean;
+    /** ral-80e: every read of `n`'s local is (through parentheses and casts) a whole `Math.min|max` argument: typing it would
+     *  only move the conversion from the declaration to the box at the call (not a lift), so the Math box form refuses it. */
+    rust80eMathArgOnlyLocal(n: any): boolean;
     rustScalarUseFormOwn(n: any, kind: string): string | undefined;
     /** ral-65n: `n` climbed through its parentheses. */
     rust65nClimbParens(n: any): any;

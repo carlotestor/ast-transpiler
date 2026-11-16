@@ -59909,6 +59909,20 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const list = _optionalChain([d, 'optionalAccess', _9119 => _9119.parent]);
     return d !== void 0 && _is.isVariableDeclaration.call(void 0, d) && d.name !== n && d.initializer !== void 0 && list !== void 0 && (list.flags & _ast.NodeFlags.Const) !== 0 && _optionalChain([list, 'access', _9120 => _9120.declarations, 'optionalAccess', _9121 => _9121.length]) === 1;
   }
+  /** ral-80e: every read of `n`'s local is (through parentheses and casts) a whole `Math.min|max` argument: typing it would
+   *  only move the conversion from the declaration to the box at the call (not a lift), so the Math box form refuses it. */
+  rust80eMathArgOnlyLocal(n) {
+    const d = this.rustDeclaredNode(n);
+    if (d === void 0 || !_is.isVariableDeclaration.call(void 0, d) || !_is.isIdentifier.call(void 0, d.name))
+      return true;
+    return this.rustLocalUsesAll(d, String(d.name.text), true, (u) => {
+      let top = u;
+      while (_is.isParenthesizedExpression.call(void 0, top.parent) || _is.isAsExpression.call(void 0, top.parent))
+        top = top.parent;
+      const call = top.parent;
+      return _is.isCallExpression.call(void 0, call) && call.expression !== top && _is.isPropertyAccessExpression.call(void 0, call.expression) && _is.isIdentifier.call(void 0, call.expression.expression) && call.expression.expression.text === "Math";
+    });
+  }
   rustScalarUseFormOwn(n, kind) {
     const parent = n.parent;
     if (parent === void 0)
@@ -65452,7 +65466,8 @@ ${ind}];`;
         return this.rustScalarTypedArgText(n, paramType, true) !== void 0 ? "targ" : void 0;
       const callee = parent.expression;
       const push = _is.isPropertyAccessExpression.call(void 0, callee) && callee.name.text === "push" && callee.expression.kind !== _ast.SyntaxKind.ThisKeyword && parent.arguments.length === 1;
-      return push ? "xbox" : void 0;
+      const math = _is.isPropertyAccessExpression.call(void 0, callee) && _is.isIdentifier.call(void 0, callee.expression) && callee.expression.text === "Math" && (callee.name.text === "min" || callee.name.text === "max") && parent.arguments.length === 2 && (kind === "int" || kind === "oint" || kind === "num" || kind === "onum") && !this.rust80eMathArgOnlyLocal(n);
+      return push || math ? "xbox" : void 0;
     }
     if (this.rustCacheCtorLimitArg(n, kind))
       return this.rustCacheCtorFinalUse(n) ? "targ" : "box";

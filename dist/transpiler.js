@@ -59910,6 +59910,20 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const list = d?.parent;
     return d !== void 0 && isVariableDeclaration3(d) && d.name !== n && d.initializer !== void 0 && list !== void 0 && (list.flags & NodeFlags4.Const) !== 0 && list.declarations?.length === 1;
   }
+  /** ral-80e: every read of `n`'s local is (through parentheses and casts) a whole `Math.min|max` argument: typing it would
+   *  only move the conversion from the declaration to the box at the call (not a lift), so the Math box form refuses it. */
+  rust80eMathArgOnlyLocal(n) {
+    const d = this.rustDeclaredNode(n);
+    if (d === void 0 || !isVariableDeclaration3(d) || !isIdentifier3(d.name))
+      return true;
+    return this.rustLocalUsesAll(d, String(d.name.text), true, (u) => {
+      let top = u;
+      while (isParenthesizedExpression3(top.parent) || isAsExpression3(top.parent))
+        top = top.parent;
+      const call = top.parent;
+      return isCallExpression6(call) && call.expression !== top && isPropertyAccessExpression3(call.expression) && isIdentifier3(call.expression.expression) && call.expression.expression.text === "Math";
+    });
+  }
   rustScalarUseFormOwn(n, kind) {
     const parent = n.parent;
     if (parent === void 0)
@@ -65453,7 +65467,8 @@ ${ind}];`;
         return this.rustScalarTypedArgText(n, paramType, true) !== void 0 ? "targ" : void 0;
       const callee = parent.expression;
       const push = isPropertyAccessExpression3(callee) && callee.name.text === "push" && callee.expression.kind !== SyntaxKind7.ThisKeyword && parent.arguments.length === 1;
-      return push ? "xbox" : void 0;
+      const math = isPropertyAccessExpression3(callee) && isIdentifier3(callee.expression) && callee.expression.text === "Math" && (callee.name.text === "min" || callee.name.text === "max") && parent.arguments.length === 2 && (kind === "int" || kind === "oint" || kind === "num" || kind === "onum") && !this.rust80eMathArgOnlyLocal(n);
+      return push || math ? "xbox" : void 0;
     }
     if (this.rustCacheCtorLimitArg(n, kind))
       return this.rustCacheCtorFinalUse(n) ? "targ" : "box";
