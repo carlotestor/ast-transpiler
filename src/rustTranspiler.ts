@@ -5354,7 +5354,7 @@ export class RustTranspiler extends BaseTranspiler {
         // element, self-call argument), so `Value::from(x.as_str())` costs that copy; a box-only one stays `Value`
         const idLent = kind === 'str' && typedUses > 0 && copied > 0 && this.rustIdString(clockInit);
         const clockLent = kind === 'str' && (this.rustClockString(clockInit) || idLent) && !this.rustStrNoLend && (copied > 0 ? this.rustReaderLendBoxes(declaration) : handOff)
-            && !this.rustConcatWithNilLocal(declaration);
+            && !this.rustConcatWithNilLocal(declaration, true);
         if (clockLent && copied > 0) this.rustStrLentLocals.add(declaration);
         // tc: a `randomBytes` string (it was an `Option<String>` lent at its copying boxes) keeps lending there instead of cloning
         if (kind === 'str' && copied > 0 && this.rustRandomBytesCall(clockInit) && !this.rustStrNoLend && this.rustReaderLendBoxes(declaration)) this.rustStrLentLocals.add(declaration);
@@ -13351,9 +13351,15 @@ export class RustTranspiler extends BaseTranspiler {
         return this.primitiveKindOfType(this.typeOfNodeIfAny(parent.left === n ? parent.right : parent.left)) === 'number';
     }
 
+    /** ral-84b: a nil-declared `let` whose current scalar decision (same scope solve) is a string kind. */
+    rust84bStrNilPartner(d: any): boolean {
+        const kind = this.rustScalarDecisions.get(d);
+        return kind === 'ostr' || kind === 'str';
+    }
+
     /** rd: some `+` chain holding this local also holds a nil-declared local (typing this one would retype that one, which
      *  belongs to the nil-declared rules). */
-    rustConcatWithNilLocal(declaration: any): boolean {
+    rustConcatWithNilLocal(declaration: any, strNilOk = false): boolean {
         let found = false;
         this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n: any) => {
             let top: any = n;
@@ -13362,7 +13368,10 @@ export class RustTranspiler extends BaseTranspiler {
                 if (found || m === undefined) return;
                 if (isIdentifier(m) && m !== n) {
                     const d: any = this.rustDeclaredNode(m);
-                    if (d !== undefined && isVariableDeclaration(d) && (d.initializer === undefined || this.literalKindOfNode(d.initializer) === 'null')) found = true;
+                    if (d !== undefined && isVariableDeclaration(d) && (d.initializer === undefined || this.literalKindOfNode(d.initializer) === 'null')
+                        // ral-84b: a nil-declared partner the scalar solve already holds as a string (`Option<String>` / `String`)
+                        // prints the same `format!` operand whatever this local's type: no retype reaches it
+                        && !(strNilOk && this.rust84bStrNilPartner(d))) found = true;
                     return;
                 }
                 if (isBinaryExpression(m) && m.operatorToken.kind === SyntaxKind.PlusToken) { visit(m.left); visit(m.right); } else if (isParenthesizedExpression(m)) visit(m.expression);

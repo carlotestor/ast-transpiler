@@ -24194,3 +24194,24 @@ describe('ral-80a: a non-boolean settle under an unknown hash keeps the tuple sl
         expect(out).toMatch(/let mut candles: Value = get_value\(/);
     });
 });
+
+describe('ral-84b: a clock string concatenated with a nil-declared string local is a String', () => {
+    const files: Record<string, string> = {
+        'ts/src/base/Exchange.ts': "export default class Exchange {\n    seconds (): number { return 1; }\n    json (x: any): string { return ''; }\n    hmac (x: string): string { return x; }\n}\n",
+        'ts/src/venue.ts': "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n    sign (path: string, method: string = 'GET', params: any = {}) {\n        let requestBody: string = undefined;\n        let headers: any = undefined;\n        const timestamp = this.seconds ().toString ();\n        const privateHeaders: any = {\n            'timestamp': timestamp,\n        };\n        let auth: string = method + timestamp + path;\n        if (method === 'POST') {\n            requestBody = this.json (params);\n            auth = method + timestamp + path + requestBody;\n        }\n        privateHeaders['signature'] = this.hmac (auth);\n        headers = privateHeaders;\n        return { 'body': requestBody, 'headers': headers };\n    }\n}\n",
+    };
+    let out: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-84b1-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = transpiler.transpileRustByPath(path.join (root, 'ts/src/venue.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test('delta sign timestamp: String, lent into the header literal before the later concatenations', () => {
+        expect(out).toContain('let mut timestamp: String = format!("{}", self.seconds().as_i64().unwrap_or_default());');
+        expect(out).not.toContain('let mut timestamp: Value');
+    });
+});
