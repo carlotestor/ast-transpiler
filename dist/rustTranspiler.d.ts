@@ -1358,6 +1358,15 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-56f: `read` (`this.F[k]`) is an argument of a `this.` call that is the whole value of the statement write
      *  `this.F[k] = this.m (.., this.F[k], ..)` whose key admits the bucket reread. */
     rustFieldBucketRereadUse(wrapped: any, read: any): boolean;
+    /** ral-59k: `this.F[k] = v` where every read of `k` in `v` is the key argument of a base `this.safeDict (this.F, k, ..)`
+     *  on the same field (woo pro handleBalance `this.balance[code] = this.extend (this.safeDict (this.balance, code, {}), account)`):
+     *  the printer binds the value before the insert, so the reader's boxed key and the insert key text are one copy each,
+     *  as the `Value` key cloned at the reader and stringified at the insert. Non-test sources; decided from the AST. */
+    rust59kFieldSafeDictReread(n: any, access: any, value: any): boolean;
+    /** ral-59k: `n` is the reader key of a statement `this.F[k] = v` that rust59kFieldSafeDictReread admits. */
+    rust59kFieldSafeDictReaderKey(n: any): boolean;
+    /** ral-59k: `m` is the key argument of a base `this.safeDict (this.<field>, m, ..)`. */
+    rust59kFieldSafeDictKeyArg(m: any, field: string): boolean;
     /** ral-56f: every read of `k` in `value` is `this.F[k]` on the written field (no write of `k`), and some other use of
      *  `k` is a two-level upper key of the same field (rustNestedFieldUpperKeyUse). Non-test sources. */
     rustFieldBucketReread(n: any, access: any, value: any): boolean;
