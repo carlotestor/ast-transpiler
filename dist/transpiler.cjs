@@ -45585,6 +45585,12 @@ var JavaTranspiler = class extends BaseTranspiler {
   // shared by printLengthProperty and transformPropertyAcessExpressionIfNeeded
   printJavaLength(expression, leftSide) {
     const kind = this.javaLengthKind(expression);
+    if (kind === "List" && _is.isIdentifier.call(void 0, expression)) {
+      const declaredList = this.javaDeclaredTypeOf(expression);
+      if (declaredList !== void 0 && JAVA_DECLARED_LIST_TYPES.test(declaredList)) {
+        return `${leftSide}.size()`;
+      }
+    }
     if (kind !== void 0) {
       const read = kind.startsWith("String") ? `((String)${leftSide}).length()` : `((java.util.List<?>)${leftSide}).size()`;
       return kind.endsWith("OrNull") ? `(${leftSide} == null ? 0 : ${read})` : read;
