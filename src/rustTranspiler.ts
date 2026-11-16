@@ -23108,7 +23108,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (extendReuse) from = 'dict';
         // ral-qa: a base `safeValue*` result read only at string keys: every non-map value (Null included) reads Null at
         // a string key exactly as the empty map `into_dict()` leaves, so the local holds the shared map
-        const keyReadOnly = from === undefined && !nilDeclared && init !== undefined && (this.rustSafeValueKeyReadSource(init) || this.rustKeyReadTernarySource(init));
+        const keyReadOnly = from === undefined && !nilDeclared && init !== undefined && (this.rustSafeValueKeyReadSource(init) || this.rustKeyReadTernarySource(init) || this.rust80gParseJsonKeyReadSource(init));
         if (keyReadOnly) from = 'dict';
         // ral-42g: a row `xs[i]` of a checker list (counter-loop binding) read only at literal string keys: the same invariant
         const elemKeyReadOnly = from === undefined && !nilDeclared && init !== undefined && this.rustListRowKeyReadSource(init);
@@ -26467,6 +26467,16 @@ export class RustTranspiler extends BaseTranspiler {
         // the receiver chain names no ws client state nor a market / currency table
         const names = (x: any): boolean => (isPropertyAccessExpression(x) && /^(?:markets|markets_by_id|currencies|currencies_by_id|clients|futures|subscriptions|orderbooks|cache)$/.test(String(x.name.text))) || (x.forEachChild(names) ?? false);
         return !names(call.arguments[0]);
+    }
+
+    /** ral-80g: `const o = this.parseJson (s)` (base `parseJson`, one argument): its answer is whatever JSON the text holds
+     *  (a map, a list, a scalar) or Null. Under ral-qa's use rule (literal string-key base reads only) a non-map answer reads
+     *  Null at every key exactly as the empty map `into_dict()` leaves, and a parsed value carries no store tag. */
+    rust80gParseJsonKeyReadSource(call: any): boolean {
+        if (!isCallExpression(call) || !isPropertyAccessExpression(call.expression) || call.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
+        if (String(call.expression.name.text) !== 'parseJson' || call.arguments.length !== 1 || this.rustTestTierSource(call)) return false;
+        const declaration: any = this.rustScalarCallee(call);
+        return declaration !== undefined && RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile().fileName));
     }
 
     /** ral-45g: `c ? a : b` whose arms are each a local / parameter, a numeric-index row, an empty map literal or a ral-qa

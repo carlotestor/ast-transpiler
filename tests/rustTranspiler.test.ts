@@ -23887,3 +23887,24 @@ describe('ral-76e: a literal-defaulted integer reader ordered against its loop c
         expect(out).not.toContain('let mut maxRetries: i64');
     });
 });
+
+describe('ral-80g R1: a base parseJson result read only at literal string keys holds a map (ral-qa invariant)', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    parseJson (s: any) { return JSON.parse (s); }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        transpiler.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts'));
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('grvt parseTransaction: `parsedMeta = this.parseJson (s)` read only by safeString at literal keys', () => {
+        const out = write ('ral-80g-r1', "    m (s: Str) {\n        const parsedMeta = this.parseJson (s);\n        const a = this.safeString (parsedMeta, 'direction');\n        const b = this.safeString (parsedMeta, 'endpoint');\n        return [ a, b ];\n    }\n");
+        expect(out).toMatch(/let (?:mut )?parsedMeta: crate::value::Dict = /);
+        expect(out).toContain('&parsedMeta, "direction"');
+    });
+    test('negative: a null-tested parseJson result keeps the Value (Null is not the empty map there)', () => {
+        const out = write ('ral-80g-r1-neg', "    m (s: Str) {\n        const parsed = this.parseJson (s);\n        if (parsed !== undefined) {\n            return this.safeString (parsed, 'x');\n        }\n        return undefined;\n    }\n");
+        expect(out).toMatch(/let (?:mut )?parsed: Value = /);
+    });
+});
