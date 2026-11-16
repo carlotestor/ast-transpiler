@@ -41644,28 +41644,12 @@ GoTranspiler.prototype.goTypeOfInitializer = function(initializer, printedValue)
   return scope !== void 0 && !ral84g6NameBacksIn(this, scope, target.text) ? GO_SAFE_DICT_LOCAL_TYPE : void 0;
 };
 function ral84g6MapWriteIsMap(goTranspiler, declaration, n, parent) {
-  const isSelfOrMap = (arg) => arg?.kind === SyntaxKind5.Identifier && (ccxtGoParamDeclarationOf(goTranspiler, arg) === declaration || ral84g6OmitArgIsMap(goTranspiler, arg));
-  if (parent?.kind === SyntaxKind5.BinaryExpression && parent.left === n && parent.operatorToken?.kind === SyntaxKind5.EqualsToken) {
-    const write = ral84g6OmitCall(parent.right);
-    return write !== void 0 && isSelfOrMap(write.arguments[0]);
-  }
-  const assignment = parent?.parent;
-  if (parent?.kind !== SyntaxKind5.ArrayLiteralExpression || assignment?.kind !== SyntaxKind5.BinaryExpression || assignment.left !== parent || assignment.operatorToken?.kind !== SyntaxKind5.EqualsToken || parent.elements.length !== 2 || parent.elements.indexOf(n) !== 1) {
+  if (parent?.kind !== SyntaxKind5.BinaryExpression || parent.left !== n || parent.operatorToken?.kind !== SyntaxKind5.EqualsToken) {
     return false;
   }
-  const call = assignment.right;
-  const callee = call?.expression;
-  if (call?.kind !== SyntaxKind5.CallExpression || call.questionDotToken !== void 0 || callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword) {
-    return false;
-  }
-  const slot = CCXT_GO_ELEMENT_1_PARAMS_SLOT[String(callee.name?.text ?? "")];
-  let signature;
-  try {
-    signature = goTranspiler.getChecker().getResolvedSignature(call)?.declaration?.resolve();
-  } catch (e) {
-    return false;
-  }
-  return slot !== void 0 && CCXT_GO_ELEMENT_1_BASE_FILE.test(signature?.getSourceFile?.()?.fileName ?? "") && isSelfOrMap(call.arguments[slot]);
+  const write = ral84g6OmitCall(parent.right);
+  const arg = write?.arguments[0];
+  return arg?.kind === SyntaxKind5.Identifier && (ccxtGoParamDeclarationOf(goTranspiler, arg) === declaration || ral84g6OmitArgIsMap(goTranspiler, arg));
 }
 var ral84g6ShippedLocalIsSafeToType = GoTranspiler.prototype.goLocalIsSafeToType;
 GoTranspiler.prototype.goLocalIsSafeToType = function(scope, declaration, varName, goType, stringWriteProven = false) {
