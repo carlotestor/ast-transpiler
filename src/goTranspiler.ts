@@ -10876,6 +10876,14 @@ export class GoNilDeclaredValueAssignmentScan extends GoNilDeclaredAssignmentSca
             return slotWrite ? true : assigned;
         }
         const parent = node.parent;
+        // 84g1: `!x` on a bool join prints the native negation once x is assigned
+        if ((parent?.kind === ts.SyntaxKind.PrefixUnaryExpression) && (parent.operator === ts.SyntaxKind.ExclamationToken)
+                && (this.joinType === 'bool') && !this.inNestedFunction (node)) {
+            if (!assigned) {
+                this.rejected = true;
+            }
+            return assigned;
+        }
         if ((parent?.kind === ts.SyntaxKind.BinaryExpression) && COMPARISON_TOKENS.includes (parent.operatorToken.kind)
                 && (this.joinType !== undefined) && !this.inNestedFunction (node)) {
             const other = (parent.left === node) ? parent.right : parent.left;
