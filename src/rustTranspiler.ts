@@ -1,5 +1,5 @@
 import { BaseTranspiler } from "./baseTranspiler.js";
-import { NodeFlags, SyntaxKind, type BinaryExpression, type Block, type CallExpression, type Declaration, type ElementAccessExpression, type Expression, type Identifier, type Node, type NodeArray, type ParameterDeclaration, type SourceFile, type TypeNode, type VariableDeclaration } from "typescript/unstable/ast";
+import { NodeFlags, SyntaxKind, type BinaryExpression, type BindingElement, type Block, type CallExpression, type Declaration, type ElementAccessExpression, type Expression, type Identifier, type Node, type NodeArray, type ParameterDeclaration, type SourceFile, type TypeNode, type VariableDeclaration } from "typescript/unstable/ast";
 import { isArrayBindingPattern, isArrayLiteralExpression, isArrayTypeNode, isArrowFunction, isAsExpression, isBinaryExpression, isBindingElement, isBlock, isCallExpression, isClassDeclaration, isClassExpression, isConditionalExpression, isDeleteExpression, isElementAccessExpression, isForInStatement, isForOfStatement, isIdentifier, isIfStatement, isMethodDeclaration, isNewExpression, isNoSubstitutionTemplateLiteral, isNonNullExpression, isNumericLiteral, isObjectLiteralExpression, isParameterDeclaration, isParenthesizedExpression, isPostfixUnaryExpression, isPrefixUnaryExpression, isPropertyAccessExpression, isPropertyDeclaration, isPropertyAssignment, isReturnStatement, isShorthandPropertyAssignment, isSourceFile, isStatement, isStringLiteral, isStringLiteralLikeNode, isTypeAssertion, isTypeReferenceNode, isVariableDeclaration, isVariableDeclarationList } from "typescript/unstable/ast/is";
 import { IndexKind, ObjectFlags, SignatureKind, SymbolFlags, TypeFlags, type Symbol as TsSymbol, type Type } from "typescript/unstable/sync";
 import { findAncestor, getAllSuperTypeNodes, isFunctionLike, signatureDeclaration, symbolDeclarations, symbolValueDeclaration, typeParts, typeTarget } from "./tsUtils.js";
@@ -25244,14 +25244,14 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** ral-84a: an array literal that is a whole argument of a `this.` / `super.` call at a plain `Value` slot
      *  (`this.depositWithdrawFee ([ fee ])`): the literal boxes each element, so a map row enters as the shared map. */
-    rust84aListLiteralSelfArg(list: any): boolean {
-        const up: any = list.parent;
-        if (!isCallExpression(up) || up.expression === list || !isPropertyAccessExpression(up.expression)) return false;
-        const recv: any = up.expression.expression;
+    rust84aListLiteralSelfArg(list: Node): boolean {
+        const up: Node | undefined = list.parent;
+        if (up === undefined || !isCallExpression(up) || up.expression === list || !isPropertyAccessExpression(up.expression)) return false;
+        const recv: Node = up.expression.expression;
         if (recv.kind !== SyntaxKind.ThisKeyword && recv.kind !== SyntaxKind.SuperKeyword) return false;
         const callee = String(up.expression.name.text);
         if (RustTranspiler.RUST_HANDED_DICT_EXTEND.has(callee) || RustTranspiler.RUST_HANDED_DICT_OMIT.has(callee)) return false;
-        const at = Array.from(up.arguments).indexOf(list);
+        const at = Array.from(up.arguments as NodeArray<Node>).indexOf(list);
         return at >= 0 && this.rustNilBoxSlotOk(up, at);
     }
 
@@ -27862,11 +27862,11 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** ral-84a: a slot of a proven watch tuple whose element at the slot's index is checker-typed `string` in every
      *  matching resolve (the ohlcv `[ symbol, timeframe, stored ]` tuples): the slot holds that string or Null. */
-    rustWsTupleStrSlot(element: any): boolean {
+    rustWsTupleStrSlot(element: BindingElement): boolean {
         return this.rustWsTupleSlotProof(element, 'str');
     }
 
-    rustWsTupleSlotProof(element: any, want: 'cache' | 'str'): boolean {
+    rustWsTupleSlotProof(element: BindingElement, want: 'cache' | 'str'): boolean {
         const pattern: any = element.parent;
         const declaration: any = pattern?.parent;
         if (pattern?.kind !== SyntaxKind.ArrayBindingPattern || declaration === undefined || !isVariableDeclaration(declaration) || declaration.name !== pattern) return false;
@@ -27916,8 +27916,8 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     /** ral-84a: a resolved tuple element the checker types `string` (`market['symbol']`, a `Str` reader result). */
-    rustWsResolvedStr(x: any): boolean {
-        const n: any = this.rustStripWrappers(x);
+    rustWsResolvedStr(x: Node): boolean {
+        const n: Node | undefined = this.rustStripWrappers(x);
         return n !== undefined && !isArrayLiteralExpression(n) && this.primitiveKindOfType(this.typeOfNodeIfAny(n)) === 'string';
     }
 
@@ -27951,7 +27951,7 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     /** ral-84a: a watched tuple's string slot reads its text once. */
-    printWsTupleStrSlot(element: any, printedName: string, read: string, nativeList: boolean, indent: string): string | undefined {
+    printWsTupleStrSlot(element: Node, printedName: string, read: string, nativeList: boolean, indent: string): string | undefined {
         if (nativeList || element?.kind !== SyntaxKind.BindingElement || this.rustTupleSlotKind(element) !== 'str') return undefined;
         return `${indent}let mut ${printedName}: Option<String> = ${read}.as_str().map(str::to_owned)`;
     }

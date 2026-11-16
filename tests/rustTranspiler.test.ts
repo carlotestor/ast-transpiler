@@ -21681,8 +21681,9 @@ describe('ral-63i: a Dict[] row stored as the element of an array literal writte
         expect(out).toContain('let mut row: crate::value::Dict = ');
         expect(out).toContain('vec![Value::Dict(row)]');
     });
-    test('a literal handed to a call slot keeps the row Value', () => {
-        const out = transpiler.transpileRustByPath (write ('ral-63i-lit-neg', '                this.hold ([ row ]);')).content;
+    // ral-84a: a literal handed straight to a self-method Value slot now boxes the row too (R2); a literal bound to a local first stays refused
+    test('a literal bound to a local before the call keeps the row Value', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-63i-lit-neg', '                const pair = [ row ];\n                this.hold (pair);')).content;
         expect(out).not.toContain('let mut row: crate::value::Dict');
     });
 });
