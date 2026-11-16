@@ -23912,3 +23912,27 @@ describe('ral-80b: a string key local of a client handle decided before the hand
         expect(out).toContain('.add_subscription(subscriptionsKey.as_str(), ');
     });
 });
+
+describe('ral-80b: a string key tested against client.subscriptions after the handle wrote it keeps the Value', () => {
+    const files: Record<string, string> = {
+        'ts/src/base/ws/Client.ts': 'export default class Client {\n    url: string;\n    subscriptions: any;\n    futures: any;\n    resolve (result: any, messageHash: string): any { return result; }\n    send (message: any): any { return message; }\n}\n',
+        'ts/src/base/ws/WsClient.ts': "import Client from './Client.js';\nexport default class WsClient extends Client {\n}\n",
+        'ts/src/base/Exchange.ts': "import WsClient from './ws/WsClient.js';\nexport default class Exchange {\n    client (url: string): WsClient { return new WsClient (); }\n    channelOf (id: string, deltas: boolean): string { return id; }\n    keep (x: any): any { return x; }\n}\n",
+        'ts/src/pro/venue.ts': "import Exchange from '../base/Exchange.js';\nexport default class venue extends Exchange {\n" +
+            "    watchBook (url: string, id: string, deltas: boolean) {\n        const client = this.client (url);\n        const deltasChannel = this.channelOf (id, true);\n        const snapshotChannel = this.channelOf (id, false);\n        const deltasHash = deltasChannel + ':requested';\n        if (deltas) {\n            client.subscriptions[deltasHash] = true;\n        }\n        if (deltas && (snapshotChannel in client.subscriptions)) {\n            delete client.subscriptions[snapshotChannel];\n        }\n        return this.keep (snapshotChannel);\n    }\n}\n",
+    };
+    let out: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-80b2-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = transpiler.transpileRustByPath(path.join (root, 'ts/src/pro/venue.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test('paradex watchOrderBookForSymbols snapshotChannel: no boxed typed key for the unserved in-test', () => {
+        expect(out).toContain('let mut deltasHash: String = ');
+        expect(out).not.toMatch(/let mut snapshotChannel: (?:String|Option<String>) = /);
+    });
+});

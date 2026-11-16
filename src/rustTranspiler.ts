@@ -8584,7 +8584,7 @@ export class RustTranspiler extends BaseTranspiler {
         // qf: the key of any other `k in obj` test boxes once (`in_op` reads a `Str` key or misses on `Null`, as the `Value` local did)
         // td: also through a `(k as string)` cast of the key (the cast prints nothing)
         if ((kind === 'str' || kind === 'ostr') && this.rustInKeyTop(n) !== undefined && !this.rustTestTierSource(n)
-            && this.rustInKeyInitialised(n)) return 'inbox';
+            && this.rustInKeyInitialised(n) && !this.rust80bClientStateInKey(n)) return 'inbox';
         if (isCallExpression(parent) && parent.expression !== n && this.rustArithCombinator(parent) && this.rustArithCallKind(parent) !== undefined) return 'native';
         // ral-65p: x's own operand in `x = (x === undefined) ? y : Math.min|max (x, y)` (rust64pSelfMinTernaryKind): the call's
         // kind reads x's decision, which the solver is deciding right now; the write proves both operands `Option<i64>`
@@ -12072,6 +12072,17 @@ export class RustTranspiler extends BaseTranspiler {
         const kind = this.rustScalarLocalOf(inner)?.kind;
         const name = super.printIdentifier(inner);
         return kind === 'str' ? `Some(${name}.as_str())` : (kind === 'ostr' ? `${name}.as_deref()` : undefined);
+    }
+
+    /** ral-80b: the key of `k in client.subscriptions|futures` the client handle does not serve (read after the method wrote
+     *  that field): ccxt's container pass folds that `in_op` into its own membership test only for a bare `Value` key, so a
+     *  boxed typed key would leave the helper call. Decided from the AST (the handle plan). */
+    rust80bClientStateInKey(n: any): boolean {
+        const top: any = this.rustInKeyTop(n);
+        const right: any = this.unwrapParens(top?.parent?.right);
+        if (right === undefined || !isPropertyAccessExpression(right) || !isIdentifier(right.expression) || right.expression.text !== 'client'
+            || !RustTranspiler.RUST_CLIENT_HANDLE_KEYS.has(String(right.name.text))) return false;
+        return this.rustClientHandleAccess(right) === undefined;
     }
 
     /** td: the left operand of a `k in obj` test that is `k` itself or `k` under parens / `as` casts, else undefined. */
