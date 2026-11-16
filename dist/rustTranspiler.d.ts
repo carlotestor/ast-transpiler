@@ -4985,6 +4985,21 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `const m = markets[i]` over a store local: read by key readers and returned. */
     rustMarketStoreElement(declaration: any): boolean;
     rustMarketStoreOf(node: any): any;
+    private rust65eByIdLists;
+    /** ral-65e: `const l = byId[k]` where `byId` is a never-reassigned `const byId = this.markets_by_id` of the same base
+     *  method and `k` a parameter. Every write of `markets_by_id` (setMarkets `mapToSafeMap (marketsById)` of a map whose
+     *  every element write stores `[ value ]` or the pushed array itself, setMarketsFromExchange's copy of another
+     *  exchange's store, deepcoin's `= [ market ]`, the runtime's `Value::Array` rows, the `undefined` reset) holds a list
+     *  of markets per id, so the read is the typed by-id store's row slice (`&[Market]`; `Market::raw` is that very element).
+     *  The local is only read: `.length`, `l[0]` returned, or `l[i]` bound to a const that is lent to any-key readers or
+     *  returned. A missing row reads the empty slice, whose length and `[0]` (`first()`) answer as the boxed `Null` did. */
+    rust65eByIdListLocal(declaration: any): boolean;
+    rust65eByIdListLocalUncached(declaration: any): boolean;
+    /** ral-65e: `k` is the counter of an enclosing `for (let k = 0; k < l.length; k++)` over the row local `l` itself, never
+     *  written in the body: a non-negative integer index below the row's length (decided on the AST, no counter decision). */
+    rust65eForCounterOf(k: any, list: any): boolean;
+    /** ral-65e: `return e` / `return l[0]` of a by-id row (rust65eByIdListLocal) in a method whose body returns a `Value`. */
+    print65eByIdReturnValue(exp: any): string | undefined;
     rustMarketStoreElementOf(node: any): any;
     printMarketStoreDeclaration(declaration: any, indent: string, varName: string): string | undefined;
     rustMarketStoreElementDecl(declaration: any): boolean;
