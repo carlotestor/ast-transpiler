@@ -4015,6 +4015,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** 'opt' for a local bound to a map read, 'book' for one bound to a constructor; undefined when it stays `Value`. */
     rustWsBookLocal(declaration: any): 'opt' | 'book' | undefined;
     rustWsBookLocalOf(node: any): 'opt' | 'book' | undefined;
+    /** The `push` call when `outer` (the `x.cache` access, wrappers climbed) is `outer.push (v)` as a statement. */
+    rust66cCachePushCall(outer: any): any;
+    /** `x.cache.push (v)` on a typed book local: the book's `cache_push`. */
+    print66cCachePush(node: any, parsedArg: string | undefined): string | undefined;
+    /** The book identifier of an initializer `x.cache` whose book local reads it as a `field` use, else undefined. */
+    rust66cBookCacheRead(init: any): any;
     rustWsBookPath(node: any, type: string): string;
     printWsBookLocalDeclaration(declaration: any, varName: string, indent: string): string | undefined;
     /** A use of a typed book local: the handle itself, or boxed once at a `Value` hand-off. */

@@ -53951,6 +53951,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const block = this.rustObjectLiteralBlock(this.rustSkipWrappers(declaration.initializer), identation);
       return `${indent}let mut ${varName}: indexmap::IndexMap<String, Value> = (${block})`;
     }
+    if (node.declarations.length === 1 && this.rustLentListLocal(declaration) && this.rust66cBookCacheRead(declaration.initializer) !== void 0)
+      return `${indent}let mut ${varName}: crate::value::List = ${super.printIdentifier(this.rust66cBookCacheRead(declaration.initializer))}.cache_items()`;
     if (node.declarations.length === 1 && this.rustLentListLocal(declaration) && this.rustTypedListField(declaration.initializer))
       return `${indent}let mut ${varName}: crate::value::List = self.${String(this.rustSkipWrappers(declaration.initializer).name.text)}.clone()`;
     if (node.declarations.length === 1 && this.rustLentListLocal(declaration))
@@ -70948,7 +70950,7 @@ ${this.getIden(identation)}}`;
       if (text !== void 0)
         return text;
     }
-    return this.printRustVecPush(node, name, parsedArg) ?? this.printBuiltListPush(node, name, parsedArg) ?? this.arrPush(node, name, parsedArg) ?? `append_to_array(&mut ${name}, ${node?.arguments?.length === 1 && parsedArg !== void 0 ? this.rustOwnedArgText(node.arguments[0], parsedArg.trim()) : parsedArg})`;
+    return this.print66cCachePush(node, parsedArg) ?? this.printRustVecPush(node, name, parsedArg) ?? this.printBuiltListPush(node, name, parsedArg) ?? this.arrPush(node, name, parsedArg) ?? `append_to_array(&mut ${name}, ${node?.arguments?.length === 1 && parsedArg !== void 0 ? this.rustOwnedArgText(node.arguments[0], parsedArg.trim()) : parsedArg})`;
   }
   printIncludesCall(node, identation, name = void 0, parsedArg = void 0) {
     return `Value::Bool(contains(&${name}, &${parsedArg}))`;
@@ -77034,6 +77036,8 @@ ${iden}}`;
   rustLentListSource(init) {
     if (this.rustTypedListField(init))
       return true;
+    if (this.rust66cBookCacheRead(init) !== void 0)
+      return true;
     if (!isCallExpression6(init) || !isPropertyAccessExpression3(init.expression))
       return false;
     const callee = init.expression;
@@ -77130,7 +77134,7 @@ ${iden}}`;
     const defaulted = this.rustDefaultedListRead(init);
     let indexed = 0;
     const type = this.typeOfNodeIfAny(declaration.initializer);
-    const slice = this.rust64iBaseSliceInit(init);
+    const slice = this.rust64iBaseSliceInit(init) || this.rust66cBookCacheRead(init) !== void 0;
     if (!slice && (type === void 0 || !this.getChecker().isArrayType(type)))
       return false;
     const name = String(declaration.name.text);
@@ -80026,6 +80030,11 @@ ${iden}}`;
               let outer = access;
               while (isParenthesizedExpression3(outer.parent) || isAsExpression3(outer.parent))
                 outer = outer.parent;
+              if (key === "cache" && this.rust66cCachePushCall(outer) !== void 0) {
+                forms.set(n, "cpush");
+                reads++;
+                return true;
+              }
               if (isPropertyAccessExpression3(outer.parent) && outer.parent.expression === outer && (String(outer.parent.name.text) !== "length" || this.isNativeWriteTargetBase(outer.parent)))
                 return false;
               forms.set(n, "field");
@@ -80073,6 +80082,43 @@ ${iden}}`;
     if (!isIdentifier3(node) || this.rustWsBookUses.get(node) === void 0)
       return void 0;
     return this.rustWsBookLocal(this.rustDeclarationOfIdentifier(node));
+  }
+  // ── ral-66c typed order-book cache ──
+  // The delta buffer of a typed book local (`Book` / `Option<Book>`) is read and written through the book itself:
+  // `x.cache.push (v)` as a statement prints `x.cache_push(v)`, and `const m = x.cache` (a `field` use of the book)
+  // whose every use is a length / element read / by-reference reader is a `crate::value::List` copy of the buffer
+  // (`x.cache_items()`), as the JS local holds the array itself: a later `x.cache = []` leaves the copy as it was.
+  /** The `push` call when `outer` (the `x.cache` access, wrappers climbed) is `outer.push (v)` as a statement. */
+  rust66cCachePushCall(outer) {
+    const access = outer.parent;
+    if (!isPropertyAccessExpression3(access) || access.expression !== outer || String(access.name.text) !== "push")
+      return void 0;
+    const call = access.parent;
+    if (!isCallExpression6(call) || call.expression !== access || call.arguments.length !== 1 || call.arguments[0].kind === SyntaxKind7.SpreadElement)
+      return void 0;
+    return call.parent?.kind === SyntaxKind7.ExpressionStatement ? call : void 0;
+  }
+  /** `x.cache.push (v)` on a typed book local: the book's `cache_push`. */
+  print66cCachePush(node, parsedArg) {
+    if (parsedArg === void 0 || !isCallExpression6(node) || !isPropertyAccessExpression3(node.expression))
+      return void 0;
+    const access = this.rustStripWrappers(node.expression.expression);
+    if (access === void 0 || !isPropertyAccessExpression3(access) || String(access.name.text) !== "cache")
+      return void 0;
+    const recv = access.expression;
+    if (!isIdentifier3(recv) || this.rustWsBookUses.get(recv) !== "cpush" || this.rustWsBookLocalOf(recv) === void 0)
+      return void 0;
+    return `${super.printIdentifier(recv)}.cache_push(${this.rustOwnedArgText(node.arguments[0], parsedArg.trim())})`;
+  }
+  /** The book identifier of an initializer `x.cache` whose book local reads it as a `field` use, else undefined. */
+  rust66cBookCacheRead(init) {
+    const n = this.rustStripWrappers(init);
+    if (n === void 0 || !isPropertyAccessExpression3(n) || !isIdentifier3(n.name) || String(n.name.text) !== "cache")
+      return void 0;
+    const recv = n.expression;
+    if (!isIdentifier3(recv) || this.rustWsBookLocal(this.rustDeclarationOfIdentifier(recv)) === void 0)
+      return void 0;
+    return this.rustWsBookUses.get(recv) === "field" ? recv : void 0;
   }
   rustWsBookPath(node, type) {
     return `${this.isTestSource(node) ? "ccxt" : "crate"}::${type}`;
