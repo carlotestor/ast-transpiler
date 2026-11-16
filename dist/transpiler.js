@@ -74475,6 +74475,8 @@ ${iden}}`;
       return false;
     if (up.kind === SyntaxKind7.PropertyAssignment)
       return up.initializer === n;
+    if (isArrayLiteralExpression4(up) && this.rustDictElementSource(init) && this.rust62nListLiteralSink(up))
+      return true;
     if (isCallExpression6(up) && isPropertyAccessExpression3(up.expression) && isIdentifier3(up.expression.expression) && up.arguments.length === 1 && up.arguments[0] === n && String(up.expression.name.text) === "push")
       return !this.rustIdentifierRefersToDeclaration(up.expression.expression, this.rustDeclarationOfIdentifier(n));
     if (isCallExpression6(up) && isPropertyAccessExpression3(up.expression) && isIdentifier3(up.expression.expression) && up.arguments.length === 1 && up.arguments[0] === n && String(up.expression.name.text) === "append" && this.rustDictElementSource(init)) {
