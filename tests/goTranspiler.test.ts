@@ -14405,3 +14405,27 @@ describe ('ral-84g5 declared-then-assigned locals', () => {
         expect (out).toContain ('var stored any');
     });
 });
+
+describe ('ral-84g5 R1 unproven key', () => {
+    test('an ohlcv entry read under a key the printer cannot prove keeps the box', () => {
+        const head = 'type Dict = { [key: string]: any };\ntype Str = string | undefined;\n'
+            + 'class ArrayCacheByTimestamp { constructor (limit: any) {} append (x: any) {} }\n'
+            + 'class BaseExchange {\n'
+            + '    ohlcvs: { [key: string]: { [key: string]: ArrayCacheByTimestamp } } = {};\n'
+            + '    safeString (d: any, k: any, def: any = undefined): Str { return d; }\n'
+            + '    safeValue (d: any, k: any, def: any = undefined): any { return d; }\n';
+        const tmp = fs.mkdtempSync (path.join (os.tmpdir (), 'go84g5b-'));
+        try {
+            const dir = path.join (tmp, 'ts', 'src', 'pro');
+            fs.mkdirSync (dir, { recursive: true });
+            const file = path.join (dir, 'venue.ts');
+            fs.writeFileSync (file, head + "    handle (message: Dict, cacheKey: any) {\n        const symbol = this.safeString (message, 's', '');\n        let stored = this.safeValue (this.ohlcvs[symbol], cacheKey);\n        if (stored === undefined) {\n            stored = new ArrayCacheByTimestamp (10);\n        }\n        stored.append (1);\n    }\n}\n");
+            const t = new Transpiler ({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+            installCcxtGoLocalTypes (t.goTranspiler);
+            const out = t.transpileGoByPath (file).content;
+            expect (out).not.toContain ('var stored WsArrayCache');
+        } finally {
+            fs.rmSync (tmp, { recursive: true, force: true });
+        }
+    });
+});

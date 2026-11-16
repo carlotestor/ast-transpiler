@@ -34036,17 +34036,28 @@ GoTranspiler.prototype.goOhlcvsReadCacheType = function (declaration) {
     if (!/(^|\/)ts\/src\/pro\//.test(fileName) || /\/test\//.test(fileName)) {
         return undefined;
     }
+    // the same shapes and key proofs goOhlcvsReadDeclaration prints natively (an unproven key keeps the helper read, so the box)
     const init: any = this.goUnwrapPrintedAssertions(declaration.initializer);
-    let shape = this.goOhlcvsFlatKeyNode(declaration) !== undefined;
-    if (!shape && (init?.kind === SyntaxKind.ElementAccessExpression)) {
-        shape = this.goOhlcvsBookAccess(init.expression) !== undefined;
-    }
-    if (!shape && (init?.kind === SyntaxKind.CallExpression) && (init.arguments?.length === 2) && (init.expression?.kind === SyntaxKind.PropertyAccessExpression)
+    const flat = this.goOhlcvsFlatKeyNode(declaration);
+    let shape = false;
+    if (flat !== undefined) {
+        shape = this.goWsKey(flat) !== undefined;
+    } else if ((init?.kind === SyntaxKind.ElementAccessExpression) && (this.goOhlcvsBookAccess(init.expression) !== undefined)) {
+        shape = (this.goWsKey(this.goOhlcvsBookAccess(init.expression).argumentExpression) !== undefined) && (this.goWsKey(init.argumentExpression) !== undefined);
+    } else if ((init?.kind === SyntaxKind.CallExpression) && (init.arguments?.length === 2) && (init.expression?.kind === SyntaxKind.PropertyAccessExpression)
         && (init.expression.expression?.kind === SyntaxKind.ThisKeyword) && (init.expression.name?.text === 'safeValue')) {
         const source = init.arguments[0];
+        const viaAccess = this.goOhlcvsBookAccess(source);
         const viaCall = this.goOhlcvsBookCall(source);
-        shape = (this.goOhlcvsBookAccess(source) !== undefined) || (this.goOhlcvsBookLocalOf(source) !== undefined)
-            || ((viaCall !== undefined) && (this.goUnwrapPrintedAssertions(source).expression.name.text === 'safeDict'));
+        let bookOk = false;
+        if (viaAccess !== undefined) {
+            bookOk = this.goWsKey(viaAccess.argumentExpression) !== undefined;
+        } else if ((viaCall !== undefined) && (this.goUnwrapPrintedAssertions(source).expression.name.text === 'safeDict')) {
+            bookOk = this.goWsKey(viaCall.key) !== undefined;
+        } else {
+            bookOk = this.goOhlcvsBookLocalOf(source) !== undefined;
+        }
+        shape = bookOk && (this.goWsKey(init.arguments[1]) !== undefined);
     }
     if (!shape) {
         return undefined;
