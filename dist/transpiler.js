@@ -41015,6 +41015,76 @@ GoTranspiler.prototype.goBaseCacheInitText = function(node) {
   }
   return `${this.printNode(node.left, 0)} = ${this.goWsCacheEmptyLiteral(node.left) ?? "map[string]any"}{}`;
 };
+GoTranspiler.prototype.goReusableFutureCall = function(node) {
+  let call = node;
+  while (call?.kind === SyntaxKind5.ParenthesizedExpression || call?.kind === SyntaxKind5.NonNullExpression) {
+    call = call.expression;
+  }
+  if (call?.kind !== SyntaxKind5.CallExpression || call.arguments?.length !== 1 || call.expression?.kind !== SyntaxKind5.PropertyAccessExpression || call.expression.name?.text !== "reusableFuture") {
+    return false;
+  }
+  const declaration = this.checkerOrUndefined()?.getSymbolAtLocation(call.expression.name)?.valueDeclaration?.resolve?.();
+  const owner = declaration?.parent;
+  const fileName = String(declaration?.getSourceFile?.()?.fileName ?? "").replace(/\\/g, "/");
+  return declaration?.kind === SyntaxKind5.MethodDeclaration && owner?.kind === SyntaxKind5.ClassDeclaration && owner.name?.text === "Client" && /(^|\/)ts\/src\/base\/ws\/Client\.ts$/.test(fileName);
+};
+GoTranspiler.prototype.goReusableFutureLocal = function(declaration) {
+  if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier || declaration.parent?.parent?.kind !== SyntaxKind5.FirstStatement || !this.goReusableFutureCall(declaration.initializer)) {
+    return false;
+  }
+  if (this.goReusableFutureLocalCache === void 0) {
+    this.goReusableFutureLocalCache = /* @__PURE__ */ new WeakMap();
+  }
+  if (this.goReusableFutureLocalCache.has(declaration)) {
+    return this.goReusableFutureLocalCache.get(declaration);
+  }
+  const checker = this.checkerOrUndefined();
+  const own = checker?.getSymbolAtLocation(declaration.name);
+  const scope = this.goEnclosingFunction(declaration);
+  const name = declaration.name.text;
+  const verdict = own !== void 0 && scope !== void 0 && !this.hasNodeWhere(scope, (n) => {
+    if (n.kind !== SyntaxKind5.Identifier || n.text !== name || n === declaration.name) {
+      return false;
+    }
+    const parent = n.parent;
+    if ((parent?.kind === SyntaxKind5.PropertyAccessExpression || parent?.kind === SyntaxKind5.PropertyAssignment) && parent.name === n) {
+      return false;
+    }
+    if (checker.getSymbolAtLocation(n) !== own) {
+      return true;
+    }
+    if (parent?.kind === SyntaxKind5.AwaitExpression && parent.expression === n) {
+      return false;
+    }
+    return !(parent?.kind === SyntaxKind5.CallExpression && parent.expression !== n && parent.arguments.indexOf(n) >= 0);
+  });
+  this.goReusableFutureLocalCache.set(declaration, verdict);
+  return verdict;
+};
+{
+  const goTypeOfInitializer = GoTranspiler.prototype.goTypeOfInitializer;
+  GoTranspiler.prototype.goTypeOfInitializer = function(initializer, printedValue) {
+    const declaration = initializer?.parent;
+    if (declaration?.kind === SyntaxKind5.VariableDeclaration && declaration.initializer === initializer && this.goReusableFutureLocal(declaration)) {
+      return "*Future";
+    }
+    if (clientSubscriptions(this, initializer) !== void 0 && printedValue.trim().endsWith(".SubscriptionsSnapshot()")) {
+      return "map[string]any";
+    }
+    return goTypeOfInitializer.call(this, initializer, printedValue);
+  };
+  const printAwaitExpression = GoTranspiler.prototype.printAwaitExpression;
+  GoTranspiler.prototype.printAwaitExpression = function(node, identation) {
+    const operand = node.expression;
+    if (operand?.kind === SyntaxKind5.Identifier) {
+      const declaration = this.checkerOrUndefined()?.getSymbolAtLocation(operand)?.valueDeclaration?.resolve?.();
+      if (this.goReusableFutureLocal(declaration) && this.goDeclaredTypeOfIdentifier(operand) === "*Future") {
+        return `(<-${this.printNode(operand, 0)}.Await())`;
+      }
+    }
+    return printAwaitExpression.call(this, node, identation);
+  };
+}
 
 // src/javaTranspiler.ts
 init_esm_shims();

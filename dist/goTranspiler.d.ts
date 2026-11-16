@@ -1968,3 +1968,8 @@ export interface GoTranspiler {
     goBaseCacheField(node: any): string | undefined;
     goBaseCacheInitText(node: any): string | undefined;
 }
+export interface GoTranspiler {
+    goReusableFutureCall(node: any): boolean;
+    goReusableFutureLocal(declaration: any): boolean;
+    goReusableFutureLocalCache: WeakMap<object, boolean>;
+}
