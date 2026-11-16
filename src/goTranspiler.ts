@@ -34099,24 +34099,29 @@ GoTranspiler.prototype.printVariableDeclarationList = function (node, identation
         if ((typed === undefined) || (rebinds === 0) || (natives === 0)) {
             return undefined;
         }
-        // an element read prints `xs[i]` bare only when the checker proves object elements (no pointer to deref)
-        const elementRead = this.hasNodeWhere(scope, (n: any) => (n.kind === SyntaxKind.ElementAccessExpression)
-            && (ccxtGoUnwrapTypeOnly(n.expression)?.kind === SyntaxKind.Identifier) && (ccxtGoUnwrapTypeOnly(n.expression).text === declaration.name.text));
-        if (elementRead) {
-            const checker: any = this.checkerOrUndefined();
-            try {
-                const type: any = checker?.getTypeAtLocation(declaration.name);
-                const element: any = ((type !== undefined) && checker.isArrayType(type)) ? checker.getIndexTypeOfType(type, IndexKind.Number) : undefined;
-                const parts: any[] = (element === undefined) ? [] : (((typeof element.isUnionType === 'function') && element.isUnionType()) ? element.getTypes().slice() : [element]);
-                if ((parts.length === 0) || !parts.every((p: any) => (p.flags & TypeFlags.Object) !== 0)) {
-                    return undefined;
-                }
-            } catch (e) {
-                return undefined;
-            }
+        if (!ccxtGoListElementReadsAreBare(this, scope, declaration)) {
+            return undefined;
         }
         return typed;
     };
+}
+// an element read of a typed list local prints `xs[i]` bare (no DerefScalar) only when the checker proves the
+// local's elements are objects; true when the local has no element read at all
+function ccxtGoListElementReadsAreBare (goTranspiler, scope, declaration) {
+    const elementRead = goTranspiler.hasNodeWhere(scope, (n: any) => (n.kind === SyntaxKind.ElementAccessExpression)
+        && (ccxtGoUnwrapTypeOnly(n.expression)?.kind === SyntaxKind.Identifier) && (ccxtGoUnwrapTypeOnly(n.expression).text === declaration.name.text));
+    if (!elementRead) {
+        return true;
+    }
+    const checker: any = goTranspiler.checkerOrUndefined();
+    try {
+        const type: any = checker?.getTypeAtLocation(declaration.name);
+        const element: any = ((type !== undefined) && checker.isArrayType(type)) ? checker.getIndexTypeOfType(type, IndexKind.Number) : undefined;
+        const parts: any[] = (element === undefined) ? [] : (((typeof element.isUnionType === 'function') && element.isUnionType()) ? element.getTypes().slice() : [element]);
+        return (parts.length > 0) && parts.every((p: any) => (p.flags & TypeFlags.Object) !== 0);
+    } catch (e) {
+        return false;
+    }
 }
 function ccxtGoUnwrapTypeOnly (node) {
     let current = node;
@@ -34175,6 +34180,11 @@ function ccxtGoUnwrapTypeOnly (node) {
         const typed = this.goDeclaredLocalTypeIfSafe(declaration, GO_SAFE_LIST_LOCAL_TYPE, reads,
             (n: any) => ((n.parent?.kind === SyntaxKind.PropertyAccessExpression) && (n.parent.name === n))
                 || ((n.parent?.kind === SyntaxKind.PropertyAssignment) && (n.parent.name === n)));
-        return ((typed !== undefined) && (natives > 0)) ? typed : undefined;
+        // the base class's element reads carry no JSON-origin proof and print DerefScalar on a typed slice: keep its box
+        const baseTree = /(^|[\\/])ts[\\/]src[\\/]base[\\/]/.test(String(declaration.getSourceFile?.()?.fileName ?? ''));
+        if ((typed === undefined) || (natives === 0) || baseTree) {
+            return undefined;
+        }
+        return typed;
     };
 }
