@@ -14141,4 +14141,16 @@ describe ('ral-77g2 reader-result locals', () => {
         const other = '    f (raw: Dict, params: Dict): any {\n        let d = this.safeDict (raw, "data", {});\n        d = this.safeString (raw, "x");\n        return d;\n    }\n';
         expect(run(other, 'ts/src')).not.toContain('SafeDictMap');
     });
+    test('R3: an empty-default safeList local handed on whole reads through SafeListTypedDefault', () => {
+        const body = '    f (raw: Dict): any {\n        const xs = this.safeList (raw, "data", []);\n        let out = undefined;\n        if (xs !== undefined) {\n            out = xs;\n        }\n        return out;\n    }\n';
+        expect(run(body, 'ts/src')).toContain('var xs []any = SafeListTypedDefault(raw, "data", []any{})');
+        // no default: the nil test sees absent, the shipped reader keeps its own spelling
+        const noDefault = body.replace('"data", []', '"data"');
+        expect(run(noDefault, 'ts/src')).toContain('var xs []any = SafeListTyped(raw, "data")');
+        // a non-empty default, or a member call on the list, keeps the box
+        expect(run(body.replace('"data", []', '"data", [ 1 ]'), 'ts/src')).not.toContain('var xs []any');
+        const member = '    f (raw: Dict): any {\n        const xs = this.safeList (raw, "data", []);\n        const out = xs;\n        return xs.join (",");\n    }\n';
+        expect(run(member, 'ts/src')).not.toContain('var xs []any');
+        expect(run(body, 'ts/src/pro')).not.toContain('SafeListTypedDefault');
+    });
 });

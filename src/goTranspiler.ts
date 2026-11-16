@@ -33412,3 +33412,41 @@ GoTranspiler.prototype.goSafeDictMapPredictionAsWs = false;
         return useKeepsMap.call(this, ref, rebinds, noDefault, ws, name);
     };
 }
+// R3. In a REST source, `const x = this.safeList (c, k, [])` whose uses only hand the list on whole (nil test, copy into an
+// `any` / []any local, length, an all-`any` helper) is a []any read with SafeListTypedDefault: that reader
+// answers the caller's empty default as a non-nil []any{} exactly where the box held it, so the nil test and
+// the copy keep their meaning (SafeListTyped would answer nil there, which is why the shipped rule refuses).
+export interface GoTranspiler {
+    goSafeListEmptyDefaultLocals: WeakSet<object>;
+}
+GoTranspiler.prototype.goSafeListEmptyDefaultLocals = new WeakSet<object>();
+{
+    const listUnbox = GoTranspiler.prototype.goSafeListLocalUnboxUncached;
+    GoTranspiler.prototype.goSafeListLocalUnboxUncached = function (declaration) {
+        const shipped = listUnbox.call(this, declaration);
+        if (shipped !== undefined) {
+            return shipped;
+        }
+        const call: any = declaration.initializer;
+        const fallback: any = call?.arguments?.[2];
+        // REST sources only: a ws / prediction member may be a cache object the box handed on as itself
+        if ((this.goSourceTreeKind(declaration) !== 'rest') || (this.goSafeListLocalArgs(call) === undefined) || (call.arguments.length !== 3)
+            || (fallback?.kind !== SyntaxKind.ArrayLiteralExpression) || (fallback.elements.length !== 0)) {
+            return undefined;
+        }
+        const typed = this.goDeclaredLocalTypeIfSafe(declaration, GO_SAFE_LIST_LOCAL_TYPE, (n) => this.goListLocalSinkReadsAsList(n, true));
+        if (typed !== undefined) {
+            this.goSafeListEmptyDefaultLocals.add(declaration);
+        }
+        return typed;
+    };
+    const listValue = GoTranspiler.prototype.goSafeListUnboxValue;
+    GoTranspiler.prototype.goSafeListUnboxValue = function (declaration, identation) {
+        const printed = listValue.call(this, declaration, identation);
+        if ((printed === undefined) || !this.goSafeListEmptyDefaultLocals.has(declaration)) {
+            return printed;
+        }
+        const args: any = this.goSafeListLocalArgs(declaration.initializer);
+        return `SafeListTypedDefault(${this.printNode(args.container, identation)}, ${this.printNode(args.key, 0)}, []any{})`;
+    };
+}
