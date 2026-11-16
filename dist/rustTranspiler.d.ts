@@ -1,5 +1,5 @@
 import { BaseTranspiler } from "./baseTranspiler.js";
-import { type Block, type CallExpression, type Declaration, type Identifier, type Node, type ParameterDeclaration, type VariableDeclaration } from "typescript/unstable/ast";
+import { type Block, type CallExpression, type Declaration, type Expression, type Identifier, type Node, type ParameterDeclaration, type VariableDeclaration } from "typescript/unstable/ast";
 import { type Symbol as TsSymbol, type Type } from "typescript/unstable/sync";
 /** A ts/src index scan reads real `*.ts` sources and this process's own stripped base copy only: no `.d.ts`, no
  *  dot-file temp copy, no other process's `*.nooverloads.<pid>.ts` (it can vanish or change mid-scan). */
@@ -2961,7 +2961,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     nativeEqualityText(node: any): string;
     unwrapParens(node: any): any;
     hasNativeComparisonOperand(node: any): any;
-    printLogicalInBooleanContext(node: any): string;
+    printLogicalInBooleanContext(node: any): any;
     printWhileStatement(node: any, identation: any): string;
     printIfStatement(node: any, identation: any): string;
     printPostFixUnaryExpression(node: any, identation: any): string;
@@ -4426,6 +4426,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A base-tier list source that may return `undefined` (a `safeList*` default must be absent or nullish). */
     rustOptListSource(node: any): boolean;
     rustOptListLocalUncached(declaration: any): boolean;
+    /** ral-80c R1: an unwritten method parameter whose typed signature slot is a string list (decided from the signature table). */
+    rust80cStrVecParamAlias(init: Expression | undefined): boolean;
+    /** ral-80c R1: `this.symbols` / `this.ids`, base fields declared `string[]` (always a list). */
+    rust80cBaseStrListField(node: Expression): boolean;
+    /** ral-80c R1: `x.push(v)` statement on an optional list alias. */
+    print80cOptListPush(node: CallExpression, parsedArg: string | undefined): string | undefined;
     /** `xs[N]` on a `string[]` parameter the body re-binds as its slice (`xs.get(N)`). */
     rustOptListParamRead(node: any): boolean;
     rustOptListParamInit(init: any): boolean;

@@ -51231,7 +51231,7 @@ ${this.getIden(identation)}}}`;
 // src/rustTranspiler.ts
 init_esm_shims();
 import { NodeFlags as NodeFlags4, SyntaxKind as SyntaxKind7 } from "typescript/unstable/ast";
-import { isArrayBindingPattern, isArrayLiteralExpression as isArrayLiteralExpression4, isArrowFunction as isArrowFunction5, isAsExpression as isAsExpression3, isBinaryExpression as isBinaryExpression5, isBindingElement, isBlock as isBlock4, isCallExpression as isCallExpression6, isClassDeclaration as isClassDeclaration4, isClassExpression as isClassExpression2, isConditionalExpression as isConditionalExpression4, isDeleteExpression as isDeleteExpression2, isElementAccessExpression as isElementAccessExpression4, isForInStatement as isForInStatement2, isForOfStatement as isForOfStatement2, isIdentifier as isIdentifier3, isIfStatement as isIfStatement4, isMethodDeclaration as isMethodDeclaration5, isNoSubstitutionTemplateLiteral, isNonNullExpression as isNonNullExpression2, isNumericLiteral as isNumericLiteral4, isObjectLiteralExpression as isObjectLiteralExpression4, isParameterDeclaration as isParameterDeclaration3, isParenthesizedExpression as isParenthesizedExpression3, isPostfixUnaryExpression as isPostfixUnaryExpression3, isPrefixUnaryExpression as isPrefixUnaryExpression3, isPropertyAccessExpression as isPropertyAccessExpression3, isReturnStatement as isReturnStatement4, isShorthandPropertyAssignment as isShorthandPropertyAssignment2, isSourceFile as isSourceFile5, isStatement, isStringLiteral as isStringLiteral3, isStringLiteralLikeNode as isStringLiteralLikeNode4, isTypeAssertion as isTypeAssertion3, isVariableDeclaration as isVariableDeclaration3, isVariableDeclarationList as isVariableDeclarationList2 } from "typescript/unstable/ast/is";
+import { isArrayBindingPattern, isArrayLiteralExpression as isArrayLiteralExpression4, isArrayTypeNode as isArrayTypeNode2, isArrowFunction as isArrowFunction5, isAsExpression as isAsExpression3, isBinaryExpression as isBinaryExpression5, isBindingElement, isBlock as isBlock4, isCallExpression as isCallExpression6, isClassDeclaration as isClassDeclaration4, isClassExpression as isClassExpression2, isConditionalExpression as isConditionalExpression4, isDeleteExpression as isDeleteExpression2, isElementAccessExpression as isElementAccessExpression4, isForInStatement as isForInStatement2, isForOfStatement as isForOfStatement2, isIdentifier as isIdentifier3, isIfStatement as isIfStatement4, isMethodDeclaration as isMethodDeclaration5, isNoSubstitutionTemplateLiteral, isNonNullExpression as isNonNullExpression2, isNumericLiteral as isNumericLiteral4, isObjectLiteralExpression as isObjectLiteralExpression4, isParameterDeclaration as isParameterDeclaration3, isParenthesizedExpression as isParenthesizedExpression3, isPostfixUnaryExpression as isPostfixUnaryExpression3, isPrefixUnaryExpression as isPrefixUnaryExpression3, isPropertyAccessExpression as isPropertyAccessExpression3, isPropertyDeclaration as isPropertyDeclaration2, isReturnStatement as isReturnStatement4, isShorthandPropertyAssignment as isShorthandPropertyAssignment2, isSourceFile as isSourceFile5, isStatement, isStringLiteral as isStringLiteral3, isStringLiteralLikeNode as isStringLiteralLikeNode4, isTypeAssertion as isTypeAssertion3, isTypeReferenceNode as isTypeReferenceNode2, isVariableDeclaration as isVariableDeclaration3, isVariableDeclarationList as isVariableDeclarationList2 } from "typescript/unstable/ast/is";
 import { IndexKind as IndexKind4, ObjectFlags, SignatureKind as SignatureKind2, SymbolFlags as SymbolFlags3, TypeFlags as TypeFlags6 } from "typescript/unstable/sync";
 import * as fs3 from "fs";
 import * as tsSync2 from "typescript/unstable/sync";
@@ -72003,7 +72003,7 @@ ${this.getIden(identation)}}`;
       if (text !== void 0)
         return text;
     }
-    return this.print66cCachePush(node, parsedArg) ?? this.printRustVecPush(node, name, parsedArg) ?? this.printBuiltListPush(node, name, parsedArg) ?? this.arrPush(node, name, parsedArg) ?? `append_to_array(&mut ${name}, ${node?.arguments?.length === 1 && parsedArg !== void 0 ? this.rustOwnedArgText(node.arguments[0], parsedArg.trim()) : parsedArg})`;
+    return this.print66cCachePush(node, parsedArg) ?? this.print80cOptListPush(node, parsedArg) ?? this.printRustVecPush(node, name, parsedArg) ?? this.printBuiltListPush(node, name, parsedArg) ?? this.arrPush(node, name, parsedArg) ?? `append_to_array(&mut ${name}, ${node?.arguments?.length === 1 && parsedArg !== void 0 ? this.rustOwnedArgText(node.arguments[0], parsedArg.trim()) : parsedArg})`;
   }
   printIncludesCall(node, identation, name = void 0, parsedArg = void 0) {
     return `Value::Bool(contains(&${name}, &${parsedArg}))`;
@@ -82872,7 +82872,8 @@ ${iden}}`;
     if (init?.kind === SyntaxKind7.AwaitExpression)
       init = this.rustSkipWrappers(init.expression);
     const nil = this.rustOptListNilInit(declaration);
-    if (!nil && !this.rustOptListSource(init))
+    const strVecAlias = !nil && this.rust80cStrVecParamAlias(init);
+    if (!nil && !strVecAlias && !this.rustOptListSource(init))
       return false;
     const name = String(declaration.name.text);
     const fn = this.rustEnclosingFunction(declaration);
@@ -82901,7 +82902,11 @@ ${iden}}`;
       if (isBinaryExpression5(up) && up.left === n && up.operatorToken.kind === SyntaxKind7.EqualsToken) {
         if (nil)
           writes++;
-        return up.parent?.kind === SyntaxKind7.ExpressionStatement && (this.rustOptListSource(up.right) || this.rustOptListLiteralWrite(up.right) || nil && this.rustDefaultedListRead(this.rustSkipWrappers(up.right)));
+        return up.parent?.kind === SyntaxKind7.ExpressionStatement && (this.rustOptListSource(up.right) || this.rustOptListLiteralWrite(up.right) || nil && this.rustDefaultedListRead(this.rustSkipWrappers(up.right)) || strVecAlias && this.rust80cBaseStrListField(up.right));
+      }
+      if (strVecAlias && isPropertyAccessExpression3(up) && up.expression === n && String(up.name.text) === "push" && isCallExpression6(up.parent) && up.parent.expression === up) {
+        natives++;
+        return this.rustVecPushShape(up.parent, name);
       }
       if (isCallExpression6(up) && up.arguments.length === 1 && up.arguments[0] === at && this.rustIsArrayIsArrayCallee(up)) {
         natives++;
@@ -82955,6 +82960,52 @@ ${iden}}`;
     }
     return true;
   }
+  /** ral-80c R1: an unwritten method parameter whose typed signature slot is a string list (decided from the signature table). */
+  rust80cStrVecParamAlias(init) {
+    const node = this.unwrapParens(init);
+    if (node === void 0 || !isIdentifier3(node) || node.text === "undefined")
+      return false;
+    const param = this.rustDeclaredNode(node);
+    if (param === void 0 || !isParameterDeclaration3(param) || !isIdentifier3(param.name) || !isMethodDeclaration5(param.parent))
+      return false;
+    const method = param.parent;
+    const entry = this.rustTypedSignature(method)?.params[Array.from(method.parameters).indexOf(param)];
+    const type = param.type;
+    const declaredList = type !== void 0 && (isTypeReferenceNode2(type) && isIdentifier3(type.typeName) && type.typeName.text === "Strings" || isArrayTypeNode2(type) && type.elementType.kind === SyntaxKind7.StringKeyword);
+    if (entry === void 0 ? !declaredList : entry.rustType !== "Option<Vec<String>>" && entry.rustType !== "Vec<String>")
+      return false;
+    for (const n of this.rustScopeNameNodes(method, String(param.name.text))) {
+      if (n === param.name || !isIdentifier3(n))
+        continue;
+      const up = n.parent;
+      if (isBinaryExpression5(up) && up.left === n && rustIsAssignmentOperator(up.operatorToken.kind))
+        return false;
+      if (isPropertyAccessExpression3(up) && up.expression === n && String(up.name.text) === "push")
+        return false;
+    }
+    return true;
+  }
+  /** ral-80c R1: `this.symbols` / `this.ids`, base fields declared `string[]` (always a list). */
+  rust80cBaseStrListField(node) {
+    const read = this.rustSkipWrappers(node);
+    if (read === void 0 || !isPropertyAccessExpression3(read) || read.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    const declaration = symbolDeclarations(this.checkerOrUndefined()?.getSymbolAtLocation(read.name))[0];
+    if (declaration === void 0 || !isPropertyDeclaration2(declaration) || !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile().fileName)))
+      return false;
+    const type = declaration.type;
+    return type !== void 0 && isArrayTypeNode2(type) && type.elementType.kind === SyntaxKind7.StringKeyword;
+  }
+  /** ral-80c R1: `x.push(v)` statement on an optional list alias. */
+  print80cOptListPush(node, parsedArg) {
+    const access = node.expression;
+    if (parsedArg === void 0 || !isPropertyAccessExpression3(access) || node.arguments.length !== 1 || node.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return void 0;
+    const declaration = this.rustOptListOf(access.expression);
+    if (declaration === void 0 || !this.rust80cStrVecParamAlias(declaration.initializer))
+      return void 0;
+    return `if let Some(__a) = &mut ${this.rustOptListName(access.expression)} { std::sync::Arc::make_mut(__a).push(${_RustTranspiler.cloneIfBareLocal(parsedArg.trim())}); }`;
+  }
   /** `xs[N]` on a `string[]` parameter the body re-binds as its slice (`xs.get(N)`). */
   rustOptListParamRead(node) {
     const key = this.rustSkipWrappers(node.argumentExpression);
@@ -83005,7 +83056,10 @@ ${iden}}`;
       return void 0;
     if (this.rustOptListNilInit(declaration))
       return `${indent}let mut ${varName}: Option<crate::value::List> = None`;
-    return `${indent}let mut ${varName}: Option<crate::value::List> = ${this.printNode(declaration.initializer, 0).trim()}.into_opt_list()`;
+    const seed = this.printNode(declaration.initializer, 0).trim();
+    const source = this.rust80cStrVecParamAlias(declaration.initializer) ? this.rustDeclaredNode(this.unwrapParens(declaration.initializer)) : void 0;
+    const copy = source !== void 0 && !seed.endsWith(".clone()") && !this.rustLocalLastUse(this.unwrapParens(declaration.initializer), source) ? ".clone()" : "";
+    return `${indent}let mut ${varName}: Option<crate::value::List> = ${seed}${copy}.into_opt_list()`;
   }
   printOptListWrite(left, right) {
     if (this.rustOptListOf(left) === void 0)
