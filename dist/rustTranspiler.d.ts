@@ -785,6 +785,8 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  (or string | undefined), printed as a `Value` binding (no typed signature slot) and never written in its function.
      *  Its box holds a `Str` or `Null`, so the arm reads it once as an `Option<String>` (the same conversion the base
      *  `Str` call arm next to it takes). */
+    /** ral-84h R1: the arm is a base `Str` parameter accepted by rust65nBaseStrParamArm through its `= undefined` / string-literal default. */
+    rust84hDefaultedStrParamArm(node: any): boolean;
     rust65nBaseStrParamArm(node: any): boolean;
     rustBaseStrFieldRead(node: any): boolean;
     /** ral-53k: a ternary whose arms are each a checker-typed string or a unified string key of an `Option<Dict>` local (one at least). */

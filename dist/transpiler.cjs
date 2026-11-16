@@ -57200,6 +57200,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (nativeUses === 0 && kind === "str" && this.rustReaderCaseStrRecv(this.unwrapParens(declaration.initializer)) !== void 0)
       return void 0;
+    const init84h = this.unwrapParens(declaration.initializer);
+    if (nativeUses === 0 && init84h !== void 0 && _is.isConditionalExpression.call(void 0, init84h) && [init84h.whenTrue, init84h.whenFalse].some((arm) => this.rust84hDefaultedStrParamArm(this.unwrapParens(arm))))
+      return void 0;
     if (!ok || unused || storeOnly || clientOnce || guarded && scope.kind !== _ast.SyntaxKind.MethodDeclaration || this.rustOkeyBoxed(declaration, boxed) || this.rustElemKeyInCostly(declaration) || this.rust59pDeleteKeyInboxed(declaration))
       return void 0;
     if (strKind && this.rustScalarHasPairEquality(declaration) && this.rustScalarBorrowedBox(declaration))
@@ -57779,16 +57782,28 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
    *  (or string | undefined), printed as a `Value` binding (no typed signature slot) and never written in its function.
    *  Its box holds a `Str` or `Null`, so the arm reads it once as an `Option<String>` (the same conversion the base
    *  `Str` call arm next to it takes). */
+  /** ral-84h R1: the arm is a base `Str` parameter accepted by rust65nBaseStrParamArm through its `= undefined` / string-literal default. */
+  rust84hDefaultedStrParamArm(node) {
+    if (node === void 0 || !_is.isIdentifier.call(void 0, node) || !this.rust65nBaseStrParamArm(node))
+      return false;
+    const param = this.rustDeclaredNode(node);
+    return param !== void 0 && _is.isParameterDeclaration.call(void 0, param) && param.initializer !== void 0;
+  }
   rust65nBaseStrParamArm(node) {
     if (node === void 0 || !_is.isIdentifier.call(void 0, node) || node.text === "undefined")
       return false;
     const param = this.rustDeclaredNode(node);
-    if (param === void 0 || !_is.isParameterDeclaration.call(void 0, param) || !_is.isIdentifier.call(void 0, param.name) || !_is.isMethodDeclaration.call(void 0, param.parent) || param.dotDotDotToken !== void 0 || param.initializer !== void 0)
+    if (param === void 0 || !_is.isParameterDeclaration.call(void 0, param) || !_is.isIdentifier.call(void 0, param.name) || !_is.isMethodDeclaration.call(void 0, param.parent) || param.dotDotDotToken !== void 0)
+      return false;
+    const init = param.initializer === void 0 ? void 0 : this.unwrapParens(param.initializer);
+    const nilDefault = init !== void 0 && this.literalKindOfNode(init) === "null";
+    const strDefault = init !== void 0 && param.type === void 0 && this.literalKindOfNode(init) === "string" && !(init.text in this.StringLiteralReplacements);
+    if (init !== void 0 && !nilDefault && !strDefault)
       return false;
     if (!_RustTranspiler.RUST_BASE_TIER_FILE.test(String(_nullishCoalesce(_optionalChain([param, 'access', _9066 => _9066.getSourceFile, 'optionalCall', _9067 => _9067(), 'optionalAccess', _9068 => _9068.fileName]), () => ( "")))))
       return false;
     const annotation = param.type;
-    const named = annotation !== void 0 && (annotation.kind === _ast.SyntaxKind.TypeReference && _is.isIdentifier.call(void 0, annotation.typeName) && annotation.typeName.text === "Str" || annotation.kind === _ast.SyntaxKind.StringKeyword);
+    const named = strDefault || annotation !== void 0 && (annotation.kind === _ast.SyntaxKind.TypeReference && _is.isIdentifier.call(void 0, annotation.typeName) && annotation.typeName.text === "Str" || annotation.kind === _ast.SyntaxKind.StringKeyword);
     if (!named || this.primitiveKindOfType(this.typeOfNodeIfAny(param.name)) !== "string")
       return false;
     if (this.rustOptParamKind(node) !== void 0)
