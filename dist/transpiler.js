@@ -56335,7 +56335,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const expected = kind === "ostr" || kind === "str" ? "string" : kind === "bool" || kind === "obool" ? "boolean" : "number";
     const combinatorKind = this.rustArithCombinator(this.unwrapParens(declaration.initializer)) ? this.rustArithCallKind(declaration.initializer) : void 0;
     const anyLength = kind === "int" && checked === void 0 && this.rustListLengthInit(this.unwrapParens(declaration.initializer));
-    if (checked !== expected && !boolTested && !anyLength && !(kind === "ostr" && this.rustOptDictStrKeyTernary(declaration.initializer)) && !(kind === "ostr" && this.rustAnyStrPushElem(this.unwrapParens(declaration.initializer)) && this.rustAnyStrPlaceRead(declaration)) && !(combinatorKind !== void 0 && combinatorKind === kind && (kind === "int" || checked === void 0)) && !(kind === "int" && checked === void 0 && this.rustSafeDictKeyOnlyLocal(declaration)))
+    const optionDefault = checked === void 0 && this.rustHandleOptionLiteralKind(declaration.initializer) === kind;
+    if (checked !== expected && !boolTested && !anyLength && !optionDefault && !(kind === "ostr" && this.rustOptDictStrKeyTernary(declaration.initializer)) && !(kind === "ostr" && this.rustAnyStrPushElem(this.unwrapParens(declaration.initializer)) && this.rustAnyStrPlaceRead(declaration)) && !(combinatorKind !== void 0 && combinatorKind === kind && (kind === "int" || checked === void 0)) && !(kind === "int" && checked === void 0 && this.rustSafeDictKeyOnlyLocal(declaration)))
       return void 0;
     const seeded = kind;
     kind = this.rustScalarWidenedKind(declaration, kind);
@@ -56385,6 +56386,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const unused = typedUses === 0 && !handOff && this.rustScalarNeedsNativeUse(declaration.initializer) && !this.rustVenueIntReboxed(declaration, kind, boxed);
     const clientOnce = nativeUses === 0 && boxed === 1 && this.rustWsClientOnlyUse(declaration);
     if (anyLength && typedUses === 0)
+      return void 0;
+    if (optionDefault && typedUses === 0)
       return void 0;
     if (nativeUses === 0 && kind === "str" && this.rustReaderCaseStrRecv(this.unwrapParens(declaration.initializer)) !== void 0)
       return void 0;
@@ -56821,6 +56824,13 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const readerKind = this.rustReaderDefaultKind(name, args, fresh);
     if (readerKind !== void 0)
       return readerKind;
+    if (fresh) {
+      const optionKind = this.rustHandleOptionLiteralKind(node);
+      if (optionKind !== void 0)
+        return optionKind;
+    }
+    if (fresh && this.rustSupportedMappingStr(node))
+      return "str";
     if (this.rustParseNumberOfString(node) && this.rustTernaryArm(node))
       return "onum";
     if (_RustTranspiler.RUST_STRING_LOCAL_HELPERS.has(name)) {
@@ -56840,6 +56850,36 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const boolBase = _RustTranspiler.RUST_SCALAR_BOOL_HELPERS[name];
     if (fresh && boolBase !== void 0)
       return args.length === boolBase + 1 && this.literalKindOfNode(args[boolBase]) === "boolean" ? "bool" : void 0;
+    return void 0;
+  }
+  /** ral-61p: base `this.getSupportedMapping (key, { 'k': 'v', .. })` at a declaration whose mapping is an object literal of
+   *  string-literal values: the base body throws unless `key in mapping` and then answers `mapping[key]`, so the result
+   *  is always one of those literals (a `String`, never `Null`). */
+  rustSupportedMappingStr(expr) {
+    const node = this.unwrapParens(expr);
+    if (node === void 0 || !isCallExpression6(node) || !isPropertyAccessExpression3(node.expression) || node.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(node.expression.name.text) !== "getSupportedMapping" || node.arguments.length !== 2 || !this.rustDeclInitPosition(node))
+      return false;
+    const declaration = this.rustScalarCallee(node);
+    if (declaration === void 0 || !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile?.()?.fileName ?? "")))
+      return false;
+    const mapping = this.unwrapParens(node.arguments[1]);
+    if (mapping?.kind !== SyntaxKind7.ObjectLiteralExpression || mapping.properties.length === 0)
+      return false;
+    return Array.from(mapping.properties).every((p) => p.kind === SyntaxKind7.PropertyAssignment && this.literalKindOfNode(this.unwrapParens(p.initializer)) === "string" && !(this.unwrapParens(p.initializer).text in this.StringLiteralReplacements));
+  }
+  /** ral-61p: `this.handleOption (m, o, <literal>)` resolved to the base tier: the option value or the default argument.
+   *  A string literal default names `ostr` (the runtime answers the stored option or that literal; a stored option of
+   *  another kind reads as `None`, the same miss the `Value` form's `.as_str()` compare made). */
+  rustHandleOptionLiteralKind(expr) {
+    const node = this.unwrapParens(expr);
+    if (node === void 0 || !isCallExpression6(node) || !isPropertyAccessExpression3(node.expression) || node.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(node.expression.name.text) !== "handleOption" || node.arguments.length !== 3)
+      return void 0;
+    const declaration = this.rustScalarCallee(node);
+    if (declaration === void 0 || !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile?.()?.fileName ?? "")))
+      return void 0;
+    const fallback = this.unwrapParens(node.arguments[2]);
+    if (this.literalKindOfNode(fallback) === "string" && !(fallback.text in this.StringLiteralReplacements))
+      return "ostr";
     return void 0;
   }
   /** Base `parseNumber(s)` with no default over a string (literal, string local, `Precise.string*`): the
@@ -61354,6 +61394,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       return `${this.rustBaseTypedBareText(node)}.unwrap_or_default()`;
     if (kind === "int" && (this.rustVenueIntCall(node) || this.rustVenueParseToInt(node)))
       return `${text}.as_i64().unwrap_or_default()`;
+    if (kind === "str" && this.rustSupportedMappingStr(node))
+      return `${text}.as_str().unwrap_or_default().to_string()`;
     if (kind === "str" && defaulted)
       return `${text}.as_str().unwrap_or(${this.quotedStringLiteral(fallback.text)}).to_string()`;
     if (kind === "int" && defaulted)
