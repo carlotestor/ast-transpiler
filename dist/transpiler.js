@@ -56397,7 +56397,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
           copied++;
       } else if (form !== void 0 && !this.rustIdentifierIsPropertyName(n))
         nativeUses++;
-      if (form === "test" || form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "lwrite" || form === "okey" || form === "fin" || form === "frd" || form === "fok" || form === "kin" || form === "nkey" || form === "ukey" || form === "parg" || form === "dkey" || form === "key" && this.rustOkeyLocal(n) && this.rustElemInsertKey(n))
+      if (form === "test" || form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "lwrite" || form === "okey" || form === "fin" || form === "frd" || form === "fok" || form === "kin" || form === "nkey" || form === "ukey" || form === "parg" || form === "dkey" || form === "key" && this.rustOkeyLocal(n) && this.rustElemInsertKey(n) || form === "mkey" && this.rust63kDictParamNestedKey(n))
         typedUses++;
       if (form === "xbox" || form === "native" || form === "targ" || form === "err")
         expressionUses = true;
@@ -59469,6 +59469,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "key";
     if (kind === "ostr" && this.rust48iChainKeyUse(n))
       return "key";
+    if ((kind === "str" || kind === "ostr") && this.rust63kLocalFlatHelperKey(n))
+      return "mkey";
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustOkeyReadUse(n))
       return "okey";
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustUrlsKeyReadUse(n))
@@ -60656,16 +60658,20 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (!isBinaryExpression5(write) || write.left !== access || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
       return false;
     let root = access.expression;
+    let identHop = false;
     while (isElementAccessExpression4(root)) {
       const k = this.rustSkipWrappers(root.argumentExpression);
-      if (k === void 0 || !isStringLiteral3(k) && !isNumericLiteral4(k))
+      if (k !== void 0 && isIdentifier3(k) && this.rustSymbolOf(k) !== this.rustSymbolOf(n))
+        identHop = true;
+      else if (k === void 0 || !isStringLiteral3(k) && !isNumericLiteral4(k))
         return false;
       root = root.expression;
     }
     if (!isIdentifier3(root) || this.rustSymbolOf(root) === this.rustSymbolOf(n))
       return false;
     const rd = this.rustDeclarationOfIdentifier(root);
-    if (rd === void 0 || !isVariableDeclaration3(rd))
+    const dictParam = rd !== void 0 && isParameterDeclaration3(rd) && this.rustParamStaysPlainDict(rd);
+    if (rd === void 0 || !(isVariableDeclaration3(rd) && !identHop) && !dictParam)
       return false;
     const own = this.rustSymbolOf(n);
     let named = false;
@@ -60676,6 +60682,50 @@ ${binding(plan.indent)}` : ""), head: "" };
     };
     visit(write.right);
     return !named;
+  }
+  /** ral-63k: `n` is the whole key of a statement write `x[n] = v` whose receiver is a local declared by a call (never an
+   *  object literal: ccxt's literal-map pass keys on the boxed key text), whose value never writes `n` and never names `this`. */
+  rust63kLocalFlatHelperKey(n) {
+    if (!isIdentifier3(n) || this.rustTestTierSource(n))
+      return false;
+    const keyNode = this.rustKeyWrapped(n);
+    const access = keyNode.parent;
+    if (!isElementAccessExpression4(access) || access.argumentExpression !== keyNode || !isIdentifier3(access.expression))
+      return false;
+    const write = access.parent;
+    if (!isBinaryExpression5(write) || write.left !== access || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    if (this.rustSymbolOf(access.expression) === this.rustSymbolOf(n))
+      return false;
+    const rd = this.rustDeclarationOfIdentifier(access.expression);
+    if (rd === void 0 || !isVariableDeclaration3(rd) || rd.initializer === void 0 || !isCallExpression6(this.rustSkipWrappers(rd.initializer)))
+      return false;
+    if (this.rustInsertValueRewritesKey(String(n.text), write.right))
+      return false;
+    const base = access.expression;
+    const key = String(n.text);
+    if ((this.rustBearerDictInsert(base, n, key, "x") ?? this.rustMapParamDictInsert(base, n, key, "x") ?? this.printNativeDictInsert(base, n, key, "x") ?? this.rustNativeDictInsert(base, n, key, "x")) !== void 0)
+      return false;
+    if (this.rustDeclaredLocalEntry(base) !== void 0)
+      return false;
+    let self = false;
+    const visit = (x) => {
+      if (x.kind === SyntaxKind7.ThisKeyword || isFunctionLike(x))
+        self = true;
+      x.forEachChild(visit);
+    };
+    visit(write.right);
+    return !self;
+  }
+  /** ral-63k: `n` is the last key of a statement write `p[..][n] = v` whose chain root is a plain-Dict parameter. */
+  rust63kDictParamNestedKey(n) {
+    if (!this.rust62kLocalNestedLastKey(n))
+      return false;
+    let root = this.rustKeyWrapped(n).parent;
+    while (isElementAccessExpression4(root))
+      root = root.expression;
+    const rd = this.rustDeclarationOfIdentifier(root);
+    return rd !== void 0 && isParameterDeclaration3(rd) && this.rustParamStaysPlainDict(rd);
   }
   /** ral-61k: `n` keys a middle hop of a statement write `this.balance|options[..][n][..] = v`: an element read whose
    *  receiver is itself an element read and which is itself the receiver of the outermost written element access. */
@@ -63634,6 +63684,11 @@ ${ind}];`;
   /** The insert key of a `String` scalar local, else undefined. */
   rustScalarInsertKeyArg(keyNode) {
     const key = this.rustSkipWrappers(keyNode);
+    const mkind = isIdentifier3(key) && this.rustScalarUseForms.get(key) === "mkey" ? this.rustScalarLocalOf(key)?.kind : void 0;
+    if (mkind === "ostr")
+      return this.rustScalarOptKeyText(key);
+    if (mkind === "str")
+      return `${super.printIdentifier(key)}.clone()`;
     const kind = isIdentifier3(key) && this.rustScalarUseForms.get(key) === "key" ? this.rustScalarLocalOf(key)?.kind : void 0;
     if (kind === "ostr")
       return this.rustScalarOptKeyText(key);
