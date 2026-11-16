@@ -23234,3 +23234,27 @@ describe('ral-73d: a typed Vec<record> result row keeps the ral-tg Option<&T> ha
         expect(out).not.toContain('Value::Dict(row)');
     });
 });
+
+describe('ral-73d: rows of a base list field of unified records (this.accounts[i])', () => {
+    const files: Record<string, string> = {
+        "ts/src/base/types.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface Account {\n    id: Str;\n    type: Str;\n    code: Str;\n    info: any;\n}\n",
+        "ts/src/base/Exchange.ts": "import type { Dict, Str, Account } from './types.js';\nexport type { Dict, Str, Account } from './types.js';\nexport default class Exchange {\n    accounts!: Account[];\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n}\n",
+        "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    findAccountId (code: string): Str {\n        for (let i = 0; i < this.accounts.length; i++) {\n            const account = this.accounts[i];\n            if (this.safeString (account, 'code') === code) {\n                return this.safeString (account, 'id');\n            }\n        }\n        return undefined;\n    }\n}\n"
+    };
+    let out = '';
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-73d3-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        transpiler.transpileRustByPath(path.join (root, 'ts/src/base/Exchange.ts'));
+        out = transpiler.transpileRustByPath (path.join (root, 'ts/src/venue.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test('coinbase account: an Account[] base field row read only at literal keys is the shared map', () => {
+        expect(out).toContain('let mut account: crate::value::Dict = self.accounts.');
+        expect(out).toContain('.into_dict();');
+        expect(out).not.toContain('let mut account: Value');
+    });
+});

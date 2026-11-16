@@ -25972,6 +25972,7 @@ export class RustTranspiler extends BaseTranspiler {
      *  ral-qa use rule), a non-map row (Null, list, scalar, out of range) reads Null there exactly as the empty map `into_dict()`
      *  leaves; the local owns its map (an Arc bump of the row), so nothing borrows the list while it lives. */
     rustListRowKeyReadSource(init: any): boolean {
+        if (this.rust73dBaseRecordFieldRow(init)) return true;
         if (!isElementAccessExpression(init) || !isIdentifier(init.expression) || this.checkerOrUndefined() === undefined || this.rustTestTierSource(init)) return false;
         const key: any = this.rustSkipWrappers(init.argumentExpression);
         if (key === undefined || (!isNumericLiteral(key) && this.primitiveKindOfType(this.typeOfNodeIfAny(key)) !== 'number')) return false;
@@ -25982,6 +25983,21 @@ export class RustTranspiler extends BaseTranspiler {
         // the list's producer names no ws client state nor a market / currency table (ral-qa's receiver exclusion)
         const names = (x: any): boolean => (isPropertyAccessExpression(x) && /^(?:markets|markets_by_id|currencies|currencies_by_id|clients|futures|subscriptions|orderbooks|cache)$/.test(String(x.name.text))) || (x.forEachChild(names) ?? false);
         return !(isVariableDeclaration(owner) && owner.initializer !== undefined && names(owner.initializer));
+    }
+
+    /** ral-73d: `this.<f>[i]` (a numeric index) where `f` is a field declared only in the base tier as a list of a unified
+     *  record (`accounts!: Account[]`): the row a counter loop binds; read only at literal string keys (ral-42g's use rule). */
+    rust73dBaseRecordFieldRow(init: any): boolean {
+        if (init === undefined || !isElementAccessExpression(init) || this.checkerOrUndefined() === undefined || this.rustTestTierSource(init)) return false;
+        const field: any = this.rustSkipWrappers(init.expression);
+        if (!isPropertyAccessExpression(field) || field.expression.kind !== SyntaxKind.ThisKeyword || !isIdentifier(field.name)) return false;
+        const key: any = this.rustSkipWrappers(init.argumentExpression);
+        if (key === undefined || (!isNumericLiteral(key) && this.primitiveKindOfType(this.typeOfNodeIfAny(key)) !== 'number')) return false;
+        const declarations = symbolDeclarations(this.getChecker().getSymbolAtLocation(field.name));
+        if (declarations.length === 0 || !declarations.every((d: any) => d.kind === SyntaxKind.PropertyDeclaration && RustTranspiler.RUST_BASE_TIER_FILE.test(String(d.getSourceFile().fileName)))) return false;
+        const listType: any = this.typeOfNodeIfAny(field);
+        if (listType === undefined || !this.getChecker().isArrayType(listType) || this.getChecker().isTupleType(listType)) return false;
+        return this.rust73dBaseRecordType(this.typeOfNodeIfAny(init));
     }
 
     /** `this.safeX (o, '<k>'[, d])`: a base by-reference reader whose container is `o`, at a literal non-index string key. */
