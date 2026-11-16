@@ -14405,4 +14405,24 @@ describe('84g7 ternary locals copied into a defaulted parameter scan', () => {
         const out = x.transpileGo(src).content;
         expect(out).not.toContain('*candlesCount');
     });
+    test('a provisionally typed value ternary read as an arm of a pointer ternary keeps the box (no Int64PtrTyped)', () => {
+        const x = new Transpiler({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        installCcxtGoLocalTypes(x.goTranspiler);
+        const src = 'type Int = number | undefined;\n'
+            + 'class X {\n'
+            + '    sum (a: any, b: any): number { return 1; }\n'
+            + '    f (since: Int = undefined, limit: Int = undefined) {\n'
+            + '        const request = {};\n'
+            + '        const cappedLimit = ((limit === undefined) || (limit > 1440)) ? 1440 : limit;\n'
+            + '        const limitResolved = (since !== undefined) ? cappedLimit : limit;\n'
+            + '        if (since !== undefined) {\n'
+            + '            request[\'end\'] = this.sum (since, 60 * cappedLimit);\n'
+            + '        }\n'
+            + '        request[\'limit\'] = limitResolved;\n'
+            + '        return request;\n'
+            + '    }\n'
+            + '}\n';
+        const out = x.transpileGo(src).content;
+        expect(out).not.toContain('Int64PtrTyped(cappedLimit)');
+    });
 });

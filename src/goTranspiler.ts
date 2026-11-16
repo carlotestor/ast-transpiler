@@ -34012,21 +34012,51 @@ GoTranspiler.prototype.printVariableDeclarationList = function (node, identation
 // pointer-or-pointee join keeps every value the parameter can hold).
 export interface GoTranspiler {
     goTernaryJoinProvisional(): boolean;
+    goTernaryJoinFeedsAnotherTernary(declaration): boolean;
 }
 
 GoTranspiler.prototype.goTernaryJoinProvisional = function (): boolean {
     return (this.goGetArgTypeComputing?.size ?? 0) > 0;
 };
 
+// declarations first asked provisionally: before this rule they stayed boxed, so a value-typed answer
+// must not reach another ternary as an arm (a pointer-typed sibling would wrap it in Int64PtrTyped)
+const GO_TERNARY_JOIN_PROVISIONAL = new WeakSet<object>();
 const goTernaryJoinSettledParts = GoTranspiler.prototype.goTernaryJoinParts;
 GoTranspiler.prototype.goTernaryJoinParts = function (declaration) {
-    if ((declaration === undefined) || !this.goTernaryJoinProvisional() || GO_TERNARY_JOIN_MEMO.has(declaration)
+    if ((declaration === undefined) || GO_TERNARY_JOIN_MEMO.has(declaration)
         || (this.goUnwrapParenthesizedNode(declaration.initializer)?.kind !== SyntaxKind.ConditionalExpression)) {
         return goTernaryJoinSettledParts.call(this, declaration);
     }
+    if (!this.goTernaryJoinProvisional()) {
+        const settled = goTernaryJoinSettledParts.call(this, declaration);
+        if ((settled === undefined) || !GO_TERNARY_JOIN_PROVISIONAL.has(declaration) || settled.goType.startsWith('*')
+            || !this.goTernaryJoinFeedsAnotherTernary(declaration)) {
+            return settled;
+        }
+        GO_TERNARY_JOIN_MEMO.set(declaration, { parts: undefined });
+        return undefined;
+    }
+    GO_TERNARY_JOIN_PROVISIONAL.add(declaration);
     const parts = goTernaryJoinSettledParts.call(this, declaration);
     GO_TERNARY_JOIN_MEMO.delete(declaration);
     return parts;
+};
+
+// is the local read as an arm of another conditional expression in its function?
+GoTranspiler.prototype.goTernaryJoinFeedsAnotherTernary = function (declaration): boolean {
+    const scope = this.goEnclosingFunction(declaration);
+    const name = declaration.name;
+    return (scope === undefined) || this.hasNodeWhere(scope, (n: any) => {
+        if ((n.kind !== SyntaxKind.Identifier) || (n.text !== name.text) || (n === name)) {
+            return false;
+        }
+        let current: any = n;
+        while (current.parent?.kind === SyntaxKind.ParenthesizedExpression) {
+            current = current.parent;
+        }
+        return (current.parent?.kind === SyntaxKind.ConditionalExpression) && (current.parent.condition !== current);
+    });
 };
 
 const goTernaryJoinSettledDeclaredType = GoTranspiler.prototype.goDeclaredTypeOfIdentifier;
