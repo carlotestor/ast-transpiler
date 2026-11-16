@@ -34000,3 +34000,52 @@ GoTranspiler.prototype.printVariableDeclarationList = function (node, identation
     }
     return goTernaryJoinUpstreamPrintDeclarationList.call(this, node, identation);
 };
+
+// ===== ral-84g2: reader-result locals =====
+// A. `(x as List).length` / `(x as List)[i]` and the parenthesized forms print as the bare local's read, so
+// the list-sink verdict of a wrapped list local is the verdict of the outermost type-only wrapper.
+{
+    const sinkReads = GoTranspiler.prototype.goListLocalSinkReadsAsList;
+    GoTranspiler.prototype.goListLocalSinkReadsAsList = function (node, nilTestSafe: boolean) {
+        let outer: any = node;
+        while (((outer.parent?.kind === SyntaxKind.AsExpression) || (outer.parent?.kind === SyntaxKind.ParenthesizedExpression)
+            || (outer.parent?.kind === SyntaxKind.NonNullExpression)) && (outer.parent.expression === outer)) {
+            outer = outer.parent;
+        }
+        return sinkReads.call(this, outer, nilTestSafe);
+    };
+}
+// B. R4 for an annotated local: `const x: Bool = this.handleOption (m, o[, d])` (or `: boolean`) read only
+// against `true`. The annotation drives the checker only; the Go read is the same boxed HandleOption answer,
+// so the declaration takes the `== true` comparison once, exactly like the unannotated R4 local.
+{
+    const trueLocal = GoTranspiler.prototype.goHandleOptionTrueLocal;
+    GoTranspiler.prototype.goHandleOptionTrueLocal = function (declaration) {
+        const annotation: any = declaration?.type;
+        if (annotation === undefined) {
+            return trueLocal.call(this, declaration);
+        }
+        const call: any = declaration.initializer;
+        const boolAnnotation = (annotation.kind === SyntaxKind.BooleanKeyword)
+            || ((annotation.kind === SyntaxKind.TypeReference) && (annotation.typeName?.kind === SyntaxKind.Identifier) && (annotation.typeName.text === 'Bool'));
+        if (!boolAnnotation || (declaration.kind !== SyntaxKind.VariableDeclaration) || (declaration.name?.kind !== SyntaxKind.Identifier)
+            || (declaration.parent?.parent?.kind !== SyntaxKind.FirstStatement)
+            || (call?.kind !== SyntaxKind.CallExpression) || (call.expression?.kind !== SyntaxKind.PropertyAccessExpression)
+            || (call.expression.expression?.kind !== SyntaxKind.ThisKeyword) || (call.expression.name?.text !== 'handleOption')
+            || (call.arguments.length < 2) || (call.arguments.length > 3)) {
+            return false;
+        }
+        const comparesWithTrue = (n: any): boolean => {
+            const parent: any = n.parent;
+            const op = parent?.operatorToken?.kind;
+            if ((parent?.kind !== SyntaxKind.BinaryExpression) || ((op !== SyntaxKind.EqualsEqualsEqualsToken) && (op !== SyntaxKind.EqualsEqualsToken)
+                && (op !== SyntaxKind.ExclamationEqualsEqualsToken) && (op !== SyntaxKind.ExclamationEqualsToken))) {
+                return false;
+            }
+            return (((parent.left === n) ? parent.right : parent.left)?.kind === SyntaxKind.TrueKeyword);
+        };
+        return this.goDeclaredLocalTypeIfSafe(declaration, 'bool', comparesWithTrue,
+            (n: any) => ((n.parent?.kind === SyntaxKind.PropertyAccessExpression) && (n.parent.name === n))
+                || ((n.parent?.kind === SyntaxKind.PropertyAssignment) && (n.parent.name === n))) === 'bool';
+    };
+}
