@@ -74232,6 +74232,8 @@ ${iden}}`;
   rustLentOptionalHandOff(call, arg, init, from, nilDeclared) {
     if (from !== "dict" && from !== "list")
       return false;
+    if (!nilDeclared && from === "dict" && init !== void 0 && isIdentifier3(init) && this.rustOptAliasSourceKind(init, this.rustEnclosingFunction(call)) === "dict")
+      return this.rustLentResponseSlot(call, arg);
     if (!nilDeclared && !(init !== void 0 && isCallExpression6(init) && this.rustOptContainerSourceOk(init, from)))
       return false;
     if (this.rustLentResponseSlot(call, arg))
@@ -75636,6 +75638,12 @@ ${iden}}`;
       const s = super.transformIdentifier(init, this.ReservedKeywordsReplacements[init.text] ?? init.text);
       return `${indent}let mut ${varName}: Option<${type}> = ${this.rustOwnedLastUse(init, src.declaration) ? s : `${s}.clone()`}`;
     }
+    if (isIdentifier3(init)) {
+      const d = this.rustDeclarationOfIdentifier(init);
+      const s = super.transformIdentifier(init, this.ReservedKeywordsReplacements[init.text] ?? init.text);
+      if (d !== void 0 && d !== init && d.name !== init && !this.rustOwnedLastUse(init, d))
+        return `${indent}let mut ${varName}: Option<${type}> = ${s}.clone().into_opt_${kind}()`;
+    }
     return `${indent}let mut ${varName}: Option<${type}> = ${this.rustWsFieldGetText(init, true) ?? this.printNode(declaration.initializer, 0).trim()}.into_opt_${kind}()`;
   }
   /** `x = None` / `x = <container read>.into_opt_dict()` for the optional form. */
@@ -76908,6 +76916,8 @@ ${iden}}`;
       return args.length >= 3 && this.rustSkipWrappers(args[2])?.kind === SyntaxKind7.FalseKeyword;
     if (method === "marketIds")
       return args.length === 1 && this.rustLentListUse(this.rustSkipWrappers(args[0]));
+    if (method === "arraySlice")
+      return !this.rustTestTierSource(init) && this.rustBaseArraySliceCall(init);
     return this.rustDefaultedListRead(init);
   }
   /** ral-48e: `xs[i]['k'] = v` (a statement) on a `[]`-defaulted list local, `i` an i64 counter or a non-negative integer
@@ -76926,6 +76936,25 @@ ${iden}}`;
     if (isNumericLiteral4(key))
       return Number.isInteger(Number(key.text)) && Number(key.text) >= 0;
     return this.isRustValueIndexKey(key);
+  }
+  /** ral-64i: a never-reassigned local initialised from a base `this.arraySlice (src, ..)` whose `src` is an identifier the
+   *  checker types `string[]` (a split): every element is a `Str`, so `Display` joins exactly what the helper joined. */
+  rust64iStringSliceDeclaration(declaration) {
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name))
+      return false;
+    const init = this.rustSkipWrappers(declaration.initializer);
+    if (!this.rust64iBaseSliceInit(init))
+      return false;
+    const source = this.rustSkipWrappers(init.arguments[0]);
+    const checker = this.checkerOrUndefined();
+    const type = source !== void 0 && isIdentifier3(source) ? this.typeOfNodeIfAny(source) : void 0;
+    return checker !== void 0 && type !== void 0 && checker.isArrayType(type) && this.primitiveKindOfType(checker.getTypeArguments?.(type)?.[0]) === "string";
+  }
+  /** ral-64i: `this.arraySlice (..)` of the base tier (no venue redeclares it), outside the test tier. */
+  rust64iBaseSliceInit(init) {
+    if (!isCallExpression6(init) || !isPropertyAccessExpression3(init.expression) || init.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    return String(init.expression.name.text) === "arraySlice" && !this.rustTestTierSource(init) && this.rustBaseArraySliceCall(init);
   }
   /** A base `safeList*` read with an empty `[]` default: a list on every path. */
   rustDefaultedListRead(init) {
@@ -76965,7 +76994,8 @@ ${iden}}`;
     const defaulted = this.rustDefaultedListRead(init);
     let indexed = 0;
     const type = this.typeOfNodeIfAny(declaration.initializer);
-    if (type === void 0 || !this.getChecker().isArrayType(type))
+    const slice = this.rust64iBaseSliceInit(init);
+    if (!slice && (type === void 0 || !this.getChecker().isArrayType(type)))
       return false;
     const name = String(declaration.name.text);
     const fn = this.rustEnclosingFunction(declaration);
@@ -81472,8 +81502,9 @@ ${iden}}`;
       const checker = this.checkerOrUndefined();
       const type = checker === void 0 ? void 0 : this.typeOfNodeIfAny(n);
       const list = type === void 0 ? void 0 : type.flags & TypeFlags6.Union ? (typeParts(type) ?? []).find((t) => checker.isArrayType(t)) : type;
-      if (list === void 0 || !checker.isArrayType(list) || this.primitiveKindOfType(checker.getTypeArguments?.(list)?.[0]) !== "string")
-        return void 0;
+      if (list === void 0 || !checker.isArrayType(list) || this.primitiveKindOfType(checker.getTypeArguments?.(list)?.[0]) !== "string") {
+        return this.rust64iStringSliceDeclaration(declaration) ? "join" : void 0;
+      }
       return "join";
     }
     if (up?.kind === SyntaxKind7.PropertyAssignment && up.initializer === n && up.parent?.kind === SyntaxKind7.ObjectLiteralExpression) {

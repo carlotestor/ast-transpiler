@@ -3637,6 +3637,11 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  literal: the write prints `add_element_to_object(get_value_mut(&mut xs, &Value::Int(i)), ..)` as before, and the
      *  runtime `get_value_mut` hops a held `List` exactly as the `Value::Arr` arm did (the same padded slot). */
     rustLentListRowWrite(access: any): boolean;
+    /** ral-64i: a never-reassigned local initialised from a base `this.arraySlice (src, ..)` whose `src` is an identifier the
+     *  checker types `string[]` (a split): every element is a `Str`, so `Display` joins exactly what the helper joined. */
+    rust64iStringSliceDeclaration(declaration: any): boolean;
+    /** ral-64i: `this.arraySlice (..)` of the base tier (no venue redeclares it), outside the test tier. */
+    rust64iBaseSliceInit(init: any): boolean;
     /** A base `safeList*` read with an empty `[]` default: a list on every path. */
     rustDefaultedListRead(init: any): boolean;
     rustLentListLocalUncached(declaration: any): boolean;
