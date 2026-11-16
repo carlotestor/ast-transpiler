@@ -41904,10 +41904,14 @@ GoTranspiler.prototype.goClientFutureLocal = function(declaration) {
     if (_optionalChain([callee, 'optionalAccess', _7630 => _7630.kind]) !== _ast.SyntaxKind.PropertyAccessExpression || _optionalChain([callee, 'access', _7631 => _7631.expression, 'optionalAccess', _7632 => _7632.kind]) !== _ast.SyntaxKind.Identifier || _optionalChain([callee, 'access', _7633 => _7633.name, 'optionalAccess', _7634 => _7634.text]) !== "resolve" && _optionalChain([callee, 'access', _7635 => _7635.name, 'optionalAccess', _7636 => _7636.text]) !== "reject" || !clientIsInterfaceFrame(node)) {
       return printed;
     }
+    const receiverName = _nullishCoalesce(callee.expression.text, () => ( ""));
+    if (!receiverName.endsWith("future")) {
+      return printed;
+    }
     const receiver = this.printNode(callee.expression, 0);
     const head = `${receiver}.${callee.name.text === "resolve" ? "Resolve" : "Reject"}(`;
     const lead = /^\s*/.exec(printed)[0];
-    if (!/future$/.test(receiver) || !printed.startsWith(head, lead.length)) {
+    if (!printed.startsWith(head, lead.length)) {
       return printed;
     }
     const declaration = _optionalChain([this, 'access', _7637 => _7637.checkerOrUndefined, 'call', _7638 => _7638(), 'optionalAccess', _7639 => _7639.getSymbolAtLocation, 'call', _7640 => _7640(callee.expression), 'optionalAccess', _7641 => _7641.valueDeclaration, 'optionalAccess', _7642 => _7642.resolve, 'optionalCall', _7643 => _7643()]);

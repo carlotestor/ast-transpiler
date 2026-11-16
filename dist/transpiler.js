@@ -41905,10 +41905,14 @@ GoTranspiler.prototype.goClientFutureLocal = function(declaration) {
     if (callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.Identifier || callee.name?.text !== "resolve" && callee.name?.text !== "reject" || !clientIsInterfaceFrame(node)) {
       return printed;
     }
+    const receiverName = callee.expression.text ?? "";
+    if (!receiverName.endsWith("future")) {
+      return printed;
+    }
     const receiver = this.printNode(callee.expression, 0);
     const head = `${receiver}.${callee.name.text === "resolve" ? "Resolve" : "Reject"}(`;
     const lead = /^\s*/.exec(printed)[0];
-    if (!/future$/.test(receiver) || !printed.startsWith(head, lead.length)) {
+    if (!printed.startsWith(head, lead.length)) {
       return printed;
     }
     const declaration = this.checkerOrUndefined()?.getSymbolAtLocation(callee.expression)?.valueDeclaration?.resolve?.();
