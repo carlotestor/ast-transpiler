@@ -23397,6 +23397,9 @@ export class RustTranspiler extends BaseTranspiler {
                 keySets++;
                 // `k in m` is the map's own `contains_key`: a native read of the shared map (the boxed `in_op` Dict arm)
                 if (isBinaryExpression(n.parent)) reads++;
+                // ral-84g R3: `Object.keys|values (m)` of a base `groupBy` / `indexBy` result (always a map) enumerates the map
+                // natively (`m.keys()` / `m.values()`, printBorrowedKeys), the very list `object_keys` / `object_values` built
+                else if (from === 'dict' && init !== undefined && isCallExpression(init) && this.rustBaseCallNamed(init, RustTranspiler.RUST_84G_GROUP_HELPERS)) reads++;
                 return true;
             }
             if (this.rustExtendHeadUse(n)) return ++extendHeads > 0 && ++reads > 0;
@@ -31594,6 +31597,7 @@ export class RustTranspiler extends BaseTranspiler {
     // map (the head is the local itself or a proven map). `omit` hands a list through unchanged, so an unproven head
     // (a `params: Value` that may carry a list body) never qualifies.
     private static readonly RUST_ALWAYS_MAP_HELPERS = new Set([ 'extend', 'indexBy', 'groupBy' ]);
+    private static readonly RUST_84G_GROUP_HELPERS = new Set([ 'indexBy', 'groupBy' ]);
 
     /** The initialiser of a reassigned handed local answers a map on every path. */
     rustHandedMapInit(declaration: any): boolean {

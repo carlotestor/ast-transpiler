@@ -24225,3 +24225,23 @@ describe('ral-84g R2: `c ? this.omit (m, k) : m` over a proven non-parameter map
         expect(out).toMatch(/let mut paramsOmitted: crate::value::Dict = \(if/);
     });
 });
+
+describe('ral-84g R3: Object.values of a groupBy result is a native read of the map', () => {
+    test('a groupBy local enumerated by Object.values is a Dict and enumerates natively; an unproven head stays boxed', () => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-84g3-'));
+        const files: Record<string, string> = {
+            'ts/src/base/Exchange.ts': "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    groupBy (x: any, k: string, out = {}) { return out; }\n    hold (x: any): any { return x; }\n}\n",
+            'ts/src/venue.ts': "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    m (data: any[], raw: any) {\n        const grouped = this.groupBy (data, 'currency');\n        const values = Object.values (grouped);\n        const other = this.hold (raw);\n        const more = Object.values (other);\n        return [ values, more ];\n    }\n}\n",
+        };
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        t.transpileRustByPath(path.join (root, 'ts/src/base/Exchange.ts'));
+        const out = t.transpileRustByPath(path.join (root, 'ts/src/venue.ts')).content;
+        expect(out).toMatch(/let mut grouped: crate::value::Dict = /);
+        expect(out).toContain('grouped.values().cloned().collect()');
+        expect(out).toMatch(/let mut other: Value = /);
+    });
+});
