@@ -438,6 +438,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaNativeSplitText(name: any, parsedArg: any, receiver?: any): string;
     javaStringReceiverText(receiver: any, name: any): string;
     javaDeclaredStringElementLocal(node: any, printed: string): boolean;
+    javaDeclaredElementLocalType(node: any, printed: string): string | undefined;
     javaNativeSplitIndexRead(node: any, index: number): string | undefined;
     javaStringBoxText(node: any, text: any): string;
     printStringTypedParse(node: any, callee: any): string;

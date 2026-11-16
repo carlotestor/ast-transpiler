@@ -43133,6 +43133,9 @@ var JavaTranspiler = class extends BaseTranspiler {
     if (arg.kind === SyntaxKind6.NullKeyword) {
       return true;
     }
+    if (type === JAVA_NATIVE_RETURN_MAP_TYPE && isIdentifier2(arg) && String(this.javaDeclaredElementLocalType(arg, arg.text) ?? "").replace(/\s+/g, "").replace(/^java\.util\./, "") === "Map<String,Object>") {
+      return true;
+    }
     if (type === JAVA_NATIVE_RETURN_MAP_TYPE && isObjectLiteralExpression3(arg)) {
       return true;
     }
@@ -49675,14 +49678,19 @@ var JavaTranspiler = class extends BaseTranspiler {
   // ral-84j1: `k` printed bare, bound to a `const k = xs[..]` element read (the element-read lane's
   // own shape, from the AST) that the embedding layer declares a Java String
   javaDeclaredStringElementLocal(node, printed) {
+    return this.javaDeclaredElementLocalType(node, printed) !== void 0 && this.javaDeclaredStringType(node);
+  }
+  // the declared Java type of a bare-printed `const x = xs[..]` element-read local, as the embedding
+  // layer publishes it (undefined for any other binding or when nothing is published)
+  javaDeclaredElementLocalType(node, printed) {
     if (node === void 0 || !isIdentifier2(node) || printed !== node.text) {
-      return false;
+      return void 0;
     }
     const declaration = this.javaDeclarationOfIdentifier(node);
     if (declaration === void 0 || !isVariableDeclaration2(declaration) || declaration.initializer === void 0 || !isElementAccessExpression3(this.unwrapParenthesized(declaration.initializer))) {
-      return false;
+      return void 0;
     }
-    return this.javaDeclaredStringType(node);
+    return this.javaDeclaredTypeOf(node);
   }
   // `s.split (<literal>)[<int literal>]` on the native split: the helper's List branch answers
   // null off range (e.g. "/".split("/") is empty), which findFirst().orElse(null) keeps, with
