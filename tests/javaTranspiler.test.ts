@@ -10514,3 +10514,28 @@ class T {
         }
     });
 });
+
+describe('ral-84j1: `x as string` on an element local declared String prints the bare local', () => {
+    const input = `
+class T {
+    run (m: any, t: any) {
+        const symbol = t['symbol'];
+        m[(symbol as string)] = t;
+        const other = t['other'];
+        m[(other as string)] = t;
+    }
+}
+`;
+    test('declared String drops the assertion cast; undeclared keeps it', () => {
+        const printer: any = (transpiler as any).javaTranspiler;
+        const previous = printer.javaDeclaredLocalTypeResolver;
+        try {
+            printer.javaDeclaredLocalTypeResolver = (d: any) => (d?.name?.text === 'symbol' ? 'String' : undefined);
+            const out = transpiler.transpileJava(input).content;
+            expect(out).not.toContain('((String)symbol)');
+            expect(out).toContain('((String)other)');
+        } finally {
+            printer.javaDeclaredLocalTypeResolver = previous;
+        }
+    });
+});

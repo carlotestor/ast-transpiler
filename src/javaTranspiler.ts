@@ -5431,7 +5431,9 @@ export class JavaTranspiler extends BaseTranspiler {
         }
 
         if (type.kind === SyntaxKind.StringKeyword) {
-            return `((String)${this.printNode(node.expression, identation)})`;
+            const operand = this.printNode(node.expression, identation);
+            // ral-84j1: an element local already declared String needs no checkcast
+            return this.javaDeclaredStringElementLocal(node.expression, operand) ? operand : `((String)${operand})`;
         }
 
         if (type.kind === SyntaxKind.ArrayType) {
