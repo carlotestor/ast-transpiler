@@ -58858,7 +58858,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
    *  way (the `&Value` operand takes the moved string), so the receiver's decision does not read this local's type. */
   rustScalarPreciseFeed(n, write, declaration) {
     const form = this.rustScalarUseForms.get(n);
-    if (form !== "box" && form !== "parg" || !this.rustPreciseStringCall(declaration.initializer) || !this.rustLocalLastUse(n, declaration))
+    if (form !== "box" && form !== "parg" || !this.rustPreciseStringCall(declaration.initializer) || form === "box" && !this.rustLocalLastUse(n, declaration))
       return false;
     let top = n;
     for (; ; ) {
