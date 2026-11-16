@@ -6605,7 +6605,9 @@ export class RustTranspiler extends BaseTranspiler {
         // parameter can still carry an `Int` that `parse_number` would pass through
         const arg: any = this.unwrapParens(call.arguments[0]);
         const kind = isIdentifier(arg) ? this.rustScalarIdentifierKind(arg) : this.rustScalarValueKind(arg, true);
-        return kind === 'str' || kind === 'ostr';
+        // ral-84g R1: a venue method already printed `-> Option<String>` (rustVenueStrCall: every venue declaration of the name
+        // declares a string return) boxes into a `Str` or `Null` at the argument, never an `Int`
+        return kind === 'str' || kind === 'ostr' || this.rustVenueStrCall(arg);
     }
 
     // Any other callee: a base one whose checker return is a string, or one declaring `string`/`Str`/`int`/`Int`

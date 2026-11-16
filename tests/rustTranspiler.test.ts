@@ -24194,3 +24194,15 @@ describe('ral-80a: a non-boolean settle under an unknown hash keeps the tuple sl
         expect(out).toMatch(/let mut candles: Value = get_value\(/);
     });
 });
+
+describe('ral-84g R1: parseNumber of a venue string method', () => {
+    test('a one-argument parseNumber of a venue method every declaration of which returns Str is an Option<f64>', () => {
+        const dir = path.join (rustFixtureRoot, 'ral-84g-r1');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export type Str = string | undefined;\nexport type Int = number | undefined;\nexport type Num = number | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    parseNumber (value: any, d: Num = undefined): number { return value; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Str, Int } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    fromEn (en: Str, scale: Int): Str {\n        if (en === undefined || scale === undefined) {\n            return undefined;\n        }\n        return en + scale.toString ();\n    }\n    fromAny (en: any): any {\n        return en;\n    }\n    fees (o: any, s: Int) {\n        const fee = this.parseNumber (this.fromEn (this.safeString (o, 'fee'), s));\n        const raw = this.parseNumber (this.fromAny (o));\n        if (fee === undefined) {\n            return [ raw ];\n        }\n        return { 'fee': fee, 'raw': raw };\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toMatch(/let mut fee: Option<f64> = self\.parseNumber\(.*\)\.as_f64\(\);/);
+        expect(out).toContain('let mut raw: Value = ');
+    });
+});
