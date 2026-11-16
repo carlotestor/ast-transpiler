@@ -74053,6 +74053,8 @@ ${iden}}`;
       return false;
     if (kind === "list" ? _is.isArrayLiteralExpression.call(void 0, last) : this.rustPlainDictLiteral(last))
       return true;
+    if (_is.isCallExpression.call(void 0, last) && this.rustBorrowedSourceKind(last) === (kind === "list" ? "list" : "dict") && this.rustContainerInitNeverNull(last, kind))
+      return true;
     return kind === "map" && this.rustNeverNullDictLocalArg(last);
   }
   /** An identifier whose local prints a plain `Dict` (borrowed dict route, not the optional form). */
