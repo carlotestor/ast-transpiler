@@ -4672,6 +4672,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustVenueStrCallers;
     rustVenueStrParamType(param: any): string | undefined;
     rustVenueStrParamTypeUncached(param: any): string | undefined;
+    /** ral-63x: `&str` parameter, every call site in the file passes a string literal at its index, and some
+     *  `let x = <param>` declaration of the body reads it whole. */
+    rust63xLiteralSeedStrParam(method: any, param: any, rustType: string): boolean;
+    /** ral-63x: a sync ws method with a declared `string` return (`-> Option<String>`, no kept arm: no by-name or ws
+     *  handler arm) and no override, trait slot or typed-return entry. Its string parameters may print typed; should
+     *  the return still print `Value`, a string slot is one an arm decodes (rustDispatch.wsArg `str` / `optstr`). */
+    rust63xNoArmStrMethod(method: any): boolean;
     private static readonly RUST_BASE_SCALAR_PARAM_METHODS;
     private static readonly RUST_BASE_ASYNC_SCALAR_PARAM_METHODS;
     private static readonly RUST_OVERRIDE_GROUP_STR_PARAMS;

@@ -85494,7 +85494,8 @@ ${this.getIden(identation)}}`;
     if ((method.modifiers ?? []).some((m) => m.kind === SyntaxKind7.StaticKeyword))
       return void 0;
     const urlOnly = this.rustVenueUrlParam(method, param);
-    if (!group && /(?:^|\/)ts\/src\/pro\//.test(file) && !this.isAsyncFunction(method) && !urlOnly)
+    const noArmStr = !group && /(?:^|\/)ts\/src\/pro\//.test(file) && !this.isAsyncFunction(method) && !urlOnly && this.rust63xNoArmStrMethod(method);
+    if (!group && /(?:^|\/)ts\/src\/pro\//.test(file) && !this.isAsyncFunction(method) && !urlOnly && !noArmStr)
       return void 0;
     const hidden = this.getMethodOverride(method);
     if (!group && hidden !== void 0 && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(hidden.getSourceFile().fileName)))
@@ -85511,6 +85512,8 @@ ${this.getIden(identation)}}`;
       return void 0;
     const rustType = optional && !declared.startsWith("Option<") ? `Option<${declared}>` : declared;
     if (rustType.includes("f64") && !this.rustVenueFloatUsesStayInside(method, param))
+      return void 0;
+    if (noArmStr && !this.rust63xLiteralSeedStrParam(method, param, rustType))
       return void 0;
     const at = Array.from(method.parameters).indexOf(param);
     for (const call of this.rustVenueStrCallSites(method)) {
@@ -85530,6 +85533,49 @@ ${this.getIden(identation)}}`;
         return void 0;
     }
     return rustType;
+  }
+  /** ral-63x: `&str` parameter, every call site in the file passes a string literal at its index, and some
+   *  `let x = <param>` declaration of the body reads it whole. */
+  rust63xLiteralSeedStrParam(method, param, rustType) {
+    if (rustType !== "&str" || !isIdentifier3(param.name))
+      return false;
+    const at = Array.from(method.parameters).indexOf(param);
+    const calls = this.rustVenueStrCallSites(method);
+    if (calls.length === 0)
+      return false;
+    for (const call of calls) {
+      const arg = call.arguments[at];
+      if (arg === void 0 || arg.kind !== SyntaxKind7.StringLiteral && arg.kind !== SyntaxKind7.NoSubstitutionTemplateLiteral)
+        return false;
+    }
+    const symbol = this.getChecker().getSymbolAtLocation(param.name);
+    let seeds = false;
+    const visit = (n) => {
+      if (seeds || n !== method.body && isFunctionLike(n))
+        return;
+      if (isVariableDeclaration3(n) && n.initializer !== void 0 && isIdentifier3(n.initializer) && this.getChecker().getSymbolAtLocation(n.initializer) === symbol) {
+        seeds = true;
+        return;
+      }
+      n.forEachChild(visit);
+    };
+    method.body.forEachChild(visit);
+    return seeds;
+  }
+  /** ral-63x: a sync ws method with a declared `string` return (`-> Option<String>`, no kept arm: no by-name or ws
+   *  handler arm) and no override, trait slot or typed-return entry. Its string parameters may print typed; should
+   *  the return still print `Value`, a string slot is one an arm decodes (rustDispatch.wsArg `str` / `optstr`). */
+  rust63xNoArmStrMethod(method) {
+    if (!isMethodDeclaration5(method) || !isIdentifier3(method.name) || this.isAsyncFunction(method))
+      return false;
+    if (this.toSnakeCaseName(String(method.name.text)) in (this.rustVirtualDispatch ?? {}))
+      return false;
+    if (this.rustMethodTypedReturnKind(method) !== void 0 || this.rustBaseNativeStrMethod(method) || this.rustVenueKeptStrArm(method))
+      return false;
+    const hidden = this.getMethodOverride(method);
+    if (hidden !== void 0 && hidden !== method)
+      return false;
+    return this.rustNativeStrReturnHead(method);
   }
   /** The first parameter of a listed override group when ALL declarations (base, prediction base, every venue,
    *  pro and prediction override) spell it `<name>: string`; one disagreeing declaration keeps the whole group `Value`. */
