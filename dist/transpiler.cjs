@@ -58526,7 +58526,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     const arg = this.unwrapParens(call.arguments[0]);
     const kind = _is.isIdentifier.call(void 0, arg) ? this.rustScalarIdentifierKind(arg) : this.rustScalarValueKind(arg, true);
-    return kind === "str" || kind === "ostr";
+    return kind === "str" || kind === "ostr" || this.rustVenueStrCall(arg);
   }
   // Any other callee: a base one whose checker return is a string, or one declaring `string`/`Str`/`int`/`Int`
   // (a bare `number` may hold a float, which `as_i64` would drop).
@@ -84001,7 +84001,13 @@ ${iden}}`;
         if (a === void 0 || !_is.isIdentifier.call(void 0, a))
           return false;
         const d = this.rustDeclarationOfIdentifier(a);
-        return d !== void 0 && d !== a && _is.isParameterDeclaration.call(void 0, d) && this.rustProvenMapParam(d) && !this.rustLocalIsReassigned(d, String(a.text));
+        if (d !== void 0 && d !== a && _is.isParameterDeclaration.call(void 0, d) && this.rustProvenMapParam(d) && !this.rustLocalIsReassigned(d, String(a.text)))
+          return true;
+        const other = this.rustSkipWrappers(x === init.whenTrue ? init.whenFalse : init.whenTrue);
+        if (other === void 0 || !_is.isCallExpression.call(void 0, other) || !this.rustOmitOfDict(other) || !this.rustOmitLineFits(other))
+          return false;
+        const head = this.rustSkipWrappers(other.arguments[0]);
+        return head !== void 0 && _is.isIdentifier.call(void 0, head) && this.rustDeclarationOfIdentifier(head) === d;
       };
       return arm(init.whenTrue) && arm(init.whenFalse) && String(declaration.initializer.getText()).split("\n")[0].length <= 240;
     }
