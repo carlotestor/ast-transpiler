@@ -61973,7 +61973,7 @@ ${binding(plan.indent)}` : ""), head: "" };
       return expressionText;
     const marketFieldInit = this.rustMarketFieldScalar(node);
     if (marketFieldInit !== void 0)
-      return marketFieldInit.kind === kind ? marketFieldInit.text : void 0;
+      return marketFieldInit.kind === kind ? marketFieldInit.text : kind === `o${marketFieldInit.kind}` && marketFieldInit.kind === "str" && this.rustNilVenueWrite(node) ? `Some(${marketFieldInit.text})` : void 0;
     const boolText = kind === "bool" && this.literalKindOfNode(node) !== "boolean" ? this.rustBoolNativeText(node) : void 0;
     if (boolText !== void 0)
       return boolText;
@@ -67271,14 +67271,17 @@ ${i1}}`;
     let top = node;
     while (top.parent !== void 0 && (isParenthesizedExpression3(top.parent) || top.parent.kind === SyntaxKind7.AsExpression))
       top = top.parent;
-    if (placed && !(isVariableDeclaration3(top.parent) && top.parent.initializer === top) && !this.rust57kMarketTernaryArm(top))
+    const declInit = isVariableDeclaration3(top.parent) && top.parent.initializer === top;
+    const nilWrite = placed && !declInit && !this.rust57kMarketTernaryArm(top) && this.rustNilVenueWrite(top);
+    if (placed && !declInit && !this.rust57kMarketTernaryArm(top) && !nilWrite)
       return void 0;
+    const keyReadTail = nilWrite ? ".into_opt_string()" : ".as_str().map(str::to_owned)";
     const currency = this.rustCurrencyLocalOf(node.expression);
     if (currency !== void 0) {
       const currencyKey = this.rustCurrencyKeyReadKey(node.expression);
       if (this.rustCurrencyLocalKind(currency) === false || currencyKey !== "code" && (currencyKey !== "id" || this.primitiveKindOfType(this.typeOfNodeIfAny(node)) !== "string"))
         return void 0;
-      return { kind: "ostr", text: `crate::value::KeyRead::key_read(&&${this.printNode(currency.name, 0)}, "${currencyKey}").as_str().map(str::to_owned)` };
+      return { kind: "ostr", text: `crate::value::KeyRead::key_read(&&${this.printNode(currency.name, 0)}, "${currencyKey}")${keyReadTail}` };
     }
     const optMarket = this.rustOptMarketLocalOf(node.expression);
     if (optMarket !== void 0) {
@@ -67295,7 +67298,7 @@ ${i1}}`;
     if (localKind === "smkt") {
       if (_RustTranspiler.RUST_MARKET_STR_FIELDS[key] === void 0 && key !== "settle")
         return void 0;
-      return { kind: "ostr", text: `crate::value::KeyRead::key_read(&&${this.printNode(declaration.name, 0)}, ${JSON.stringify(key)}).as_str().map(str::to_owned)` };
+      return { kind: "ostr", text: `crate::value::KeyRead::key_read(&&${this.printNode(declaration.name, 0)}, ${JSON.stringify(key)})${keyReadTail}` };
     }
     const recv = `(${this.printNode(declaration.name, 0)})`;
     if (_RustTranspiler.RUST_MARKET_BOOL_FIELDS.has(key))
