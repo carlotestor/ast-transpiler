@@ -24224,3 +24224,19 @@ describe('ral-84e: safeBool locals print the Option<bool> reader twin', () => {
         expect(out).not.toContain('safe_bool_k_opt');
     });
 });
+describe('ral-84e: a ternary of an optional market record field and undefined is an Option<String>', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface Market { id: Str; symbol: Str; base: Str; quote: Str; [key: string]: any }\nexport default class Exchange {\n    options: Dict = {};\n    markets: Dict = {};\n    market (symbol: string): Market { return this.markets[symbol]; }\n    hold (m: any): any { return m; }\n    filterBySymbol (rows: any, symbol: Str = undefined): any { return rows; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str, Market } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        const typed = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['market'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        return typed.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('derive fetchSettlementHistory symbolResolved', () => {
+        const out = write ('ral-84e-t1', "    f (symbol: Str = undefined, rows: any = undefined) {\n        let market = undefined;\n        if (symbol !== undefined) {\n            market = this.market (symbol);\n        }\n        const symbolResolved = (market !== undefined) ? market['symbol'] : undefined;\n        return this.filterBySymbol (rows, symbolResolved);\n    }\n");
+        expect(out).toMatch(/let mut symbolResolved: Option<String> = \(if \(market\.is_some\(\)\) \{ crate::value::KeyRead::key_read\(&+market, "symbol"\)\.into_opt_string\(\) \} else \{ None \}\);/);
+        expect(out).not.toContain('let mut symbolResolved: Value');
+    });
+});

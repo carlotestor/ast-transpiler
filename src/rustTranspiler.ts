@@ -5895,7 +5895,11 @@ export class RustTranspiler extends BaseTranspiler {
         if (!RustTranspiler.RUST_NIL_ELEM_STR_KEYS.has(String(node.argumentExpression.text))) return undefined;
         if (/[/]test[/]/.test(String(node.getSourceFile?.()?.fileName ?? ''))) return undefined;
         const local = this.rustOptContainerOf(node.expression);
-        if (local === undefined || local.kind !== 'dict') return undefined;
+        // ral-84e: also an optional market / currency record (`Option<Market>` local, lent `Option<&Market>` / currency slot):
+        // its `KeyRead` reads the record's own map and answers `Null` when absent, the same `Value` the boxed arm held
+        const record = local === undefined && (this.rustOptMarketLocalOf(node.expression) !== undefined || this.rustMarketSlotParamOf(node.expression) !== undefined
+            || this.rustCurrencySlotParamOf(node.expression) !== undefined || this.rustCurrencyLocalOf(node.expression) !== undefined);
+        if (!record && (local === undefined || local.kind !== 'dict')) return undefined;
         const read = this.printNode(node, 0).trim();
         if (!/^(?:crate|ccxt)::value::KeyRead::key_read\(&{1,2}[A-Za-z_][A-Za-z0-9_]*, "[A-Za-z]+"\)$/.test(read)) return undefined;
         return `${read}.into_opt_string()`;
