@@ -59589,6 +59589,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "box";
     if ((kind === "str" || kind === "ostr") && this.rustWsCacheMapKeyUse(n))
       return "fin";
+    if ((kind === "str" || kind === "ostr") && this.rust68hPadReceiver(n) && this.rustLocalLastUse(n, this.rustDeclaredNode(n)))
+      return "box";
     if (kind === "bool" && this.rustScalarBoolLogicalText(this.rustClimbLogicalWrappers(n)) !== void 0)
       return "cond";
     if (kind === "bool" && _is.isPrefixUnaryExpression.call(void 0, parent) && this.rustValueNotOfBoolLocal(parent) !== void 0)
@@ -60855,7 +60857,33 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (!_is.isBinaryExpression.call(void 0, write) || write.right !== n || write.operatorToken.kind !== _ast.SyntaxKind.EqualsToken || _optionalChain([write, 'access', _9161 => _9161.parent, 'optionalAccess', _9162 => _9162.kind]) !== _ast.SyntaxKind.ExpressionStatement)
       return false;
     const access = write.left;
-    return _is.isElementAccessExpression.call(void 0, access) && _is.isStringLiteral.call(void 0, access.argumentExpression) && this.rustNestedFieldChain(access) && !/\bthis\b/.test(String(access.expression.getText()).replace(/^this\./, ""));
+    if (!_is.isElementAccessExpression.call(void 0, access) || !this.rustNestedFieldChain(access) || /\bthis\b/.test(String(access.expression.getText()).replace(/^this\./, "")))
+      return false;
+    return _is.isStringLiteral.call(void 0, access.argumentExpression) || this.rust68hNestedParamKey(access, n);
+  }
+  /** ral-68h: `n` is the receiver of a two-argument `n.padStart|padEnd (..)` call (TS `String.prototype` method). */
+  rust68hPadReceiver(n) {
+    const access = n.parent;
+    if (!_is.isPropertyAccessExpression.call(void 0, access) || access.expression !== n)
+      return false;
+    const method = String(access.name.text);
+    const call = access.parent;
+    return (method === "padStart" || method === "padEnd") && _is.isCallExpression.call(void 0, call) && call.expression === access && call.arguments.length === 2 && this.primitiveKindOfType(this.typeOfNodeIfAny(n)) === "string";
+  }
+  /** ral-68h: the last key of `this.F[..][k] = n` is a string parameter of the enclosing method (pro requestId
+   *  `this.options['requestId'][url] = newValue`): the insert prints the same helper call with its own key text, the
+   *  value slot takes `Value::from(n)` (the Int / Float the `Value` local held). Decided from the parameter's
+   *  declaration (checker type `string`, never reassigned in the body) and `n` not naming the key. */
+  rust68hNestedParamKey(access, n) {
+    const key = this.rustSkipWrappers(access.argumentExpression);
+    if (!_is.isIdentifier.call(void 0, key) || String(key.text) === String(n.text))
+      return false;
+    const decl = this.rustDeclaredNode(key);
+    if (decl === void 0 || !_is.isParameterDeclaration.call(void 0, decl) || decl.dotDotDotToken !== void 0 || decl.questionToken !== void 0 || decl.initializer !== void 0)
+      return false;
+    if (this.rustEnclosingFunction(decl) !== this.rustEnclosingFunction(access))
+      return false;
+    return this.primitiveKindOfType(this.typeOfNodeIfAny(decl.name)) === "string";
   }
   /** Assignment hook: the r05 insert of a nested plain-field write keyed by a typed string local. */
   printNestedFieldKeyWrite(left, acc, value) {

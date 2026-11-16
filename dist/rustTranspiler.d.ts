@@ -1381,6 +1381,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustNestedFieldUpperKeyUse(n: any): boolean;
     /** `this.F[..]['lit'] = n` (statement): the value slot of a nested plain-field insert. */
     rustNestedFieldValueUse(n: any): boolean;
+    /** ral-68h: `n` is the receiver of a two-argument `n.padStart|padEnd (..)` call (TS `String.prototype` method). */
+    rust68hPadReceiver(n: any): boolean;
+    /** ral-68h: the last key of `this.F[..][k] = n` is a string parameter of the enclosing method (pro requestId
+     *  `this.options['requestId'][url] = newValue`): the insert prints the same helper call with its own key text, the
+     *  value slot takes `Value::from(n)` (the Int / Float the `Value` local held). Decided from the parameter's
+     *  declaration (checker type `string`, never reassigned in the body) and `n` not naming the key. */
+    rust68hNestedParamKey(access: any, n: any): boolean;
     /** Assignment hook: the r05 insert of a nested plain-field write keyed by a typed string local. */
     printNestedFieldKeyWrite(left: any, acc: string, value: string): string | undefined;
     /** ral-56f: the bucket entry of a `ukey` upper key (rustNestedFieldUpperKeyUse), keyed by the local's own text (the
