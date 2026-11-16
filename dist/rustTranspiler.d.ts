@@ -4291,6 +4291,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustWsBookLocalOf(node: any): 'opt' | 'book' | undefined;
     /** The `push` call when `outer` (the `x.cache` access, wrappers climbed) is `outer.push (v)` as a statement. */
     rust66cCachePushCall(outer: any): any;
+    /** ral-84a: `n` is the sole argument of a `x.cache.push (n)` statement whose `x` is a typed book local: the book's
+     *  `cache_push(v: Value)` takes the box, so a map local enters as `Value::Dict` (or the `Null` its optional form held). */
+    rust84aBookCachePushArg(n: Node): boolean;
     /** `x.cache.push (v)` on a typed book local: the book's `cache_push`. */
     print66cCachePush(node: any, parsedArg: string | undefined): string | undefined;
     /** The book identifier of an initializer `x.cache` whose book local reads it as a `field` use, else undefined. */

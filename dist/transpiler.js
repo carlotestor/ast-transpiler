@@ -76860,6 +76860,8 @@ ${iden}}`;
       return false;
     if (up.kind === SyntaxKind7.PropertyAssignment)
       return up.initializer === n;
+    if (this.rust84aBookCachePushArg(n))
+      return true;
     if (!isCallExpression6(up) || up.expression === n || !isPropertyAccessExpression3(up.expression) || up.expression.expression.kind !== SyntaxKind7.ThisKeyword)
       return false;
     const callee = String(up.expression.name.text);
@@ -77204,6 +77206,8 @@ ${iden}}`;
     if (isArrayLiteralExpression4(up) && this.rust62nListLiteralSink(up))
       return true;
     if (this.rustWsDispatchCallArg(n))
+      return true;
+    if (this.rust84aBookCachePushArg(n))
       return true;
     if (!isCallExpression6(up) || up.expression === n || !isPropertyAccessExpression3(up.expression) || up.expression.expression.kind !== SyntaxKind7.ThisKeyword)
       return false;
@@ -82126,6 +82130,19 @@ ${iden}}`;
     if (!isCallExpression6(call) || call.expression !== access || call.arguments.length !== 1 || call.arguments[0].kind === SyntaxKind7.SpreadElement)
       return void 0;
     return call.parent?.kind === SyntaxKind7.ExpressionStatement ? call : void 0;
+  }
+  /** ral-84a: `n` is the sole argument of a `x.cache.push (n)` statement whose `x` is a typed book local: the book's
+   *  `cache_push(v: Value)` takes the box, so a map local enters as `Value::Dict` (or the `Null` its optional form held). */
+  rust84aBookCachePushArg(n) {
+    const call = n.parent;
+    if (call === void 0 || !isCallExpression6(call) || call.arguments.length !== 1 || call.arguments[0] !== n || !isPropertyAccessExpression3(call.expression))
+      return false;
+    const access = this.rustStripWrappers(call.expression.expression);
+    if (access === void 0 || !isPropertyAccessExpression3(access) || String(access.name.text) !== "cache" || !isIdentifier3(access.expression))
+      return false;
+    if (call.parent?.kind !== SyntaxKind7.ExpressionStatement || String(call.expression.name.text) !== "push")
+      return false;
+    return this.rustWsBookLocal(this.rustDeclarationOfIdentifier(access.expression)) !== void 0 && this.rustWsBookUses.get(access.expression) === "cpush";
   }
   /** `x.cache.push (v)` on a typed book local: the book's `cache_push`. */
   print66cCachePush(node, parsedArg) {
