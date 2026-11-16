@@ -79382,9 +79382,9 @@ ${iden}}`;
     };
     let matched = 0;
     for (const r of table) {
-      if (!r.pats.some((rp) => hashes.some((wp) => _RustTranspiler.rustWsPatternsMeet(rp, wp))))
+      if (!(r.rpats ?? r.pats).some((rp) => hashes.some((wp) => _RustTranspiler.rustWsPatternsMeet(rp, wp))))
         continue;
-      if (r.kind === "none" || r.kind === "dict" && r.plainMap === true)
+      if (r.kind === "none" || r.scalar === true || r.kind === "dict" && r.plainMap === true)
         continue;
       const t = r.kind === "list" && r.value !== void 0 ? tuple(r.value) : void 0;
       const e = t?.elements[index];
@@ -80588,10 +80588,14 @@ ${iden}}`;
     };
     const nothing = (x) => x === void 0 || this.rustStripWrappers(x)?.kind === SyntaxKind7.UndefinedKeyword || isIdentifier3(this.rustStripWrappers(x)) && this.rustStripWrappers(x).text === "undefined";
     const kindOf = (x) => nothing(x) ? "none" : this.rustWsResolvedKind(x) ?? "other";
-    const add = (hash, x, kind, site) => {
+    const boolean = (x) => {
+      const v = x === void 0 ? void 0 : this.rustStripWrappers(x);
+      return v !== void 0 && (v.kind === SyntaxKind7.TrueKeyword || v.kind === SyntaxKind7.FalseKeyword);
+    };
+    const add = (hash, x, kind, site, scalar = false) => {
       const sites = site !== void 0 ? this.rustWsHelperCallSites(cls, site, [hash, x]) : void 0;
       if (sites === void 0) {
-        table.push({ pats: hash === null ? [[null]] : this.rustWsHashPatterns(hash, 0, /* @__PURE__ */ new Set()), rpats: hash === null ? [[null]] : this.rustWsRefinedHashPatterns(hash), kind: kind ?? kindOf(x), value: kind === void 0 ? x : void 0, plainMap: kind === void 0 && this.rustWsPlainMapResolve(x) });
+        table.push({ pats: hash === null ? [[null]] : this.rustWsHashPatterns(hash, 0, /* @__PURE__ */ new Set()), rpats: hash === null ? [[null]] : this.rustWsRefinedHashPatterns(hash), kind: kind ?? kindOf(x), value: kind === void 0 ? x : void 0, plainMap: kind === void 0 && this.rustWsPlainMapResolve(x), scalar: scalar || kind === void 0 && boolean(x) });
         return;
       }
       for (const env of sites) {
@@ -80602,7 +80606,7 @@ ${iden}}`;
             const d = e !== void 0 && isIdentifier3(this.rustStripWrappers(e)) ? this.rustDeclarationOfIdentifier(this.rustStripWrappers(e)) : void 0;
             return d !== void 0 && env.has(d) ? env.get(d).arg : e;
           };
-          table.push({ pats: hash === null ? [[null]] : this.rustWsHashPatterns(hash, 0, /* @__PURE__ */ new Set()), rpats: hash === null ? [[null]] : this.rustWsRefinedHashPatterns(hash), kind: kind ?? kindOf(bound(x)), plainMap: kind === void 0 && this.rustWsPlainMapResolve(bound(x)) });
+          table.push({ pats: hash === null ? [[null]] : this.rustWsHashPatterns(hash, 0, /* @__PURE__ */ new Set()), rpats: hash === null ? [[null]] : this.rustWsRefinedHashPatterns(hash), kind: kind ?? kindOf(bound(x)), value: kind === void 0 ? this.rustWsSiteTupleValue(bound(x)) : void 0, plainMap: kind === void 0 && this.rustWsPlainMapResolve(bound(x)), scalar: scalar || kind === void 0 && boolean(bound(x)) });
         } finally {
           this.rustWsHashEnv = save;
         }
@@ -80615,7 +80619,7 @@ ${iden}}`;
       const recv = this.rustStripWrappers(n.expression.expression);
       if (recv.kind === SyntaxKind7.ThisKeyword) {
         if (name === "cleanUnsubscription")
-          add(n.arguments[2] ?? null, void 0, "other", n);
+          add(n.arguments[2] ?? null, void 0, "other", n, this.rustWsBaseCleanUnsubscription(n));
         else if (name === "loadOrderBook")
           add(n.arguments[1] ?? null, void 0, "book");
         else if (name === "spawn" || name === "delay") {
@@ -80637,6 +80641,27 @@ ${iden}}`;
     });
     this.rustWsResolveTables.set(cls, table);
     return table;
+  }
+  /** ral-80a: a helper's resolved value kept for the tuple-slot proof only when it is an array literal whose elements name
+   *  no parameter of the helper (so reading them outside the caller's bindings reads the same nodes). */
+  rustWsSiteTupleValue(x) {
+    const v = x === void 0 ? void 0 : this.rustStripWrappers(x);
+    if (v === void 0 || !isArrayLiteralExpression4(v))
+      return void 0;
+    let param = false;
+    const visit = (n) => {
+      if (isIdentifier3(n) && this.rustDeclarationOfIdentifier(n)?.kind === SyntaxKind7.Parameter)
+        param = true;
+      n.forEachChild?.(visit);
+    };
+    visit(v);
+    return param ? void 0 : v;
+  }
+  /** ral-80a: `this.cleanUnsubscription (..)` bound to the base tier's method, whose only resolve is `client.resolve (true, unsubHash)`
+   *  (a venue override may resolve anything, so it is not this). */
+  rustWsBaseCleanUnsubscription(call) {
+    const callee = this.rustScalarCallee(call);
+    return callee !== void 0 && isMethodDeclaration5(callee) && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(callee.getSourceFile?.()?.fileName ?? ""));
   }
   /** When `site` sits in a method of `cls` with parameters: the parameter bindings of every call of that method
    *  (`this.m (..)`, or `this.spawn (this.m, ..)`), so a hash or value built from a parameter reads each caller's
