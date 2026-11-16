@@ -13357,8 +13357,9 @@ export class RustTranspiler extends BaseTranspiler {
         // fixed-arity method drops a same-named signature left by an earlier file.
         const methods = node.members.filter(m => m.kind === SyntaxKind.MethodDeclaration);
         methods.forEach((method: any) => {
-            const requiredCount = method.parameters.filter(p => (!p.initializer && !p.questionToken) || this.rustVenuePositional(p)).length;
-            if (requiredCount < method.parameters.length) {
+            const printed = this.rustPrintedParams(method);
+            const requiredCount = printed.filter(p => (!p.initializer && !p.questionToken) || this.rustVenuePositional(p)).length;
+            if (requiredCount < printed.length) {
                 this.methodSignatures[method.name.text] = { requiredCount };
             } else if (method.body !== undefined) {
                 delete this.methodSignatures[method.name.text];
@@ -13380,7 +13381,7 @@ export class RustTranspiler extends BaseTranspiler {
             const args = ['&self', ...typed.params.map(p => `${p.name}: ${p.rustType}`)].join(', ');
             return `${this.getIden(identation + 1)}pub fn ${name}(${args}) -> crate::Result<${typed.ret}>`;
         }
-        const params = node.parameters;
+        const params = this.rustPrintedParams(node);
         const requiredParams = params.filter(p => (!p.initializer && !p.questionToken) || this.rustVenuePositional(p));
         const printedParams = requiredParams.map(p => ({ name: (this.rustBookSideParam(p) ? 'mut ' : '') + this.printNode(p.name, 0), rustType: this.rustParamType(p) }));
         if (requiredParams.length < params.length) printedParams.push({ name: 'optional_args', rustType: '&[Value]' });
@@ -15214,7 +15215,7 @@ export class RustTranspiler extends BaseTranspiler {
 
     printMethodDeclaration(node, identation) {
         const methodDef = this.printMethodDefinition(node, identation);
-        const params = node.parameters;
+        const params = this.rustPrintedParams(node);
         const optionalParams = params.filter(p => (p.initializer !== undefined || p.questionToken !== undefined) && !this.rustTypedFilterPositional(p) && !this.rustVenuePositional(p));
 
         // Build optional param initializations
@@ -15782,13 +15783,36 @@ export class RustTranspiler extends BaseTranspiler {
             && !this.rustParamPrintsMap(param) && !this.rustParamPrintsStrVec(param) && !this.rustParamReadsByReference(param);
     }
 
+    /** Parameters a method prints: a sync venue override of a `DerivedExchange` slot drops a trailing run of optional
+     *  parameters its body never names when that leaves exactly the slot's arity (foxbit `parseTransaction (t, currency,
+     *  since, limit)`): the override then matches the slot and is printed once, inside the trait impl. */
+    rustPrintedParams(method: any): any[] {
+        const params: any[] = Array.from(method?.parameters ?? []);
+        if (!isMethodDeclaration(method) || method.body === undefined || !isIdentifier(method.name) || this.isAsyncFunction(method)) return params;
+        const slots = this.rustVirtualDispatch[this.toSnakeCaseName(String(method.name.text))];
+        const file = String(method.getSourceFile?.()?.fileName ?? '').replace(/\\/g, '/');
+        if (slots === undefined || slots.some(rustDispatch.isSlotSlice) || params.length <= slots.length || file.search(/\/ts\/src\/(?:pro\/|prediction\/)?[^/]+\.ts$/) < 0) return params;
+        const extra = params.slice(slots.length);
+        if (extra.some((p: any) => !isIdentifier(p.name) || (p.initializer === undefined && p.questionToken === undefined) || p.dotDotDotToken !== undefined)) return params;
+        const names = new Set(extra.map((p: any) => String(p.name.text)));
+        let named = false;
+        const visit = (n: any) => {
+            if (named) return;
+            // any identifier spelled like a dropped parameter keeps it (a shadowing local included: never a guess)
+            if (isIdentifier(n) && names.has(String(n.text)) && !(isPropertyAccessExpression(n.parent) && n.parent.name === n)) { named = true; return; }
+            n.forEachChild(visit);
+        };
+        method.body.forEachChild(visit);
+        return named ? params : params.slice(0, slots.length);
+    }
+
     /** A venue (not base-tier) method overriding a lent slot with the slot's arity. */
     rustLentSlotOverride(method: any): boolean {
         if (!isMethodDeclaration(method) || method.body === undefined || !isIdentifier(method.name) || this.isAsyncFunction(method)) return false;
         const snake = this.toSnakeCaseName(String(method.name.text));
         const slots = this.rustLentSlots.has(snake) ? this.rustVirtualDispatch[snake] : undefined;
         const file = String(method.getSourceFile?.()?.fileName ?? '').replace(/\\/g, '/');
-        return slots !== undefined && method.parameters.length === slots.length && file.search(/\/ts\/src\/(?:pro\/|prediction\/)?[^/]+\.ts$/) >= 0
+        return slots !== undefined && this.rustPrintedParams(method).length === slots.length && file.search(/\/ts\/src\/(?:pro\/|prediction\/)?[^/]+\.ts$/) >= 0
             && this.rustTypedSignature(method) === undefined && !this.rustMethodReferencedAsValue(method);
     }
 
@@ -15798,7 +15822,7 @@ export class RustTranspiler extends BaseTranspiler {
         const slots = this.rustVirtualDispatch[this.toSnakeCaseName(String(method.name.text))];
         const file = String(method.getSourceFile?.()?.fileName ?? '').replace(/\\/g, '/');
         // a trailing slice slot takes the optional parameters, so the method has at least the slots before it
-        const arity = slots !== undefined && slots.length > 0 && rustDispatch.isSlotSlice(slots[slots.length - 1]) ? method.parameters.length >= slots.length - 1 : method.parameters.length === slots?.length;
+        const arity = slots !== undefined && slots.length > 0 && rustDispatch.isSlotSlice(slots[slots.length - 1]) ? method.parameters.length >= slots.length - 1 : this.rustPrintedParams(method).length === slots?.length;
         return slots !== undefined && arity && file.search(/\/ts\/src\/(?:pro\/|prediction\/)?[^/]+\.ts$/) >= 0;
     }
 

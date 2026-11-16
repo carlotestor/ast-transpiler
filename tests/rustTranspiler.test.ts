@@ -10386,6 +10386,28 @@ describe('rust by-name dispatch signature table', () => {
         expect(out).toMatch(/pub fn other\(&self\)[^]*?self\.nonce\(\)/);
     });
 
+    test('a slot override with trailing optional parameters its body never names prints the slot arity (lifts into the trait impl)', () => {
+        const cfg = { 'virtualDispatch': { parse_transaction: [ 'transaction', 'currency' ] }, 'lentSlots': [ 'parse_transaction' ], 'parser': { 'NUM_LINES_END_FILE': 0 } };
+        const t = new Transpiler({ 'verbose': false, 'rust': cfg });
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-slotarity-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), 'export type Dict = { [key: string]: any };\nexport default class Exchange {\n'
+            + '    parseTransaction (transaction: Dict, currency: any = undefined): any { return transaction; }\n}\n');
+        const venue = path.join(root, 'ts/src/venue.ts');
+        fs.writeFileSync(venue, "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n"
+            + "    override parseTransaction (transaction: any, currency: any = undefined, since: number = undefined, limit: number = undefined): any { return { 'info': transaction, 'c': currency }; }\n"
+            + "    load (): any { const r = { 'a': 1 }; return this.parseTransaction (r); }\n}\n");
+        const out = t.transpileRustByPath(venue).content;
+        expect(out).toContain('let currency = get_arg(optional_args, 0, Value::Null);');
+        expect(out).not.toMatch(/let (?:since|limit) = get_arg/);
+        expect(out).toContain('<Self as crate::exchange::DerivedExchange>::parse_transaction(self, ');
+        // a body that names a trailing parameter keeps it in the slice
+        const used = path.join(root, 'ts/src/used.ts');
+        fs.writeFileSync(used, "import Exchange from './base/Exchange.js';\nexport default class used extends Exchange {\n"
+            + "    override parseTransaction (transaction: any, currency: any = undefined, since: number = undefined): any { return { 'info': transaction, 's': since }; }\n}\n");
+        expect(t.transpileRustByPath(used).content).toContain('let since = get_arg(optional_args, 1, Value::Null);');
+    });
+
     test('the call printer names the trait path itself (no splice into printed call text)', () => {
         const cfg = { 'virtualDispatch': { nonce: [], sign: [ 'path', 'optional_args: &[Value]' ], parse_order: [ 'order', 'market' ] }, 'lentSlots': [ 'parse_order' ], 'parser': { 'NUM_LINES_END_FILE': 0 } };
         const t = new Transpiler({ 'verbose': false, 'rust': cfg });
