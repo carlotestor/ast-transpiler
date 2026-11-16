@@ -51587,6 +51587,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // `x = y` from a typed `Option<..>` local of the same kind that is never read after the write moves the
     // payload out (`x = y.take()`): no copy, and the dead source is left `None`.
     this.rustNilAliasMoves = /* @__PURE__ */ new WeakSet();
+    /** ral-76a S1: `return x` of the method's own local that another rule already prints `Option<String>` (a `safeString`
+     *  read, checker `string | undefined`): under a `: Str` signature it is the payload itself, so the method prints
+     *  `-> Option<String>` and its callers' string locals read it natively. Decided from the AST and the local's own rule. */
+    this.rust76aS1Off = false;
     this.rustOwnNameSkip = false;
     /** ral-52i: set only while the built-list rule walks its uses. */
     this.rustDisjointShadowSkip = false;
@@ -55064,10 +55068,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     return this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name)) === "string";
   }
-  /** ral-76a S1: `return x` of the method's own local that another rule already prints `Option<String>` (a `safeString`
-   *  read, checker `string | undefined`): under a `: Str` signature it is the payload itself, so the method prints
-   *  `-> Option<String>` and its callers' string locals read it natively. Decided from the AST and the local's own rule. */
   rust76aOptStrReturnLocal(n, fn) {
+    if (this.rust76aS1Off)
+      return false;
     if (n === void 0 || !_is.isIdentifier.call(void 0, n) || !_is.isReturnStatement.call(void 0, n.parent) || _chunkC7C726CWcjs.findAncestor.call(void 0, n.parent.parent, _chunkC7C726CWcjs.isFunctionLike) !== fn)
       return false;
     const declaration = this.rustDeclaredNode(n);
@@ -55096,6 +55099,15 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   /** ral-76a S1: the method prints `-> Option<String>` only because a return is its own reader local (rust76aOptStrReturnLocal). */
   rust76aOptStrReturnMethod(fn) {
     if (fn === void 0 || fn.kind !== _ast.SyntaxKind.MethodDeclaration || fn.body === void 0 || this.rustNativeStrReturnKind(fn) !== "str")
+      return false;
+    this.rust76aS1Off = true;
+    let without;
+    try {
+      without = this.rust57xStrReturnMethod(fn);
+    } finally {
+      this.rust76aS1Off = false;
+    }
+    if (without)
       return false;
     let hit = false;
     const visit = (n) => {

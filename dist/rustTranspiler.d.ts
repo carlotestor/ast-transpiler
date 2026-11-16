@@ -512,6 +512,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-76a S1: `return x` of the method's own local that another rule already prints `Option<String>` (a `safeString`
      *  read, checker `string | undefined`): under a `: Str` signature it is the payload itself, so the method prints
      *  `-> Option<String>` and its callers' string locals read it natively. Decided from the AST and the local's own rule. */
+    private rust76aS1Off;
     rust76aOptStrReturnLocal(n: any, fn: any): boolean;
     /** ral-76a S1: the method prints `-> Option<String>` only because a return is its own reader local (rust76aOptStrReturnLocal). */
     rust76aOptStrReturnMethod(fn: any): boolean;
