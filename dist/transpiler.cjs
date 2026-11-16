@@ -74315,6 +74315,8 @@ ${iden}}`;
         return ++lentResponses > 0 && ++reads > 0;
       if (from === "dict" && _is.isCallExpression.call(void 0, up) && this.rustLentParamsSlot(up, n) && (extendReuse || init !== void 0 && _is.isCallExpression.call(void 0, init) && this.rustBuiltReturnSourceKind(init) === "dict"))
         return ++reads > 0;
+      if (sbAlias && !nilDeclared && from === "dict" && _is.isCallExpression.call(void 0, up) && this.rustLentParamsSlot(up, n) && !this.rustTestTierSource(n))
+        return ++reads > 0;
       if (from === "dict" && this.rustJwtRequestSlot(up, n))
         return ++jwtLends > 0 && ++reads > 0;
       if (this.rustOptAliasTargetUse(n, declaration, fn))
