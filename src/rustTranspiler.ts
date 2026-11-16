@@ -21613,6 +21613,8 @@ export class RustTranspiler extends BaseTranspiler {
         const d: any = this.rustDeclarationOfIdentifier(rhs);
         if (d === undefined || !isVariableDeclaration(d) || d.name === rhs || !isIdentifier(d.name) || this.rustEnclosingFunction(d) !== fn) return undefined;
         const list: any = d.parent;
+        // ral-61i: a nil-declared `let` whose every write is a declared `Promise<Dict>` endpoint (syntactic proof)
+        if (list?.kind === SyntaxKind.VariableDeclarationList && list.declarations?.length === 1 && (list.flags & NodeFlags.Const) === 0 && this.rustDeclaredDictEndpointLet(d)) return 'dict';
         if (list?.kind !== SyntaxKind.VariableDeclarationList || list.declarations?.length !== 1 || (list.flags & NodeFlags.Const) === 0) return undefined;
         const init: any = this.rustSkipWrappers(d.initializer);
         if (init === undefined || !isCallExpression(init) || !isPropertyAccessExpression(init.expression) || init.expression.expression.kind !== SyntaxKind.ThisKeyword) return undefined;
@@ -21624,6 +21626,38 @@ export class RustTranspiler extends BaseTranspiler {
         if (init.arguments.length > at && this.literalKindOfNode(this.rustSkipWrappers(init.arguments[at])) !== 'null') return undefined;
         if (String(init.getText()).split('\n')[0].length > 240) return undefined;
         return kind;
+    }
+
+    /** ral-61i: `let x = undefined` / `let x: T;` (a statement, one declarator) written only as statements `x = await this.<endpoint> (..)`
+     *  of REST endpoints declared `Promise<Dict>` (or `x = undefined`): the optional map the declared-endpoint rule holds. */
+    rustDeclaredDictEndpointLet(d: any): boolean {
+        const init: any = this.rustSkipWrappers(d.initializer);
+        if (init !== undefined && this.literalKindOfNode(init) !== 'null') return false;
+        if (d.parent?.parent?.kind !== SyntaxKind.VariableStatement || this.rustTestTierSource(d)) return false;
+        const fn: any = this.rustEnclosingFunction(d);
+        if (fn === undefined || isSourceFile(fn)) return false;
+        const name = String(d.name.text);
+        let writes = 0;
+        let ok = true;
+        const visit = (n: any) => {
+            if (!ok) return;
+            if (isIdentifier(n) && String(n.text) === name && n !== d.name && !this.rustIdentifierIsPropertyName(n) && this.rustIdentifierRefersToDeclaration(n, d)) {
+                const up: any = n.parent;
+                if (isBinaryExpression(up) && up.left === n) {
+                    if (up.operatorToken.kind !== SyntaxKind.EqualsToken || up.parent?.kind !== SyntaxKind.ExpressionStatement) { ok = false; return; }
+                    const rhs: any = this.rustSkipWrappers(up.right);
+                    if (this.literalKindOfNode(rhs) === 'null') return;
+                    if (rhs?.kind !== SyntaxKind.AwaitExpression || !this.rustDeclaredEndpointWrite(rhs)) { ok = false; return; }
+                    const call: any = this.rustSkipWrappers(rhs.expression);
+                    if (this.rustDeclaredEndpointKind(call) !== 'dict') { ok = false; return; }
+                    writes++;
+                }
+                return;
+            }
+            n.forEachChild(visit);
+        };
+        visit(fn);
+        return ok && writes > 0;
     }
 
     /** The source side: `t = n` (statement) whose target `t` holds the optional form of n's kind through rustOptAliasSourceKind. */
