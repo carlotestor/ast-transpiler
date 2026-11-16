@@ -34327,6 +34327,7 @@ function ccxtGoUnwrapTypeOnly (node) {
 export interface GoTranspiler {
     goClientFuturesTable(node): boolean;
     goClientFutureReadKey(initializer): Node | undefined;
+    goClientFutureCheckerStringKey(key): boolean;
     goClientFutureLocal(declaration): boolean;
     goClientFutureLocalCache: WeakMap<object, boolean>;
 }
@@ -34363,7 +34364,16 @@ GoTranspiler.prototype.goClientFutureReadKey = function (initializer) {
     if ((key.kind === SyntaxKind.StringLiteral) || ((key.kind === SyntaxKind.Identifier) && this.goIsStringKeyExpression(key))) {
         return key;
     }
+    // 87g3 R1: a key the checker types `string` that Go still boxes (an untyped parameter, a *string reader
+    // result) reads through the typed FutureTyped twin, which keys like FutureGet (subsKey) but answers *Future
+    if ((key.kind === SyntaxKind.Identifier) && this.goClientFutureCheckerStringKey(key)) {
+        return key;
+    }
     return undefined;
+};
+GoTranspiler.prototype.goClientFutureCheckerStringKey = function (key) {
+    const type = this.checkerOrUndefined()?.getTypeAtLocation(key);
+    return (type !== undefined) && ((type.flags & TypeFlags.String) !== 0);
 };
 GoTranspiler.prototype.goClientFutureLocal = function (declaration) {
     if ((declaration?.kind !== SyntaxKind.VariableDeclaration) || (declaration.name?.kind !== SyntaxKind.Identifier)
@@ -34424,6 +34434,9 @@ GoTranspiler.prototype.goClientFutureLocal = function (declaration) {
         if ((node?.declarations?.length === 1) && this.goClientFutureLocal(declaration)) {
             const key = this.goClientFutureReadKey(declaration.initializer);
             if (this.getGoLocalType(declaration, '') === '*Future') {
+                if ((key.kind !== SyntaxKind.StringLiteral) && !this.goIsStringKeyExpression(key)) {
+                    return `${this.getIden(identation)}var ${this.printNode(declaration.name, 0)} *Future = client.(ClientInterface).FutureTyped(${this.printNode(key, 0)})`;
+                }
                 return `${this.getIden(identation)}var ${this.printNode(declaration.name, 0)} *Future = client.Futures[${this.printNode(key, 0)}]`;
             }
         }

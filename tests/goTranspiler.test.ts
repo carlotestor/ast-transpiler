@@ -15014,3 +15014,28 @@ describe('84g7 R2 int64 pointer arm next to an int arm', () => {
         expect(out).toContain('var since *int64 = GetArgInt64Ptr(optionalArgs, 0, nil)');
     });
 });
+
+describe('go 87g3 client futures read with a boxed string key', () => {
+    const root = fs.mkdtempSync (path.join (os.tmpdir (), 'go87g3-'));
+    const src = path.join (root, 'ts', 'src');
+    fs.mkdirSync (path.join (src, 'base', 'ws'), { recursive: true });
+    fs.mkdirSync (path.join (src, 'pro'), { recursive: true });
+    fs.writeFileSync (path.join (src, 'base', 'Exchange.ts'), "export class Exchange {\n    safeValue (o, k, d = undefined) { return o; }\n}\n");
+    fs.writeFileSync (path.join (src, 'base', 'ws', 'Client.ts'), "export default class Client {\n    futures: any = {};\n    subscriptions: any = {};\n}\n");
+    const goPath = (body: string) => {
+        const file = path.join (src, 'pro', 'ex.ts');
+        fs.writeFileSync (file, "import { Exchange } from '../base/Exchange';\nimport Client from '../base/ws/Client';\n" + body);
+        return new Transpiler ({ verbose: false, go: {} }).transpileGoByPath (file).content;
+    };
+    afterAll (() => fs.rmSync (root, { recursive: true, force: true }));
+    test ('a string-typed parameter key reads the typed FutureTyped twin', () => {
+        const out = goPath ("export class ex extends Exchange {\n    async loadSnapshot (client: Client, messageHash: string) {\n        if (messageHash in client.futures) {\n            const future = this.safeValue (client.futures, messageHash);\n            future.resolve (true);\n        }\n    }\n}\n");
+        expect (out).toContain ('var future *Future = client.(ClientInterface).FutureTyped(messageHash)');
+        expect (out).toContain ('future.Resolve(true)');
+    });
+    test ('an untyped key keeps the box', () => {
+        const out = goPath ("export class ex extends Exchange {\n    async loadSnapshot (client: Client, messageHash) {\n        const future = client.futures[messageHash];\n        future.resolve (true);\n    }\n}\n");
+        expect (out).toContain ('var future any = ');
+        expect (out).toContain ('future.(*Future).Resolve(true)');
+    });
+});
