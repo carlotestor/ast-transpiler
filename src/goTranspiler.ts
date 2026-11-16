@@ -33822,7 +33822,7 @@ GoTranspiler.prototype.goReusableFutureLocal = function (declaration) {
         const operand: any = node.expression;
         if (operand?.kind === SyntaxKind.Identifier) {
             const declaration: any = this.checkerOrUndefined()?.getSymbolAtLocation(operand)?.valueDeclaration?.resolve?.();
-            if (this.goReusableFutureLocal(declaration) && (this.goDeclaredTypeOfIdentifier(operand) === '*Future')) {
+            if ((this.goReusableFutureLocal(declaration) || this.goClientFutureLocal(declaration)) && (this.goDeclaredTypeOfIdentifier(operand) === '*Future')) {
                 return `(<-${this.printNode(operand, 0)}.Await())`;
             }
         }
@@ -34373,7 +34373,16 @@ GoTranspiler.prototype.goClientFutureReadKey = function (initializer) {
 };
 GoTranspiler.prototype.goClientFutureCheckerStringKey = function (key) {
     const type = this.checkerOrUndefined()?.getTypeAtLocation(key);
-    return (type !== undefined) && ((type.flags & TypeFlags.String) !== 0);
+    if (type === undefined) {
+        return false;
+    }
+    if ((type.flags & TypeFlags.String) !== 0) {
+        return true;
+    }
+    // 87g3 R2: `string | undefined` (a Str reader result): FutureTyped's subsKey answers nil for a nil key, like FutureGet
+    const parts = type.isUnionType() ? type.getTypes() : [];
+    return parts.some((t) => (t.flags & TypeFlags.String) !== 0)
+        && parts.every((t) => (t.flags & (TypeFlags.String | TypeFlags.Undefined | TypeFlags.Null)) !== 0);
 };
 GoTranspiler.prototype.goClientFutureLocal = function (declaration) {
     if ((declaration?.kind !== SyntaxKind.VariableDeclaration) || (declaration.name?.kind !== SyntaxKind.Identifier)
@@ -34410,6 +34419,9 @@ GoTranspiler.prototype.goClientFutureLocal = function (declaration) {
                     && ((parent.name?.text === 'resolve') || (parent.name?.text === 'reject'))
                     && (parent.parent?.kind === SyntaxKind.CallExpression) && (parent.parent.expression === parent)) {
                     return false;
+                }
+                if ((parent?.kind === SyntaxKind.AwaitExpression) && (parent.expression === n)) {
+                    return false; // 87g3 R2: prints the native receive `(<-f.Await())`
                 }
                 return !this.goIsNilComparisonOperand(n, parent);
             });
