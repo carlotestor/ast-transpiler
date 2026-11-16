@@ -20794,3 +20794,15 @@ describe('ral-62p: a base handleOption with a bool literal default (cast or anno
         expect(out).toContain('let mut c: Value = ');
     });
 });
+
+describe('ral-62p: a base parseDate result is an Option<i64>', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nconst parseDate = (x) => {\n    if (typeof x !== 'string' || !x) {\n        return undefined;\n    }\n    return Date.parse (x);\n};\nexport default class Exchange {\n    parseDate = parseDate;\n    safeString (o: any, k: any, d: Str = undefined): Str { return d; }\n    iso8601 (t: any): Str { return t; }\n}\n";
+    test('declared from parseDate, boxed into a dict and handed to iso8601 (foxbit / paymium parse*)', () => {
+        const dir = path.join (rustFixtureRoot, 'ral-62p-parse-date');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parseThing (t: Dict): Dict {\n        const timestamp = this.parseDate (this.safeString (t, 'created_at'));\n        return {\n            'timestamp': timestamp,\n            'datetime': this.iso8601 (timestamp),\n        };\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toMatch(/let mut timestamp: Option<i64> = self\.parse_?[dD]ate\(.*\)\.as_i64\(\);/);
+    });
+});

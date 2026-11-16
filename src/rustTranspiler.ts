@@ -5523,6 +5523,8 @@ export class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_BASE_SCALAR_RETURNS: { [name: string]: string } = {
         safeCurrencyCode: 'ostr', safeSymbol: 'ostr', numberToString: 'ostr', iso8601: 'ostr',
         networkIdToCode: 'ostr', marketId: 'ostr', currencyId: 'ostr', milliseconds: 'oint', seconds: 'oint',
+        // ral-62p: the hand-written `parse_date` answers `Value::Int` (epoch ms) or `Value::Null`, the TS `number | undefined`
+        parseDate: 'oint',
     };
 
     /** Base `parseNumber(s)` with no default over a string (literal, string local, `Precise.string*`): the
