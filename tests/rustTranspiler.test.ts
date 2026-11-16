@@ -24254,3 +24254,24 @@ describe('ral-84d R2/R3: a defaulted safeDict copy of this.options (or a native-
         expect(out).toMatch(/let (?:mut )?subscriptions: Value = /);
     });
 });
+
+describe('ral-84d R4: an Array.isArray-tested safeValue local reads its length in the list arm', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    safeValue (o: any, k: any, d: any = undefined): any { return o; }\n    safeString (o: any, k: any, d: any = undefined): string { return o; }\n    keep (o: any): any { return o; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        transpiler.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts'));
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('bithumb urlencodeWithArrayBrackets: loop over value.length inside the arm', () => {
+        const out = write ('ral-84d-r4a', "    m (query: Dict, key: string): string {\n        let result = '';\n        const value = this.safeValue (query, key);\n        if (Array.isArray (value)) {\n            for (let j = 0; j < value.length; j++) {\n                result += this.safeString (value, j);\n            }\n        } else {\n            result += this.safeString (query, key);\n        }\n        return result;\n    }\n");
+        expect(out).toContain('let mut value: Option<crate::value::List> = ');
+        expect(out).toContain('value.as_deref().map(Vec::as_slice).unwrap_or_default().len()');
+    });
+    test('negative: a length read outside the arm keeps the local Value', () => {
+        const out = write ('ral-84d-r4n', "    m (query: Dict, key: string): number {\n        const value = this.safeValue (query, key);\n        if (Array.isArray (value)) {\n            return this.keep (value);\n        }\n        return value.length;\n    }\n");
+        expect(out).toMatch(/let (?:mut )?value: Value = /);
+    });
+});

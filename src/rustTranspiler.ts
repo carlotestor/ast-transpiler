@@ -31263,7 +31263,8 @@ export class RustTranspiler extends BaseTranspiler {
                 if (this.rustSafeValueKeyReaderUse(n)) { mapReads++; this.rustOptListBoxes.set(n, 'map'); return true; }
                 // every other use reads the list, so it must sit where `Array.isArray (x)` held
                 if (!this.rust80dInListArm(n, declaration, fn)) return false;
-                if (isBinaryExpression(use) || isPropertyAccessExpression(use)) return false;
+                // ral-84d R4: a `.length` read in the list arm reads the held list's slice (Some there: the boxed length)
+                if (isBinaryExpression(use) || (isPropertyAccessExpression(use) && !(use.expression === n && String(use.name.text) === 'length'))) return false;
             }
             if (this.rustIdentifierIsPropertyName(n)) return !(n.parent?.kind === SyntaxKind.ShorthandPropertyAssignment && n.parent.name === n);
             if (!this.rustIdentifierRefersToDeclaration(n, declaration) || this.rustEnclosingFunction(n) !== fn) return false;
