@@ -41046,6 +41046,35 @@ GoTranspiler.prototype.goSafeDictMapPredictionAsWs = false;
     return useKeepsMap.call(this, ref, rebinds, noDefault, ws, name);
   };
 }
+GoTranspiler.prototype.goSafeListEmptyDefaultLocals = /* @__PURE__ */ new WeakSet();
+{
+  const listUnbox = GoTranspiler.prototype.goSafeListLocalUnboxUncached;
+  GoTranspiler.prototype.goSafeListLocalUnboxUncached = function(declaration) {
+    const shipped = listUnbox.call(this, declaration);
+    if (shipped !== void 0) {
+      return shipped;
+    }
+    const call = declaration.initializer;
+    const fallback = call?.arguments?.[2];
+    if (this.goSourceTreeKind(declaration) !== "rest" || this.goSafeListLocalArgs(call) === void 0 || call.arguments.length !== 3 || fallback?.kind !== SyntaxKind5.ArrayLiteralExpression || fallback.elements.length !== 0) {
+      return void 0;
+    }
+    const typed = this.goDeclaredLocalTypeIfSafe(declaration, GO_SAFE_LIST_LOCAL_TYPE, (n) => this.goListLocalSinkReadsAsList(n, true));
+    if (typed !== void 0) {
+      this.goSafeListEmptyDefaultLocals.add(declaration);
+    }
+    return typed;
+  };
+  const listValue = GoTranspiler.prototype.goSafeListUnboxValue;
+  GoTranspiler.prototype.goSafeListUnboxValue = function(declaration, identation) {
+    const printed = listValue.call(this, declaration, identation);
+    if (printed === void 0 || !this.goSafeListEmptyDefaultLocals.has(declaration)) {
+      return printed;
+    }
+    const args = this.goSafeListLocalArgs(declaration.initializer);
+    return `SafeListTypedDefault(${this.printNode(args.container, identation)}, ${this.printNode(args.key, 0)}, []any{})`;
+  };
+}
 
 // src/javaTranspiler.ts
 init_esm_shims();

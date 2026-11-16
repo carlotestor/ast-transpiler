@@ -1971,3 +1971,6 @@ export interface GoTranspiler {
 export interface GoTranspiler {
     goSafeDictMapPredictionAsWs: boolean;
 }
+export interface GoTranspiler {
+    goSafeListEmptyDefaultLocals: WeakSet<object>;
+}
