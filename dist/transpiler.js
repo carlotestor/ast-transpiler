@@ -81916,11 +81916,11 @@ ${iden}}`;
     const block = statement.parent;
     const statements = Array.from(block?.statements ?? []);
     let at = statements.indexOf(statement) + 1;
-    while (at < statements.length && statements[at].kind === SyntaxKind7.VariableStatement && !mentions(statements[at]))
+    while (at < statements.length && !mentions(statements[at]))
       at++;
     const first = statements[at];
     const write = first?.kind === SyntaxKind7.ExpressionStatement ? first.expression : void 0;
-    if (!isBinaryExpression5(write) || !isArrayLiteralExpression4(write.left) || write.operatorToken.kind !== SyntaxKind7.EqualsToken || mentions(write.right))
+    if (write === void 0 || !isBinaryExpression5(write) || !isArrayLiteralExpression4(write.left) || write.operatorToken.kind !== SyntaxKind7.EqualsToken || mentions(write.right))
       return false;
     const slot = write.left.elements.find((e) => isIdentifier3(e) && e.text === name);
     if (slot === void 0 || this.rustDeclaredNode(slot) !== declaration || !this.rustDictSlotOfWrite(slot))
@@ -81940,7 +81940,7 @@ ${iden}}`;
         if (up.operatorToken.kind !== SyntaxKind7.EqualsToken || up.parent?.kind !== SyntaxKind7.ExpressionStatement)
           return false;
         const rhs = this.rustSkipWrappers(up.right);
-        return isCallExpression6(rhs) && rhs.arguments.length === 2 && isIdentifier3(rhs.arguments[0]) && rhs.arguments[0].text === name && this.rustBaseCallNamed(rhs, _RustTranspiler.RUST_HANDED_DICT_OMIT);
+        return isCallExpression6(rhs) && (rhs.arguments.length === 2 && isIdentifier3(rhs.arguments[0]) && rhs.arguments[0].text === name && this.rustBaseCallNamed(rhs, _RustTranspiler.RUST_HANDED_DICT_OMIT) || this.rustBaseCallNamed(rhs, _RustTranspiler.RUST_ALWAYS_MAP_HELPERS) && String(up.getText()).length <= 240);
       }
       return true;
     });
@@ -83261,6 +83261,9 @@ ${iden}}`;
   // tested with a literal `in`, or handed whole to an alias, a ternary arm or a `Value` local write (boxed there).
   /** `native` for a literal-key read / statement write / `in` test of a params slot, `box` for a whole-value hand-off. */
   rustMutableSlotUse(n, declaration) {
+    if (isVariableDeclaration3(declaration) && this.rustDeclaredNode(n) === declaration && n !== declaration.name && this.rustNilSlotDictCandidate(declaration)) {
+      return this.rustDictKeyReadUse(n) || this.rustUntilHeadKeyWrite(n) !== void 0 ? "native" : void 0;
+    }
     if (declaration?.kind !== SyntaxKind7.BindingElement || this.rustDeclaredNode(n) !== declaration)
       return void 0;
     const up = n.parent;
@@ -83288,7 +83291,7 @@ ${iden}}`;
   }
   rustMutableDictSlot(declaration) {
     if (declaration?.kind === SyntaxKind7.VariableDeclaration)
-      return this.rustBorrowedLocalKind(declaration) === "dict" && this.rustMutableBuiltLocals.has(declaration);
+      return this.rustBorrowedLocalKind(declaration) === "dict" && this.rustMutableBuiltLocals.has(declaration) || this.rustNilSlotDictLocal(declaration);
     return declaration?.kind === SyntaxKind7.BindingElement && this.rustHandedDictLocal(declaration);
   }
   /** `ostr` for a string slot read through the scalar forms: tests, `format!` concats, string methods, typed

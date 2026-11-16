@@ -81915,11 +81915,11 @@ ${iden}}`;
     const block = statement.parent;
     const statements = Array.from(_nullishCoalesce(_optionalChain([block, 'optionalAccess', _10893 => _10893.statements]), () => ( [])));
     let at = statements.indexOf(statement) + 1;
-    while (at < statements.length && statements[at].kind === _ast.SyntaxKind.VariableStatement && !mentions(statements[at]))
+    while (at < statements.length && !mentions(statements[at]))
       at++;
     const first = statements[at];
     const write = _optionalChain([first, 'optionalAccess', _10894 => _10894.kind]) === _ast.SyntaxKind.ExpressionStatement ? first.expression : void 0;
-    if (!_is.isBinaryExpression.call(void 0, write) || !_is.isArrayLiteralExpression.call(void 0, write.left) || write.operatorToken.kind !== _ast.SyntaxKind.EqualsToken || mentions(write.right))
+    if (write === void 0 || !_is.isBinaryExpression.call(void 0, write) || !_is.isArrayLiteralExpression.call(void 0, write.left) || write.operatorToken.kind !== _ast.SyntaxKind.EqualsToken || mentions(write.right))
       return false;
     const slot = write.left.elements.find((e) => _is.isIdentifier.call(void 0, e) && e.text === name);
     if (slot === void 0 || this.rustDeclaredNode(slot) !== declaration || !this.rustDictSlotOfWrite(slot))
@@ -81939,7 +81939,7 @@ ${iden}}`;
         if (up.operatorToken.kind !== _ast.SyntaxKind.EqualsToken || _optionalChain([up, 'access', _10895 => _10895.parent, 'optionalAccess', _10896 => _10896.kind]) !== _ast.SyntaxKind.ExpressionStatement)
           return false;
         const rhs = this.rustSkipWrappers(up.right);
-        return _is.isCallExpression.call(void 0, rhs) && rhs.arguments.length === 2 && _is.isIdentifier.call(void 0, rhs.arguments[0]) && rhs.arguments[0].text === name && this.rustBaseCallNamed(rhs, _RustTranspiler.RUST_HANDED_DICT_OMIT);
+        return _is.isCallExpression.call(void 0, rhs) && (rhs.arguments.length === 2 && _is.isIdentifier.call(void 0, rhs.arguments[0]) && rhs.arguments[0].text === name && this.rustBaseCallNamed(rhs, _RustTranspiler.RUST_HANDED_DICT_OMIT) || this.rustBaseCallNamed(rhs, _RustTranspiler.RUST_ALWAYS_MAP_HELPERS) && String(up.getText()).length <= 240);
       }
       return true;
     });
@@ -83260,6 +83260,9 @@ ${iden}}`;
   // tested with a literal `in`, or handed whole to an alias, a ternary arm or a `Value` local write (boxed there).
   /** `native` for a literal-key read / statement write / `in` test of a params slot, `box` for a whole-value hand-off. */
   rustMutableSlotUse(n, declaration) {
+    if (_is.isVariableDeclaration.call(void 0, declaration) && this.rustDeclaredNode(n) === declaration && n !== declaration.name && this.rustNilSlotDictCandidate(declaration)) {
+      return this.rustDictKeyReadUse(n) || this.rustUntilHeadKeyWrite(n) !== void 0 ? "native" : void 0;
+    }
     if (_optionalChain([declaration, 'optionalAccess', _11053 => _11053.kind]) !== _ast.SyntaxKind.BindingElement || this.rustDeclaredNode(n) !== declaration)
       return void 0;
     const up = n.parent;
@@ -83287,7 +83290,7 @@ ${iden}}`;
   }
   rustMutableDictSlot(declaration) {
     if (_optionalChain([declaration, 'optionalAccess', _11062 => _11062.kind]) === _ast.SyntaxKind.VariableDeclaration)
-      return this.rustBorrowedLocalKind(declaration) === "dict" && this.rustMutableBuiltLocals.has(declaration);
+      return this.rustBorrowedLocalKind(declaration) === "dict" && this.rustMutableBuiltLocals.has(declaration) || this.rustNilSlotDictLocal(declaration);
     return _optionalChain([declaration, 'optionalAccess', _11063 => _11063.kind]) === _ast.SyntaxKind.BindingElement && this.rustHandedDictLocal(declaration);
   }
   /** `ostr` for a string slot read through the scalar forms: tests, `format!` concats, string methods, typed
