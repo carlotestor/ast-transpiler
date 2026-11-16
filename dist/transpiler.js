@@ -82508,11 +82508,6 @@ ${iden}}`;
           handOffs++;
           return true;
         }
-        if (up?.kind === SyntaxKind7.PropertyAssignment && up.initializer === n && short(n) && this.rust84bLiteralValueShared(n, declaration)) {
-          boxes.push([n, "clone"]);
-          handOffs++;
-          return true;
-        }
         if (this.rustBuiltListValueAliasWrite(n, declaration) && short(n)) {
           boxes.push([n, "clone"]);
           handOffs++;
@@ -82658,18 +82653,6 @@ ${iden}}`;
       }
     }
     return true;
-  }
-  /** ral-84b: the literal value `n` of a built list sits in the list's own block nesting (no loop or closure between the
-   *  declaration and it), and the object literal holding it is not itself the list's own write. */
-  rust84bLiteralValueShared(node, declaration) {
-    if (this.rustTestTierSource(node))
-      return false;
-    for (let up = node.parent; up !== void 0 && !(up.pos <= declaration.pos && declaration.end <= up.end); up = up.parent) {
-      if (isFunctionLike(up) || up.kind === SyntaxKind7.ForStatement || up.kind === SyntaxKind7.ForOfStatement || up.kind === SyntaxKind7.ForInStatement || up.kind === SyntaxKind7.WhileStatement || up.kind === SyntaxKind7.DoStatement)
-        return false;
-    }
-    const literal2 = node.parent?.parent;
-    return isObjectLiteralExpression4(literal2) && !(isBinaryExpression5(literal2.parent) && isIdentifier3(literal2.parent.left) && this.rustIdentifierRefersToDeclaration(literal2.parent.left, declaration));
   }
   /** `this.inArray (needle, x)` (haystack), `this.arrayConcat (a, b)` (either operand) on the base helpers, or the row of a
    *  `stored.append (x)` statement on a ws cache local: hand-written slots taking `impl Into<Value>`. */

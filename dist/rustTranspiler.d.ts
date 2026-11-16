@@ -4340,9 +4340,6 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBuiltListSelfWrapWrite(write: any, declaration: any): boolean;
     /** ral-tf: no later statement of the function pushes to or writes the list, and the use is in no loop or closure. */
     rustBuiltListFrozenAfter(node: any, declaration: any, name: string): boolean;
-    /** ral-84b: the literal value `n` of a built list sits in the list's own block nesting (no loop or closure between the
-     *  declaration and it), and the object literal holding it is not itself the list's own write. */
-    rust84bLiteralValueShared(node: any, declaration: any): boolean;
     /** `this.inArray (needle, x)` (haystack), `this.arrayConcat (a, b)` (either operand) on the base helpers, or the row of a
      *  `stored.append (x)` statement on a ws cache local: hand-written slots taking `impl Into<Value>`. */
     rustBuiltListLentHelperSlot(call: any, n: any): 'inArray' | 'arrayConcat' | 'append' | undefined;
