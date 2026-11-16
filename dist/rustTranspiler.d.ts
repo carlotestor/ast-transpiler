@@ -2961,7 +2961,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     nativeEqualityText(node: any): string;
     unwrapParens(node: any): any;
     hasNativeComparisonOperand(node: any): any;
-    printLogicalInBooleanContext(node: any): string;
+    printLogicalInBooleanContext(node: any): any;
     printWhileStatement(node: any, identation: any): string;
     printIfStatement(node: any, identation: any): string;
     printPostFixUnaryExpression(node: any, identation: any): string;
@@ -3858,6 +3858,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustSafeValueKeyReaderUse(n: any): boolean;
     private rustVenueContainerDecisions;
     private static readonly RUST_VENUE_RECORD_NAMES;
+    /** ral-80f: element records that only name a list (`Market` itself is `MarketInterface | undefined`, so never a bare map). */
+    private static readonly RUST_VENUE_LIST_ELEMENT_NAMES;
     rustVenueContainerReturnKind(call: any): {
         kind: 'dict' | 'list';
         nullable: boolean;

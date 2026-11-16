@@ -78140,7 +78140,7 @@ ${iden}}`;
     if (_RustTranspiler.RUST_VENUE_RECORD_NAMES.has(inner))
       return { kind: "dict", nullable: false };
     const elem = /^(\w+)\[\]$/.exec(inner);
-    if (elem !== null && _RustTranspiler.RUST_VENUE_RECORD_NAMES.has(elem[1]))
+    if (elem !== null && (_RustTranspiler.RUST_VENUE_RECORD_NAMES.has(elem[1]) || _RustTranspiler.RUST_VENUE_LIST_ELEMENT_NAMES.has(elem[1])))
       return { kind: "list", nullable: false };
     if (/^\[[^[\]]+\]$/.test(inner) && this.rustTupleLiteralReturns(declaration, inner.slice(1, -1).split(",").length))
       return { kind: "list", nullable: false };
@@ -90554,8 +90554,13 @@ _RustTranspiler.RUST_VENUE_RECORD_NAMES = /* @__PURE__ */ new Set([
   "FundingHistory",
   "FundingRateHistory",
   "Greeks",
-  "Currencies"
+  "Currencies",
+  // ral-80f: the transfer and prediction-order records (maps at runtime, like the unified ones above)
+  "TransferEntry",
+  "PredictionOrder"
 ]);
+/** ral-80f: element records that only name a list (`Market` itself is `MarketInterface | undefined`, so never a bare map). */
+_RustTranspiler.RUST_VENUE_LIST_ELEMENT_NAMES = /* @__PURE__ */ new Set(["Market", "MarketInterface"]);
 // Test-tier readers: the harness `ExchangeOps` readers take `impl KeyRead` like the base ones, so a test's
 // `Value` container argument is lent (`&x`) where the call cloned it.
 _RustTranspiler.RUST_TEST_KEYREAD_READERS = /^safe(?:Value|String|Bool|Dict|List|Number|Integer)$|^safeStringN$/;
