@@ -1355,6 +1355,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-63k: `n` is the whole key of a statement write `x[n] = v` whose receiver is a local declared by a call (never an
      *  object literal: ccxt's literal-map pass keys on the boxed key text), whose value never writes `n` and never names `this`. */
     rust63kLocalFlatHelperKey(n: any): boolean;
+    /** ral-65k: the flat helper write `x[k] = v` (rust63kLocalFlatHelperKey) whose value may read `this`: the key is a
+     *  `String` local initialised by a ternary of two string literals, so its lent box is the very `Str` the `Value` held. */
+    rust65kThisValueOk(write: any): boolean;
     /** ral-63k: `n` is the last key of a statement write `p[..][n] = v` whose chain root is a plain-Dict parameter. */
     rust63kDictParamNestedKey(n: any): boolean;
     /** ral-61k: `n` keys a middle hop of a statement write `this.balance|options[..][n][..] = v`: an element read whose
@@ -1831,6 +1834,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  on a typed ws order-book local whose use there is its `Value` box: `get_value` takes the key as `impl ValueKey`
      *  (`&str` / `Option<&str>` box to the very `Str` / `Null` key the `Value` local held), so the lookup is unchanged. */
     rust64kBookKeyRead(n: any): boolean;
+    /** ral-65k: `n` is the whole key of `r[n]` where `r` is a const typed `Tickers` / `OHLCVsBySymbol` result local read
+     *  through `KeyRead` (printTypedResultElemRead): both impls answer `read(&Value::Str(k))` with `key_read(k)`, so the
+     *  borrowed `String` key reads the very entry the `Value` key did. */
+    rust65kTypedResultKey(n: any): boolean;
     /** ral-64k: the read of a `bkey` use: `get_value(&<book box>, k.as_str() | k.as_deref())`. */
     print64kBookKeyRead(node: any): string | undefined;
     /** Element-access hook: the native read of an `okey` use. */
@@ -2091,6 +2098,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustTypedResultElemKind(init: any): 'vec' | 'map' | 'map2' | undefined;
     /** `xs.length`, `xs[i]` (int literal / int-literal counter) on a Vec result, `xs[k]` (a `Value` key) on a map result. */
     rustTypedResultElemUse(n: any, elem: 'vec' | 'map' | 'map2'): boolean;
+    /** ral-65k: the checker types `k` as plain `string` (no `undefined` / `null` member). */
+    rust65kPlainStringKey(k: any): boolean;
     /** `x` is read only: not written, deleted, updated or called. */
     rustTypedResultReadOnlyAt(x: any): boolean;
     /** Element-access hook: the native read of a typed result element, boxed through its shared record handle. */
