@@ -33393,3 +33393,22 @@ GoTranspiler.prototype.goSafeDictMapPredictionAsWs = false;
         }
     };
 }
+// R2. A statement-level rebinding `x = this.extend (..)` of such a local keeps the map type: the Go
+// BaseExchange.Extend result is a fresh non-nil map[string]any (ExtendMap), so the write prints as it
+// stands (`x = this.Extend(..)`), assignable to the typed local, and no later nil test can differ.
+{
+    const useKeepsMap = GoTranspiler.prototype.goMapLocalUseKeepsMap;
+    GoTranspiler.prototype.goMapLocalUseKeepsMap = function (ref, rebinds, noDefault, ws, name) {
+        const write: any = ref.parent;
+        if ((write?.kind === SyntaxKind.BinaryExpression) && (write.left === ref) && (write.operatorToken?.kind === SyntaxKind.EqualsToken)
+            && (write.parent?.kind === SyntaxKind.ExpressionStatement)) {
+            const right: any = this.goUnwrapParenthesizedNode(write.right);
+            if ((right?.kind === SyntaxKind.CallExpression) && (right.expression?.kind === SyntaxKind.PropertyAccessExpression)
+                && (right.expression.expression?.kind === SyntaxKind.ThisKeyword) && (right.expression.name?.text === 'extend')
+                && (right.arguments.length >= 1) && (right.arguments.length <= 2)) {
+                return true;
+            }
+        }
+        return useKeepsMap.call(this, ref, rebinds, noDefault, ws, name);
+    };
+}

@@ -14130,4 +14130,15 @@ describe ('ral-77g2 reader-result locals', () => {
         expect(run(field, 'ts/src/prediction')).not.toContain('SafeDictMap');
         expect(run(body, 'ts/src/base', 'Exchange.ts')).not.toContain('SafeDictMap');
     });
+    test('R2: a statement-level this.extend rebinding keeps the typed map local', () => {
+        const body = '    f (raw: Dict, params: Dict): any {\n        let d = this.safeDict (raw, "data", {});\n        d = this.extend (d, params);\n        return this.safeString (d, "id");\n    }\n';
+        const out = run(body, 'ts/src');
+        expect(out).toContain('var d map[string]any = this.SafeDictMap(raw, "data", map[string]any{})');
+        expect(out).toContain('d = this.Extend(d, params)');
+        // an extend used as a value, or another call, keeps the box
+        const value = '    f (raw: Dict, params: Dict): any {\n        let d = this.safeDict (raw, "data", {});\n        const e = (d = this.extend (d, params));\n        return e;\n    }\n';
+        expect(run(value, 'ts/src')).not.toContain('SafeDictMap');
+        const other = '    f (raw: Dict, params: Dict): any {\n        let d = this.safeDict (raw, "data", {});\n        d = this.safeString (raw, "x");\n        return d;\n    }\n';
+        expect(run(other, 'ts/src')).not.toContain('SafeDictMap');
+    });
 });
