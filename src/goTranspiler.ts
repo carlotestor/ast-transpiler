@@ -33378,6 +33378,8 @@ const GO_TERNARY_POINTEE: { [pointer: string]: string } = { '*string': 'string',
 
 export interface GoTranspiler {
     goTernaryJoinParts(declaration): { goType: string, derefTrue: boolean, derefFalse: boolean } | undefined;
+    goTernaryJoinPartsUncached(declaration): { goType: string, derefTrue: boolean, derefFalse: boolean } | undefined;
+    goTernaryJoinHasForeignComparison(declaration, goType: string): boolean;
     goTernaryJoinArmType(node): string | undefined;
     goTernaryJoinConditionDefines(condition, name: string, outcome: boolean): boolean;
     goTernaryJoinDeclaration(statement, declaration, identation: number): string | undefined;
@@ -33445,7 +33447,58 @@ GoTranspiler.prototype.goTernaryJoinConditionDefines = function (condition, name
     return notEqual ? outcome : !outcome;
 };
 
+// one answer per declaration: the arms can first be classified while another local's resolution is in
+// flight (its guard answers undefined), and every reader and the declaration must agree on that answer
+const GO_TERNARY_JOIN_MEMO = new WeakMap<object, { parts: { goType: string, derefTrue: boolean, derefFalse: boolean } | undefined }>();
 GoTranspiler.prototype.goTernaryJoinParts = function (declaration) {
+    if (declaration === undefined) {
+        return undefined;
+    }
+    const memo = GO_TERNARY_JOIN_MEMO.get(declaration);
+    if (memo !== undefined) {
+        return memo.parts;
+    }
+    GO_TERNARY_JOIN_MEMO.set(declaration, { parts: undefined }); // re-entry answers the box
+    let parts = this.goTernaryJoinPartsUncached(declaration);
+    if ((parts !== undefined) && this.goTernaryJoinHasForeignComparison(declaration, parts.goType)) {
+        parts = undefined;
+    }
+    GO_TERNARY_JOIN_MEMO.set(declaration, { parts: parts });
+    return parts;
+};
+
+// a comparison the printer inlines as the Go operator against an operand of another static Go type
+// (`dataLength == pageSize` with an `int` length) compiled only while the local was `any`; keep the box
+GoTranspiler.prototype.goTernaryJoinHasForeignComparison = function (declaration, goType: string): boolean {
+    const scope = this.goEnclosingFunction(declaration);
+    const name = declaration.name;
+    if (scope === undefined) {
+        return true;
+    }
+    return this.hasNodeWhere(scope, (n: any) => {
+        if ((n.kind !== SyntaxKind.Identifier) || (n.text !== name.text) || (n === name)) {
+            return false;
+        }
+        let current: any = n;
+        while (current.parent?.kind === SyntaxKind.ParenthesizedExpression) {
+            current = current.parent;
+        }
+        const parent: any = current.parent;
+        if ((parent?.kind !== SyntaxKind.BinaryExpression) || ((COMPARISON_TOKENS.indexOf(parent.operatorToken.kind) < 0)
+            && (ORDERED_COMPARISON_OPERATORS[parent.operatorToken.kind] === undefined))) {
+            return false;
+        }
+        const other: any = this.goUnwrapParenthesizedNode((parent.left === current) ? parent.right : parent.left);
+        if ((other?.kind === SyntaxKind.NullKeyword) || ((other?.kind === SyntaxKind.Identifier) && (other.text === 'undefined'))
+            || (other?.kind === SyntaxKind.NumericLiteral) || (other?.kind === SyntaxKind.StringLiteral) || this.goIsSignedNumericLiteral(other)) {
+            return false;
+        }
+        const otherType = this.goOperandStaticType(other, this.printNode(other, 0));
+        return (otherType !== undefined) && (otherType !== goType);
+    });
+};
+
+GoTranspiler.prototype.goTernaryJoinPartsUncached = function (declaration) {
     const ternary: any = this.goUnwrapParenthesizedNode(declaration?.initializer);
     if (ternary?.kind !== SyntaxKind.ConditionalExpression) {
         return undefined;
