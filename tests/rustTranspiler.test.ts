@@ -8900,7 +8900,7 @@ describe('rust reader default locals', () => {
 
     test('readers whose default has the reader kind, and a bool reader without default, get native types', () => {
         const text = out();
-        expect(text).toMatch(/let mut flag: Option<bool> = self\.safe_?[bB]ool[^;]*\.as_bool\(\);/);
+        expect(text).toContain('let mut flag: Option<bool> = self.safe_bool_k_opt(o.clone(), "flag", &[]);');
         expect(text).toContain('if (flag == Some(true)) {');
         expect(text).toMatch(/let mut name: Option<String> = self\.safe_string_k_opt\([^;]*\);/);
         expect(text).toMatch(/let mut limit: Option<i64> = self\.safe_?[iI]nteger[^;]*\.as_i64\(\);/);
@@ -10524,7 +10524,7 @@ describe('typed safeMarket and market slots', () => {
         expect(base).toContain('let mut markets: &[crate::types::Market] = __marketsById.records_by_id(');
         expect(base).toContain('return markets[0].clone();');
         expect(base).toContain('market: Option<&crate::types::Market>');
-        expect(base).toContain('self.safe_bool_k(&market, "inverse"');
+        expect(base).toContain('self.safe_bool_k_opt(&market, "inverse"');
         const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
         expect(out).toContain('let mut resolved: crate::types::Market = self.safeMarket(');
         expect(out).toContain('crate::value::KeyRead::key_read(&&resolved, "symbol")');
@@ -24192,5 +24192,35 @@ describe('ral-80a: a non-boolean settle under an unknown hash keeps the tuple sl
     });
     test('negative: a string settle under an unknown hash still blocks the slot', () => {
         expect(out).toMatch(/let mut candles: Value = get_value\(/);
+    });
+});
+describe('ral-84e: safeBool locals print the Option<bool> reader twin', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    options: Dict = {};\n    safeBool (o: any, k: any, d: any = undefined): boolean { return o; }\n    safeBool2 (o: any, k1: any, k2: any, d: any = undefined): boolean { return o; }\n    hold (m: any): any { return m; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('a literal default unwraps the twin to that literal; no default keeps Option<bool>', () => {
+        const out = write ('ral-84e-a', "    a (p: Dict, m: Dict) {\n        const params = this.hold (p);\n        const market = this.hold (m);\n        const fast = this.safeBool (params, 'fast', false);\n        const trig = this.safeBool2 (params, 'trigger', 'stop', true);\n        const delisted = this.safeBool (market, 'isDelisted');\n        let active = true;\n        if (delisted !== undefined) {\n            active = !delisted;\n        }\n        if (fast && trig) {\n            return this.hold (active);\n        }\n        return 1;\n    }\n");
+        expect(out).toContain('let mut fast: bool = self.safe_bool_k_opt(');
+        expect(out).toContain('\"fast\", &[Value::Bool(false)]).unwrap_or(false);');
+        expect(out).toContain('let mut trig: bool = self.safe_bool2_opt(');
+        expect(out).toContain('.unwrap_or(true);');
+        expect(out).toContain('let mut delisted: Option<bool> = self.safe_bool_k_opt(');
+        expect(out).toContain('Value::Bool(!(delisted == Some(true)))');
+        expect(out).not.toContain('.as_bool().unwrap_or(false)');
+    });
+    test('an Option<bool> leaf of a write into an Option<bool> local reads its truthiness', () => {
+        const out = write ('ral-84e-b', "    b (r: Dict) {\n        const raw = this.hold (r);\n        const rawActive = this.safeBool (raw, 'active');\n        const closed = this.safeBool (raw, 'closed', false);\n        let active: boolean = undefined;\n        if (rawActive !== undefined) {\n            active = (rawActive) && (!closed);\n        }\n        return this.hold (active);\n    }\n");
+        expect(out).toContain('let mut rawActive: Option<bool> = self.safe_bool_k_opt(');
+        expect(out).toContain('(rawActive == Some(true))');
+        expect(out).not.toContain('let mut rawActive: Value');
+    });
+    test('negative: a non-literal default keeps the boxed reader', () => {
+        const out = write ('ral-84e-c', "    c (p: Dict, d: boolean) {\n        const params = this.hold (p);\n        const fast = this.safeBool (params, 'fast', d);\n        if (fast) {\n            return 1;\n        }\n        return 2;\n    }\n");
+        expect(out).not.toContain('safe_bool_k_opt');
     });
 });
