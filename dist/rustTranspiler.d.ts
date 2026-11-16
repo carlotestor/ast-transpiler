@@ -1340,6 +1340,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-62k: `n` is the last key of a statement write `x[..][n] = v` whose chain root is a plain local identifier
      *  (two or more hops) and whose value never names `n` or `this`. */
     rust62kLocalNestedLastKey(n: any): boolean;
+    /** ral-63k: `n` is the whole key of a statement write `x[n] = v` whose receiver is a local declared by a call (never an
+     *  object literal: ccxt's literal-map pass keys on the boxed key text), whose value never writes `n` and never names `this`. */
+    rust63kLocalFlatHelperKey(n: any): boolean;
+    /** ral-63k: `n` is the last key of a statement write `p[..][n] = v` whose chain root is a plain-Dict parameter. */
+    rust63kDictParamNestedKey(n: any): boolean;
     /** ral-61k: `n` keys a middle hop of a statement write `this.balance|options[..][n][..] = v`: an element read whose
      *  receiver is itself an element read and which is itself the receiver of the outermost written element access. */
     rust61kNestedFieldMiddleKey(n: any): boolean;
