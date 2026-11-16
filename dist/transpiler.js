@@ -52023,6 +52023,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustMarketGuardHits = 0;
     this.rustMarketPending = /* @__PURE__ */ new Set();
     this.rustSafeMarketBoxing = /* @__PURE__ */ new Set();
+    this.rust65eByIdLists = /* @__PURE__ */ new WeakMap();
     this.rustTypedUnified = new Set(config["typedUnified"] ?? []);
     this.rustVirtualDispatch = config["virtualDispatch"] ?? {};
     this.rustNonVirtualShims = new Set(config["nonVirtualShims"] ?? []);
@@ -52795,6 +52796,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (!this.rustIsOrderBookSide(node.expression) && this.isValueLengthType(this.typeOfNodeIfAny(node.expression)))
       return this.printNativeLength(node, receiver);
     if (this.rustReadBearerKind(node.expression) === "list" || this.rustBorrowedListUse(node.expression) || this.rustLentListUse(node.expression))
+      return this.printNativeLength(node, receiver);
+    if (isIdentifier3(node.expression) && this.rustMarketStoreOf(node.expression) !== void 0 && this.rust65eByIdListLocal(this.rustMarketStoreOf(node.expression)))
       return this.printNativeLength(node, receiver);
     if (this.provenListValue(node.expression))
       return `${receiver}.as_array().map_or(Value::Int(0), |__a| Value::Int(__a.len() as i64))`;
@@ -71156,6 +71159,9 @@ ${iden}}`;
       return `${idn}return ${typedReturn};`;
     if (this.rustReturnsMarket(fn))
       return `${idn}return ${this.printMarketReturnValue(exp)};`;
+    const byIdReturn = this.print65eByIdReturnValue(exp);
+    if (byIdReturn !== void 0)
+      return `${idn}return ${byIdReturn};`;
     if (this.rustReturnsOptMarket(fn))
       return `${idn}return ${this.printOptMarketReturnValue(exp)};`;
     if (this.rustReturnsCurrency(fn))
@@ -87345,6 +87351,8 @@ ${this.getIden(identation)}}`;
       return false;
     const fn = this.rustEnclosingFunction(declaration);
     return this.rustLocalUsesAll(declaration, String(declaration.name.text), true, (n) => {
+      if (isMethodDeclaration5(n.parent) && n.parent.name === n)
+        return true;
       if (this.rustEnclosingFunction(n) !== fn)
         return false;
       const up = n.parent;
@@ -87357,7 +87365,110 @@ ${this.getIden(identation)}}`;
     if (node === void 0 || !isIdentifier3(node))
       return void 0;
     const declaration = this.rustDeclarationOfIdentifier(node);
-    return declaration !== void 0 && declaration.name !== node && this.rustMarketStoreLocal(declaration) ? declaration : void 0;
+    return declaration !== void 0 && declaration.name !== node && (this.rustMarketStoreLocal(declaration) || this.rust65eByIdListLocal(declaration)) ? declaration : void 0;
+  }
+  /** ral-65e: `const l = byId[k]` where `byId` is a never-reassigned `const byId = this.markets_by_id` of the same base
+   *  method and `k` a parameter. Every write of `markets_by_id` (setMarkets `mapToSafeMap (marketsById)` of a map whose
+   *  every element write stores `[ value ]` or the pushed array itself, setMarketsFromExchange's copy of another
+   *  exchange's store, deepcoin's `= [ market ]`, the runtime's `Value::Array` rows, the `undefined` reset) holds a list
+   *  of markets per id, so the read is the typed by-id store's row slice (`&[Market]`; `Market::raw` is that very element).
+   *  The local is only read: `.length`, `l[0]` returned, or `l[i]` bound to a const that is lent to any-key readers or
+   *  returned. A missing row reads the empty slice, whose length and `[0]` (`first()`) answer as the boxed `Null` did. */
+  rust65eByIdListLocal(declaration) {
+    if (declaration?.kind !== SyntaxKind7.VariableDeclaration)
+      return false;
+    let decision = this.rust65eByIdLists.get(declaration);
+    if (decision === void 0) {
+      this.rust65eByIdLists.set(declaration, false);
+      decision = this.rust65eByIdListLocalUncached(declaration);
+      this.rust65eByIdLists.set(declaration, decision);
+    }
+    return decision;
+  }
+  rust65eByIdListLocalUncached(declaration) {
+    if (!isIdentifier3(declaration.name) || (declaration.parent.flags & NodeFlags4.Const) === 0 || declaration.parent.declarations.length !== 1)
+      return false;
+    const init = this.rustSkipWrappers(declaration.initializer);
+    if (init === void 0 || !isElementAccessExpression4(init) || !isIdentifier3(init.expression))
+      return false;
+    const key = this.rustSkipWrappers(init.argumentExpression);
+    if (!isIdentifier3(key) || this.rustDeclaredNode(key)?.kind !== SyntaxKind7.Parameter)
+      return false;
+    const fn = this.rustEnclosingFunction(declaration);
+    if (fn === void 0 || isSourceFile5(fn) || !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(fn.getSourceFile().fileName)) || this.rustReturnsMarket(fn))
+      return false;
+    const store = this.rustDeclarationOfIdentifier(init.expression);
+    if (store === void 0 || !isVariableDeclaration3(store) || !isIdentifier3(store.name) || (store.parent.flags & NodeFlags4.Const) === 0)
+      return false;
+    const src = this.rustSkipWrappers(store.initializer);
+    if (src === void 0 || !isPropertyAccessExpression3(src) || src.expression.kind !== SyntaxKind7.ThisKeyword || String(src.name.text) !== "markets_by_id")
+      return false;
+    if (this.rustEnclosingFunction(store) !== fn)
+      return false;
+    return this.rustLocalUsesAll(declaration, String(declaration.name.text), true, (n) => {
+      if (this.rustEnclosingFunction(n) !== fn)
+        return false;
+      const up = n.parent;
+      if (isPropertyAccessExpression3(up) && up.expression === n)
+        return String(up.name.text) === "length" && !(isBinaryExpression5(up.parent) && up.parent.left === up && rustIsAssignmentOperator(up.parent.operatorToken.kind));
+      if (!isElementAccessExpression4(up) || up.expression !== n)
+        return false;
+      const k = this.rustSkipWrappers(up.argumentExpression);
+      if (isReturnStatement4(up.parent))
+        return isNumericLiteral4(k) && Number(k.text) === 0;
+      const decl = up.parent;
+      return decl?.kind === SyntaxKind7.VariableDeclaration && decl.initializer === up && this.rust65eForCounterOf(k, declaration) && this.rustMarketStoreElement(decl);
+    });
+  }
+  /** ral-65e: `k` is the counter of an enclosing `for (let k = 0; k < l.length; k++)` over the row local `l` itself, never
+   *  written in the body: a non-negative integer index below the row's length (decided on the AST, no counter decision). */
+  rust65eForCounterOf(k, list) {
+    if (!isIdentifier3(k))
+      return false;
+    const counter = this.rustDeclarationOfIdentifier(k);
+    const counterList = counter?.parent;
+    const loop = counterList?.parent;
+    if (counter === void 0 || !isVariableDeclaration3(counter) || loop?.kind !== SyntaxKind7.ForStatement || loop.initializer !== counter.parent || counterList.declarations.length !== 1)
+      return false;
+    const start = this.rustSkipWrappers(counter.initializer);
+    if (start === void 0 || !isNumericLiteral4(start) || Number(start.text) !== 0)
+      return false;
+    const cond = this.rustSkipWrappers(loop.condition);
+    if (cond === void 0 || !isBinaryExpression5(cond) || cond.operatorToken.kind !== SyntaxKind7.LessThanToken || !isIdentifier3(cond.left) || this.rustDeclarationOfIdentifier(cond.left) !== counter)
+      return false;
+    const bound = this.rustSkipWrappers(cond.right);
+    if (!isPropertyAccessExpression3(bound) || String(bound.name.text) !== "length" || !isIdentifier3(bound.expression) || this.rustDeclarationOfIdentifier(bound.expression) !== list)
+      return false;
+    const inc = loop.incrementor;
+    if (inc === void 0 || !(isPostfixUnaryExpression3(inc) || isPrefixUnaryExpression3(inc)) || inc.operator !== SyntaxKind7.PlusPlusToken || !isIdentifier3(inc.operand))
+      return false;
+    let written = false;
+    const visit = (x) => {
+      if (written)
+        return;
+      if (isIdentifier3(x) && this.rustDeclarationOfIdentifier(x) === counter && x !== counter.name && x !== inc.operand) {
+        const up = x.parent;
+        if (isBinaryExpression5(up) && up.left === x && rustIsAssignmentOperator(up.operatorToken.kind) || isPrefixUnaryExpression3(up) || isPostfixUnaryExpression3(up))
+          written = true;
+      }
+      x.forEachChild(visit);
+    };
+    visit(loop.statement);
+    return !written;
+  }
+  /** ral-65e: `return e` / `return l[0]` of a by-id row (rust65eByIdListLocal) in a method whose body returns a `Value`. */
+  print65eByIdReturnValue(exp) {
+    const inner = this.unwrapParens(exp);
+    if (isIdentifier3(inner)) {
+      const element = this.rustMarketStoreElementOf(inner);
+      const list = element !== void 0 ? this.rustDeclarationOfIdentifier(this.rustSkipWrappers(element.initializer).expression) : void 0;
+      return list !== void 0 && this.rust65eByIdListLocal(list) ? `Value::from(${super.printIdentifier(inner)})` : void 0;
+    }
+    if (isElementAccessExpression4(inner) && isIdentifier3(inner.expression)) {
+      const list = this.rustMarketStoreOf(inner.expression);
+      return list !== void 0 && this.rust65eByIdListLocal(list) ? `${super.printIdentifier(inner.expression)}.first().map(Value::from).unwrap_or(Value::Null)` : void 0;
+    }
+    return void 0;
   }
   rustMarketStoreElementOf(node) {
     if (node === void 0 || !isIdentifier3(node))
@@ -87369,8 +87480,9 @@ ${this.getIden(identation)}}`;
     return init !== void 0 && isElementAccessExpression4(init) && this.rustMarketStoreOf(init.expression) !== void 0 ? declaration : void 0;
   }
   printMarketStoreDeclaration(declaration, indent, varName) {
-    if (this.rustMarketStoreLocal(declaration)) {
-      const key = this.printNode(this.rustSkipWrappers(declaration.initializer).arguments[1], 0).trim();
+    if (this.rustMarketStoreLocal(declaration) || this.rust65eByIdListLocal(declaration)) {
+      const init2 = this.rustSkipWrappers(declaration.initializer);
+      const key = this.printNode(isElementAccessExpression4(init2) ? init2.argumentExpression : init2.arguments[1], 0).trim();
       return `${indent}let __marketsById = self.markets_by_id_typed();
 ${indent}let mut ${varName}: &[crate::types::Market] = __marketsById.records_by_id(${key}.as_str().unwrap_or_default()).unwrap_or_default()`;
     }
