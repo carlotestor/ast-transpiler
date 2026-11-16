@@ -1968,3 +1968,6 @@ export interface GoTranspiler {
     goBaseCacheField(node: any): string | undefined;
     goBaseCacheInitText(node: any): string | undefined;
 }
+export interface GoTranspiler {
+    goSafeDictMapPredictionAsWs: boolean;
+}

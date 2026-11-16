@@ -41014,6 +41014,24 @@ GoTranspiler.prototype.goBaseCacheInitText = function(node) {
   }
   return `${this.printNode(node.left, 0)} = ${_nullishCoalesce(this.goWsCacheEmptyLiteral(node.left), () => ( "map[string]any"))}{}`;
 };
+GoTranspiler.prototype.goSafeDictMapPredictionAsWs = false;
+{
+  const sourceTreeKind = GoTranspiler.prototype.goSourceTreeKind;
+  GoTranspiler.prototype.goSourceTreeKind = function(node) {
+    const kind = sourceTreeKind.call(this, node);
+    return kind === "skip" && this.goSafeDictMapPredictionAsWs && this.goNodeIsInPredictionTree(node) ? "ws" : kind;
+  };
+  const safeDictMapLocal = GoTranspiler.prototype.goSafeDictMapLocalUncached;
+  GoTranspiler.prototype.goSafeDictMapLocalUncached = function(declaration) {
+    const outer = this.goSafeDictMapPredictionAsWs;
+    this.goSafeDictMapPredictionAsWs = true;
+    try {
+      return safeDictMapLocal.call(this, declaration);
+    } finally {
+      this.goSafeDictMapPredictionAsWs = outer;
+    }
+  };
+}
 
 // src/javaTranspiler.ts
 _chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
