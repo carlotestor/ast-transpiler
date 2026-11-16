@@ -41033,6 +41033,19 @@ GoTranspiler.prototype.goSafeDictMapPredictionAsWs = false;
     }
   };
 }
+{
+  const useKeepsMap = GoTranspiler.prototype.goMapLocalUseKeepsMap;
+  GoTranspiler.prototype.goMapLocalUseKeepsMap = function(ref, rebinds, noDefault, ws, name) {
+    const write = ref.parent;
+    if (write?.kind === SyntaxKind5.BinaryExpression && write.left === ref && write.operatorToken?.kind === SyntaxKind5.EqualsToken && write.parent?.kind === SyntaxKind5.ExpressionStatement) {
+      const right = this.goUnwrapParenthesizedNode(write.right);
+      if (right?.kind === SyntaxKind5.CallExpression && right.expression?.kind === SyntaxKind5.PropertyAccessExpression && right.expression.expression?.kind === SyntaxKind5.ThisKeyword && right.expression.name?.text === "extend" && right.arguments.length >= 1 && right.arguments.length <= 2) {
+        return true;
+      }
+    }
+    return useKeepsMap.call(this, ref, rebinds, noDefault, ws, name);
+  };
+}
 
 // src/javaTranspiler.ts
 init_esm_shims();
