@@ -14486,3 +14486,23 @@ describe ('84g1 bool join read through `!`', () => {
         expect(out).toContain('var pm any = nil');
     });
 });
+
+describe ('84g1 optional-slot rule leaves already-safe *string joins alone', () => {
+    const go = (body: string): string => {
+        const t = new Transpiler({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        installCcxtGoHooks(t.goTranspiler);
+        return t.transpileGo('type Str = string | undefined;\nclass V {\n'
+            + '    safeString (a: any, k: any = undefined): Str { return a; }\n' + body + '}\n').content;
+    };
+    test('a written *string local whose optional-slot read is already safe stays *string', () => {
+        const out = go('    f (m: any): any {\n'
+            + '        let side: Str = undefined;\n'
+            + "        if (m['x']) {\n"
+            + "            side = 'buy';\n"
+            + '        }\n'
+            + '        const v = this.safeString (m, side);\n'
+            + "        return { 'side': side, 'v': v };\n"
+            + '    }\n');
+        expect(out).toContain('var side *string = nil');
+    });
+});

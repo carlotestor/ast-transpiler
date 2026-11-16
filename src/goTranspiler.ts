@@ -9020,10 +9020,14 @@ function ccxtGoTupleStringJoinTypeUncached (goTranspiler, declaration) {
                 && (parent.operatorToken.kind === ts.SyntaxKind.EqualsToken)) {
                 ok = ccxtGoTupleStringWriteIsProven (goTranspiler, parent.right);
                 writes += 1;
-            } else if (ccxtGoTupleStringOptionalArgument (goTranspiler, n)) {
-                optionalArgs += 1;
-            } else if (isDestructuringTarget (n) || !ccxtGoTupleStringReadIsSafe (goTranspiler, n)) {
+            } else if (isDestructuringTarget (n)) {
                 ok = false;
+            } else if (!ccxtGoTupleStringReadIsSafe (goTranspiler, n)) {
+                if (ccxtGoTupleStringOptionalArgument (goTranspiler, n)) {
+                    optionalArgs += 1;
+                } else {
+                    ok = false;
+                }
             }
         }
         n?.forEachChild (visit);
