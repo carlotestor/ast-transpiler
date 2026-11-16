@@ -2000,3 +2000,6 @@ export interface GoTranspiler {
     goTernaryJoinProvisional(): boolean;
     goTernaryJoinFeedsAnotherTernary(declaration: any): boolean;
 }
+export interface GoTranspiler {
+    goTernaryJoinFeedsParameterCopy(declaration: any): boolean;
+}

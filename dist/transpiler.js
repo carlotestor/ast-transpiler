@@ -41596,7 +41596,7 @@ GoTranspiler.prototype.goDeclaredTypeOfIdentifier = function(node) {
 var goTernaryJoinR1PartsUncached = GoTranspiler.prototype.goTernaryJoinPartsUncached;
 GoTranspiler.prototype.goTernaryJoinPartsUncached = function(declaration) {
   const known = goTernaryJoinR1PartsUncached.call(this, declaration);
-  if (known !== void 0) {
+  if (known !== void 0 || this.goTernaryJoinProvisional()) {
     return known;
   }
   const ternary = this.goUnwrapParenthesizedNode(declaration?.initializer);
@@ -41612,6 +41612,9 @@ GoTranspiler.prototype.goTernaryJoinPartsUncached = function(declaration) {
     const arm = this.goUnwrapParenthesizedNode(armNode);
     return armType === "*int64" && otherType === "int" && arm?.kind === SyntaxKind5.Identifier && this.goTernaryJoinConditionDefines(ternary.condition, arm.text, outcome);
   };
+  if (this.goTernaryJoinFeedsParameterCopy(declaration)) {
+    return void 0;
+  }
   if (pointerArm(ternary.whenTrue, whenTrue, whenFalse, true)) {
     return { goType: "int64", derefTrue: true, derefFalse: false, widenFalse: true };
   }
@@ -41619,6 +41622,22 @@ GoTranspiler.prototype.goTernaryJoinPartsUncached = function(declaration) {
     return { goType: "int64", derefTrue: false, derefFalse: true, widenTrue: true };
   }
   return void 0;
+};
+GoTranspiler.prototype.goTernaryJoinFeedsParameterCopy = function(declaration) {
+  const scope = this.goEnclosingFunction(declaration);
+  const name = declaration.name.text;
+  const checker = this.checkerOrUndefined();
+  if (scope === void 0 || checker === void 0) {
+    return true;
+  }
+  return this.hasNodeWhere(scope, (n) => {
+    if (n.kind !== SyntaxKind5.BinaryExpression || n.operatorToken?.kind !== SyntaxKind5.EqualsToken || n.left?.kind !== SyntaxKind5.Identifier || !this.hasNodeWhere(n.right, (r) => r.kind === SyntaxKind5.Identifier && r.text === name)) {
+      return false;
+    }
+    const target = checker.getSymbolAtLocation(n.left)?.valueDeclaration?.resolve();
+    const source = this.goUnwrapParenthesizedNode(target?.initializer);
+    return target?.kind === SyntaxKind5.VariableDeclaration && source?.kind === SyntaxKind5.Identifier && checker.getSymbolAtLocation(source)?.valueDeclaration?.resolve()?.kind === SyntaxKind5.Parameter;
+  });
 };
 var goTernaryJoinR1Declaration = GoTranspiler.prototype.goTernaryJoinDeclaration;
 GoTranspiler.prototype.goTernaryJoinDeclaration = function(statement, declaration, identation) {
