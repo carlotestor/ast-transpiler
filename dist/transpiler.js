@@ -66135,7 +66135,7 @@ ${i1}}`;
     const currency = this.rustCurrencyLocalOf(node.expression);
     if (currency !== void 0) {
       const currencyKey = this.rustCurrencyKeyReadKey(node.expression);
-      if (this.rustCurrencyLocalKind(currency) !== "cstruct" || currencyKey !== "code" && (currencyKey !== "id" || this.primitiveKindOfType(this.typeOfNodeIfAny(node)) !== "string"))
+      if (this.rustCurrencyLocalKind(currency) === false || currencyKey !== "code" && (currencyKey !== "id" || this.primitiveKindOfType(this.typeOfNodeIfAny(node)) !== "string"))
         return void 0;
       return { kind: "ostr", text: `crate::value::KeyRead::key_read(&&${this.printNode(currency.name, 0)}, "${currencyKey}").as_str().map(str::to_owned)` };
     }
