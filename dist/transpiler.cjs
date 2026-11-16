@@ -63671,8 +63671,8 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       const narrowed = _optionalChain([this, 'access', _9616 => _9616.rustOptParamDefault, 'call', _9617 => _9617(node), 'optionalAccess', _9618 => _9618.kind]);
       if (narrowed !== void 0)
         return narrowed;
-      const a = _nullishCoalesce(this.rustScalarValueKind(node.whenTrue, true), () => ( this.rustOptParamKind(node.whenTrue)));
-      const b = _nullishCoalesce(this.rustScalarValueKind(node.whenFalse, true), () => ( this.rustOptParamKind(node.whenFalse)));
+      const a = _nullishCoalesce(_nullishCoalesce(this.rustScalarValueKind(node.whenTrue, true), () => ( this.rustOptParamKind(node.whenTrue))), () => ( this.rust84eBoolArmKind(node.whenTrue)));
+      const b = _nullishCoalesce(_nullishCoalesce(this.rustScalarValueKind(node.whenFalse, true), () => ( this.rustOptParamKind(node.whenFalse))), () => ( this.rust84eBoolArmKind(node.whenFalse)));
       const joined = this.rustScalarJoinKinds(a, b, true);
       return joined === "null" ? void 0 : joined;
     }
@@ -68232,6 +68232,19 @@ ${i1}}`;
       return void 0;
     const value = this.printTypedMarketValue(declaration.initializer);
     return value === void 0 ? void 0 : `${indent}let mut ${varName}: crate::types::Market = ${value}`;
+  }
+  /** ral-84e: an equality arm (`m['inverse'] === true`, `t === 'inverse'`) of a ternary initializer of a `boolean` local whose
+   *  native text exists: the arm prints that `bool` (rustScalarNativeText's ternary arm), the very `Bool` its box held. */
+  rust84eBoolArmKind(arm) {
+    const node = this.unwrapParens(arm);
+    if (node === void 0 || !_is.isBinaryExpression.call(void 0, node) || !this.isEqualityOp(node.operatorToken.kind) || !this.rustTernaryArm(node))
+      return void 0;
+    let top = node;
+    while (_is.isParenthesizedExpression.call(void 0, top.parent) || _is.isConditionalExpression.call(void 0, top.parent) && top.parent.condition !== top)
+      top = top.parent;
+    if (!_is.isVariableDeclaration.call(void 0, top.parent) || !_is.isIdentifier.call(void 0, top.parent.name) || this.primitiveKindOfType(this.typeOfNodeIfAny(top.parent.name)) !== "boolean")
+      return void 0;
+    return this.nativeEqualityText(node) !== void 0 ? "bool" : void 0;
   }
   /** A `const x = <comparison>` initializer whose native text exists and whose local's checker type is `boolean`. */
   rustBoolCompareSeed(node) {
