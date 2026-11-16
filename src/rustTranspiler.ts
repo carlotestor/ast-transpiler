@@ -23107,7 +23107,12 @@ export class RustTranspiler extends BaseTranspiler {
         // map on every path, boxed once (`Value::from(&x)` / `Value::Dict(x)`); non-test sources, each box line within 400
         const sbSlotParamsBoxOnly = sbAlias && sbMapWrites > 0 && reads === 0 && writes === 0 && nullTests === 0 && paramsBoxes > 0
             && paramsBoxes === boxedElementUses.length && !this.rustTestTierSource(declaration) && boxedElementUses.every((u: any) => this.rustBoxLineOk(u));
-        if (!safe || (reads === 0 && !builtBoxOnly && !boxOnly && !endpointBoxOnly && !optAliasBoxOnly && !sbSlotParamsBoxOnly && !this.rustNullTestedDictLocal(init, nullTests, writes)) || mixed || from === undefined
+        // ral-76i: a never-rewritten non-nil local holding a declared `Promise<Dict>` / `Promise<List>` endpoint answer whose every
+        // use is one whole box at a `return x` / `{ 'k': x }` sink (ral-43a): typed as the declared container, boxed once (D11)
+        const endpointWholeBoxOnly = endpoint && !nilDeclared && (from === 'dict' || from === 'list') && reads === 0 && writes === 0 && nullTests === 0
+            && boxedElementUses.length > 0 && defaultedBoxes === boxedElementUses.length && optionalBoxes === 0 && paramsBoxes === 0
+            && boxedElementUses.every((u: any) => (isReturnStatement(u.parent) || u.parent?.kind === SyntaxKind.PropertyAssignment) && this.rustDeclaredEndpointWholeBox(u) && this.rustBoxLineOk(u));
+        if (!safe || (reads === 0 && !builtBoxOnly && !boxOnly && !endpointBoxOnly && !endpointWholeBoxOnly && !optAliasBoxOnly && !sbSlotParamsBoxOnly && !this.rustNullTestedDictLocal(init, nullTests, writes)) || mixed || from === undefined
             || ((this.rustNilResponseLocals.has(declaration) || from === 'api' || this.rustDictElementSource(init)) && (nullTests > 0 || lengths > 0 || (indexLikeReads > 0 && !this.rustUrlsMapEntry(init))))
             || (this.rustListElementSource(init) && (nullTests > 0 || lengths > 0))) return undefined;
         // ral-kc: a declared endpoint answering off its declared shape is `None` in the optional form: a null test would tell it apart

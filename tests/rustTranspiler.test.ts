@@ -23476,3 +23476,28 @@ describe('ral-73e: safeDict results read at a typed string key', () => {
         expect(out).toMatch(/let (?:mut )?conflicting: Value = /);
     });
 });
+
+describe('ral-76i: a declared endpoint answer whose only use is one whole box is held', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type List = any[];\nexport default class Exchange {\n    hold (x: any): any { return x; }\n}\n";
+    const api = "import Exchange from '../base/Exchange.js';\nimport type { Dict, List } from '../base/Exchange.js';\nexport default abstract class venueApi extends Exchange {\n    publicGetMap (params = {}): Promise<Dict> { return this.hold (params); }\n    publicGetRows (params = {}): Promise<List> { return this.hold (params); }\n    publicGetAny (params = {}): Promise<Dict | List> { return this.hold (params); }\n}\n";
+    const run = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync (path.join (dir, 'ts/src/abstract'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/abstract/venue.ts'), api);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import venueApi from './abstract/venue.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends venueApi {\n" + body + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('a Promise<Dict> answer returned whole and a Promise<List> answer stored as a literal value are held', () => {
+        const out = run ('r76i-endpoint-whole', "    async setLeverage (params: Dict = {}) {\n        const response = await this.publicGetMap (params);\n        return response;\n    }\n    async fetchBalance (params: Dict = {}) {\n        const positions = await this.publicGetRows (params);\n        return { 'positions': positions };\n    }\n");
+        expect(out).toContain('let mut response: crate::value::Dict = ');
+        expect(out).toContain('return Value::Dict(response);');
+        expect(out).toContain('let mut positions: crate::value::List = ');
+        expect(out).toContain('Value::Arr(positions)');
+    });
+    test('negative: a Dict | List answer returned whole stays boxed', () => {
+        const out = run ('r76i-endpoint-whole-any', "    async setLeverage (params: Dict = {}) {\n        const response = await this.publicGetAny (params);\n        return response;\n    }\n");
+        expect(out).toMatch(/let (?:mut )?response: Value = /);
+    });
+});
