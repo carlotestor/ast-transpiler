@@ -962,6 +962,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  local: only uses bound to its own symbol are walked. Any other second binding keeps the plain walk. */
     rustBlockLocalUsesAll(declaration: any, name: string, acceptUse: (n: any) => boolean, scalar?: boolean, skipPropertyNames?: boolean): boolean;
     rustBindingUsesWalk(declaration: any, nodes: any[], own: any, home: any, skip: any[], skipPropertyNames: boolean, acceptUse: (n: any) => boolean, scalar: boolean): boolean;
+    /** ral-60k: a direct argument of a base-class `this.m (..)` call that is the whole source of a write to a local declared
+     *  `Dict` (kucoin fetchBalance `result = this.mergeBalanceAccount (result, currencyCode, ..)` in a sibling block): the
+     *  written local's type is its annotation and the argument boxes into the call, as the plain walk already prints it. */
+    rust60kBaseCallArgDictWrite(n: any, write: any): boolean;
     /** ral-58k: the key argument of a base `this.safeDict (src, k, dflt)` that is the whole source of a write to a local
      *  declared `Dict` (bitget pro handleBalance `account = this.safeDict (this.balance, code, account)`): the written local's
      *  type is its annotation, never this key's, and the reader takes the key as a boxed `Value` either way. */

@@ -58322,10 +58322,23 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (push !== void 0 && isCallExpression6(push) && !this.rustCopyPushPairElement(n, push, trial) && !this.rustPushSelfCallArgUse(n, push, trial))
         return false;
       const write = findAncestor(n, (m) => isStatement(m) || isBinaryExpression5(m) && m.operatorToken.kind === SyntaxKind7.EqualsToken);
-      if (write !== void 0 && isBinaryExpression5(write) && this.isNodeInsideNode(n, write.right) && !this.rustScalarBoxedField(n, write, declaration) && !this.rustScalarFeedsElementWrite(n, write) && !this.rustScalarPreciseFeed(n, write, declaration) && !this.rustScalarCacheFieldCtor(n, write) && !this.rustScalarSumOperandWrite(n, write) && !this.rust58kDictReaderKeyWrite(n, write))
+      if (write !== void 0 && isBinaryExpression5(write) && this.isNodeInsideNode(n, write.right) && !this.rustScalarBoxedField(n, write, declaration) && !this.rustScalarFeedsElementWrite(n, write) && !this.rustScalarPreciseFeed(n, write, declaration) && !this.rustScalarCacheFieldCtor(n, write) && !this.rustScalarSumOperandWrite(n, write) && !this.rust58kDictReaderKeyWrite(n, write) && !this.rust60kBaseCallArgDictWrite(n, write))
         return false;
     }
     return true;
+  }
+  /** ral-60k: a direct argument of a base-class `this.m (..)` call that is the whole source of a write to a local declared
+   *  `Dict` (kucoin fetchBalance `result = this.mergeBalanceAccount (result, currencyCode, ..)` in a sibling block): the
+   *  written local's type is its annotation and the argument boxes into the call, as the plain walk already prints it. */
+  rust60kBaseCallArgDictWrite(n, write) {
+    if (write.operatorToken?.kind !== SyntaxKind7.EqualsToken || this.rustTestTierSource(n))
+      return false;
+    const target = this.unwrapParens(write.left);
+    const call = this.unwrapParens(write.right);
+    if (!isIdentifier3(target) || !isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword || !this.rustCalleeIsRuntimeBase(call) || !call.arguments.some((a) => this.unwrapParens(a) === n))
+      return false;
+    const d = this.rustDeclaredNode(target);
+    return d !== void 0 && isVariableDeclaration3(d) && d.type !== void 0 && String(d.type.getText()) === "Dict";
   }
   /** ral-58k: the key argument of a base `this.safeDict (src, k, dflt)` that is the whole source of a write to a local
    *  declared `Dict` (bitget pro handleBalance `account = this.safeDict (this.balance, code, account)`): the written local's
