@@ -1283,6 +1283,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-46d: `n` reads a local declared `const f = m['<opt flag>']` off a loaded market struct (`Option<bool>` field). */
     rustMarketFlagFieldLocal(n: any): boolean;
     /** ral-80e: `n` names a single-binding `const` local with an initializer (no later write is possible). */
+    /** ral-84e: `n` is a leaf (through `!`, parentheses, `&&` / `||`) of the right side of a statement `y = <logical>` whose
+     *  target y is an `Option<bool>` local and whose logical rust67bBoolLogicalWrite admits (printed `Some(<condition>)`). */
+    rust84eOptBoolWriteLeaf(n: any): boolean;
     rust80eConstDecl(n: any): boolean;
     /** ral-80e: every read of `n`'s local is (through parentheses and casts) a whole `Math.min|max` argument: typing it would
      *  only move the conversion from the declaration to the box at the call (not a lift), so the Math box form refuses it. */
@@ -3908,6 +3911,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBorrowedDictReader(call: any): string | undefined;
     private static readonly RUST_OPT_K_READERS;
     private static readonly RUST_OPT_READERS;
+    private static readonly RUST_OPT_BOOL_READERS;
+    private rustOptBoolReading;
     private static readonly RUST_TEST_OPT_READERS;
     private rustOptReaderPrint;
     private rustOptReaderPrinted;
@@ -3916,6 +3921,12 @@ export declare class RustTranspiler extends BaseTranspiler {
         name: string;
         key?: string;
     } | undefined;
+    /** A borrowed `_k` reader with an `_opt` twin in the current print (`safe_bool_k` only while a bool twin prints). */
+    rustOptKReader(rust: string): boolean;
+    /** ral-84e: `self.safe_bool*_opt(..)` for a base safeBool / safeBool2 / safeBoolN call: `Option<bool>` as is for an
+     *  `obool` local with no default, `.unwrap_or(<literal>)` for a `bool` local with a literal boolean default (the boxed
+     *  reader returns the member only when it is a `Bool`, else that default: the twin's `None` then unwraps to it). */
+    rustOptBoolReaderText(kind: string, node: any): string | undefined;
     /** The `_opt` twin call of a base safeString-family reader node, printed by the reader's own printer; else undefined. */
     rustOptReaderCallText(expr: any, identation?: number): string | undefined;
     /** `self.safe_X_k(&x, "k", &[..])` when `x` is a borrowed dict local or a typed container local. */
