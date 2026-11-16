@@ -1336,6 +1336,11 @@ export declare class RustTranspiler extends BaseTranspiler {
         key: string;
         write: boolean;
     } | undefined;
+    /** ral-80b: a `const client = this.client (url)` local whose declaration has not printed yet. A scalar decision made
+     *  ahead of the method's print (a key local's use walk) would otherwise see `declOk` false and refuse every handle
+     *  key use; the declaration prints `let mut client: Value = self.client(..)` on one line (the declOk test) when its
+     *  initializer is that call over an identifier, string literal or property access argument. Decided from the AST. */
+    rust80bClientDeclPending(plan: any): boolean;
     rustClientHandleReceiver(plan: any, field: boolean): string;
     /** `client.<field>` as the handle's field (`top`: only for a local declared as the handle, ahead of
      *  the native map reads; otherwise the last resort of the property printer). */
@@ -2961,7 +2966,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     nativeEqualityText(node: any): string;
     unwrapParens(node: any): any;
     hasNativeComparisonOperand(node: any): any;
-    printLogicalInBooleanContext(node: any): string;
+    printLogicalInBooleanContext(node: any): any;
     printWhileStatement(node: any, identation: any): string;
     printIfStatement(node: any, identation: any): string;
     printPostFixUnaryExpression(node: any, identation: any): string;
