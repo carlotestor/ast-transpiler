@@ -4501,6 +4501,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBaseCallNamed(call: any, names: Set<string>): boolean;
     rustHandedDictLocalUncached(declaration: any): boolean;
     private static readonly RUST_ALWAYS_MAP_HELPERS;
+    private static readonly RUST_84G_GROUP_HELPERS;
     /** The initialiser of a reassigned handed local answers a map on every path. */
     rustHandedMapInit(declaration: any): boolean;
     /** ral-55a: `let x: Dict = this.omit (y, [ 'a', .. ])` (identifier head, literal keys, one line): the typed declaration

@@ -75367,6 +75367,8 @@ ${iden}}`;
         keySets++;
         if (isBinaryExpression5(n.parent))
           reads++;
+        else if (from === "dict" && init !== void 0 && isCallExpression6(init) && this.rustBaseCallNamed(init, _RustTranspiler.RUST_84G_GROUP_HELPERS))
+          reads++;
         return true;
       }
       if (this.rustExtendHeadUse(n))
@@ -91440,6 +91442,7 @@ _RustTranspiler.RUST_HANDED_DICT_SOURCES = /* @__PURE__ */ new Set(["extend", "o
 // map (the head is the local itself or a proven map). `omit` hands a list through unchanged, so an unproven head
 // (a `params: Value` that may carry a list body) never qualifies.
 _RustTranspiler.RUST_ALWAYS_MAP_HELPERS = /* @__PURE__ */ new Set(["extend", "indexBy", "groupBy"]);
+_RustTranspiler.RUST_84G_GROUP_HELPERS = /* @__PURE__ */ new Set(["indexBy", "groupBy"]);
 _RustTranspiler.RUST_HANDED_DICT_OMIT = /* @__PURE__ */ new Set(["omit"]);
 _RustTranspiler.RUST_HANDED_DICT_EXTEND = /* @__PURE__ */ new Set(["extend", "deepExtend"]);
 _RustTranspiler.RUST_OPT_EXTEND = /* @__PURE__ */ new Set(["extend"]);
