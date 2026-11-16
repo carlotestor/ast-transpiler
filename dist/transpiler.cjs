@@ -62642,6 +62642,13 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
         const test = lk === void 0 ? `${value2} ${sign} (__p as f64)` : `(__p as f64) ${sign} ${value2}`;
         return `matches!(${text(k, typed)}, Some(__p) if ${test})`;
       }
+      if (k === "oint" && own !== void 0 && this.rust63nNoDefaultIntReader(own.declaration) && this.rustScalarValueNumber(other)) {
+        if (dry)
+          return "_";
+        const value2 = `${this.printNode(other, 0).trim()}.as_f64().unwrap_or(f64::NAN)`;
+        const test = lk === void 0 ? `${value2} ${sign} (__p as f64)` : `(__p as f64) ${sign} ${value2}`;
+        return `matches!(${text(k, typed)}, Some(__p) if ${test})`;
+      }
       if (k !== "int" && k !== "num" || own === void 0 || !(this.rustRdOwnInit(own.declaration) || k === "int" && this.rustIntReaderLitDefault(own.declaration)) || !this.rustScalarValueNumber(other))
         return void 0;
       if (dry)
@@ -64067,6 +64074,15 @@ ${ind}];`;
       return false;
     const base = _RustTranspiler.RUST_SCALAR_INT_HELPERS[String(init.expression.name.text)];
     return base !== void 0 && init.arguments.length === base + 1 && this.rustScalarIntLiteral(this.unwrapParens(init.arguments[base])) !== void 0;
+  }
+  /** ral-63n: `const x = this.safeInteger* (..)` with no default argument: the reader answers an `Int` or `Null`. */
+  rust63nNoDefaultIntReader(declaration) {
+    const init = declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) ? void 0 : this.unwrapParens(declaration.initializer);
+    if (init === void 0 || !_is.isCallExpression.call(void 0, init) || !_is.isPropertyAccessExpression.call(void 0, init.expression) || init.expression.expression.kind !== _ast.SyntaxKind.ThisKeyword)
+      return false;
+    const name = String(init.expression.name.text);
+    const base = _RustTranspiler.RUST_SCALAR_INT_HELPERS[name];
+    return base !== void 0 && name.startsWith("safeInteger") && init.arguments.length === base;
   }
   /** ral-54n: `this.safeInteger* (..)` printed as its `Value` (an `Int` or `Null` on every path). */
   rustIntReaderCall(node) {
@@ -71963,7 +71979,10 @@ ${iden}}`;
   /** qe: `rows.push (x)` into another local list, or `m[k] = x` into a local container that is not a tagged store
    *  (never `this.*`, `client.subscriptions` or a cache `hashmap()` read): the map enters the store whole, once. */
   rustLocalStoreHandOff(n) {
-    const up = n.parent;
+    let at = n;
+    while (_is.isAsExpression.call(void 0, at.parent) || _is.isParenthesizedExpression.call(void 0, at.parent))
+      at = at.parent;
+    const up = at.parent;
     const own = this.rustDeclarationOfIdentifier(n);
     const untaggedLocal = (root) => {
       if (!_is.isIdentifier.call(void 0, root) || this.rustIdentifierRefersToDeclaration(root, own))
@@ -71973,9 +71992,9 @@ ${iden}}`;
         return false;
       return d.initializer === void 0 || !this.rustInitReadsTaggedStore(d.initializer) && !this.rustContainerInitReadsStore(this.rustSkipWrappers(d.initializer));
     };
-    if (_is.isCallExpression.call(void 0, up) && _is.isPropertyAccessExpression.call(void 0, up.expression) && up.arguments.length === 1 && up.arguments[0] === n && String(up.expression.name.text) === "push")
+    if (at === n && _is.isCallExpression.call(void 0, up) && _is.isPropertyAccessExpression.call(void 0, up.expression) && up.arguments.length === 1 && up.arguments[0] === n && String(up.expression.name.text) === "push")
       return untaggedLocal(up.expression.expression);
-    if (_is.isBinaryExpression.call(void 0, up) && up.right === n && up.operatorToken.kind === _ast.SyntaxKind.EqualsToken && _is.isElementAccessExpression.call(void 0, up.left) && _optionalChain([up, 'access', _10026 => _10026.parent, 'optionalAccess', _10027 => _10027.kind]) === _ast.SyntaxKind.ExpressionStatement)
+    if (_is.isBinaryExpression.call(void 0, up) && up.right === at && up.operatorToken.kind === _ast.SyntaxKind.EqualsToken && _is.isElementAccessExpression.call(void 0, up.left) && _optionalChain([up, 'access', _10026 => _10026.parent, 'optionalAccess', _10027 => _10027.kind]) === _ast.SyntaxKind.ExpressionStatement)
       return untaggedLocal(this.rustSkipWrappers(up.left.expression));
     return false;
   }

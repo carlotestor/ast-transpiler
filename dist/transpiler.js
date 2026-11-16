@@ -62643,6 +62643,13 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
         const test = lk === void 0 ? `${value2} ${sign} (__p as f64)` : `(__p as f64) ${sign} ${value2}`;
         return `matches!(${text(k, typed)}, Some(__p) if ${test})`;
       }
+      if (k === "oint" && own !== void 0 && this.rust63nNoDefaultIntReader(own.declaration) && this.rustScalarValueNumber(other)) {
+        if (dry)
+          return "_";
+        const value2 = `${this.printNode(other, 0).trim()}.as_f64().unwrap_or(f64::NAN)`;
+        const test = lk === void 0 ? `${value2} ${sign} (__p as f64)` : `(__p as f64) ${sign} ${value2}`;
+        return `matches!(${text(k, typed)}, Some(__p) if ${test})`;
+      }
       if (k !== "int" && k !== "num" || own === void 0 || !(this.rustRdOwnInit(own.declaration) || k === "int" && this.rustIntReaderLitDefault(own.declaration)) || !this.rustScalarValueNumber(other))
         return void 0;
       if (dry)
@@ -64068,6 +64075,15 @@ ${ind}];`;
       return false;
     const base = _RustTranspiler.RUST_SCALAR_INT_HELPERS[String(init.expression.name.text)];
     return base !== void 0 && init.arguments.length === base + 1 && this.rustScalarIntLiteral(this.unwrapParens(init.arguments[base])) !== void 0;
+  }
+  /** ral-63n: `const x = this.safeInteger* (..)` with no default argument: the reader answers an `Int` or `Null`. */
+  rust63nNoDefaultIntReader(declaration) {
+    const init = declaration === void 0 || !isVariableDeclaration3(declaration) ? void 0 : this.unwrapParens(declaration.initializer);
+    if (init === void 0 || !isCallExpression6(init) || !isPropertyAccessExpression3(init.expression) || init.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    const name = String(init.expression.name.text);
+    const base = _RustTranspiler.RUST_SCALAR_INT_HELPERS[name];
+    return base !== void 0 && name.startsWith("safeInteger") && init.arguments.length === base;
   }
   /** ral-54n: `this.safeInteger* (..)` printed as its `Value` (an `Int` or `Null` on every path). */
   rustIntReaderCall(node) {
@@ -71964,7 +71980,10 @@ ${iden}}`;
   /** qe: `rows.push (x)` into another local list, or `m[k] = x` into a local container that is not a tagged store
    *  (never `this.*`, `client.subscriptions` or a cache `hashmap()` read): the map enters the store whole, once. */
   rustLocalStoreHandOff(n) {
-    const up = n.parent;
+    let at = n;
+    while (isAsExpression3(at.parent) || isParenthesizedExpression3(at.parent))
+      at = at.parent;
+    const up = at.parent;
     const own = this.rustDeclarationOfIdentifier(n);
     const untaggedLocal = (root) => {
       if (!isIdentifier3(root) || this.rustIdentifierRefersToDeclaration(root, own))
@@ -71974,9 +71993,9 @@ ${iden}}`;
         return false;
       return d.initializer === void 0 || !this.rustInitReadsTaggedStore(d.initializer) && !this.rustContainerInitReadsStore(this.rustSkipWrappers(d.initializer));
     };
-    if (isCallExpression6(up) && isPropertyAccessExpression3(up.expression) && up.arguments.length === 1 && up.arguments[0] === n && String(up.expression.name.text) === "push")
+    if (at === n && isCallExpression6(up) && isPropertyAccessExpression3(up.expression) && up.arguments.length === 1 && up.arguments[0] === n && String(up.expression.name.text) === "push")
       return untaggedLocal(up.expression.expression);
-    if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && isElementAccessExpression4(up.left) && up.parent?.kind === SyntaxKind7.ExpressionStatement)
+    if (isBinaryExpression5(up) && up.right === at && up.operatorToken.kind === SyntaxKind7.EqualsToken && isElementAccessExpression4(up.left) && up.parent?.kind === SyntaxKind7.ExpressionStatement)
       return untaggedLocal(this.rustSkipWrappers(up.left.expression));
     return false;
   }
