@@ -65964,9 +65964,10 @@ ${i1}}`;
       return void 0;
     const currency = this.rustCurrencyLocalOf(node.expression);
     if (currency !== void 0) {
-      if (this.rustCurrencyLocalKind(currency) !== "cstruct" || this.rustCurrencyKeyReadKey(node.expression) !== "code")
+      const currencyKey = this.rustCurrencyKeyReadKey(node.expression);
+      if (this.rustCurrencyLocalKind(currency) !== "cstruct" || currencyKey !== "code" && (currencyKey !== "id" || this.primitiveKindOfType(this.typeOfNodeIfAny(node)) !== "string"))
         return void 0;
-      return { kind: "ostr", text: `crate::value::KeyRead::key_read(&&${this.printNode(currency.name, 0)}, "code").as_str().map(str::to_owned)` };
+      return { kind: "ostr", text: `crate::value::KeyRead::key_read(&&${this.printNode(currency.name, 0)}, "${currencyKey}").as_str().map(str::to_owned)` };
     }
     const optMarket = this.rustOptMarketLocalOf(node.expression);
     if (optMarket !== void 0) {
