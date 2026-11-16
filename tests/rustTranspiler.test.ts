@@ -23496,6 +23496,11 @@ describe('ral-76i: a declared endpoint answer whose only use is one whole box is
         expect(out).toContain('let mut positions: crate::value::List = ');
         expect(out).toContain('Value::Arr(positions)');
     });
+    test('rule 2: answers stored as array-literal elements and into this.options are held', () => {
+        const out = run ('r76i-endpoint-store', "    async fetchAll (params: Dict = {}) {\n        const a = this.publicGetMap (params);\n        const b = this.publicGetMap (params);\n        return [ a, b ];\n    }\n    async fetchConfig () {\n        const rows = await this.publicGetRows ();\n        this.options['rows'] = rows;\n        return true;\n    }\n");
+        expect(out).toContain('let mut rows: crate::value::List = ');
+        expect(out).not.toMatch(/let (?:mut )?rows: Value = /);
+    });
     test('negative: a Dict | List answer returned whole stays boxed', () => {
         const out = run ('r76i-endpoint-whole-any', "    async setLeverage (params: Dict = {}) {\n        const response = await this.publicGetAny (params);\n        return response;\n    }\n");
         expect(out).toMatch(/let (?:mut )?response: Value = /);
