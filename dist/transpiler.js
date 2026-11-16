@@ -58433,10 +58433,23 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (push !== void 0 && isCallExpression6(push) && !this.rustCopyPushPairElement(n, push, trial) && !this.rustPushSelfCallArgUse(n, push, trial))
         return false;
       const write = findAncestor(n, (m) => isStatement(m) || isBinaryExpression5(m) && m.operatorToken.kind === SyntaxKind7.EqualsToken);
-      if (write !== void 0 && isBinaryExpression5(write) && this.isNodeInsideNode(n, write.right) && !this.rustScalarBoxedField(n, write, declaration) && !this.rustScalarFeedsElementWrite(n, write) && !this.rustScalarPreciseFeed(n, write, declaration) && !this.rustScalarCacheFieldCtor(n, write) && !this.rustScalarSumOperandWrite(n, write) && !this.rust58kDictReaderKeyWrite(n, write) && !this.rust60kBaseCallArgDictWrite(n, write) && !this.rust62pBaseCallArgKeyWrite(n, write))
+      if (write !== void 0 && isBinaryExpression5(write) && this.isNodeInsideNode(n, write.right) && !this.rustScalarBoxedField(n, write, declaration) && !this.rustScalarFeedsElementWrite(n, write) && !this.rustScalarPreciseFeed(n, write, declaration) && !this.rustScalarCacheFieldCtor(n, write) && !this.rustScalarSumOperandWrite(n, write) && !this.rust58kDictReaderKeyWrite(n, write) && !this.rust60kBaseCallArgDictWrite(n, write) && !this.rust62pBaseCallArgKeyWrite(n, write) && !this.rust64nTypedArgWrite(n, write, form))
         return false;
     }
     return true;
+  }
+  /** ral-64n: a typed-signature argument (`targ`: printed `x.as_deref().unwrap_or_default()` / `x.as_deref()` / the Copy
+   *  payload, never a boxed operand) of the call that is the whole source of a write to a typed scalar local (bitflyer
+   *  `expiry = this.parseExpiryDate (expiryDate)` with `expiryDate` declared in two sibling blocks): the written local
+   *  prints its own conversion of the call's `Value`, so no build/ pass reads a boxed text of this argument there. */
+  rust64nTypedArgWrite(n, write, form) {
+    if (form !== "targ" || write.operatorToken?.kind !== SyntaxKind7.EqualsToken)
+      return false;
+    const target = this.unwrapParens(write.left);
+    const call = this.unwrapParens(write.right);
+    if (!isIdentifier3(target) || !isCallExpression6(call) || !call.arguments.some((a) => this.unwrapParens(a) === n))
+      return false;
+    return this.rustScalarLocalOf(target) !== void 0 || this.rustNilLocalOfIdentifier(target) !== void 0;
   }
   /** ral-60k: a direct argument of a base-class `this.m (..)` call that is the whole source of a write to a local declared
    *  `Dict` (kucoin fetchBalance `result = this.mergeBalanceAccount (result, currencyCode, ..)` in a sibling block): the
@@ -61942,12 +61955,34 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
     const delim = this.unwrapParens(call.arguments[0]);
     const lit = this.rustNativeStringLiteralArg(delim);
     const sep = lit !== void 0 && delim.text !== "" ? `"${lit}"` : isIdentifier3(delim) && this.rustScalarLocalOf(delim)?.kind === "str" ? `${super.printIdentifier(delim)}.as_str()` : void 0;
+    const optDelim = sep === void 0 ? this.rust64nOptSplitDelim(call) : void 0;
+    if (optDelim !== void 0) {
+      const hay = recvKind === "str" ? `Some(${super.printIdentifier(recv)}.as_str())` : `${super.printIdentifier(recv)}.as_deref()`;
+      return `Value::Array(if let (Some(__s), Some(__d)) = (${hay}, ${super.printIdentifier(optDelim)}.as_deref()) { __s.split(__d).map(Value::from).collect() } else { Vec::new() })`;
+    }
     if (sep === void 0)
       return void 0;
     const name = super.printIdentifier(recv);
     if (recvKind === "str")
       return `Value::Array(${name}.split(${sep}).map(Value::from).collect())`;
     return `Value::Array(if let Some(__s) = ${name}.as_deref() { __s.split(${sep}).map(Value::from).collect() } else { Vec::new() })`;
+  }
+  /** ral-64n: the sole argument of `s.split(..)` when it is `(d as string)` (parentheses / a `string` assertion only) over an
+   *  `Option<String>` local `d`; a bare identifier keeps the old decision (no assertion, no new form). */
+  rust64nOptSplitDelim(call) {
+    const arg = call?.arguments?.[0];
+    if (arg === void 0 || call.arguments.length !== 1)
+      return void 0;
+    const local = this.rustStrCastLocal(arg);
+    return local !== void 0 && this.rustScalarLocalOf(local)?.kind === "ostr" ? local : void 0;
+  }
+  /** ral-64n: `n` (through its parentheses / `as string`) is the delimiter `rust64nOptSplitDelim` prints from the local. */
+  rust64nOptSplitDelimUse(n) {
+    let top = n;
+    while (isParenthesizedExpression3(top.parent) || top.parent?.kind === SyntaxKind7.AsExpression)
+      top = top.parent;
+    const call = top.parent;
+    return isCallExpression6(call) && call.expression !== top && call.arguments[0] === top && this.rust64nOptSplitDelim(call) === n && this.rustStrLocalSplitText(call) !== void 0;
   }
   /** `s.slice(a)` / `s.slice(a, b)` on a typed string local with literal bounds (a non-negative end): the runtime's
    *  char-indexed slice without a closure. A start past the end clamps to an empty `skip`, `b < a` takes nothing (the
@@ -64266,6 +64301,8 @@ ${ind}];`;
     }
     if (isParenthesizedExpression3(parent) || parent.kind === SyntaxKind7.AsExpression) {
       const outer = this.rustScalarUseForm(parent, kind);
+      if (kind === "ostr" && this.rust64nOptSplitDelimUse(n))
+        return "native";
       return outer === "box" || outer === "xbox" || outer === "native" && (isParenthesizedExpression3(parent) || this.rustCastSplitRecv(parent)) ? outer : void 0;
     }
     if (isBinaryExpression5(parent)) {
