@@ -8432,6 +8432,14 @@ export class RustTranspiler extends BaseTranspiler {
         return this.rustMarketFieldScalar(this.unwrapParens(declaration.initializer))?.kind === 'obool';
     }
 
+    /** ral-80e: `n` names a single-binding `const` local with an initializer (no later write is possible). */
+    rust80eConstDecl(n: any): boolean {
+        const d: any = this.rustDeclaredNode(n);
+        const list: any = d?.parent;
+        return d !== undefined && isVariableDeclaration(d) && d.name !== n && d.initializer !== undefined && list !== undefined
+            && (list.flags & NodeFlags.Const) !== 0 && list.declarations?.length === 1;
+    }
+
     rustScalarUseFormOwn(n, kind: string): string | undefined {
         const parent: any = n.parent;
         if (parent === undefined) return undefined;
@@ -8453,6 +8461,10 @@ export class RustTranspiler extends BaseTranspiler {
         // a `Value::Bool(..)` box): the leaf prints its truthiness `(x == Some(true))`, the very test the boxed `is_true` made
         // (only a local the printer itself types off the struct field: other `Option<bool>` locals may be narrowed to `bool` later)
         if (kind === 'obool' && this.rustClimbLogicalWrappers(n) !== n && this.rustConditionBoolSlot(n) && this.rustMarketFlagFieldLocal(n)) return 'cond';
+        // ral-80e: a `bool` leaf of a logical the printer emits as a native `bool` (a narrowed bool local's initializer, a
+        // `Value::Bool(..)` box): the leaf prints bare, the very truthiness the boxed `is_true(&x)` read (`Bool(b)` is `b`).
+        // Only a `const` (never rewritten: literal-seeded `let` locals stay ccxt narrowBoolLocals', destructured slots may be Null)
+        if (kind === 'bool' && this.rustClimbLogicalWrappers(n) !== n && this.rust80eConstDecl(n) && this.rustConditionBoolSlot(n)) return 'cond';
         // vd: a string operand of a `Precise.string<Add|Sub|..>` arithmetic entry point is lent as is (the runtime takes
         // `&impl PreciseArg`: `None` reads as the `Null` box, a string as its `Str`); no box, no copy
         if ((kind === 'str' || kind === 'ostr') && this.rustPreciseLentOperand(n) && this.rustPreciseLendLocal(n)) return 'parg';

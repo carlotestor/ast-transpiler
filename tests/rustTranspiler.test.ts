@@ -23887,3 +23887,24 @@ describe('ral-76e: a literal-defaulted integer reader ordered against its loop c
         expect(out).not.toContain('let mut maxRetries: i64');
     });
 });
+describe('ral-80e: a native bool local as the leaf of a logical the printer prints as a native bool', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    options: Dict = {};\n    safeBool (o: any, k: any, d: any = undefined): boolean { return o; }\n    hold (m: any): any { return m; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('coinbaseinternational isOption: `isFuture || isOption` into a bool local reads the leaf bare', () => {
+        const out = write ('ral-80e-a', "    a (market: Dict, kind: string, isPerpetual: boolean) {\n        const isFuture = !isPerpetual && (kind.indexOf ('future') >= 0);\n        const isOption = (kind.indexOf ('option') >= 0);\n        const isFutureOrOption = isFuture || isOption;\n        const expiry = isFutureOrOption ? this.hold (market) : undefined;\n        return { 'option': isOption, 'future': isFuture, 'e': expiry };\n    }\n");
+        expect(out).toContain('let mut isOption: bool = ');
+        expect(out).toContain('|| isOption');
+        expect(out).not.toContain('is_true(&isOption)');
+        expect(out).toContain('Value::Bool(isOption)');
+    });
+    test('a negative: a bool local whose logical is a Value (an `any` operand) keeps the Value', () => {
+        const out = write ('ral-80e-a-neg', "    a (market: Dict, kind: string, x: Dict) {\n        const isOption = (kind.indexOf ('option') >= 0);\n        const v = isOption || this.hold (x);\n        return { 'option': isOption, 'v': v };\n    }\n");
+        expect(out).not.toContain('let mut isOption: bool');
+    });
+});
