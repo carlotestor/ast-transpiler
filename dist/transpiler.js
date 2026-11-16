@@ -57265,7 +57265,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const numericSum = (kind === "int" || kind === "num" || kind === "oint" || kind === "onum") && this.rustSumShape(this.unwrapParens(declaration.initializer));
     const clockInit = this.unwrapParens(declaration.initializer);
     const idLent = kind === "str" && typedUses > 0 && copied > 0 && this.rustIdString(clockInit);
-    const clockLent = kind === "str" && (this.rustClockString(clockInit) || idLent) && !this.rustStrNoLend && (copied > 0 ? this.rustReaderLendBoxes(declaration) : handOff) && !this.rustConcatWithNilLocal(declaration);
+    const clockLent = kind === "str" && (this.rustClockString(clockInit) || idLent) && !this.rustStrNoLend && (copied > 0 ? this.rustReaderLendBoxes(declaration) : handOff) && !this.rustConcatWithNilLocal(declaration, true);
     if (clockLent && copied > 0)
       this.rustStrLentLocals.add(declaration);
     if (kind === "str" && copied > 0 && this.rustRandomBytesCall(clockInit) && !this.rustStrNoLend && this.rustReaderLendBoxes(declaration))
@@ -65702,9 +65702,14 @@ ${ind}];`;
       return kind === "int" || kind === "oint";
     return this.primitiveKindOfType(this.typeOfNodeIfAny(parent.left === n ? parent.right : parent.left)) === "number";
   }
+  /** ral-84b: a nil-declared `let` whose current scalar decision (same scope solve) is a string kind. */
+  rust84bStrNilPartner(d) {
+    const kind = this.rustScalarDecisions.get(d);
+    return kind === "ostr" || kind === "str";
+  }
   /** rd: some `+` chain holding this local also holds a nil-declared local (typing this one would retype that one, which
    *  belongs to the nil-declared rules). */
-  rustConcatWithNilLocal(declaration) {
+  rustConcatWithNilLocal(declaration, strNilOk = false) {
     let found = false;
     this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
       let top = n;
@@ -65715,7 +65720,7 @@ ${ind}];`;
           return;
         if (isIdentifier3(m) && m !== n) {
           const d = this.rustDeclaredNode(m);
-          if (d !== void 0 && isVariableDeclaration3(d) && (d.initializer === void 0 || this.literalKindOfNode(d.initializer) === "null"))
+          if (d !== void 0 && isVariableDeclaration3(d) && (d.initializer === void 0 || this.literalKindOfNode(d.initializer) === "null") && !(strNilOk && this.rust84bStrNilPartner(d)))
             found = true;
           return;
         }
@@ -82485,6 +82490,11 @@ ${iden}}`;
           handOffs++;
           return true;
         }
+        if (up?.kind === SyntaxKind7.PropertyAssignment && up.initializer === n && short(n) && this.rust84bLiteralValueShared(n, declaration)) {
+          boxes.push([n, "clone"]);
+          handOffs++;
+          return true;
+        }
         if (this.rustBuiltListValueAliasWrite(n, declaration) && short(n)) {
           boxes.push([n, "clone"]);
           handOffs++;
@@ -82630,6 +82640,18 @@ ${iden}}`;
       }
     }
     return true;
+  }
+  /** ral-84b: the literal value `n` of a built list sits in the list's own block nesting (no loop or closure between the
+   *  declaration and it), and the object literal holding it is not itself the list's own write. */
+  rust84bLiteralValueShared(node, declaration) {
+    if (this.rustTestTierSource(node))
+      return false;
+    for (let up = node.parent; up !== void 0 && !(up.pos <= declaration.pos && declaration.end <= up.end); up = up.parent) {
+      if (isFunctionLike(up) || up.kind === SyntaxKind7.ForStatement || up.kind === SyntaxKind7.ForOfStatement || up.kind === SyntaxKind7.ForInStatement || up.kind === SyntaxKind7.WhileStatement || up.kind === SyntaxKind7.DoStatement)
+        return false;
+    }
+    const literal2 = node.parent?.parent;
+    return isObjectLiteralExpression4(literal2) && !(isBinaryExpression5(literal2.parent) && isIdentifier3(literal2.parent.left) && this.rustIdentifierRefersToDeclaration(literal2.parent.left, declaration));
   }
   /** `this.inArray (needle, x)` (haystack), `this.arrayConcat (a, b)` (either operand) on the base helpers, or the row of a
    *  `stored.append (x)` statement on a ws cache local: hand-written slots taking `impl Into<Value>`. */

@@ -2014,9 +2014,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_SCALAR_VALUE_OPERAND_OPS;
     /** A number local as one operand of `+ - * /` whose other operand prints as a `Value` (ordered compares keep their own native form). */
     rustScalarValueOperandUse(parent: any, n: any, kind: string): boolean;
+    /** ral-84b: a nil-declared `let` whose current scalar decision (same scope solve) is a string kind. */
+    rust84bStrNilPartner(d: any): boolean;
     /** rd: some `+` chain holding this local also holds a nil-declared local (typing this one would retype that one, which
      *  belongs to the nil-declared rules). */
-    rustConcatWithNilLocal(declaration: any): boolean;
+    rustConcatWithNilLocal(declaration: any, strNilOk?: boolean): boolean;
     /** rd: a `for (let i = <int>; ..; i++)` counter read in its own loop whose only write is the step: always an `Int`. */
     rustValueIntCounter(node: any): boolean;
     /** ral-76e: `c`, `c + k` or `c - k` (parentheses skipped) where `c` is an always-`Int` for counter (rustValueIntCounter) and
@@ -4334,6 +4336,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBuiltListSelfWrapWrite(write: any, declaration: any): boolean;
     /** ral-tf: no later statement of the function pushes to or writes the list, and the use is in no loop or closure. */
     rustBuiltListFrozenAfter(node: any, declaration: any, name: string): boolean;
+    /** ral-84b: the literal value `n` of a built list sits in the list's own block nesting (no loop or closure between the
+     *  declaration and it), and the object literal holding it is not itself the list's own write. */
+    rust84bLiteralValueShared(node: any, declaration: any): boolean;
     /** `this.inArray (needle, x)` (haystack), `this.arrayConcat (a, b)` (either operand) on the base helpers, or the row of a
      *  `stored.append (x)` statement on a ws cache local: hand-written slots taking `impl Into<Value>`. */
     rustBuiltListLentHelperSlot(call: any, n: any): 'inArray' | 'arrayConcat' | 'append' | undefined;
