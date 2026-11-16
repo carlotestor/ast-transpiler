@@ -51795,6 +51795,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustOptContainerLocals = /* @__PURE__ */ new WeakSet();
     /** ral-61n: optional map locals whose key-set uses (`Object.keys`, `in`) print off `x.as_deref()`. */
     this.rustOptKeySetLocals = /* @__PURE__ */ new WeakSet();
+    this.rust62nDictArrayTests = /* @__PURE__ */ new WeakSet();
     this.rustNeverNullTests = /* @__PURE__ */ new WeakMap();
     // ── ral-wh: index / variable-key reads on held Dict / List locals (rustBorrowedIndexReadUse) ──
     // `KeyRead::read(&&x, &k)` is `get_map_value` / `get_list_value`, the arm `get_value` takes for that variant.
@@ -62657,7 +62658,7 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
     if (!isIdentifier3(self) || this.rustScalarIdentifierKind(self) === void 0)
       return void 0;
     if (!isIdentifier3(partner))
-      return this.rust59nValueReaderPartner(partner) && !this.rust59nKeysElementRead(self) ? this.rustScalarPayloadPartnerTest(self, partner, kind, sign, dry) : void 0;
+      return this.rust59nValueReaderPartner(partner) ? this.rustScalarPayloadPartnerTest(self, partner, kind, sign, dry) : void 0;
     const base = kind.startsWith("o") ? kind.slice(1) : kind;
     if (base !== "str" && base !== "int" || this.rustScalarValuePartnerKind(partner) !== base)
       return this.rustScalarPayloadPartnerTest(self, partner, kind, sign, dry);
@@ -69563,7 +69564,8 @@ ${ind}let ${view}: &${map} = &${arc};
       }
       if (link === chain[0] && this.rustBorrowedIndexReads.has(link) && isIdentifier3(receiver)) {
         const borrowedKey = isIdentifier3(key) && this.rustBorrowedStrElems.has(this.rustDeclarationOfIdentifier(key));
-        acc = `crate::value::KeyRead::read(&&${super.printIdentifier(receiver)}, &${borrowedKey ? `Value::from(${super.printIdentifier(key)})` : this.rustI64HelperKeyText(key, node) ?? this.printNode(key, 0)})`;
+        const typedKey = isIdentifier3(key) && !borrowedKey ? this.rust62nTypedStrKey(key) : void 0;
+        acc = `crate::value::KeyRead::read(&&${super.printIdentifier(receiver)}, &${borrowedKey ? `Value::from(${super.printIdentifier(key)})` : typedKey ?? this.rustI64HelperKeyText(key, node) ?? this.printNode(key, 0)})`;
         continue;
       }
       const outerKey = this.rustSkipWrappers(key);
@@ -69893,6 +69895,13 @@ ${idn}}`;
   }
   /** A registered `i64` counter as a helper key (`Value::Int(i)`). zf: a read the ccxt write-back binds takes it too
    *  (`writeBackIndexedMutations` matches `get_value(&xs, &Value::Int(i))` and writes back at the same `Int` key). */
+  /** ral-62n: the boxed key text of a typed `String` / `Option<String>` local keying a borrowed index read. */
+  rust62nTypedStrKey(key) {
+    const kind = this.rustScalarLocalOf(key)?.kind;
+    if (kind !== "str" && kind !== "ostr")
+      return void 0;
+    return `Value::from(${super.printIdentifier(key)}${kind === "str" ? ".as_str()" : ".as_deref()"})`;
+  }
   rustI64HelperKeyText(keyNode, read) {
     const key = this.rustSkipWrappers(keyNode);
     if (this.rustI64CounterOf(key) === void 0)
@@ -70278,6 +70287,8 @@ ${this.getIden(identation)}}`;
     const optList = this.printOptListIsArray(node);
     if (optList !== void 0)
       return optList;
+    if (this.rust62nDictArrayTests.has(node))
+      return "Value::Bool(false)";
     return `Value::Bool(${this.nativeValuePredicateText("array", node?.arguments?.[0], parsedArg) ?? `is_array(&${parsedArg})`})`;
   }
   printObjectKeysCall(node, identation, parsedArg = void 0) {
@@ -72823,6 +72834,8 @@ ${iden}}`;
     let listIndexWrites = 0;
     const neverNullInit = !nilDeclared && allSlot === void 0 && init !== void 0 && (from === "dict" || from === "list") && this.rustContainerInitNeverNull(init, from === "list" ? "list" : "map") && this.rustBaseCallNamed(init, _RustTranspiler.RUST_NEVER_NULL_TEST_READERS) && this.rustEmptyContainerLiteral(init.arguments[init.arguments.length - 1], from);
     const neverNullTests = [];
+    const dictArrayTests = [];
+    const dictReaderInit = !nilDeclared && from === "dict" && init !== void 0 && this.rustBaseCallNamed(init, _RustTranspiler.RUST_62N_DICT_READERS) && this.rust62nMapOrNullDefault(init);
     const accept = (n) => {
       if (this.rustIdentifierIsPropertyName(n))
         return !(n.parent?.kind === SyntaxKind7.ShorthandPropertyAssignment && n.parent.name === n);
@@ -72837,6 +72850,8 @@ ${iden}}`;
         nullTests++;
         return true;
       }
+      if (dictReaderInit && isCallExpression6(up) && up.arguments.length === 1 && up.arguments[0] === n && this.rustIsArrayIsArrayCallee(up))
+        return dictArrayTests.push(up) > 0;
       if (sbAlias && this.rustNilSlotWrite(n) && this.rustDictSlotOfWrite(n) && this.rustDestrBoxLineOk(n)) {
         this.rustSbAliasSlotWrites.add(n);
         return ++sbMapWrites > 0;
@@ -73013,6 +73028,8 @@ ${iden}}`;
     }
     if (neverNullTests.length > 0 && writes > 0)
       nullTests += neverNullTests.length;
+    if (dictArrayTests.length > 0 && writes > 0)
+      return void 0;
     const constTests = writes === 0 ? neverNullTests : [];
     const builtBoxOnly = reads === 0 && boxedElementUses.length > 0 && nullTests === 0 && writes === 0 && init !== void 0 && isCallExpression6(init) && (this.rustBuiltReturnSourceKind(init) !== void 0 || paramsBoxes === boxedElementUses.length && this.rustOmitOfDict(init) || optionalBoxes === 0 && paramsBoxes === 0 && boxedElementUses.every((u) => this.rustDefaultedContainerBoxUse(u, init)) || optionalBoxes === boxedElementUses.length && nullTests === 0 && writes === 0 && this.rustOptReaderBoxUse(boxedElementUses[0], init) || optionalBoxes === 0 && paramsBoxes === 0 && this.rustVenueContainerReturnKind(init)?.nullable === false && boxedElementUses.every((u) => this.rustBuiltReturnBoxUse(u, init)));
     const boxOnly = reads === 0 && boxedElementUses.length > 0 && (this.rustDictElementSource(init) || this.rustListElementSource(init)) && nullTests === 0 && writes === 0;
@@ -73093,6 +73110,8 @@ ${iden}}`;
     }
     for (const t of constTests)
       this.rustNeverNullTests.set(t, declaration);
+    for (const t of dictArrayTests)
+      this.rust62nDictArrayTests.add(t);
     for (const n of boxedElementUses)
       this.rustDictElementBoxes.set(n, this.rustLocalLastUse(n, declaration) || n.parent?.kind === SyntaxKind7.ConditionalExpression && this.rustOwnedLastUse(n, declaration) ? "move" : "share");
     if (extendReuse || neverNullRewrites)
@@ -73100,6 +73119,14 @@ ${iden}}`;
     for (const w of reuseProducerWrites)
       this.rustReuseProducerWrites.add(w);
     return from === "list" ? "list" : "dict";
+  }
+  /** ral-62n: the reader's default (after its key arguments) is absent, `undefined` or an object literal: a map default. */
+  rust62nMapOrNullDefault(call) {
+    const keys = String(call.expression.name.text) === "safeDict2" ? 3 : 2;
+    if (call.arguments.length > keys + 1)
+      return false;
+    const dflt = call.arguments.length > keys ? this.rustSkipWrappers(call.arguments[keys]) : void 0;
+    return dflt === void 0 || this.literalKindOfNode(dflt) === "null" || isObjectLiteralExpression4(dflt);
   }
   /** ral-60n: the reader's default is the empty literal of the local's kind (`[]` for a list, `{}` for a map). */
   rustEmptyContainerLiteral(node, from) {
@@ -73306,6 +73333,8 @@ ${iden}}`;
     if (this.rustListIndexIntKey(key))
       return true;
     const keyScalar = this.rustScalarLocalOf(key);
+    if (keyScalar !== void 0 && (keyScalar.kind === "str" || keyScalar.kind === "ostr") && keyDecl.initializer !== void 0 && this.rustOwnKeysElementKey(n, key))
+      return true;
     return keyScalar === void 0 && this.rustNilLocalKind(keyDecl) === void 0 && !this.rustWsUrlLocal(keyDecl) && this.rustBorrowedLocalKind(keyDecl) === void 0 && !this.rustLentListLocal(keyDecl);
   }
   /** A plain map literal (outside the test tier): every `x = ..` write must be `x = this.extend (x, y)`; the
@@ -74601,7 +74630,12 @@ ${iden}}`;
     if (d === void 0 || d === recv || d.name === recv || !(isVariableDeclaration3(d) || d.kind === SyntaxKind7.Parameter))
       return false;
     const own = this.rustDeclarationOfIdentifier(n);
-    return own !== void 0 && own !== n && own.name !== n && this.rustLocalLastUse(n, own);
+    if (own === void 0 || own === n || own.name === n)
+      return false;
+    if (this.rustLocalLastUse(n, own))
+      return true;
+    const guard = findAncestor(n, (a) => a.kind === SyntaxKind7.IfStatement || isFunctionLike(a));
+    return castRecv && guard !== void 0 && guard.kind === SyntaxKind7.IfStatement && this.rustGuardedBranchLastUse(n, own, guard);
   }
   // ── rustOptReaderBoxUse: a nullable base `safeDict*` read handed on whole ──
   // `Option<Dict>` keeps Null apart from the map, so `x.map_or(Value::Null, Value::Dict)` gives back exactly the
@@ -74620,6 +74654,8 @@ ${iden}}`;
       return true;
     if (this.rustLocalStoreHandOff(n))
       return true;
+    if (isArrayLiteralExpression4(up) && this.rust62nListLiteralSink(up))
+      return true;
     if (this.rustWsDispatchCallArg(n))
       return true;
     if (!isCallExpression6(up) || up.expression === n || !isPropertyAccessExpression3(up.expression) || up.expression.expression.kind !== SyntaxKind7.ThisKeyword)
@@ -74629,6 +74665,23 @@ ${iden}}`;
       return false;
     const at = Array.from(up.arguments).indexOf(n);
     return !this.rustLentResponseSlot(up, n) && !this.rustLentListSlot(up, n) && !this.rustLentHelperSlot(up, n, "dict") && this.rustNilBoxSlotOk(up, at);
+  }
+  /** ral-62n: the array literal is the default argument of a base `safeList*` reader, or the whole right side of a
+   *  `x = [..]` / `m[k] = [..]` statement (written into a place, not handed to a call's `Value` slot). */
+  rust62nListLiteralSink(list) {
+    let top = list;
+    while (isParenthesizedExpression3(top.parent) || isAsExpression3(top.parent))
+      top = top.parent;
+    const up = top.parent;
+    if (isBinaryExpression5(up) && up.right === top && up.operatorToken.kind === SyntaxKind7.EqualsToken)
+      return up.parent?.kind === SyntaxKind7.ExpressionStatement;
+    if (!isCallExpression6(up) || up.arguments.length === 0 || up.arguments[up.arguments.length - 1] !== top)
+      return false;
+    if (!this.rustBaseCallNamed(up, _RustTranspiler.RUST_62N_LIST_READERS))
+      return false;
+    const callee = up.expression;
+    const keys = String(callee.name.text) === "safeList2" ? 3 : 2;
+    return up.arguments.length === keys + 1;
   }
   /** ral-55h: `n` is a handler argument (not the `this` receiver slot) of `h.call (this, ..)` on an identifier `h` typed
    *  `any` (the by-name ws dispatch the ccxt build turns into `self.dispatch_ws_handler(&h, &[..])`). */
@@ -87859,6 +87912,8 @@ _RustTranspiler.RUST_BORROWED_ANY_KEY_READERS = /^safe(?:Value|String(?:Lower|Up
 // rewritten): the reader answers a `Value::Arr` / `Value::Dict` on every path (the read when it is that container, else
 // the default), so the boxed `x != Value::Null` was always true and `x == Value::Null` always false. Truth table in the
 // jest test 'ral-60n ... truth table'. The test prints that constant; the local keeps the plain container form.
+// ral-62n: base readers whose body answers a map (`isDictionary`) or the default: no list on any path without a list default
+_RustTranspiler.RUST_62N_DICT_READERS = /* @__PURE__ */ new Set(["safeDict", "safeDict2", "safeDictN"]);
 _RustTranspiler.RUST_NEVER_NULL_TEST_READERS = /* @__PURE__ */ new Set(["safeList", "safeList2", "safeListN", "safeDict", "safeDict2", "safeDictN"]);
 _RustTranspiler.RUST_SELF_EXTEND = /* @__PURE__ */ new Set(["extend"]);
 _RustTranspiler.RUST_REUSE_SAFE_DICT = /* @__PURE__ */ new Set(["safeDict"]);
@@ -87887,6 +87942,7 @@ _RustTranspiler.RUST_LENT_OPTIONAL_HELPERS = /* @__PURE__ */ new Set([
   // exactly as the boxed Null passed through, `Some(m)` drops keys from the shared map (copy-on-write)
   "omit"
 ]);
+_RustTranspiler.RUST_62N_LIST_READERS = /* @__PURE__ */ new Set(["safeList", "safeList2", "safeListN"]);
 // ── rustParamReadsByReference / rustReaderTakesContainerByReference: generated readers lend their container ──
 // A generated base reader whose container parameter is only handed to by-reference readers declares it
 // `impl KeyRead`: a `Value` argument still passes by value, and a dict or list local is lent as `&x`.
