@@ -3656,7 +3656,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `let mut x: Option<crate::value::Dict> = <init>.into_opt_dict()` (`None` when declared empty). */
     printOptContainerDeclaration(declaration: any, varName: string, indent: string): string | undefined;
     /** `x = None` / `x = <container read>.into_opt_dict()` for the optional form. */
-    printOptContainerWrite(left: any, right: any): string | undefined;
+    printOptContainerWrite(left: any, right: any, identation?: number): string | undefined;
     /** `x.is_some()` / `x.is_none()` for a null test of the optional form. */
     printOptContainerNullTest(left: any, right: any, op: any): string | undefined;
     rustBorrowedListUse(node: any): boolean;
@@ -3693,6 +3693,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-63i: `this.m (..)` whose resolved declaration is a method of the calling venue's own source file (not the base
      *  tier, not an abstract endpoint), so its argument slots print from that declaration. */
     rust63iSameFileMethod(call: any): boolean;
+    /** ral-76b: `t[k] = x` (statement, one level, `t` a plain local or `this` field read) or `t = x` / `let t = x` whose
+     *  target local is untyped (no typed decision of its own), so the right side is a plain `Value` place. */
+    rust76bWholeHandOff(n: any): boolean;
+    rust76bUntypedTarget(target: any): boolean;
     rustDeclaredEndpointBoxUse(n: any): boolean;
     /** `this.F` for a checker dict-shaped field (`fundingRates: Dictionary<FundingRate>`) the native insert writes
      *  (`printNativeDictInsert`: `rustFieldStaysDict`). The insert stores whatever handle it is given, so a built map

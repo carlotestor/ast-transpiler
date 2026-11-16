@@ -53703,7 +53703,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return marketWrite;
     if (isAssign && this.rustTypedListField(left))
       return `${this.printNode(left, 0)} = ${this.printNode(right, 0).trim()}.into_list()`;
-    const optContainerWrite = isAssign && isIdentifier3(left) ? this.printOptContainerWrite(left, right) ?? this.printOptListWrite(left, right) ?? this.printExtendReuseWrite(left, right) ?? this.printSbAliasWrite(node, left, right) : void 0;
+    const optContainerWrite = isAssign && isIdentifier3(left) ? this.printOptContainerWrite(left, right, identation) ?? this.printOptListWrite(left, right) ?? this.printExtendReuseWrite(left, right) ?? this.printSbAliasWrite(node, left, right) : void 0;
     if (optContainerWrite !== void 0)
       return optContainerWrite;
     const nilMapWrite = isAssign && isIdentifier3(left) ? this.printNilMapWrite(left, right, identation) : void 0;
@@ -74250,6 +74250,7 @@ ${iden}}`;
     let castLengths = 0;
     let nullWrites = 0;
     let endpointBoxes = 0;
+    let literal76bWrites = 0;
     let plainReads = 0;
     let aliasBoxes = 0;
     let optAliasWrites = 0;
@@ -74342,6 +74343,12 @@ ${iden}}`;
             mixed = true;
           from = from ?? venueKind;
           return String(rhs.getText()).split("\n")[0].length <= 240;
+        }
+        if (nilDeclared && (from === void 0 || from === "dict") && this.rustSameKindRewrite(rhs, "dict") && isObjectLiteralExpression4(rhs) && rhs.properties.length > 0) {
+          declaredEndpointWrites++;
+          literal76bWrites++;
+          from = "dict";
+          return true;
         }
         const kind = this.rustNilResponseWriteKind(rhs, nilDeclared, declaration);
         const declaredWrite = nilDeclared && this.rustDeclaredEndpointWrite(rhs);
@@ -74478,6 +74485,8 @@ ${iden}}`;
     const boxOnly = reads === 0 && boxedElementUses.length > 0 && (this.rustDictElementSource(init) || this.rustListElementSource(init)) && nullTests === 0 && writes === 0;
     const declaredDictOnly = nilDeclared && from === "dict" && !mixed && declaredEndpointWrites > 0 && declaredEndpointWrites + nullWrites === writes && !this.rustNilResponseLocals.has(declaration);
     const declaredListTested = nilDeclared && from === "list" && !mixed && nullTests > 0 && declaredEndpointWrites > 0 && declaredEndpointWrites + nullWrites === writes && !this.rustNilResponseLocals.has(declaration) && lengths === 0 && castLengths === 0;
+    if (literal76bWrites > 0 && declaredEndpointWrites === literal76bWrites)
+      return void 0;
     const endpointBoxOnly = endpointBoxes > 0 && (nullTests === 0 || declaredDictOnly) && declaredEndpointWrites > 0 && declaredEndpointWrites + nullWrites === writes && !this.rustNilResponseLocals.has(declaration) && boxedElementUses.every((u) => this.rustBoxLineOk(u));
     if (endpointBoxes > 0 && !endpointBoxOnly)
       return void 0;
@@ -76701,7 +76710,7 @@ ${iden}}`;
     return `${indent}let mut ${varName}: Option<${type}> = ${this.rustWsFieldGetText(init, true) ?? this.printNode(declaration.initializer, 0).trim()}.into_opt_${kind}()`;
   }
   /** `x = None` / `x = <container read>.into_opt_dict()` for the optional form. */
-  printOptContainerWrite(left, right) {
+  printOptContainerWrite(left, right, identation = 0) {
     const local = this.rustOptContainerOf(left);
     if (local === void 0)
       return void 0;
@@ -76709,6 +76718,8 @@ ${iden}}`;
     const rhs = this.rustSkipWrappers(right);
     if (this.literalKindOfNode(rhs) === "null")
       return `${name} = None`;
+    if (local.kind === "dict" && isObjectLiteralExpression4(rhs) && rhs.properties.length > 0 && this.rustSameKindRewrite(rhs, "dict"))
+      return `${name} = Some(crate::value::Dict::new(${this.rustObjectLiteralBlock(rhs, identation)}))`;
     const src = this.rustOptContainerOf(rhs);
     if (src !== void 0 && src.kind === local.kind && this.rustPrintedOptional.has(src.declaration)) {
       const s = super.transformIdentifier(rhs, this.ReservedKeywordsReplacements[rhs.text] ?? rhs.text);
@@ -76945,6 +76956,27 @@ ${iden}}`;
     const file = declaration.getSourceFile?.();
     return file !== void 0 && file === call.getSourceFile?.() && !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(file.fileName));
   }
+  /** ral-76b: `t[k] = x` (statement, one level, `t` a plain local or `this` field read) or `t = x` / `let t = x` whose
+   *  target local is untyped (no typed decision of its own), so the right side is a plain `Value` place. */
+  rust76bWholeHandOff(n) {
+    const up = n.parent;
+    if (up?.kind === SyntaxKind7.VariableDeclaration && up.initializer === n)
+      return isIdentifier3(up.name) && this.rust76bUntypedTarget(up);
+    if (!isBinaryExpression5(up) || up.right !== n || up.operatorToken.kind !== SyntaxKind7.EqualsToken || up.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const left = up.left;
+    if (isIdentifier3(left)) {
+      const target = this.rustDeclaredNode(left);
+      return target !== void 0 && isVariableDeclaration3(target) && isIdentifier3(target.name) && target !== this.rustDeclaredNode(n) && this.rust76bUntypedTarget(target);
+    }
+    if (!isElementAccessExpression4(left) || !isIdentifier3(left.expression))
+      return false;
+    const holder = this.rustDeclaredNode(left.expression);
+    return holder !== void 0 && holder !== this.rustDeclaredNode(n) && (isVariableDeclaration3(holder) || holder.kind === SyntaxKind7.Parameter);
+  }
+  rust76bUntypedTarget(target) {
+    return this.rustNilLocalKind(target) === void 0 && this.rustScalarLocalKind(target) === void 0 && this.rustBorrowedLocalKind(target) === void 0 && !this.rustDictLocalIsTyped(target) && !this.rustVecLocalIsTyped(target) && this.rustMarketLocalKind(target) === false && !this.rustOptListLocal(target);
+  }
   rustDeclaredEndpointBoxUse(n) {
     const up = n.parent;
     if (up === void 0 || this.rustScalarInNestedWrite(n, true))
@@ -76953,6 +76985,8 @@ ${iden}}`;
       return up.initializer === n && isObjectLiteralExpression4(up.parent) && !this.rustInDestructureWrite(n);
     if (isReturnStatement4(up))
       return up.expression === n;
+    if (this.rust76bWholeHandOff(n))
+      return true;
     if (isCallExpression6(up) && up.expression !== n && isPropertyAccessExpression3(up.expression) && up.expression.expression.kind === SyntaxKind7.ThisKeyword && this.rust63iSameFileMethod(up) && !this.rustLentResponseSlot(up, n) && !this.rustLentListSlot(up, n) && !this.rustLentHelperSlot(up, n, "dict")) {
       return this.rustNilBoxSlotOk(up, Array.from(up.arguments).indexOf(n));
     }
