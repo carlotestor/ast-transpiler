@@ -43151,7 +43151,7 @@ var JavaTranspiler = class extends BaseTranspiler {
     if (isStringLiteralLikeNode3(arg)) {
       return true;
     }
-    return this.javaProvableString(arg);
+    return this.javaProvableString(arg) || isIdentifier2(arg) && this.javaDeclaredStringElementLocal(arg, arg.text);
   }
   // the native printed type of each argument position of a call, when the resolved
   // signature declares that parameter natively
@@ -45587,7 +45587,7 @@ var JavaTranspiler = class extends BaseTranspiler {
   printJavaLength(expression, leftSide) {
     const kind = this.javaLengthKind(expression);
     if (kind !== void 0) {
-      const read = kind.startsWith("String") ? `((String)${leftSide}).length()` : `((java.util.List<?>)${leftSide}).size()`;
+      const read = kind.startsWith("String") ? `${this.javaStringReceiverText(expression, leftSide)}.length()` : `((java.util.List<?>)${leftSide}).size()`;
       return kind.endsWith("OrNull") ? `(${leftSide} == null ? 0 : ${read})` : read;
     }
     const declared = this.javaDeclaredTypeOf(expression);
@@ -47122,14 +47122,16 @@ var JavaTranspiler = class extends BaseTranspiler {
   }
   printDeleteExpression(node, _identation) {
     const object = this.printNode(node.expression.expression, 0);
-    const key = this.printNode(node.expression.argumentExpression, 0);
+    const keyNode = node.expression.argumentExpression;
+    const printedKey = this.printNode(keyNode, 0);
+    const key = this.javaDeclaredStringElementLocal(keyNode, printedKey) ? printedKey : `(String)${printedKey}`;
     if (this.javaWsClientMapReceiver(node.expression.expression)) {
-      return `${object}.remove((String)${key})`;
+      return `${object}.remove(${key})`;
     }
     if (this.javaBaseDeclaredMapCacheField(node.expression.expression)) {
-      return `${object}.remove((String)${key})`;
+      return `${object}.remove(${key})`;
     }
-    return `((java.util.Map<String,Object>)${object}).remove((String)${key})`;
+    return `((java.util.Map<String,Object>)${object}).remove(${key})`;
   }
   // `this.<field>` resolving to an Exchange.ts field of JAVA_BASE_DECLARED_MAP_CACHE_FIELDS
   javaBaseDeclaredMapCacheField(expression) {
@@ -49658,10 +49660,29 @@ var JavaTranspiler = class extends BaseTranspiler {
     if (this.javaScalarFamily(receiver) !== "string" || this.javaScalarFamily(separator) !== "string") {
       return void 0;
     }
-    return `${this.ARRAY_OPENING_TOKEN}${this.javaNativeSplitText(name, parsedArg)}${this.ARRAY_CLOSING_TOKEN}`;
+    return `${this.ARRAY_OPENING_TOKEN}${this.javaNativeSplitText(name, parsedArg, receiver)}${this.ARRAY_CLOSING_TOKEN}`;
   }
-  javaNativeSplitText(name, parsedArg) {
-    return `((String)${name}).split(java.util.regex.Pattern.quote(${parsedArg}))`;
+  javaNativeSplitText(name, parsedArg, receiver = void 0) {
+    return `${this.javaStringReceiverText(receiver, name)}.split(java.util.regex.Pattern.quote(${parsedArg}))`;
+  }
+  // ral-84j1: the text of a String-method receiver (or String argument). An identifier the
+  // embedding layer declares a Java String (javaDeclaredStringType, decided from the TS checker
+  // there) already has the static type the method needs, so the checkcast every Object local
+  // takes is not printed; anything else keeps `((String)x)`.
+  javaStringReceiverText(receiver, name) {
+    return this.javaDeclaredStringElementLocal(receiver, name) ? name : `((String)${name})`;
+  }
+  // ral-84j1: `k` printed bare, bound to a `const k = xs[..]` element read (the element-read lane's
+  // own shape, from the AST) that the embedding layer declares a Java String
+  javaDeclaredStringElementLocal(node, printed) {
+    if (node === void 0 || !isIdentifier2(node) || printed !== node.text) {
+      return false;
+    }
+    const declaration = this.javaDeclarationOfIdentifier(node);
+    if (declaration === void 0 || !isVariableDeclaration2(declaration) || declaration.initializer === void 0 || !isElementAccessExpression3(this.unwrapParenthesized(declaration.initializer))) {
+      return false;
+    }
+    return this.javaDeclaredStringType(node);
   }
   // `s.split (<literal>)[<int literal>]` on the native split: the helper's List branch answers
   // null off range (e.g. "/".split("/") is empty), which findFirst().orElse(null) keeps, with
@@ -49747,7 +49768,7 @@ var JavaTranspiler = class extends BaseTranspiler {
       return name;
     }
     if (this.javaScalarFamily(receiver) === "string") {
-      return `((String)${name})`;
+      return this.javaStringReceiverText(receiver, name);
     }
     return void 0;
   }
@@ -49820,7 +49841,7 @@ var JavaTranspiler = class extends BaseTranspiler {
       return void 0;
     }
     if (this.javaProvableString(arg)) {
-      return `((String)${name}).indexOf(${parsedArg})`;
+      return `${this.javaStringReceiverText(receiver, name)}.indexOf(${parsedArg})`;
     }
     let argType;
     try {
@@ -49829,24 +49850,24 @@ var JavaTranspiler = class extends BaseTranspiler {
       return void 0;
     }
     if (argType.getAliasSymbol?.() === void 0 && this.isStringType(argType.flags) && (isIdentifier2(arg) || isPropertyAccessExpression2(arg))) {
-      return `((String)${name}).indexOf(((String)${parsedArg}))`;
+      return `${this.javaStringReceiverText(receiver, name)}.indexOf(${this.javaStringReceiverText(arg, parsedArg)})`;
     }
     return void 0;
   }
   printIndexOfCall(node, _identation, name = void 0, parsedArg = void 0) {
     return this.javaNativeIndexOfCall(node, name, parsedArg) ?? this.javaNarrowedIndexOf(node, name, parsedArg) ?? `${this.INDEXOF_WRAPPER_OPEN}${name}, ${parsedArg}${this.INDEXOF_WRAPPER_CLOSE}`;
   }
-  printSearchCall(_node, _identation, name = void 0, parsedArg = void 0) {
-    return `((String)${name}).indexOf(${parsedArg})`;
+  printSearchCall(node, _identation, name = void 0, parsedArg = void 0) {
+    return `${this.javaStringReceiverText(node?.expression?.expression, name)}.indexOf(${parsedArg})`;
   }
-  printStartsWithCall(_node, _identation, name = void 0, parsedArg = void 0) {
-    return `((String)${name}).startsWith(((String)${parsedArg}))`;
+  printStartsWithCall(node, _identation, name = void 0, parsedArg = void 0) {
+    return `${this.javaStringReceiverText(node?.expression?.expression, name)}.startsWith(${this.javaStringReceiverText(node?.arguments?.[0], parsedArg)})`;
   }
-  printEndsWithCall(_node, _identation, name = void 0, parsedArg = void 0) {
-    return `((String)${name}).endsWith(((String)${parsedArg}))`;
+  printEndsWithCall(node, _identation, name = void 0, parsedArg = void 0) {
+    return `${this.javaStringReceiverText(node?.expression?.expression, name)}.endsWith(${this.javaStringReceiverText(node?.arguments?.[0], parsedArg)})`;
   }
-  printTrimCall(_node, _identation, name = void 0) {
-    return `((String)${name}).trim()`;
+  printTrimCall(node, _identation, name = void 0) {
+    return `${this.javaStringReceiverText(node?.expression?.expression, name)}.trim()`;
   }
   printJoinCall(_node, _identation, name = void 0, parsedArg = void 0) {
     return `String.join((String)${parsedArg}, (java.util.List<String>)${name})`;
@@ -49863,11 +49884,11 @@ var JavaTranspiler = class extends BaseTranspiler {
   printToStringCall(_node, _identation, name = void 0) {
     return `String.valueOf(${name})`;
   }
-  printToUpperCaseCall(_node, _identation, name = void 0) {
-    return `((String)${name}).toUpperCase()`;
+  printToUpperCaseCall(node, _identation, name = void 0) {
+    return `${this.javaStringReceiverText(node?.expression?.expression, name)}.toUpperCase()`;
   }
-  printToLowerCaseCall(_node, _identation, name = void 0) {
-    return `((String)${name}).toLowerCase()`;
+  printToLowerCaseCall(node, _identation, name = void 0) {
+    return `${this.javaStringReceiverText(node?.expression?.expression, name)}.toLowerCase()`;
   }
   printSliceCall(node, _identation, name = void 0, parsedArg = void 0, parsedArg2 = void 0) {
     const nativeCall = this.nativeSliceCallIfProvable(node, name) ?? this.javaTypedStringSliceCall(node, name, parsedArg, parsedArg2, _identation);
