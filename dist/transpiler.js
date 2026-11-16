@@ -54519,9 +54519,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (this.rustNilLocalKind(declaration) !== void 0)
       return void 0;
     const scope = this.rustEnclosingFunction(declaration);
-    if (scope === void 0 || isSourceFile5(scope) || this.rustNativeStrReturnKind(scope) === "str")
+    if (scope === void 0 || isSourceFile5(scope))
       return void 0;
     const name = String(declaration.name.text);
+    if (this.rustNativeStrReturnKind(scope) === "str" && !this.rustScopeNameNodes(scope, name).some((n) => this.rust61xNilStrReturnLocal(n, scope) && this.rustDeclaredNode(n) === declaration))
+      return void 0;
     let joined = "null";
     let writes = 0;
     for (const n of this.rustScopeNameNodes(scope, name)) {
@@ -54560,7 +54562,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const kind = joined;
     if (kind === "ostr" && !this.rustSiblingStrBoxesMove(declaration, scope))
       return void 0;
-    if (kind === "ostr" && this.rust45bUsesNewForm(declaration, scope, name) && this.rust45bReturnedFromStrMethod(declaration, scope, name))
+    if (kind === "ostr" && this.rust45bUsesNewForm(declaration, scope, name) && this.rust45bReturnedFromStrMethod(declaration, scope, name) && this.rustNativeStrReturnHead(scope) && !this.rust57xStrReturnMethod(scope))
       return void 0;
     if (this.rustScalarSeeding)
       return kind;
@@ -54882,7 +54884,23 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     return this.literalKindOfNode(this.unwrapParens(declaration.initializer)) === "string" && this.rustEnclosingFunction(declaration) === fn;
   }
+  /** ral-61x: `return x` of the method's own nil-declared `let x: Str = undefined` local (an accumulator the body writes):
+   *  as an `Option<String>` it is the payload itself, as a `Value` a checker-string `Value` (converts either way). */
+  rust61xNilStrReturnLocal(n, fn) {
+    if (n === void 0 || !isIdentifier3(n) || !isReturnStatement4(n.parent) || findAncestor(n.parent.parent, isFunctionLike) !== fn)
+      return false;
+    const declaration = this.rustDeclaredNode(n);
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name) || declaration.type === void 0)
+      return false;
+    if (declaration.initializer !== void 0 && this.literalKindOfNode(this.unwrapParens(declaration.initializer)) !== "null")
+      return false;
+    if ((declaration.parent.flags & NodeFlags4.Const) !== 0 || this.rustEnclosingFunction(declaration) !== fn)
+      return false;
+    return this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name)) === "string";
+  }
   rust56xStrReturnText(exp, fn) {
+    if (exp !== void 0 && this.rust61xNilStrReturnLocal(exp, fn) && this.rustScalarLocalOf(exp)?.kind === "ostr")
+      return super.printIdentifier(exp);
     if (exp === void 0 || !isIdentifier3(exp) || !this.rust56xStrReturnLocal(exp, fn))
       return void 0;
     const kind = this.rustScalarLocalOf(exp)?.kind;
@@ -59407,6 +59425,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (typedReturn !== void 0)
         return typedReturn === kind || typedReturn === `o${kind}` ? "native" : void 0;
       if ((kind === "str" || kind === "ostr") && this.rust56xStrReturnLocal(n, fn) && this.rustStrReturnSignature(fn, n) && this.rust57xStrReturnMethod(fn))
+        return "native";
+      if (kind === "ostr" && this.rust61xNilStrReturnLocal(n, fn) && this.rust57xStrReturnMethod(fn))
         return "native";
       return this.rustNativeStrReturnKind(fn) === "str" || this.rustStrReturnSignature(fn, n) ? void 0 : "box";
     }
@@ -64202,7 +64222,7 @@ ${ind}];`;
         return;
       if (isReturnStatement4(n)) {
         const inner = this.unwrapParensNode(n.expression);
-        const own = inner !== void 0 && isIdentifier3(inner) && this.rust56xStrReturnLocal(inner, fn) && this.rustStrReturnSignature(fn, inner) && this.primitiveKindOfType(this.getCheckedTypeOf(inner)) === "string";
+        const own = inner !== void 0 && isIdentifier3(inner) && this.rust56xStrReturnLocal(inner, fn) && this.rustStrReturnSignature(fn, inner) && this.primitiveKindOfType(this.getCheckedTypeOf(inner)) === "string" || this.rust61xNilStrReturnLocal(inner, fn);
         if (!own && !this.rustStrReturnValueConverts(n.expression)) {
           ok = false;
           return;
