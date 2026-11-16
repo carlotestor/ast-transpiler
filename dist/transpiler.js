@@ -41624,22 +41624,26 @@ GoTranspiler.prototype.printVariableDeclarationList = function(node, identation)
     if (typed === void 0 || rebinds === 0 || natives === 0) {
       return void 0;
     }
-    const elementRead = this.hasNodeWhere(scope, (n) => n.kind === SyntaxKind5.ElementAccessExpression && ccxtGoUnwrapTypeOnly(n.expression)?.kind === SyntaxKind5.Identifier && ccxtGoUnwrapTypeOnly(n.expression).text === declaration.name.text);
-    if (elementRead) {
-      const checker = this.checkerOrUndefined();
-      try {
-        const type = checker?.getTypeAtLocation(declaration.name);
-        const element = type !== void 0 && checker.isArrayType(type) ? checker.getIndexTypeOfType(type, IndexKind2.Number) : void 0;
-        const parts = element === void 0 ? [] : typeof element.isUnionType === "function" && element.isUnionType() ? element.getTypes().slice() : [element];
-        if (parts.length === 0 || !parts.every((p) => (p.flags & TypeFlags4.Object) !== 0)) {
-          return void 0;
-        }
-      } catch (e) {
-        return void 0;
-      }
+    if (!ccxtGoListElementReadsAreBare(this, scope, declaration)) {
+      return void 0;
     }
     return typed;
   };
+}
+function ccxtGoListElementReadsAreBare(goTranspiler, scope, declaration) {
+  const elementRead = goTranspiler.hasNodeWhere(scope, (n) => n.kind === SyntaxKind5.ElementAccessExpression && ccxtGoUnwrapTypeOnly(n.expression)?.kind === SyntaxKind5.Identifier && ccxtGoUnwrapTypeOnly(n.expression).text === declaration.name.text);
+  if (!elementRead) {
+    return true;
+  }
+  const checker = goTranspiler.checkerOrUndefined();
+  try {
+    const type = checker?.getTypeAtLocation(declaration.name);
+    const element = type !== void 0 && checker.isArrayType(type) ? checker.getIndexTypeOfType(type, IndexKind2.Number) : void 0;
+    const parts = element === void 0 ? [] : typeof element.isUnionType === "function" && element.isUnionType() ? element.getTypes().slice() : [element];
+    return parts.length > 0 && parts.every((p) => (p.flags & TypeFlags4.Object) !== 0);
+  } catch (e) {
+    return false;
+  }
 }
 function ccxtGoUnwrapTypeOnly(node) {
   let current = node;
@@ -41691,7 +41695,11 @@ function ccxtGoUnwrapTypeOnly(node) {
       reads,
       (n) => n.parent?.kind === SyntaxKind5.PropertyAccessExpression && n.parent.name === n || n.parent?.kind === SyntaxKind5.PropertyAssignment && n.parent.name === n
     );
-    return typed !== void 0 && natives > 0 ? typed : void 0;
+    const baseTree = /(^|[\\/])ts[\\/]src[\\/]base[\\/]/.test(String(declaration.getSourceFile?.()?.fileName ?? ""));
+    if (typed === void 0 || natives === 0 || baseTree) {
+      return void 0;
+    }
+    return typed;
   };
 }
 
