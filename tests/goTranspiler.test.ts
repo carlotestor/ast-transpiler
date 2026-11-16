@@ -14506,3 +14506,35 @@ describe ('84g1 optional-slot rule leaves already-safe *string joins alone', () 
         expect(out).toContain('var side *string = nil');
     });
 });
+
+describe ('84g1 nil-declared *string handed to an optional slot', () => {
+    const go = (body: string): string => {
+        const t = new Transpiler({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        installCcxtGoHooks(t.goTranspiler);
+        return t.transpileGo('type Str = string | undefined;\nclass V {\n'
+            + '    safeString (a: any, k: any): Str { return a; }\n'
+            + '    filter (a: any, symbol: Str = undefined, n: any = undefined): any { return a; }\n' + body + '}\n').content;
+    };
+    test('a safeString-written local handed to an optional parameter types as *string', () => {
+        const out = go('    f (m: any, xs: any): any {\n'
+            + '        let s: Str = undefined;\n'
+            + '        if (m !== undefined) {\n'
+            + "            s = this.safeString (m, 'symbol');\n"
+            + '        }\n'
+            + '        return this.filter (xs, s, 1);\n'
+            + '    }\n');
+        expect(out).toContain('var s *string = nil');
+        expect(out).not.toContain('derefPtr');
+    });
+    test('a required parameter slot keeps the box', () => {
+        const out = go('    g (a: any, symbol: Str): any { return a; }\n'
+            + '    f (m: any, xs: any): any {\n'
+            + '        let s: Str = undefined;\n'
+            + '        if (m !== undefined) {\n'
+            + "            s = this.safeString (m, 'symbol');\n"
+            + '        }\n'
+            + '        return this.g (xs, s);\n'
+            + '    }\n');
+        expect(out).not.toContain('var s *string = nil');
+    });
+});

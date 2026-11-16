@@ -4696,6 +4696,7 @@ export function ccxtGoNilDeclaredJoinType (goTranspiler, declaration) {
     let readUnproven = false;
     let parsedNumberWrite = false;
     let elementWriteRead = false;
+    let stringOnlyRead = false;
     const visit = (n) => {
         if (readUnproven) {
             return;
@@ -4714,8 +4715,12 @@ export function ccxtGoNilDeclaredJoinType (goTranspiler, declaration) {
                 }
                 joinType = written;
             } else if (!nilDeclaredReadIsSafe (goTranspiler, n)) {
-                readUnproven = true;
-                return;
+                if (ccxtGoNilDeclaredStringArgumentRead (goTranspiler, n)) {
+                    stringOnlyRead = true;          // 84g1: admitted for a *string join only (checked below)
+                } else {
+                    readUnproven = true;
+                    return;
+                }
             } else if ((parent?.kind === ts.SyntaxKind.BinaryExpression) && (parent.right === n)
                     && (parent.operatorToken.kind === ts.SyntaxKind.EqualsToken)) {
                 elementWriteRead = true;
@@ -4734,6 +4739,9 @@ export function ccxtGoNilDeclaredJoinType (goTranspiler, declaration) {
     if (NIL_DECLARED_SCALAR_POINTER_TYPES.indexOf (joinType) < 0) {
         return undefined;
     }
+    if (stringOnlyRead && (joinType !== '*string')) {
+        return undefined;
+    }
     // the upstream rejects (shadowed type name, `x.push`, `++`, spread, destructuring,
     // a write of another type) must all pass for the same type
     if (goTranspiler.goTypeNameIsShadowed (scope, joinType)
@@ -4741,6 +4749,30 @@ export function ccxtGoNilDeclaredJoinType (goTranspiler, declaration) {
         return undefined;
     }
     return joinType;
+}
+
+// 84g1: a read that hands a *string local to a slot reading a nil pointer as absent: an optional
+// parameter of a transpiled method (GetArgStringPtr / GetArg), or the symbol argument of a ws cache
+// `getLimit (symbol, limit)` (every Go GetLimit derefScalars it or ignores it)
+function ccxtGoNilDeclaredStringArgumentRead (goTranspiler, node) {
+    const call = node.parent;
+    if ((call?.kind !== ts.SyntaxKind.CallExpression) || (call.expression === node)) {
+        return false;
+    }
+    const index = call.arguments.indexOf (node);
+    const callee = call.expression;
+    if ((index === 0) && (callee?.kind === ts.SyntaxKind.PropertyAccessExpression) && (callee.name?.text === 'getLimit')
+        && (callee.expression?.kind === ts.SyntaxKind.Identifier) && (call.arguments.length === 2)) {
+        let type;
+        try {
+            type = goTranspiler.getChecker ().getTypeAtLocation (callee.expression);
+        } catch (e) {
+            return false;
+        }
+        const text = String (goTranspiler.getChecker ().typeToString (type) ?? '');
+        return /^(?:ArrayCache\w*|ArrayCacheBy\w+)(?:\s*\|\s*undefined)?$/.test (text);
+    }
+    return ccxtGoNilJoinArgumentSeesAbsent (goTranspiler, call, index);
 }
 
 function installNilDeclaredJoin (goTranspiler) {
