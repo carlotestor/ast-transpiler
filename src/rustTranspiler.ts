@@ -23276,8 +23276,11 @@ export class RustTranspiler extends BaseTranspiler {
         let listIndexWrites = 0;
         // ral-60n: never-null reader initializer (checked once more after the walk: no whole write may follow)
         const neverNullInit = !nilDeclared && allSlot === undefined && init !== undefined && (from === 'dict' || from === 'list')
-            && this.rustContainerInitNeverNull(init, from === 'list' ? 'list' : 'map') && this.rustBaseCallNamed(init, RustTranspiler.RUST_NEVER_NULL_TEST_READERS)
-            && this.rustEmptyContainerLiteral(init.arguments[init.arguments.length - 1], from);
+            && ((this.rustContainerInitNeverNull(init, from === 'list' ? 'list' : 'map') && this.rustBaseCallNamed(init, RustTranspiler.RUST_NEVER_NULL_TEST_READERS)
+            && this.rustEmptyContainerLiteral(init.arguments[init.arguments.length - 1], from))
+            // ral-84g R4: a `this.` call the fresh-container proof (rustBuiltReturnSourceKind) shows building this very kind on every
+            // path (a base `extend` / `groupBy`, a method whose every return is a built list) is never Null either
+            || (isCallExpression(init) && this.rustBuiltReturnSourceKind(init) === from));
         const neverNullTests: any[] = [];
         // ral-62n: `Array.isArray (x)` of a base `safeDict*` result (a map or Null on every path, never a list)
         const dictArrayTests: any[] = [];
