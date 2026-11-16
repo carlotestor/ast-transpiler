@@ -57996,11 +57996,29 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       while (_is.isParenthesizedExpression.call(void 0, top.parent))
         top = top.parent;
       const parent = top.parent;
-      if (_is.isBinaryExpression.call(void 0, parent) && parent.right === top && (parent.operatorToken.kind === _ast.SyntaxKind.PlusEqualsToken || parent.operatorToken.kind === _ast.SyntaxKind.PlusToken && _is.isBinaryExpression.call(void 0, parent.parent) && parent.parent.operatorToken.kind === _ast.SyntaxKind.EqualsToken))
+      if (_is.isBinaryExpression.call(void 0, parent) && parent.right === top && (parent.operatorToken.kind === _ast.SyntaxKind.PlusEqualsToken || parent.operatorToken.kind === _ast.SyntaxKind.PlusToken && _is.isBinaryExpression.call(void 0, parent.parent) && parent.parent.operatorToken.kind === _ast.SyntaxKind.EqualsToken) && !this.rust84bAppendTargetString(parent))
         appended = true;
       return true;
     });
     return appended;
+  }
+  /** ral-84b: the append `.. + x` / `t += x` writes a local the printer already holds as a native string (a scalar
+   *  `String` / `Option<String>` decision or the url-builder `String` let): the append prints the same `format!` operand
+   *  whatever this local's type, so typing it retypes nothing. */
+  rust84bAppendTargetString(parent) {
+    let assign = parent;
+    while (assign !== void 0 && !(_is.isBinaryExpression.call(void 0, assign) && rustIsAssignmentOperator(assign.operatorToken.kind))) {
+      if (!(_is.isBinaryExpression.call(void 0, assign) && assign.operatorToken.kind === _ast.SyntaxKind.PlusToken) && !_is.isParenthesizedExpression.call(void 0, assign))
+        return false;
+      assign = assign.parent;
+    }
+    if (assign === void 0 || !_is.isIdentifier.call(void 0, assign.left))
+      return false;
+    const target = this.rustDeclaredNode(assign.left);
+    if (target === void 0 || !_is.isVariableDeclaration.call(void 0, target))
+      return false;
+    const kind = this.rustScalarDecisions.get(target);
+    return kind === "str" || kind === "ostr";
   }
   /** Call hook: the `String` result is boxed once (`Value::from`) wherever a `Value` is expected. */
   printRustStrRuntimeCall(node, identation) {
@@ -73745,7 +73763,7 @@ ${iden}}`;
         escapes.push(n);
         return true;
       }
-      if (prediction && _is.isCallExpression.call(void 0, parent) && parent.arguments.some((a) => a === n)) {
+      if (prediction && _is.isCallExpression.call(void 0, parent) && parent.arguments.some((a) => a === n) && (produced || this.bearerEnumArg(parent) !== n)) {
         if (this.nativeReadCallee(parent))
           return false;
         escapes.push(n);

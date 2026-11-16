@@ -57997,11 +57997,29 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       while (isParenthesizedExpression3(top.parent))
         top = top.parent;
       const parent = top.parent;
-      if (isBinaryExpression5(parent) && parent.right === top && (parent.operatorToken.kind === SyntaxKind7.PlusEqualsToken || parent.operatorToken.kind === SyntaxKind7.PlusToken && isBinaryExpression5(parent.parent) && parent.parent.operatorToken.kind === SyntaxKind7.EqualsToken))
+      if (isBinaryExpression5(parent) && parent.right === top && (parent.operatorToken.kind === SyntaxKind7.PlusEqualsToken || parent.operatorToken.kind === SyntaxKind7.PlusToken && isBinaryExpression5(parent.parent) && parent.parent.operatorToken.kind === SyntaxKind7.EqualsToken) && !this.rust84bAppendTargetString(parent))
         appended = true;
       return true;
     });
     return appended;
+  }
+  /** ral-84b: the append `.. + x` / `t += x` writes a local the printer already holds as a native string (a scalar
+   *  `String` / `Option<String>` decision or the url-builder `String` let): the append prints the same `format!` operand
+   *  whatever this local's type, so typing it retypes nothing. */
+  rust84bAppendTargetString(parent) {
+    let assign = parent;
+    while (assign !== void 0 && !(isBinaryExpression5(assign) && rustIsAssignmentOperator(assign.operatorToken.kind))) {
+      if (!(isBinaryExpression5(assign) && assign.operatorToken.kind === SyntaxKind7.PlusToken) && !isParenthesizedExpression3(assign))
+        return false;
+      assign = assign.parent;
+    }
+    if (assign === void 0 || !isIdentifier3(assign.left))
+      return false;
+    const target = this.rustDeclaredNode(assign.left);
+    if (target === void 0 || !isVariableDeclaration3(target))
+      return false;
+    const kind = this.rustScalarDecisions.get(target);
+    return kind === "str" || kind === "ostr";
   }
   /** Call hook: the `String` result is boxed once (`Value::from`) wherever a `Value` is expected. */
   printRustStrRuntimeCall(node, identation) {
@@ -73746,7 +73764,7 @@ ${iden}}`;
         escapes.push(n);
         return true;
       }
-      if (prediction && isCallExpression6(parent) && parent.arguments.some((a) => a === n)) {
+      if (prediction && isCallExpression6(parent) && parent.arguments.some((a) => a === n) && (produced || this.bearerEnumArg(parent) !== n)) {
         if (this.nativeReadCallee(parent))
           return false;
         escapes.push(n);

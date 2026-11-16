@@ -825,6 +825,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustStrRuntimeFormatOperand(node: any): boolean;
     /** A local seeded from such a call is not appended onto another local (that write would retype the other one). */
     rustStrRuntimeLocalCostly(declaration: any): boolean;
+    /** ral-84b: the append `.. + x` / `t += x` writes a local the printer already holds as a native string (a scalar
+     *  `String` / `Option<String>` decision or the url-builder `String` let): the append prints the same `format!` operand
+     *  whatever this local's type, so typing it retypes nothing. */
+    rust84bAppendTargetString(parent: any): boolean;
     /** Call hook: the `String` result is boxed once (`Value::from`) wherever a `Value` is expected. */
     printRustStrRuntimeCall(node: any, identation: any): string | undefined;
     private static readonly RUST_BASE_TYPED_METHODS;
