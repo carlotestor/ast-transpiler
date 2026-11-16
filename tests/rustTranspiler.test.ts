@@ -24220,3 +24220,23 @@ describe('ral-84a: a watched tuple string slot stays boxed when a resolve puts a
     });
 });
 
+
+describe('ral-84a: a Dict[] row handed inside an array literal to a self-method Value slot', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type List = any[];\nexport default class Exchange {\n    safeString (o: any, k: any, d: any = undefined): string | undefined { return o; }\n    safeList (o: any, k: any, d: any = undefined): List { return o; }\n    feeOf (rows: any): any { return rows; }\n}\n";
+    const write = (name: string, hand: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, List } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    m (message: Dict) {\n        const rows: Dict[] = this.safeList (message, 'B', []);\n        const out = [];\n        for (let i = 0; i < rows.length; i++) {\n            const fee = rows[i];\n            out.push (this.safeString (fee, 'a'));\n" + hand + "        }\n        return out;\n    }\n}\n");
+        return path.join (dir, 'ts/src/venue.ts');
+    };
+    test('[ fee ] as a self-call argument keeps the row a shared map', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-84a-lit-pos', "            out.push (this.feeOf ([ fee ]));\n")).content;
+        expect(out).toContain('let mut fee: crate::value::Dict = ');
+        expect(out).toContain('self.feeOf(Value::from(vec![Value::Dict(fee)]))');
+    });
+    test('[ fee ] read back by index keeps the row Value', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-84a-lit-neg', "            const pair = [ fee ];\n            out.push (pair);\n")).content;
+        expect(out).not.toContain('let mut fee: crate::value::Dict');
+    });
+});

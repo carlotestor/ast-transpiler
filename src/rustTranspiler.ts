@@ -24864,7 +24864,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (up.kind === SyntaxKind.PropertyAssignment) return up.initializer === n;
         // ral-63i: an element of an array literal that is the whole right side of `x = [..]` / `m[k] = [..]` or a base
         // safeList* default (rust62nListLiteralSink): the literal boxes each element, so the row enters as the shared map
-        if (isArrayLiteralExpression(up) && this.rustDictElementSource(init) && this.rust62nListLiteralSink(up)) return true;
+        if (isArrayLiteralExpression(up) && this.rustDictElementSource(init) && (this.rust62nListLiteralSink(up) || this.rust84aListLiteralSelfArg(up))) return true;
         // `rows.push (row)` into another local list: the list keeps its own type, the element enters as the shared map
         if (isCallExpression(up) && isPropertyAccessExpression(up.expression) && isIdentifier(up.expression.expression) && up.arguments.length === 1 && up.arguments[0] === n
             && String(up.expression.name.text) === 'push') return !this.rustIdentifierRefersToDeclaration(up.expression.expression, this.rustDeclarationOfIdentifier(n) as any);
@@ -25241,6 +25241,19 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     static readonly RUST_62N_LIST_READERS = new Set([ 'safeList', 'safeList2', 'safeListN' ]);
+
+    /** ral-84a: an array literal that is a whole argument of a `this.` / `super.` call at a plain `Value` slot
+     *  (`this.depositWithdrawFee ([ fee ])`): the literal boxes each element, so a map row enters as the shared map. */
+    rust84aListLiteralSelfArg(list: any): boolean {
+        const up: any = list.parent;
+        if (!isCallExpression(up) || up.expression === list || !isPropertyAccessExpression(up.expression)) return false;
+        const recv: any = up.expression.expression;
+        if (recv.kind !== SyntaxKind.ThisKeyword && recv.kind !== SyntaxKind.SuperKeyword) return false;
+        const callee = String(up.expression.name.text);
+        if (RustTranspiler.RUST_HANDED_DICT_EXTEND.has(callee) || RustTranspiler.RUST_HANDED_DICT_OMIT.has(callee)) return false;
+        const at = Array.from(up.arguments).indexOf(list);
+        return at >= 0 && this.rustNilBoxSlotOk(up, at);
+    }
 
     /** ral-55h: `n` is a handler argument (not the `this` receiver slot) of `h.call (this, ..)` on an identifier `h` typed
      *  `any` (the by-name ws dispatch the ccxt build turns into `self.dispatch_ws_handler(&h, &[..])`). */
