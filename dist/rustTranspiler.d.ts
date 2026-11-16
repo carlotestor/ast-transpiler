@@ -1801,6 +1801,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustUrlsKeyReadUse(n: any): boolean;
     /** uh: the use's local is initialised by `c ? 'a' : 'b'` (both arms string literals). */
     rustStrLiteralTernaryLocal(n: any): boolean;
+    /** ral-64k: `n` is the whole key of an element read `book[n]` (through `( .. as T)` wrappers) that initialises a local,
+     *  on a typed ws order-book local whose use there is its `Value` box: `get_value` takes the key as `impl ValueKey`
+     *  (`&str` / `Option<&str>` box to the very `Str` / `Null` key the `Value` local held), so the lookup is unchanged. */
+    rust64kBookKeyRead(n: any): boolean;
+    /** ral-64k: the read of a `bkey` use: `get_value(&<book box>, k.as_str() | k.as_deref())`. */
+    print64kBookKeyRead(node: any): string | undefined;
     /** Element-access hook: the native read of an `okey` use. */
     printOkeyRead(node: any): string | undefined;
     private static readonly RUST_SCALAR_VALUE_OPERAND_OPS;
