@@ -56268,6 +56268,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const node = this.unwrapParens(init);
     if (node === void 0)
       return false;
+    if (this.rust62pBoolCastOption(node))
+      return true;
     if (this.literalKindOfNode(node) !== void 0 || this.rustScalarIntLiteral(node) !== void 0 || this.rustScalarFloatLiteral(node) !== void 0)
       return true;
     if (isBinaryExpression5(node))
@@ -56389,6 +56391,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (optionDefault && typedUses === 0)
       return void 0;
+    if (kind === "obool" && typedUses === 0 && this.rustHandleOptionLiteralKind(this.rust62pBoolCastOption(this.unwrapParens(declaration.initializer)) ? this.unwrapParens(declaration.initializer).expression : declaration.initializer) === "obool")
+      return void 0;
     if (nativeUses === 0 && kind === "str" && this.rustReaderCaseStrRecv(this.unwrapParens(declaration.initializer)) !== void 0)
       return void 0;
     if (!ok || unused || storeOnly || clientOnce || guarded && scope.kind !== SyntaxKind7.MethodDeclaration || this.rustOkeyBoxed(declaration, boxed) || this.rustElemKeyInCostly(declaration) || this.rust59pDeleteKeyInboxed(declaration))
@@ -56497,7 +56501,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   rustAnyBoolTestedLocal(declaration) {
     if ((declaration.parent?.flags & NodeFlags4.Const) === 0)
       return false;
-    const init = this.unwrapParens(declaration.initializer);
+    const cast = this.unwrapParens(declaration.initializer);
+    const init = this.rust62pBoolCastOption(cast) ? this.unwrapParens(cast.expression) : cast;
     if (!isCallExpression6(init) || !isPropertyAccessExpression3(init.expression) || init.expression.expression.kind !== SyntaxKind7.ThisKeyword)
       return false;
     const callee = this.rustScalarCallee(init);
@@ -56870,6 +56875,16 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   /** ral-61p: `this.handleOption (m, o, <literal>)` resolved to the base tier: the option value or the default argument.
    *  A string literal default names `ostr` (the runtime answers the stored option or that literal; a stored option of
    *  another kind reads as `None`, the same miss the `Value` form's `.as_str()` compare made). */
+  /** ral-62p: `this.handleOption (m, o, d) as Bool` (or `as boolean`) on the base handleOption. */
+  rust62pBoolCastOption(node) {
+    if (node === void 0 || !isAsExpression3(node) || !["Bool", "boolean"].includes(String(node.type?.getText?.() ?? "")))
+      return false;
+    const call = this.unwrapParens(node.expression);
+    if (call === void 0 || !isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(call.expression.name.text) !== "handleOption")
+      return false;
+    const declaration = this.rustScalarCallee(call);
+    return declaration !== void 0 && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile?.()?.fileName ?? ""));
+  }
   rustHandleOptionLiteralKind(expr) {
     const node = this.unwrapParens(expr);
     if (node === void 0 || !isCallExpression6(node) || !isPropertyAccessExpression3(node.expression) || node.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(node.expression.name.text) !== "handleOption" || node.arguments.length !== 3)
@@ -56880,6 +56895,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const fallback = this.unwrapParens(node.arguments[2]);
     if (this.literalKindOfNode(fallback) === "string" && !(fallback.text in this.StringLiteralReplacements))
       return "ostr";
+    if (fallback?.kind === SyntaxKind7.TrueKeyword || fallback?.kind === SyntaxKind7.FalseKeyword)
+      return "obool";
     return void 0;
   }
   /** Base `parseNumber(s)` with no default over a string (literal, string local, `Precise.string*`): the
@@ -58378,7 +58395,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (push !== void 0 && isCallExpression6(push) && !this.rustCopyPushPairElement(n, push, trial) && !this.rustPushSelfCallArgUse(n, push, trial))
         return false;
       const write = findAncestor(n, (m) => isStatement(m) || isBinaryExpression5(m) && m.operatorToken.kind === SyntaxKind7.EqualsToken);
-      if (write !== void 0 && isBinaryExpression5(write) && this.isNodeInsideNode(n, write.right) && !this.rustScalarBoxedField(n, write, declaration) && !this.rustScalarFeedsElementWrite(n, write) && !this.rustScalarPreciseFeed(n, write, declaration) && !this.rustScalarCacheFieldCtor(n, write) && !this.rustScalarSumOperandWrite(n, write) && !this.rust58kDictReaderKeyWrite(n, write) && !this.rust60kBaseCallArgDictWrite(n, write))
+      if (write !== void 0 && isBinaryExpression5(write) && this.isNodeInsideNode(n, write.right) && !this.rustScalarBoxedField(n, write, declaration) && !this.rustScalarFeedsElementWrite(n, write) && !this.rustScalarPreciseFeed(n, write, declaration) && !this.rustScalarCacheFieldCtor(n, write) && !this.rustScalarSumOperandWrite(n, write) && !this.rust58kDictReaderKeyWrite(n, write) && !this.rust60kBaseCallArgDictWrite(n, write) && !this.rust62pBaseCallArgKeyWrite(n, write))
         return false;
     }
     return true;
@@ -58395,6 +58412,26 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     const d = this.rustDeclaredNode(target);
     return d !== void 0 && isVariableDeclaration3(d) && d.type !== void 0 && String(d.type.getText()) === "Dict";
+  }
+  /** ral-62p: the key of an element read `m[k]` that is a direct argument of a base-class `this.f (..)` call, the call the
+   *  whole source of a write to a local declared `Dict` / `List` (indodax fetchDepositsWithdrawals
+   *  `transactions = this.arrayConcat (transactions, withdraw[key])`): the written local's type is its annotation, the
+   *  element read prints its own key form and the call takes the read's `Value` either way, never this key's box. */
+  rust62pBaseCallArgKeyWrite(n, write) {
+    if (write.operatorToken?.kind !== SyntaxKind7.EqualsToken || this.rustTestTierSource(n))
+      return false;
+    let up = n;
+    while (isParenthesizedExpression3(up.parent) || isAsExpression3(up.parent) || isNonNullExpression2(up.parent))
+      up = up.parent;
+    const access = up.parent;
+    if (access === void 0 || !isElementAccessExpression4(access) || access.argumentExpression !== up)
+      return false;
+    const target = this.unwrapParens(write.left);
+    const call = this.unwrapParens(write.right);
+    if (!isIdentifier3(target) || !isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword || !this.rustCalleeIsRuntimeBase(call) || !call.arguments.some((a) => this.unwrapParens(a) === access))
+      return false;
+    const d = this.rustDeclaredNode(target);
+    return d !== void 0 && isVariableDeclaration3(d) && d.type !== void 0 && ["Dict", "List"].includes(String(d.type.getText()));
   }
   /** ral-58k: the key argument of a base `this.safeDict (src, k, dflt)` that is the whole source of a write to a local
    *  declared `Dict` (bitget pro handleBalance `account = this.safeDict (this.balance, code, account)`): the written local's
@@ -61256,6 +61293,8 @@ ${binding(plan.indent)}` : ""), head: "" };
   }
   /** The native value of a scalar expression for a local of `kind` (`Some(..)` for optional kinds). */
   rustScalarNativeText(kind, expr) {
+    if (this.rust62pBoolCastOption(this.unwrapParens(expr)))
+      return this.rustScalarNativeText(kind, this.unwrapParens(expr).expression);
     const node = this.unwrapParens(expr);
     const optional = kind.startsWith("o");
     const base = optional ? kind.slice(1) : kind;
@@ -61767,7 +61806,7 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
   }
   /** `indexOf` needle as an `Option<&str>`: a non-empty literal, a typed string local, or a string-typed `Value` expression. */
   rustStrFindNeedle(node, syntactic) {
-    const inner = this.unwrapParens(node);
+    const inner = this.rustStripWrappers(node);
     if (inner === void 0)
       return void 0;
     const lit = this.rustNativeStringLiteralArg(inner);
