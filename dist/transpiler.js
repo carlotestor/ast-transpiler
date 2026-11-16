@@ -41575,6 +41575,27 @@ function ral84g6NameBacksIn(goTranspiler, scope, name, depth = 0) {
     return target?.kind === SyntaxKind5.Identifier && target.text !== name && ral84g6NameBacksIn(goTranspiler, scope, target.text, depth + 1);
   });
 }
+function ral84g6HasNativeUse(goTranspiler, scope, declaration) {
+  const name = declaration.name.text;
+  const isNil = (e) => e?.kind === SyntaxKind5.NullKeyword || e?.kind === SyntaxKind5.Identifier && e.text === "undefined";
+  return goTranspiler.hasNodeWhere(scope, (n) => {
+    if (n.kind !== SyntaxKind5.Identifier || n.text !== name || n === declaration.name || ccxtGoParamDeclarationOf(goTranspiler, n) !== declaration) {
+      return false;
+    }
+    const parent = n.parent;
+    if (parent?.kind === SyntaxKind5.BinaryExpression) {
+      const op = parent.operatorToken?.kind;
+      if ((op === SyntaxKind5.EqualsEqualsEqualsToken || op === SyntaxKind5.ExclamationEqualsEqualsToken || op === SyntaxKind5.EqualsEqualsToken || op === SyntaxKind5.ExclamationEqualsToken) && isNil(parent.left === n ? parent.right : parent.left)) {
+        return true;
+      }
+      return parent.left === n && op === SyntaxKind5.EqualsToken && ral84g6OmitCall(parent.right) !== void 0;
+    }
+    if (parent?.kind === SyntaxKind5.ElementAccessExpression && parent.expression === n) {
+      return true;
+    }
+    return parent?.kind === SyntaxKind5.CallExpression && parent.arguments?.[0] === n && ral84g6OmitCall(parent) !== void 0;
+  });
+}
 function ral84g6OmitLocalType(goTranspiler, declaration) {
   if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier || declaration.parent?.parent?.kind !== SyntaxKind5.FirstStatement || declaration.parent.declarations?.length !== 1) {
     return void 0;
@@ -41586,7 +41607,7 @@ function ral84g6OmitLocalType(goTranspiler, declaration) {
   const call = ral84g6OmitCall(declaration.initializer);
   let verdict;
   const scope = goTranspiler.goEnclosingFunction(declaration);
-  if (call !== void 0 && scope !== void 0 && ral84g6OmitArgIsMap(goTranspiler, call.arguments[0]) && !goTranspiler.goTypeNameIsShadowed(scope, GO_SAFE_DICT_LOCAL_TYPE) && !ral84g6NameBacksIn(goTranspiler, scope, declaration.name.text)) {
+  if (call !== void 0 && scope !== void 0 && ral84g6OmitArgIsMap(goTranspiler, call.arguments[0]) && !goTranspiler.goTypeNameIsShadowed(scope, GO_SAFE_DICT_LOCAL_TYPE) && !ral84g6NameBacksIn(goTranspiler, scope, declaration.name.text) && ral84g6HasNativeUse(goTranspiler, scope, declaration)) {
     const name = declaration.name.text;
     const unsafe = goTranspiler.hasNodeWhere(scope, (n) => {
       if (n.kind !== SyntaxKind5.Identifier || n.text !== name || n === declaration.name) {
@@ -41641,7 +41662,7 @@ GoTranspiler.prototype.goTypeOfInitializer = function(initializer, printedValue)
     return void 0;
   }
   const scope = this.goEnclosingFunction(parent);
-  return scope !== void 0 && !ral84g6NameBacksIn(this, scope, target.text) ? GO_SAFE_DICT_LOCAL_TYPE : void 0;
+  return scope !== void 0 && !ral84g6NameBacksIn(this, scope, target.text) && (parent.kind !== SyntaxKind5.VariableDeclaration || ral84g6HasNativeUse(this, scope, parent)) ? GO_SAFE_DICT_LOCAL_TYPE : void 0;
 };
 function ral84g6MapWriteIsMap(goTranspiler, declaration, n, parent) {
   if (parent?.kind !== SyntaxKind5.BinaryExpression || parent.left !== n || parent.operatorToken?.kind !== SyntaxKind5.EqualsToken) {
