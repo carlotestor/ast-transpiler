@@ -23476,3 +23476,26 @@ describe('ral-73e: safeDict results read at a typed string key', () => {
         expect(out).toMatch(/let (?:mut )?conflicting: Value = /);
     });
 });
+
+describe('ral-76j: unified / parse call results whose Rust return is typed', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface Market { id: Str; symbol: string; spot: boolean; info: any }\nexport default class Exchange {\n    markets: Dict = {};\n    market (symbol: string): Market {\n        return this.markets[symbol];\n    }\n    parseTicker (ticker: Dict, market: Market = undefined): any {\n        return ticker;\n    }\n    keep (o: any, p: any = undefined): any {\n        return o;\n    }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        const typed = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['market'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        return typed.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('A backpack fetchTicker: a market local lent to a market slot and also handed off whole stays the struct', () => {
+        const out = write ('ral-76j-a', "    one (symbol: string, params: Dict = {}) {\n        const market = this.market (symbol);\n        const request = this.keep (params, market);\n        return this.parseTicker (request, market);\n    }\n");
+        expect(out).toContain('let mut market: crate::types::Market = (match self.market(');
+        expect(out).toContain('(market).raw.clone()');
+        expect(out).toContain('Some(&market)');
+        expect(out).not.toContain('let mut market: Value');
+    });
+    test('A negative: a market local only handed off whole (no slot, no field read) stays Value', () => {
+        const out = write ('ral-76j-a-neg', "    one (symbol: string, params: Dict = {}) {\n        const market = this.market (symbol);\n        return this.keep (params, market);\n    }\n");
+        expect(out).toMatch(/let (?:mut )?market: Value = /);
+    });
+});

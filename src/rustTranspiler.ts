@@ -14797,7 +14797,9 @@ export class RustTranspiler extends BaseTranspiler {
         if (empty) return writes > 0 || fromOpt ? 'opt' : false;
         // a lent market slot takes the struct as is: without a `Value` hand-off the record is never boxed again
         // key reads with a default borrow the record too (`KeyRead` for `&Market`): with no `Value` hand-off it stays a struct
-        return fieldReads > 0 || ((slotUses > 0 || keyReads > 0) && valueUses === 0) ? 'struct' : false;
+        // ral-76j: a lent market slot borrows the struct where the boxed local decoded a copy (`from_raw(m.clone())`), and a
+        // whole-value hand-off boxes the record's own `raw` (an `Arc` bump, as `m.clone()` was): the struct wins either way
+        return fieldReads > 0 || slotUses > 0 || (keyReads > 0 && valueUses === 0) ? 'struct' : false;
     }
 
     // ── rustOptMarketKeyRead / printOptMarketKeyRead: literal-key reads on an `Option<Market>` local ──
