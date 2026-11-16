@@ -509,6 +509,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-61x: `return x` of the method's own nil-declared `let x: Str = undefined` local (an accumulator the body writes):
      *  as an `Option<String>` it is the payload itself, as a `Value` a checker-string `Value` (converts either way). */
     rust61xNilStrReturnLocal(n: any, fn: any): boolean;
+    /** ral-76a S1: `return x` of the method's own local that another rule already prints `Option<String>` (a `safeString`
+     *  read, checker `string | undefined`): under a `: Str` signature it is the payload itself, so the method prints
+     *  `-> Option<String>` and its callers' string locals read it natively. Decided from the AST and the local's own rule. */
+    rust76aOptStrReturnLocal(n: any, fn: any): boolean;
     rust56xStrReturnText(exp: any, fn: any): string | undefined;
     /** ral-56x K1: a `+` partner that is itself a concat (or a `.toString()`) the printer already prints as a boxed `Value::Str(format!(..))`
      *  (always a `Str`, never `Null`), so the optional string joins the same `format!` with its `as_deref().unwrap_or("null")` text. */

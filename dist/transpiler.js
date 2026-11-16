@@ -55065,7 +55065,22 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     return this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name)) === "string";
   }
+  /** ral-76a S1: `return x` of the method's own local that another rule already prints `Option<String>` (a `safeString`
+   *  read, checker `string | undefined`): under a `: Str` signature it is the payload itself, so the method prints
+   *  `-> Option<String>` and its callers' string locals read it natively. Decided from the AST and the local's own rule. */
+  rust76aOptStrReturnLocal(n, fn) {
+    if (n === void 0 || !isIdentifier3(n) || !isReturnStatement4(n.parent) || findAncestor(n.parent.parent, isFunctionLike) !== fn)
+      return false;
+    const declaration = this.rustDeclaredNode(n);
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || this.rustEnclosingFunction(declaration) !== fn)
+      return false;
+    if (this.rustVenueKeptStrArm(fn))
+      return false;
+    return this.rustScalarLocalOf(n)?.kind === "ostr";
+  }
   rust56xStrReturnText(exp, fn) {
+    if (this.rust76aOptStrReturnLocal(exp, fn))
+      return super.printIdentifier(exp);
     if (exp !== void 0 && this.rust61xNilStrReturnLocal(exp, fn) && this.rustScalarLocalOf(exp)?.kind === "ostr")
       return super.printIdentifier(exp);
     if (exp === void 0 || !isIdentifier3(exp) || !this.rust56xStrReturnLocal(exp, fn))
@@ -63049,7 +63064,7 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       if (!isIdentifier3(n) || !isBinaryExpression5(parent) || parent.left !== n || parent.operatorToken.kind !== SyntaxKind7.EqualsToken)
         continue;
       const src = this.rustScalarAsWrite(parent.right) ?? parent.right;
-      const write = isIdentifier3(this.unwrapParens(src)) && this.literalKindOfNode(this.unwrapParens(src)) !== "null" ? this.rustScalarIdentifierKind(this.unwrapParens(src)) ?? this.rustOptParamKind(src) : this.rustScalarValueKind(src, true);
+      const write = isIdentifier3(this.unwrapParens(src)) && this.literalKindOfNode(this.unwrapParens(src)) !== "null" ? this.rustScalarIdentifierKind(this.unwrapParens(src)) ?? this.rustOptParamKind(src) : this.rustScalarValueKind(src, true) ?? (this.rustVenueStrCall(this.unwrapParens(src)) ? "ostr" : void 0);
       const next = write === void 0 ? void 0 : this.rustScalarJoinKinds(joined, write, joined === "bool" && write === "null");
       if (next !== void 0 && (next === joined || next === `o${joined}`))
         joined = next;
@@ -65309,7 +65324,7 @@ ${ind}];`;
         return;
       if (isReturnStatement4(n)) {
         const inner = this.unwrapParensNode(n.expression);
-        const own = inner !== void 0 && isIdentifier3(inner) && this.rust56xStrReturnLocal(inner, fn) && this.rustStrReturnSignature(fn, inner) && this.primitiveKindOfType(this.getCheckedTypeOf(inner)) === "string" || this.rust61xNilStrReturnLocal(inner, fn);
+        const own = inner !== void 0 && isIdentifier3(inner) && this.rust56xStrReturnLocal(inner, fn) && this.rustStrReturnSignature(fn, inner) && this.primitiveKindOfType(this.getCheckedTypeOf(inner)) === "string" || this.rust61xNilStrReturnLocal(inner, fn) || this.rust76aOptStrReturnLocal(inner, fn);
         if (!own && !this.rustStrReturnValueConverts(n.expression)) {
           ok = false;
           return;
