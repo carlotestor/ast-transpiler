@@ -56834,6 +56834,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "int";
     if (fresh && this.rustTernaryArm(node) && this.rustBaseStrFieldRead(node))
       return "ostr";
+    if (fresh && this.rustTernaryArm(node) && this.rust65nBaseStrParamArm(node))
+      return "ostr";
     if (fresh && this.rustTernaryArm(node) && this.rustOptDictStrKeyText(node) !== void 0)
       return "ostr";
     if (!isCallExpression6(node))
@@ -56972,6 +56974,35 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     return kind === "str" || kind === "ostr";
   }
   /** ral-52k: `this.<field>` of the table whose declaration is the base-tier `string` property (no venue redeclares it). */
+  /** ral-65n: `p` is a parameter of a base-tier method, annotated `Str` (or `string`), whose checker type is a string
+   *  (or string | undefined), printed as a `Value` binding (no typed signature slot) and never written in its function.
+   *  Its box holds a `Str` or `Null`, so the arm reads it once as an `Option<String>` (the same conversion the base
+   *  `Str` call arm next to it takes). */
+  rust65nBaseStrParamArm(node) {
+    if (node === void 0 || !isIdentifier3(node) || node.text === "undefined")
+      return false;
+    const param = this.rustDeclaredNode(node);
+    if (param === void 0 || !isParameterDeclaration3(param) || !isIdentifier3(param.name) || !isMethodDeclaration5(param.parent) || param.dotDotDotToken !== void 0 || param.initializer !== void 0)
+      return false;
+    if (!_RustTranspiler.RUST_BASE_TIER_FILE.test(String(param.getSourceFile?.()?.fileName ?? "")))
+      return false;
+    const annotation = param.type;
+    const named = annotation !== void 0 && (annotation.kind === SyntaxKind7.TypeReference && isIdentifier3(annotation.typeName) && annotation.typeName.text === "Str" || annotation.kind === SyntaxKind7.StringKeyword);
+    if (!named || this.primitiveKindOfType(this.typeOfNodeIfAny(param.name)) !== "string")
+      return false;
+    if (this.rustOptParamKind(node) !== void 0)
+      return false;
+    for (const n of this.rustScopeNameNodes(param.parent, String(param.name.text))) {
+      if (n === param.name || !isIdentifier3(n))
+        continue;
+      const up = n.parent;
+      if (isBinaryExpression5(up) && up.left === n && up.operatorToken.kind >= SyntaxKind7.FirstAssignment && up.operatorToken.kind <= SyntaxKind7.LastAssignment)
+        return false;
+      if ((up.kind === SyntaxKind7.PrefixUnaryExpression || up.kind === SyntaxKind7.PostfixUnaryExpression) && (up.operator === SyntaxKind7.PlusPlusToken || up.operator === SyntaxKind7.MinusMinusToken))
+        return false;
+    }
+    return true;
+  }
   rustBaseStrFieldRead(node) {
     if (node === void 0 || !isPropertyAccessExpression3(node) || node.expression.kind !== SyntaxKind7.ThisKeyword || !_RustTranspiler.RUST_BASE_STR_FIELDS.has(String(node.name.text)))
       return false;
@@ -58252,9 +58283,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       while (isParenthesizedExpression3(top.parent) || isConditionalExpression4(top.parent))
         top = top.parent;
       const { moved, solved } = this.rustStrHandOffDecided(n, top, declaration);
+      const armOfOstr = top !== n && this.rustScalarUseForms.get(n) === "native" && isConditionalExpression4(this.rust65nClimbParens(n).parent) && this.rust65nOstrTernaryArmOfOstrLocal(this.rust65nClimbParens(n).parent) && this.rustEnclosingFunction(top) === this.rustEnclosingFunction(declaration);
       if (isBinaryExpression5(top.parent) && top.parent.right === top && top.parent.operatorToken.kind === SyntaxKind7.EqualsToken && !isElementAccessExpression4(this.unwrapParens(top.parent.left)) && !isPropertyAccessExpression3(this.unwrapParens(top.parent.left)) && !moved && !solved)
         handed = true;
-      if (isVariableDeclaration3(top.parent) && top.parent.initializer === top && !moved && !solved)
+      if (isVariableDeclaration3(top.parent) && top.parent.initializer === top && !moved && !solved && !armOfOstr)
         handed = true;
       if (isReturnStatement4(top.parent) && !(top === n && (this.rustMethodTypedReturnKind(findAncestor(top.parent.parent, isFunctionLike)) !== void 0 || this.rustVenueKeptStrArm(findAncestor(top.parent.parent, isFunctionLike)))))
         handed = true;
@@ -59580,9 +59612,38 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         return this.printNode(parent, 0).trim().startsWith("Value::Str(format!(") && this.rustOptStrConcatFits(n) ? "concat" : "box";
       return kind === "str" && this.printNode(parent, 0).trim().startsWith("Value::Str(format!(") ? "concat" : "box";
     }
+    if (kind === "ostr" && isConditionalExpression4(parent) && parent.condition !== n && this.rust65nOstrTernaryArmOfOstrLocal(parent))
+      return "native";
     if (isConditionalExpression4(parent) && parent.condition !== n)
       return "box";
     return this.rustScalarExpressionUseForm(n, kind);
+  }
+  /** ral-65n: `n` climbed through its parentheses. */
+  rust65nClimbParens(n) {
+    let top = n;
+    while (top.parent !== void 0 && isParenthesizedExpression3(top.parent))
+      top = top.parent;
+    return top;
+  }
+  /** ral-65n: `t` is the whole initializer (through parentheses) of a `const` whose current scalar decision is `ostr`. */
+  rust65nOstrTernaryArmOfOstrLocal(t) {
+    let top = t;
+    while (top.parent !== void 0 && isParenthesizedExpression3(top.parent))
+      top = top.parent;
+    const declaration = top.parent;
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.initializer !== top || !isIdentifier3(declaration.name))
+      return false;
+    if (this.rustScalarDecisions.get(declaration) !== "ostr")
+      return false;
+    for (const arm of [t.whenTrue, t.whenFalse]) {
+      const leaf = this.unwrapParens(arm);
+      if (!isIdentifier3(leaf))
+        continue;
+      const decl = this.rustDeclaredNode(leaf);
+      if (decl !== void 0 && isVariableDeclaration3(decl) && this.rustScalarDecisions.get(decl) === "str")
+        return false;
+    }
+    return true;
   }
   rustWsClientCallArg(call, kind) {
     const callee = call.expression;
@@ -61546,6 +61607,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       return this.rustListLengthText(node);
     if (kind === "ostr" && this.rustTernaryArm(node) && this.rustBaseStrFieldRead(node))
       return `${this.printNode(node, 0).trim()}.as_str().map(str::to_owned)`;
+    if (kind === "ostr" && this.rustTernaryArm(node) && this.rust65nBaseStrParamArm(node))
+      return `${super.printIdentifier(node)}.as_str().map(str::to_owned)`;
     if (kind === "ostr" && this.rustTernaryArm(node)) {
       const read = this.rustOptDictStrKeyText(node);
       if (read !== void 0)
