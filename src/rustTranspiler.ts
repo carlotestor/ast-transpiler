@@ -5264,6 +5264,8 @@ export class RustTranspiler extends BaseTranspiler {
             || (this.rustScOwnSelfCall(declaration.initializer) && !this.rustOdExcludedCallee(declaration.initializer) && !this.rustVenueLocalHandedOn(declaration) && this.rustReaderLendBoxes(declaration)))))
             && !this.rust66s3StrReturnedVeto(declaration, scope);
         const storeOnly = guarded && nativeUses === 0 && boxed === 1 && !handOff;
+        // ral-84e: a record-arm ternary string is typed only for a native use (boxed straight back it stays the `Value` it is handed as)
+        if (ok && nativeUses === 0 && kind === 'ostr' && this.rust84eRecordArmTernary(declaration.initializer)) return undefined;
         const unused = typedUses === 0 && !handOff && this.rustScalarNeedsNativeUse(declaration.initializer) && !this.rustVenueIntReboxed(declaration, kind, boxed);
         // a string handed once to a ws client call and nothing else stays a `Value`
         const clientOnce = nativeUses === 0 && boxed === 1 && this.rustWsClientOnlyUse(declaration);
@@ -5897,12 +5899,24 @@ export class RustTranspiler extends BaseTranspiler {
         const local = this.rustOptContainerOf(node.expression);
         // ral-84e: also an optional market / currency record (`Option<Market>` local, lent `Option<&Market>` / currency slot):
         // its `KeyRead` reads the record's own map and answers `Null` when absent, the same `Value` the boxed arm held
-        const record = local === undefined && (this.rustOptMarketLocalOf(node.expression) !== undefined || this.rustMarketSlotParamOf(node.expression) !== undefined
-            || this.rustCurrencySlotParamOf(node.expression) !== undefined || this.rustCurrencyLocalOf(node.expression) !== undefined);
-        if (!record && (local === undefined || local.kind !== 'dict')) return undefined;
+        if ((local === undefined || local.kind !== 'dict') && !this.rust84eOptRecordRecv(node.expression)) return undefined;
         const read = this.printNode(node, 0).trim();
         if (!/^(?:crate|ccxt)::value::KeyRead::key_read\(&{1,2}[A-Za-z_][A-Za-z0-9_]*, "[A-Za-z]+"\)$/.test(read)) return undefined;
         return `${read}.into_opt_string()`;
+    }
+
+    /** ral-84e: an optional market / currency record (`Option<Market>` local, lent `Option<&Market>` / currency slot, currency
+     *  local): its `KeyRead` reads the record's own map and answers `Null` when absent, the same `Value` the boxed read held. */
+    rust84eOptRecordRecv(recv: any): boolean {
+        return this.rustOptContainerOf(recv) === undefined && (this.rustOptMarketLocalOf(recv) !== undefined || this.rustMarketSlotParamOf(recv) !== undefined
+            || this.rustCurrencySlotParamOf(recv) !== undefined || this.rustCurrencyLocalOf(recv) !== undefined);
+    }
+
+    /** ral-84e: a ternary initializer with an arm `r['k']` read off such a record (rust84eOptRecordRecv). */
+    rust84eRecordArmTernary(init: any): boolean {
+        const node: any = this.unwrapParens(init);
+        if (node === undefined || !isConditionalExpression(node)) return false;
+        return [ node.whenTrue, node.whenFalse ].some((a: any) => { const arm: any = this.unwrapParens(a); return isElementAccessExpression(arm) && this.rust84eOptRecordRecv(arm.expression); });
     }
 
     /** True when `node` (through parens) is the `whenTrue`/`whenFalse` arm of a ternary that initialises a declaration. */

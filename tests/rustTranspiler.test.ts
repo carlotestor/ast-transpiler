@@ -24235,8 +24235,11 @@ describe('ral-84e: a ternary of an optional market record field and undefined is
         return typed.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
     };
     test('derive fetchSettlementHistory symbolResolved', () => {
-        const out = write ('ral-84e-t1', "    f (symbol: Str = undefined, rows: any = undefined) {\n        let market = undefined;\n        if (symbol !== undefined) {\n            market = this.market (symbol);\n        }\n        const symbolResolved = (market !== undefined) ? market['symbol'] : undefined;\n        return this.filterBySymbol (rows, symbolResolved);\n    }\n");
+        const out = write ('ral-84e-t1', "    f (symbol: Str = undefined, rows: any = undefined) {\n        let market = undefined;\n        if (symbol !== undefined) {\n            market = this.market (symbol);\n        }\n        const symbolResolved = (market !== undefined) ? market['symbol'] : undefined;\n        if (symbolResolved === 'BTC/USDT') {\n            return 1;\n        }\n        return this.filterBySymbol (rows, symbolResolved);\n    }\n");
         expect(out).toMatch(/let mut symbolResolved: Option<String> = \(if \(market\.is_some\(\)\) \{ crate::value::KeyRead::key_read\(&+market, "symbol"\)\.into_opt_string\(\) \} else \{ None \}\);/);
         expect(out).not.toContain('let mut symbolResolved: Value');
+    });    test('negative: boxed straight back (no native use) it stays Value', () => {
+        const out = write ('ral-84e-t2', "    g (symbol: Str = undefined) {\n        let market = undefined;\n        if (symbol !== undefined) {\n            market = this.market (symbol);\n        }\n        const symbolResolved = (market !== undefined) ? market['symbol'] : undefined;\n        return { 'symbol': symbolResolved };\n    }\n");
+        expect(out).toContain('let mut symbolResolved: Value');
     });
 });
