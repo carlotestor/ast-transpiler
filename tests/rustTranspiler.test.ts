@@ -20485,3 +20485,24 @@ describe('ral-61p: a handleOption local typed from its literal default argument'
         expect(out).toContain('let mut precision: Value = ');
     });
 });
+
+describe('ral-61p: getSupportedMapping over a literal map of string literals is a String', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    getSupportedMapping (key: Str, mapping: Dict = {}) { if (key in mapping) { return mapping[key]; } throw new Error (key); }\n    keep (o: any): any { return o; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        return path.join (dir, 'ts/src/venue.ts');
+    };
+    test('compared and concatenated (gate pro watchOrders typeId)', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-61p-gsm', "    m (type: Str) {\n        const typeId: string = this.getSupportedMapping (type, {\n            'spot': 'spot',\n            'swap': 'futures',\n        });\n        if (typeId === 'spot') {\n            return 1;\n        }\n        return typeId + '.orders';\n    }\n")).content;
+        expect(out).toContain('let mut typeId: String = ');
+        expect(out).toContain('.as_str().unwrap_or_default().to_string();');
+        expect(out).toContain('(typeId == "spot")');
+    });
+    test('negative: a mapping with a non-literal value stays Value', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-61p-gsm-neg', "    m (type: Str, other: string) {\n        const typeId: string = this.getSupportedMapping (type, {\n            'spot': other,\n            'swap': 'futures',\n        });\n        if (typeId === 'spot') {\n            return 1;\n        }\n        return typeId + '.orders';\n    }\n")).content;
+        expect(out).toContain('let mut typeId: Value = ');
+    });
+});

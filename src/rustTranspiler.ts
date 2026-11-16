@@ -5447,6 +5447,7 @@ export class RustTranspiler extends BaseTranspiler {
         // string literal names the option's kind (`Option<String>`), as handleOptionStringAndParams does. Bool defaults stay
         // with the bool rules (rustAnyBoolTestedLocal / `as Bool`); int defaults stay `Value` (rustHandleOptionLiteralKind).
         if (fresh) { const optionKind = this.rustHandleOptionLiteralKind(node); if (optionKind !== undefined) return optionKind; }
+        if (fresh && this.rustSupportedMappingStr(node)) return 'str';
         if (this.rustParseNumberOfString(node) && this.rustTernaryArm(node)) return 'onum';
         // a literal default is returned for every missing key, so the reader is never `Null`
         if (RustTranspiler.RUST_STRING_LOCAL_HELPERS.has(name)) {
@@ -5464,6 +5465,21 @@ export class RustTranspiler extends BaseTranspiler {
         const boolBase = RustTranspiler.RUST_SCALAR_BOOL_HELPERS[name];
         if (fresh && boolBase !== undefined) return args.length === boolBase + 1 && this.literalKindOfNode(args[boolBase]) === 'boolean' ? 'bool' : undefined;
         return undefined;
+    }
+
+    /** ral-61p: base `this.getSupportedMapping (key, { 'k': 'v', .. })` at a declaration whose mapping is an object literal of
+     *  string-literal values: the base body throws unless `key in mapping` and then answers `mapping[key]`, so the result
+     *  is always one of those literals (a `String`, never `Null`). */
+    rustSupportedMappingStr(expr): boolean {
+        const node: any = this.unwrapParens(expr);
+        if (node === undefined || !isCallExpression(node) || !isPropertyAccessExpression(node.expression) || node.expression.expression.kind !== SyntaxKind.ThisKeyword
+            || String(node.expression.name.text) !== 'getSupportedMapping' || node.arguments.length !== 2 || !this.rustDeclInitPosition(node)) return false;
+        const declaration: any = this.rustScalarCallee(node);
+        if (declaration === undefined || !RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile?.()?.fileName ?? ''))) return false;
+        const mapping: any = this.unwrapParens(node.arguments[1]);
+        if (mapping?.kind !== SyntaxKind.ObjectLiteralExpression || mapping.properties.length === 0) return false;
+        return Array.from(mapping.properties).every((p: any) => p.kind === SyntaxKind.PropertyAssignment && this.literalKindOfNode(this.unwrapParens(p.initializer)) === 'string'
+            && !(this.unwrapParens(p.initializer).text in this.StringLiteralReplacements));
     }
 
     /** ral-61p: `this.handleOption (m, o, <literal>)` resolved to the base tier: the option value or the default argument.
@@ -9807,6 +9823,7 @@ export class RustTranspiler extends BaseTranspiler {
         const defaulted = this.rustScalarValueKind(node, true) === base;
         if (kind === 'int' && this.rustVenueParseToInt(node) && this.rustBaseTypedReturnKind(node) === 'oint') return `${this.rustBaseTypedBareText(node)}.unwrap_or_default()`;
         if (kind === 'int' && (this.rustVenueIntCall(node) || this.rustVenueParseToInt(node))) return `${text}.as_i64().unwrap_or_default()`;
+        if (kind === 'str' && this.rustSupportedMappingStr(node)) return `${text}.as_str().unwrap_or_default().to_string()`;
         if (kind === 'str' && defaulted) return `${text}.as_str().unwrap_or(${this.quotedStringLiteral(fallback.text)}).to_string()`;
         if (kind === 'int' && defaulted) return `${text}.as_i64().unwrap_or(${this.rustScalarIntLiteral(fallback)})`;
         if (kind === 'ostr' && this.rustVenueStrCall(node)) return this.rustVenueStrCallText(node);
