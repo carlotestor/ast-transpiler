@@ -13807,11 +13807,6 @@ export class RustTranspiler extends BaseTranspiler {
     // `await this.<typed unified>(args)` inside a `Value` body: bind each argument, call the typed method and
     // box the `Result` back to `Value` (an `Err` re-raises as the panic the untyped call raised).
     printTypedUnifiedCall(node): string | undefined {
-        const text = this.printTypedUnifiedCallUnlifted(node);
-        return text === undefined ? undefined : this.rustLentSlotCallText(node, text);
-    }
-
-    printTypedUnifiedCallUnlifted(node): string | undefined {
         const callee = node.expression;
         if (!isPropertyAccessExpression(callee)) return undefined;
         // a ws class reaches its REST parent through `self.parent` (ccxt rewrites `self.super_X(`), so its `super.X()` is typed too
@@ -13872,7 +13867,8 @@ export class RustTranspiler extends BaseTranspiler {
             return RustTranspiler.cloneIfBareLocal(v);
         });
         const receiver = testCore ? this.printNode(callee.expression, 0) : 'self';
-        const typedCall = `${receiver}.${viaSuper ? 'super_' : ''}${this.toSnakeCaseName(callee.name.text)}(${printed.join(', ')})${isAsync ? '.await' : ''}`;
+        const head = testCore || viaSuper ? undefined : this.rustSlotCallHead(node, printed.join(', '));
+        const typedCall = `${head ?? `${receiver}.${viaSuper ? 'super_' : ''}${this.toSnakeCaseName(callee.name.text)}(${printed.join(', ')})`}${isAsync ? '.await' : ''}`;
         // a discarded result is never boxed: only its `Err` re-raises
         if (this.rustTypedCallIsDiscarded(node)) return `if let Err(__e) = ${typedCall} { panic!("{}", __e) }`;
         // the test harness is its own crate over `ccxt`
@@ -15349,7 +15345,8 @@ export class RustTranspiler extends BaseTranspiler {
                     const head = optName.key !== undefined ? `${ownedArgs(args.slice(0, 1))}, ${optName.key}` : requiredArgs;
                     return `self.${optName.name}(${head}, &[${tail}])`;
                 }
-                return `self.${methodName}(${reqPart}&[${tail}])`;
+                const callArgs = `${reqPart}&[${tail}]`;
+                return this.rustSlotCallHead(node, callArgs) ?? `self.${methodName}(${callArgs})`;
             }
         }
 
@@ -15438,7 +15435,8 @@ export class RustTranspiler extends BaseTranspiler {
             const head = optName.key !== undefined ? [ cloned[0], optName.key ] : cloned.slice(0, fixed);
             return `self.${optName.name}(${head.join(', ')}, &[${cloned.slice(fixed).join(', ')}])`;
         }
-        return `${receiver}.${methodName}(${cloned.slice(0, fixed).join(', ')}${fixed > 0 ? ', ' : ''}&[${cloned.slice(fixed).join(', ')}])`;
+        const callArgs = `${cloned.slice(0, fixed).join(', ')}${fixed > 0 ? ', ' : ''}&[${cloned.slice(fixed).join(', ')}]`;
+        return (receiver === 'self' || receiver === 'super' ? this.rustSlotCallHead(node, callArgs) : undefined) ?? `${receiver}.${methodName}(${callArgs})`;
     }
 
     /** A ws `super.parseX (x, market)` to a fixed-arity parser with a lent market slot: by-value locals are cloned
@@ -15447,7 +15445,7 @@ export class RustTranspiler extends BaseTranspiler {
         const params = this.rustCalleeParams(node);
         if (params === undefined || !params.some((_p: any, at: number) => this.rustMarketSlot(params, at))) return undefined;
         const args = this.rustPrintedArgs(node, identation, params).map((a, at) => (this.rustMarketSlot(params, at) ? a : this.rustSliceArgText(a)));
-        return `super.${methodName}(${args.join(', ')})`;
+        return this.rustSlotCallHead(node, args.join(', ')) ?? `super.${methodName}(${args.join(', ')})`;
     }
 
     rustSliceArgText(a: string): string {
@@ -15770,8 +15768,8 @@ export class RustTranspiler extends BaseTranspiler {
         return depth === 0 ? out : undefined;
     }
 
-    printCallExpression(node, identation) {
-        return this.rustLentSlotCallText(node, this.printCallExpressionUnlifted(node, identation));
+    printCallHead(node, parsedExpression: string, parsedArgs: string): string {
+        return this.rustSlotCallHead(node, parsedArgs) ?? super.printCallHead(node, parsedExpression, parsedArgs);
     }
 
     /** First parameter of a venue override of a lent `DerivedExchange` slot (same arity as the slot): `impl Into<crate::Value>`. */
@@ -15819,42 +15817,43 @@ export class RustTranspiler extends BaseTranspiler {
         return undefined;
     }
 
-    /** `this.m(..)` to the calling file's own override of a lent slot: that override lives only in the
-     *  `DerivedExchange` impl, so the call names the trait (the base method of the same name takes a `Value`). */
-    rustLentSlotCallText(node: any, text: string): string {
-        if (this.rustLentSlots.size === 0 || !isPropertyAccessExpression(node.expression)) return text;
+    /** Trait path of a `this.m(..)` / ws `super.m(..)` call whose callee only one trait reaches unambiguously, from the AST:
+     *  the calling file's own lent slot override lives only in the `DerivedExchange` impl (the base method of the same
+     *  name takes a `Value`); inside any slot override (printed in the trait impl, closures included) both traits are in
+     *  scope, so a base slot or another venue override is named by its base trait (what the inherent body resolved to;
+     *  its preamble reaches the override). A ws `super.m(..)` to the REST parent's lifted override goes through the
+     *  trait on the parent core (`receiver` 'parent'). */
+    rustSlotCallPath(node: any): { path: string, snake: string, receiver: 'self' | 'parent' } | undefined {
+        if (this.rustLentSlots.size === 0 || !isCallExpression(node) || !isPropertyAccessExpression(node.expression)) return undefined;
         const name = String(node.expression.name.text);
-        if (node.expression.expression.kind === SyntaxKind.SuperKeyword) {
-            // a ws `super.m(..)` to the REST parent's lifted override: the parent core implements it on the trait only
-            const target: any = this.rustScalarCallee(node);
-            const head = `super.${name}(`;
-            if (!this.rustLentSlots.has(this.toSnakeCaseName(name)) || !text.startsWith(head) || !/ts[/]src[/]pro[/]/.test(String(node.getSourceFile?.()?.fileName ?? ''))
-                || target === undefined || target.getSourceFile?.() === node.getSourceFile?.() || !this.rustLentSlotOverride(target)) return text;
-            const rest = text.slice(head.length);
-            return `crate::exchange::DerivedExchange::${this.toSnakeCaseName(name)}(&self.parent${rest.startsWith(')') ? '' : ', '}${rest}`;
-        }
-        if (node.expression.expression.kind !== SyntaxKind.ThisKeyword) return text;
         const snake = this.toSnakeCaseName(name);
-        const at = [ `self.${name}(`, `self.${snake}(` ].map((h) => ({ h, i: text.indexOf(h) })).filter((x) => x.i >= 0).sort((x, y) => x.i - y.i)[0];
-        if (!(snake in this.rustVirtualDispatch) || at === undefined) return text;
-        const callee: any = this.rustScalarCallee(node);
-        if (callee === undefined) return text;
-        let path: string | undefined;
-        if (this.rustLentSlots.has(snake) && callee.getSourceFile?.() === node.getSourceFile?.() && this.rustLentSlotOverride(callee)) path = 'crate::exchange::DerivedExchange';
-        // inside a slot override (printed in the trait impl, closures included) both traits are in scope: a base slot or another
-        // venue override is named by its base trait (what the inherent body resolved to); its preamble reaches the override
-        else if (this.rustSlotOverrideBody(findAncestor(node, isMethodDeclaration))) {
-            const own = String(callee.getSourceFile?.()?.fileName ?? '');
-            const file = (RustTranspiler.RUST_BASE_TIER_FILE.test(own) ? own : this.rustSlotOverrideBody(callee) ? this.rustBaseTierDeclarer(callee, name) ?? '' : '').replace(/\\/g, '/');
-            path = /\/ts\/src\/base\/PredictionExchange\.ts$/.test(file) ? 'crate::prediction_exchange_generated::PredictionBase'
-                : RustTranspiler.RUST_BASE_TIER_FILE.test(file) ? 'crate::exchange_generated::ExchangeBase' : undefined;
+        if (node.expression.expression.kind === SyntaxKind.SuperKeyword) {
+            const target: any = this.rustScalarCallee(node);
+            if (!this.rustLentSlots.has(snake) || !/ts[/]src[/]pro[/]/.test(String(node.getSourceFile?.()?.fileName ?? ''))
+                || target === undefined || target.getSourceFile?.() === node.getSourceFile?.() || !this.rustLentSlotOverride(target)) return undefined;
+            return { path: 'crate::exchange::DerivedExchange', snake, receiver: 'parent' };
         }
-        if (path === undefined) return text;
-        const rest = text.slice(at.i + at.h.length);
-        return `${text.slice(0, at.i)}<Self as ${path}>::${snake}(self${rest.startsWith(')') ? '' : ', '}${rest}`;
+        if (node.expression.expression.kind !== SyntaxKind.ThisKeyword || !(snake in this.rustVirtualDispatch)) return undefined;
+        const callee: any = this.rustScalarCallee(node);
+        if (callee === undefined) return undefined;
+        if (this.rustLentSlots.has(snake) && callee.getSourceFile?.() === node.getSourceFile?.() && this.rustLentSlotOverride(callee)) return { path: 'crate::exchange::DerivedExchange', snake, receiver: 'self' };
+        if (!this.rustSlotOverrideBody(findAncestor(node, isMethodDeclaration))) return undefined;
+        const own = String(callee.getSourceFile?.()?.fileName ?? '');
+        const file = (RustTranspiler.RUST_BASE_TIER_FILE.test(own) ? own : this.rustSlotOverrideBody(callee) ? this.rustBaseTierDeclarer(callee, name) ?? '' : '').replace(/\\/g, '/');
+        const path = /\/ts\/src\/base\/PredictionExchange\.ts$/.test(file) ? 'crate::prediction_exchange_generated::PredictionBase'
+            : RustTranspiler.RUST_BASE_TIER_FILE.test(file) ? 'crate::exchange_generated::ExchangeBase' : undefined;
+        return path === undefined ? undefined : { path, snake, receiver: 'self' };
     }
 
-    printCallExpressionUnlifted(node, identation) {
+    /** The whole call printed through its trait path (`rustSlotCallPath`), or undefined when method syntax stays. */
+    rustSlotCallHead(node: any, args: string): string | undefined {
+        const slot = this.rustSlotCallPath(node);
+        if (slot === undefined) return undefined;
+        const sep = args.length > 0 ? ', ' : '';
+        return slot.receiver === 'parent' ? `${slot.path}::${slot.snake}(&self.parent${sep}${args})` : `<Self as ${slot.path}>::${slot.snake}(self${sep}${args})`;
+    }
+
+    printCallExpression(node, identation) {
         this.rustFormatPrints.delete(node);
         const expression = node.expression;
         const bookCall = this.printWsBookMapRead(node) ?? this.printWsBookCtorCall(node, identation); if (bookCall !== undefined) return bookCall;
