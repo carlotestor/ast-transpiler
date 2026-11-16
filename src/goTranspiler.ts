@@ -34020,7 +34020,8 @@ GoTranspiler.prototype.goTernaryJoinProvisional = function (): boolean {
 
 const goTernaryJoinSettledParts = GoTranspiler.prototype.goTernaryJoinParts;
 GoTranspiler.prototype.goTernaryJoinParts = function (declaration) {
-    if ((declaration === undefined) || !this.goTernaryJoinProvisional() || GO_TERNARY_JOIN_MEMO.has(declaration)) {
+    if ((declaration === undefined) || !this.goTernaryJoinProvisional() || GO_TERNARY_JOIN_MEMO.has(declaration)
+        || (this.goUnwrapParenthesizedNode(declaration.initializer)?.kind !== SyntaxKind.ConditionalExpression)) {
         return goTernaryJoinSettledParts.call(this, declaration);
     }
     const parts = goTernaryJoinSettledParts.call(this, declaration);
@@ -34034,7 +34035,8 @@ GoTranspiler.prototype.goDeclaredTypeOfIdentifier = function (node) {
         return goTernaryJoinSettledDeclaredType.call(this, node);
     }
     const declaration: any = this.checkerOrUndefined()?.getSymbolAtLocation(node)?.valueDeclaration?.resolve();
-    const owner = ((declaration?.kind === SyntaxKind.VariableDeclaration) && (declaration.initializer !== undefined))
+    const owner = ((declaration?.kind === SyntaxKind.VariableDeclaration)
+        && (this.goUnwrapParenthesizedNode(declaration.initializer)?.kind === SyntaxKind.ConditionalExpression))
         ? goTernaryJoinOwner(declaration.initializer) : undefined;
     if ((owner !== declaration) || (owner === undefined) || this.goDeclaredTypeCache.has(owner) || GO_TERNARY_JOIN_MEMO.has(owner)) {
         return goTernaryJoinSettledDeclaredType.call(this, node);

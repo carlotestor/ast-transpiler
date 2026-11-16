@@ -14384,4 +14384,25 @@ describe('84g7 ternary locals copied into a defaulted parameter scan', () => {
         expect(out).toContain('\tvar contractLimit int64\n\tif limit != nil {\n\t\tcontractLimit = *limit\n\t} else {\n\t\tcontractLimit = 2000\n\t}');
         expect(out).not.toContain('var contractLimit any = func() any {');
     });
+    test('a non-ternary local copied from a pointer and reassigned from the parameter keeps its value form', () => {
+        const x = new Transpiler({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        installCcxtGoLocalTypes(x.goTranspiler);
+        const src = 'type Int = number | undefined;\n'
+            + 'class X {\n'
+            + '    options: any = {};\n'
+            + '    safeInteger (o: any, k: string, d: Int = undefined): Int { return d; }\n'
+            + '    f (tf: number, now: number, limit: Int = undefined) {\n'
+            + '        const request = {};\n'
+            + '        const defaultLimit = this.safeInteger (this.options, \'l\', 200);\n'
+            + '        let candlesCount: Int = defaultLimit;\n'
+            + '        if (limit !== undefined) {\n'
+            + '            candlesCount = limit;\n'
+            + '        }\n'
+            + '        request[\'start_ts\'] = now - (candlesCount * tf);\n'
+            + '        return request;\n'
+            + '    }\n'
+            + '}\n';
+        const out = x.transpileGo(src).content;
+        expect(out).not.toContain('*candlesCount');
+    });
 });
