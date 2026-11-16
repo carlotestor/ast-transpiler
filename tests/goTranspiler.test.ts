@@ -14354,3 +14354,50 @@ describe ('ral-77g8 ws struct parser results', () => {
         expect (out).toContain ('defaultType = *this.SafeString(this.Options, "defaultType", defaultType)');
     });
 });
+
+describe ('ral-84g8: sibling block-scoped parse* locals', () => {
+    test ('two const parsed in disjoint blocks each take the parser map type', () => {
+        const x = new Transpiler ({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        installCcxtGoLocalTypes (x.goTranspiler);
+        const src = 'type Dict = { [key: string]: any };\n'
+            + 'class Ex {\n'
+            + '    parseWsTrade (t: Dict, market: any = undefined): Dict { return { \'id\': t[\'id\'] }; }\n'
+            + '    safeString (a: any, b: any, c: any = undefined): string { return undefined; }\n'
+            + '    f (message: Dict, list: any[], stored: any) {\n'
+            + '        if (Array.isArray (list)) {\n'
+            + '            for (let i = 0; i < list.length; i++) {\n'
+            + '                const parsed = this.parseWsTrade (list[i]);\n'
+            + '                stored.append (parsed);\n'
+            + '            }\n'
+            + '        } else {\n'
+            + '            const parsed = this.parseWsTrade (message);\n'
+            + '            const symbol = this.safeString (parsed, \'symbol\');\n'
+            + '            stored.append (parsed);\n'
+            + '        }\n'
+            + '    }\n'
+            + '}\n';
+        const out = x.transpileGo (src).content;
+        expect (out).toContain ('var parsed map[string]any = this.ParseWsTrade(GetValue(list, i))');
+        expect (out).toContain ('var parsed map[string]any = this.ParseWsTrade(message)');
+    });
+    test ('a nested same-named declaration still keeps the box', () => {
+        const x = new Transpiler ({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        installCcxtGoLocalTypes (x.goTranspiler);
+        const src = 'type Dict = { [key: string]: any };\n'
+            + 'class Ex {\n'
+            + '    parseWsTrade (t: Dict, market: any = undefined): Dict { return { \'id\': t[\'id\'] }; }\n'
+            + '    f (message: Dict, stored: any) {\n'
+            + '        {\n'
+            + '            const parsed = this.parseWsTrade (message);\n'
+            + '            if (stored) {\n'
+            + '                const parsed = this.parseWsTrade (message);\n'
+            + '                stored.append (parsed);\n'
+            + '            }\n'
+            + '            stored.append (parsed);\n'
+            + '        }\n'
+            + '    }\n'
+            + '}\n';
+        const out = x.transpileGo (src).content;
+        expect (out).not.toContain ('var parsed map[string]any');
+    });
+});
