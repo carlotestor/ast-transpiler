@@ -20223,6 +20223,11 @@ describe('ral-60p: a pro-tier Object.keys element that is an indexOf needle and 
         expect(out).toContain('let mut key: Option<String> = keys.get(i as usize).and_then(Value::as_str).map(str::to_owned);');
         expect(out).toContain('(channel.as_deref(), key.as_deref())');
     });
+    test('the needle of a find on a string Value parameter (gate pro getMarketTypeByUrl) is an Option<String> too', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-60p-needle-param', "    m (url: string) {\n        const findBy: Dict = { 'op-': 'option', 'delivery': 'future' };\n        const keys = Object.keys (findBy);\n        for (let i = 0; i < keys.length; i++) {\n            const key = keys[i];\n            const value = findBy[key];\n            if (url.indexOf (key) >= 0) {\n                return value;\n            }\n        }\n        return 'spot';\n    }\n")).content;
+        expect(out).toContain('let mut key: Option<String> = keys.get(i as usize).and_then(Value::as_str).map(str::to_owned);');
+        expect(out).toContain('url.as_str().zip(key.as_deref())');
+    });
     test('negative: a key that also reads a this field cache stays Value', () => {
         const out = transpiler.transpileRustByPath (write ('ral-60p-needle-field', loop ('this.tickers[key]'))).content;
         expect(out).toContain('let mut key: Value = ');

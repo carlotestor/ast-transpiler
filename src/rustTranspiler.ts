@@ -31014,7 +31014,7 @@ export class RustTranspiler extends BaseTranspiler {
         const plain = (x: any): boolean => isIdentifier(x) || (isPropertyAccessExpression(x) && isIdentifier(x.name) && plain(x.expression));
         if (!plain(recv) || this.primitiveKindOfType(this.typeOfNodeIfAny(recv)) !== 'string') return false;
         if (isIdentifier(recv) && (this.rustStringLocalIdentifierIsTyped(recv) || this.rustScalarLocalOf(recv) !== undefined || this.rustScalarIdentifierKind(recv) !== undefined)) return false;
-        return !this.rust41bWsKeyLocal(n);
+        return !this.rust41bWsKeyLocal(n, true);
     }
 
     // `x.indexOf(y)` with a proven-string needle: `-1` when either side is not a `Str` (byte index).
