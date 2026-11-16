@@ -72807,7 +72807,7 @@ ${iden}}`;
       if (!_is.isCallExpression.call(void 0, up) || up.arguments[0] !== n)
         return handed();
       const keyArgs = up.arguments.slice(1, _is.isPropertyAccessExpression.call(void 0, up.expression) && /2$/.test(String(up.expression.name.text)) ? 3 : 2).map((a) => this.rustSkipWrappers(a));
-      const stringKey = keyArgs.every((k) => k !== void 0 && _is.isStringLiteralLikeNode.call(void 0, k) && !/^\d+$/.test(String(k.text)) && !(String(k.text) in this.StringLiteralReplacements));
+      const stringKey = keyArgs.every((k) => k !== void 0 && (_is.isStringLiteralLikeNode.call(void 0, k) && !/^\d+$/.test(String(k.text)) && !(String(k.text) in this.StringLiteralReplacements) || _is.isIdentifier.call(void 0, k) && from === "dict" && this.rustDictElementSource(init) && this.primitiveKindOfType(this.typeOfNodeIfAny(k)) === "string"));
       const literalKey = this.rustBorrowedDictReader(up) !== void 0;
       if (!literalKey && !((from !== "api" || stringKey) && this.rustBorrowedAnyKeyReader(up)))
         return handed();
@@ -75023,6 +75023,11 @@ ${iden}}`;
     if (up.kind === _ast.SyntaxKind.ConditionalExpression && up.condition !== n) {
       const other = this.unwrapParens(up.whenTrue === n ? up.whenFalse : up.whenTrue);
       return _is.isObjectLiteralExpression.call(void 0, other) || this.literalKindOfNode(other) !== void 0;
+    }
+    if (this.rustSafeDictDefaultUse(n) && _is.isIdentifier.call(void 0, this.rustSkipWrappers(up.arguments[0]))) {
+      const head = this.rustSkipWrappers(up.arguments[0]);
+      const declaration = this.rustDeclarationOfIdentifier(n);
+      return declaration !== void 0 && this.rustDeclarationOfIdentifier(head) === declaration;
     }
     return _is.isAsExpression.call(void 0, up) && up.expression === n && _is.isReturnStatement.call(void 0, up.parent);
   }
@@ -79303,6 +79308,10 @@ ${iden}}`;
         }
         if (_is.isCallExpression.call(void 0, up) && up.arguments[0] === n && this.rustBorrowedAnyKeyReader(up)) {
           natives++;
+          return true;
+        }
+        if (nilAssigned && _is.isAsExpression.call(void 0, up) && up.expression === n && _is.isCallExpression.call(void 0, up.parent) && up.parent.arguments.length === 3 && up.parent.arguments[2] === up && this.rustBaseCallNamed(up.parent, _RustTranspiler.RUST_SAFE_LIST_SELF_DEFAULT) && _is.isIdentifier.call(void 0, this.rustSkipWrappers(up.parent.arguments[0])) && this.rustIdentifierRefersToDeclaration(this.rustSkipWrappers(up.parent.arguments[0]), declaration)) {
+          boxes.push([n, "clone"]);
           return true;
         }
         if (_is.isReturnStatement.call(void 0, up) && up.expression === n) {
@@ -87554,6 +87563,7 @@ _RustTranspiler.RUST_BORROWED_LIST_SOURCES = /* @__PURE__ */ new Set(["safeList"
 _RustTranspiler.RUST_BORROWED_ANY_KEY_READERS = /^safe(?:Value|String(?:Lower|Upper)?|Integer|Float|Timestamp|IntegerProduct)(?:2|N)?$/;
 _RustTranspiler.RUST_SELF_EXTEND = /* @__PURE__ */ new Set(["extend"]);
 _RustTranspiler.RUST_REUSE_SAFE_DICT = /* @__PURE__ */ new Set(["safeDict"]);
+_RustTranspiler.RUST_SAFE_LIST_SELF_DEFAULT = /* @__PURE__ */ new Set(["safeList"]);
 _RustTranspiler.RUST_UNTIL_LIST_WRITE = /* @__PURE__ */ new Set(["handleUntilOption"]);
 // ral-wf: the generated base `merge_balance_account(result, code, account)` (exchange_generated.rs) returns its own
 // `result` argument on both paths, inserting only under `result[code]`, so a reuse literal moves in and back unchanged in kind
