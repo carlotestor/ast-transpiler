@@ -23500,3 +23500,29 @@ describe('ral-76a: the printer boxes a routed error constructor stored into an u
         expect(out).toContain('let mut failure: crate::ExchangeError = crate::exchange_errors::network_error(');
     });
 });
+
+describe('ral-76a: a venue Str method returning its own safeString local prints Option<String>; a literal seed written from it stays typed', () => {
+    const files: Record<string, string> = {
+        'ts/src/base/types.ts': "export type Str = string | undefined;\nexport interface Dict { [key: string]: any }\n",
+        'ts/src/base/Exchange.ts': "import type { Str, Dict } from './types.js';\nexport type { Str, Dict } from './types.js';\nexport default class Exchange {\n    id: string = 'x';\n    safeString (o: any, k: any, d: any = undefined): Str { return o[k]; }\n}\n",
+        'ts/src/venue.ts': "import Exchange from './base/Exchange.js';\nimport type { Str, Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    encodeTif (tif: Str): Str {\n        const table: Dict = { 'GTC': 'GTC', 'PO': 'POST_ONLY' };\n        const instruction = this.safeString (table, tif);\n        if (instruction === undefined) {\n            throw new Error ('bad');\n        }\n        return instruction;\n    }\n    build (tif: Str, postOnly: boolean): Dict {\n        const request: Dict = {};\n        let instruction = 'GTC';\n        if (tif !== undefined) {\n            instruction = this.encodeTif (tif);\n        }\n        if (postOnly && instruction !== 'RPI') {\n            instruction = 'POST_ONLY';\n        }\n        request['instruction'] = instruction;\n        return request;\n    }\n}\n",
+    };
+    let out: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-76a2-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = transpiler.transpileRustByPath (path.join (root, 'ts/src/venue.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test('S1: the Str method returns its Option<String> local itself', () => {
+        expect(out).toMatch(/fn encodeTif\(&self, tif: Option<&str>\) -> Option<String>/);
+        expect(out).toContain('return instruction;');
+    });
+    test('S2: the literal seed written from the venue Str method is Option<String>', () => {
+        expect(out).toContain('let mut instruction: Option<String> = Some("GTC".to_string());');
+        expect(out).not.toContain('let mut instruction: Value');
+    });
+});

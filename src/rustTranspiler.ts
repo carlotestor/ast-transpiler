@@ -3565,7 +3565,20 @@ export class RustTranspiler extends BaseTranspiler {
         return this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name)) === 'string';
     }
 
+    /** ral-76a S1: `return x` of the method's own local that another rule already prints `Option<String>` (a `safeString`
+     *  read, checker `string | undefined`): under a `: Str` signature it is the payload itself, so the method prints
+     *  `-> Option<String>` and its callers' string locals read it natively. Decided from the AST and the local's own rule. */
+    rust76aOptStrReturnLocal(n: any, fn: any): boolean {
+        if (n === undefined || !isIdentifier(n) || !isReturnStatement(n.parent) || findAncestor(n.parent.parent, isFunctionLike) !== fn) return false;
+        const declaration: any = this.rustDeclaredNode(n);
+        if (declaration === undefined || !isVariableDeclaration(declaration) || this.rustEnclosingFunction(declaration) !== fn) return false;
+        // a kept-arm venue method (RUST_VENUE_KEPT_STR_ARMS) stays `-> Value` and boxes its reader string once (ral-sd)
+        if (this.rustVenueKeptStrArm(fn)) return false;
+        return this.rustScalarLocalOf(n)?.kind === 'ostr';
+    }
+
     rust56xStrReturnText(exp: any, fn: any): string | undefined {
+        if (this.rust76aOptStrReturnLocal(exp, fn)) return super.printIdentifier(exp);
         if (exp !== undefined && this.rust61xNilStrReturnLocal(exp, fn) && this.rustScalarLocalOf(exp)?.kind === 'ostr') return super.printIdentifier(exp);
         if (exp === undefined || !isIdentifier(exp) || !this.rust56xStrReturnLocal(exp, fn)) return undefined;
         const kind = this.rustScalarLocalOf(exp)?.kind;
@@ -11399,7 +11412,9 @@ export class RustTranspiler extends BaseTranspiler {
             if (!isIdentifier(n) || !isBinaryExpression(parent) || parent.left !== n || parent.operatorToken.kind !== SyntaxKind.EqualsToken) continue;
             const src: any = this.rustScalarAsWrite(parent.right) ?? parent.right;
             const write = isIdentifier(this.unwrapParens(src)) && this.literalKindOfNode(this.unwrapParens(src)) !== 'null'
-                ? this.rustScalarIdentifierKind(this.unwrapParens(src)) ?? this.rustOptParamKind(src) : this.rustScalarValueKind(src, true);
+                ? this.rustScalarIdentifierKind(this.unwrapParens(src)) ?? this.rustOptParamKind(src) : this.rustScalarValueKind(src, true)
+                    // ral-76a S2: a write from a venue `Str` method (every venue declaration `string` / `Str`; rustScalarWriteOk's vd arm) holds its string or Null
+                    ?? (this.rustVenueStrCall(this.unwrapParens(src)) ? 'ostr' : undefined);
             // 40b: a `bool` local with a later `x = undefined` write is an `Option<bool>` (`None` is the `Null` it held)
             const next = write === undefined ? undefined : this.rustScalarJoinKinds(joined, write, joined === 'bool' && write === 'null');
             if (next !== undefined && (next === joined || next === `o${joined}`)) joined = next;
@@ -13501,7 +13516,7 @@ export class RustTranspiler extends BaseTranspiler {
                 // only a local the `-> Option<String>` signature itself held back (rustStrReturnSignature: its return use answered no form);
                 // a local other rules already type keeps the decision it had
                 const own = (inner !== undefined && isIdentifier(inner) && this.rust56xStrReturnLocal(inner, fn) && this.rustStrReturnSignature(fn, inner)
-                    && this.primitiveKindOfType(this.getCheckedTypeOf(inner)) === 'string') || this.rust61xNilStrReturnLocal(inner, fn);
+                    && this.primitiveKindOfType(this.getCheckedTypeOf(inner)) === 'string') || this.rust61xNilStrReturnLocal(inner, fn) || this.rust76aOptStrReturnLocal(inner, fn);
                 if (!own && !this.rustStrReturnValueConverts(n.expression)) { ok = false; return; }
             }
             n.forEachChild(visit);
