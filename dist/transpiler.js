@@ -41553,8 +41553,27 @@ function ral84g6OmitCall(node) {
 function ral84g6OmitArgIsMap(goTranspiler, arg) {
   return ccxtGoProducerArgIsMap(goTranspiler, arg) || ccxtGoJoinedParamsLocal(goTranspiler, arg);
 }
-function ral84g6NameBacksIn(goTranspiler, scope, name) {
-  return goTranspiler.hasNodeWhere(scope, (n) => n.kind === SyntaxKind5.BinaryExpression && n.operatorToken?.kind === SyntaxKind5.InKeyword && n.right?.kind === SyntaxKind5.Identifier && n.right.text === name);
+function ral84g6NameBacksIn(goTranspiler, scope, name, depth = 0) {
+  if (depth > 4) {
+    return true;
+  }
+  return goTranspiler.hasNodeWhere(scope, (n) => {
+    if (n.kind === SyntaxKind5.BinaryExpression && n.operatorToken?.kind === SyntaxKind5.InKeyword && n.right?.kind === SyntaxKind5.Identifier && n.right.text === name) {
+      return true;
+    }
+    if (n.kind !== SyntaxKind5.Identifier || n.text !== name) {
+      return false;
+    }
+    const parent = n.parent;
+    if (parent?.kind === SyntaxKind5.ArrayLiteralExpression && parent.parent?.kind === SyntaxKind5.ReturnStatement) {
+      return true;
+    }
+    const omit = parent?.kind === SyntaxKind5.CallExpression && parent.arguments?.[0] === n ? ral84g6OmitCall(parent) : void 0;
+    const value = omit !== void 0 ? omit : n;
+    const holder = value.parent;
+    const target = holder?.kind === SyntaxKind5.VariableDeclaration && holder.initializer === value ? holder.name : holder?.kind === SyntaxKind5.BinaryExpression && holder.right === value && holder.operatorToken?.kind === SyntaxKind5.EqualsToken ? holder.left : void 0;
+    return target?.kind === SyntaxKind5.Identifier && target.text !== name && ral84g6NameBacksIn(goTranspiler, scope, target.text, depth + 1);
+  });
 }
 function ral84g6OmitLocalType(goTranspiler, declaration) {
   if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier || declaration.parent?.parent?.kind !== SyntaxKind5.FirstStatement || declaration.parent.declarations?.length !== 1) {
@@ -41567,7 +41586,7 @@ function ral84g6OmitLocalType(goTranspiler, declaration) {
   const call = ral84g6OmitCall(declaration.initializer);
   let verdict;
   const scope = goTranspiler.goEnclosingFunction(declaration);
-  if (call !== void 0 && scope !== void 0 && ral84g6OmitArgIsMap(goTranspiler, call.arguments[0]) && !goTranspiler.goTypeNameIsShadowed(scope, GO_SAFE_DICT_LOCAL_TYPE)) {
+  if (call !== void 0 && scope !== void 0 && ral84g6OmitArgIsMap(goTranspiler, call.arguments[0]) && !goTranspiler.goTypeNameIsShadowed(scope, GO_SAFE_DICT_LOCAL_TYPE) && !ral84g6NameBacksIn(goTranspiler, scope, declaration.name.text)) {
     const name = declaration.name.text;
     const unsafe = goTranspiler.hasNodeWhere(scope, (n) => {
       if (n.kind !== SyntaxKind5.Identifier || n.text !== name || n === declaration.name) {
@@ -41623,6 +41642,64 @@ GoTranspiler.prototype.goTypeOfInitializer = function(initializer, printedValue)
   }
   const scope = this.goEnclosingFunction(parent);
   return scope !== void 0 && !ral84g6NameBacksIn(this, scope, target.text) ? GO_SAFE_DICT_LOCAL_TYPE : void 0;
+};
+function ral84g6MapWriteIsMap(goTranspiler, declaration, n, parent) {
+  const isSelfOrMap = (arg) => arg?.kind === SyntaxKind5.Identifier && (ccxtGoParamDeclarationOf(goTranspiler, arg) === declaration || ral84g6OmitArgIsMap(goTranspiler, arg));
+  if (parent?.kind === SyntaxKind5.BinaryExpression && parent.left === n && parent.operatorToken?.kind === SyntaxKind5.EqualsToken) {
+    const write = ral84g6OmitCall(parent.right);
+    return write !== void 0 && isSelfOrMap(write.arguments[0]);
+  }
+  const assignment = parent?.parent;
+  if (parent?.kind !== SyntaxKind5.ArrayLiteralExpression || assignment?.kind !== SyntaxKind5.BinaryExpression || assignment.left !== parent || assignment.operatorToken?.kind !== SyntaxKind5.EqualsToken || parent.elements.length !== 2 || parent.elements.indexOf(n) !== 1) {
+    return false;
+  }
+  const call = assignment.right;
+  const callee = call?.expression;
+  if (call?.kind !== SyntaxKind5.CallExpression || call.questionDotToken !== void 0 || callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword) {
+    return false;
+  }
+  const slot = CCXT_GO_ELEMENT_1_PARAMS_SLOT[String(callee.name?.text ?? "")];
+  let signature;
+  try {
+    signature = goTranspiler.getChecker().getResolvedSignature(call)?.declaration?.resolve();
+  } catch (e) {
+    return false;
+  }
+  return slot !== void 0 && CCXT_GO_ELEMENT_1_BASE_FILE.test(signature?.getSourceFile?.()?.fileName ?? "") && isSelfOrMap(call.arguments[slot]);
+}
+var ral84g6ShippedLocalIsSafeToType = GoTranspiler.prototype.goLocalIsSafeToType;
+GoTranspiler.prototype.goLocalIsSafeToType = function(scope, declaration, varName, goType, stringWriteProven = false) {
+  if (ral84g6ShippedLocalIsSafeToType.call(this, scope, declaration, varName, goType, stringWriteProven)) {
+    return true;
+  }
+  if (goType !== GO_SAFE_DICT_LOCAL_TYPE || scope === void 0 || declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.initializer?.kind !== SyntaxKind5.Identifier || ral84g6NameBacksIn(this, scope, varName)) {
+    return false;
+  }
+  let rebinds = 0;
+  const unsafe = this.hasNodeWhere(scope, (n) => {
+    if (n.kind !== SyntaxKind5.Identifier || n.text !== varName || n === declaration.name) {
+      return false;
+    }
+    const parent = n.parent;
+    if (parent?.kind === SyntaxKind5.PropertyAccessExpression && parent.name === n || parent?.kind === SyntaxKind5.PropertyAssignment && parent.name === n) {
+      return false;
+    }
+    const target = ccxtGoParamDeclarationOf(this, n);
+    if (target !== declaration) {
+      return target === void 0;
+    }
+    if (parent?.kind === SyntaxKind5.BinaryExpression && parent.left === n && parent.operatorToken?.kind === SyntaxKind5.EqualsToken) {
+      if (this.goTypeOfInitializer(parent.right, this.printNode(parent.right, 0)) === goType) {
+        return false;
+      }
+    }
+    if (ral84g6MapWriteIsMap(this, declaration, n, parent)) {
+      rebinds += 1;
+      return false;
+    }
+    return ccxtGoProducerUseRebinds(n) || isDestructuringTarget(n) || ccxtGoWriteSiteShippedVeto(this, n, parent, goType);
+  });
+  return !unsafe && rebinds > 0;
 };
 
 // src/javaTranspiler.ts
