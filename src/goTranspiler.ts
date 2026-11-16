@@ -34000,3 +34000,48 @@ GoTranspiler.prototype.printVariableDeclarationList = function (node, identation
     }
     return goTernaryJoinUpstreamPrintDeclarationList.call(this, node, identation);
 };
+
+// ---- 84g7: ternary locals asked while a parameter's GetArg type is being decided -----------------
+// A defaulted parameter's GetArg type is decided by scanning its copy targets, and a ternary local that
+// copies the parameter (`const n = (limit !== undefined) ? limit : 2000`) is one of them: classifying the
+// local inside that scan sees the parameter's in-progress `any` and used to memoise the box for good, so
+// the declaration printed `var n any = func() any {..}()` although the parameter ends up `*int64`. An
+// answer reached while a GetArg type is being computed is provisional: it is neither memoised nor left in
+// the declared-type caches, and the next ask, once the parameter is settled, decides the declaration.
+// The parameter's own verdict never depended on the local being typed (the scan saw the box, the
+// pointer-or-pointee join keeps every value the parameter can hold).
+export interface GoTranspiler {
+    goTernaryJoinProvisional(): boolean;
+}
+
+GoTranspiler.prototype.goTernaryJoinProvisional = function (): boolean {
+    return (this.goGetArgTypeComputing?.size ?? 0) > 0;
+};
+
+const goTernaryJoinSettledParts = GoTranspiler.prototype.goTernaryJoinParts;
+GoTranspiler.prototype.goTernaryJoinParts = function (declaration) {
+    if ((declaration === undefined) || !this.goTernaryJoinProvisional() || GO_TERNARY_JOIN_MEMO.has(declaration)) {
+        return goTernaryJoinSettledParts.call(this, declaration);
+    }
+    const parts = goTernaryJoinSettledParts.call(this, declaration);
+    GO_TERNARY_JOIN_MEMO.delete(declaration);
+    return parts;
+};
+
+const goTernaryJoinSettledDeclaredType = GoTranspiler.prototype.goDeclaredTypeOfIdentifier;
+GoTranspiler.prototype.goDeclaredTypeOfIdentifier = function (node) {
+    if (!this.goTernaryJoinProvisional() || (node?.kind !== SyntaxKind.Identifier)) {
+        return goTernaryJoinSettledDeclaredType.call(this, node);
+    }
+    const declaration: any = this.checkerOrUndefined()?.getSymbolAtLocation(node)?.valueDeclaration?.resolve();
+    const owner = ((declaration?.kind === SyntaxKind.VariableDeclaration) && (declaration.initializer !== undefined))
+        ? goTernaryJoinOwner(declaration.initializer) : undefined;
+    if ((owner !== declaration) || (owner === undefined) || this.goDeclaredTypeCache.has(owner) || GO_TERNARY_JOIN_MEMO.has(owner)) {
+        return goTernaryJoinSettledDeclaredType.call(this, node);
+    }
+    const answer = goTernaryJoinSettledDeclaredType.call(this, node);
+    this.goDeclaredTypeCache.delete(owner);
+    this.goLocalStaticTypeCache.delete(owner);
+    this.goLocalSafeVerdicts.delete(owner);
+    return answer;
+};

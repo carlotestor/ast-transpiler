@@ -14354,3 +14354,34 @@ describe ('ral-77g8 ws struct parser results', () => {
         expect (out).toContain ('defaultType = *this.SafeString(this.Options, "defaultType", defaultType)');
     });
 });
+
+describe('84g7 ternary locals copied into a defaulted parameter scan', () => {
+    test('a ternary over a GetArg pointer parameter is typed even when first asked inside that parameter scan', () => {
+        const x = new Transpiler({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        installCcxtGoLocalTypes(x.goTranspiler);
+        const src = 'type Int = number | undefined;\n'
+            + 'class X {\n'
+            + '    seconds (): number { return 1; }\n'
+            + '    parseTimeframe (t: string): number { return 60; }\n'
+            + '    f (timeframe: string, isContract: boolean, since: Int = undefined, limit: Int = undefined) {\n'
+            + '        const request = {};\n'
+            + '        const contractLimit: number = (limit !== undefined) ? limit : 2000;\n'
+            + '        let rangeLimit = limit;\n'
+            + '        if (isContract) {\n'
+            + '            rangeLimit = contractLimit;\n'
+            + '        }\n'
+            + '        const duration = this.parseTimeframe (timeframe);\n'
+            + '        if (since === undefined) {\n'
+            + '            const now = this.seconds ();\n'
+            + '            request[\'from\'] = now - duration * (contractLimit - 1);\n'
+            + '        }\n'
+            + '        request[\'size\'] = rangeLimit;\n'
+            + '        return request;\n'
+            + '    }\n'
+            + '}\n';
+        const out = x.transpileGo(src).content;
+        expect(out).toContain('var limit *int64 = GetArgInt64Ptr(optionalArgs, 1, nil)');
+        expect(out).toContain('\tvar contractLimit int64\n\tif limit != nil {\n\t\tcontractLimit = *limit\n\t} else {\n\t\tcontractLimit = 2000\n\t}');
+        expect(out).not.toContain('var contractLimit any = func() any {');
+    });
+});
