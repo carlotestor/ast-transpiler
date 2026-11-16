@@ -2375,7 +2375,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (op === SyntaxKind.InKeyword) {
             const shadow = this.rustParamShadowOf(right);
             return this.printWsBookMapHas(left, right) ?? this.printWsCacheMapHas(left, right) ?? this.printBorrowedInOp(left, right) ?? this.printFieldKeyInOp(left, right) ?? this.printElemKeyInOp(left, right) ?? this.printClientHandleInOp(left, right, false) ?? (shadow !== undefined ? this.printShadowInOperator(shadow, left) : undefined)
-                ?? this.bearerInOp(left, right) ?? this.printNativeInOperator(left, right)
+                ?? this.print65bWsInKey(left, right) ?? this.bearerInOp(left, right) ?? this.printNativeInOperator(left, right)
                 ?? this.literalInOp(left, right) ?? this.provenDictFieldInOp(left, right) ?? this.rustDictInOp(left, right)
                 ?? `Value::Bool(in_op(&${this.printNode(right, 0)}, &${this.printNode(left, 0)}))`;
         }
@@ -8070,6 +8070,10 @@ export class RustTranspiler extends BaseTranspiler {
         if (kind === 'ostr' && this.rustInitKeyLocal(n) && this.rustElemKeyInUse(n)) return 'kin';
         // ral-59p: the key of a statement `delete X[k]` (ws cache / client-handle deletes took their own forms above)
         if ((kind === 'str' || kind === 'ostr') && this.rustInitKeyLocal(n) && !this.rustTestTierSource(n) && this.rust59pDeleteKeyUse(n)) return 'dkey';
+        // ral-65b: an `Option<String>` base-reader local (no default) keying `k in client.subscriptions|futures` that is not the
+        // handle's own key test: boxed once as the `Value` local held it (`Str` / `Null`), printed by print65bWsInKey; gate
+        // handleErrorMessage `id` (ccxt's rustStrNLocalOptionString pass did this)
+        if (kind === 'ostr' && this.rust65bWsInKey(n) && this.rust64bReaderLocal(this.rustDeclaredNode(n))) return 'box';
         // qf: the key of any other `k in obj` test boxes once (`in_op` reads a `Str` key or misses on `Null`, as the `Value` local did)
         // td: also through a `(k as string)` cast of the key (the cast prints nothing)
         if ((kind === 'str' || kind === 'ostr') && this.rustInKeyTop(n) !== undefined && !this.rustTestTierSource(n)
@@ -11268,6 +11272,25 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     /** The key local of an `in` test has a non-null initializer (nil-declared locals are left to their own rule). */
+    /** ral-65b: `k in client.subscriptions|futures` keyed by a typed `Option<String>` reader local (rust65bWsInKey): the
+     *  dict-shaped membership test of the client field read, with the key boxed as the `Value` local held it (a `None` key
+     *  is `Null`, which never matches a `Str` key: the `in_op` answer) */
+    print65bWsInKey(left: any, right: any): string | undefined {
+        if (!isIdentifier(left) || this.rustScalarLocalOf(left)?.kind !== 'ostr' || this.rustScalarUseForms.get(left) !== 'box' || !this.rust65bWsInKey(left)) return undefined;
+        const recv: any = this.unwrapParens(right);
+        if (!isIdentifier(recv.expression)) return undefined;
+        const field = `get_value(&${this.printNode(recv.expression, 0).trim()}, &Value::Str(${this.quotedStringLiteral(String(recv.name.text))}.into()))`;
+        return `Value::Bool(matches!((&${field}, &${this.printNode(left, 0).trim()}), (Value::Dict(__d), Value::Str(__k)) if __d.contains_key(__k.as_ref())))`;
+    }
+
+    /** ral-65b: `n` is the bare key of `n in client.subscriptions|futures` on a ws `Client` that the handle does not print. */
+    rust65bWsInKey(n): boolean {
+        const parent: any = n.parent;
+        if (!isBinaryExpression(parent) || parent.operatorToken.kind !== SyntaxKind.InKeyword || parent.left !== n || this.rustClientHandleIsInTest(parent)) return false;
+        const recv: any = this.unwrapParens(parent.right);
+        return isPropertyAccessExpression(recv) && (recv.name.text === 'subscriptions' || recv.name.text === 'futures') && this.rustIsWsClientType(this.typeOfNodeIfAny(recv.expression));
+    }
+
     rustInKeyInitialised(n): boolean {
         // a ws `client.subscriptions|futures` receiver is rewritten by ccxt's container-op pass from a `Value` key: leave it
         const recv: any = this.unwrapParens(this.rustInKeyTop(n).parent.right);
