@@ -1,5 +1,5 @@
 import { BaseTranspiler } from "./baseTranspiler.js";
-import { type BinaryExpression, type Block, type CallExpression, type Declaration, type ElementAccessExpression, type Expression, type Identifier, type Node, type ParameterDeclaration, type VariableDeclaration } from "typescript/unstable/ast";
+import { type BinaryExpression, type BindingElement, type Block, type CallExpression, type Declaration, type ElementAccessExpression, type Expression, type Identifier, type Node, type ParameterDeclaration, type VariableDeclaration } from "typescript/unstable/ast";
 import { type Symbol as TsSymbol, type Type } from "typescript/unstable/sync";
 /** A ts/src index scan reads real `*.ts` sources and this process's own stripped base copy only: no `.d.ts`, no
  *  dot-file temp copy, no other process's `*.nooverloads.<pid>.ts` (it can vanish or change mid-scan). */
@@ -3665,7 +3665,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     static readonly RUST_62N_LIST_READERS: Set<string>;
     /** ral-84a: an array literal that is a whole argument of a `this.` / `super.` call at a plain `Value` slot
      *  (`this.depositWithdrawFee ([ fee ])`): the literal boxes each element, so a map row enters as the shared map. */
-    rust84aListLiteralSelfArg(list: any): boolean;
+    rust84aListLiteralSelfArg(list: Node): boolean;
     /** ral-55h: `n` is a handler argument (not the `this` receiver slot) of `h.call (this, ..)` on an identifier `h` typed
      *  `any` (the by-name ws dispatch the ccxt build turns into `self.dispatch_ws_handler(&h, &[..])`). */
     rustWsDispatchCallArg(n: any): boolean;
@@ -4037,10 +4037,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustWsTupleCacheSlot(element: any): boolean;
     /** ral-84a: a slot of a proven watch tuple whose element at the slot's index is checker-typed `string` in every
      *  matching resolve (the ohlcv `[ symbol, timeframe, stored ]` tuples): the slot holds that string or Null. */
-    rustWsTupleStrSlot(element: any): boolean;
-    rustWsTupleSlotProof(element: any, want: 'cache' | 'str'): boolean;
+    rustWsTupleStrSlot(element: BindingElement): boolean;
+    rustWsTupleSlotProof(element: BindingElement, want: 'cache' | 'str'): boolean;
     /** ral-84a: a resolved tuple element the checker types `string` (`market['symbol']`, a `Str` reader result). */
-    rustWsResolvedStr(x: any): boolean;
+    rustWsResolvedStr(x: Node): boolean;
     /** ral-55w: a resolved value that is a plain map, never a cache / book marker: a fresh or proven map, or an entry of
      *  the base `balance` field (balances are plain maps), so a numeric slot read off it is Null. */
     rustWsPlainMapResolve(x: any): boolean;
@@ -4050,7 +4050,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-54w: a watched tuple's cache slot: the runtime's marker test converts the slot once. */
     printWsTupleCacheSlot(element: any, printedName: string, read: string, nativeList: boolean, indent: string): string | undefined;
     /** ral-84a: a watched tuple's string slot reads its text once. */
-    printWsTupleStrSlot(element: any, printedName: string, read: string, nativeList: boolean, indent: string): string | undefined;
+    printWsTupleStrSlot(element: Node, printedName: string, read: string, nativeList: boolean, indent: string): string | undefined;
     printWsCacheLocalDeclaration(declaration: any, varName: string, indent: string): string | undefined;
     /** A use of a typed cache local: the handle itself, or boxed once at a `Value` hand-off. */
     printWsCacheLocalUse(node: any): string | undefined;

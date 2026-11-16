@@ -77234,7 +77234,7 @@ ${iden}}`;
    *  (`this.depositWithdrawFee ([ fee ])`): the literal boxes each element, so a map row enters as the shared map. */
   rust84aListLiteralSelfArg(list) {
     const up = list.parent;
-    if (!isCallExpression6(up) || up.expression === list || !isPropertyAccessExpression3(up.expression))
+    if (up === void 0 || !isCallExpression6(up) || up.expression === list || !isPropertyAccessExpression3(up.expression))
       return false;
     const recv = up.expression.expression;
     if (recv.kind !== SyntaxKind7.ThisKeyword && recv.kind !== SyntaxKind7.SuperKeyword)
