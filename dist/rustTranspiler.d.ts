@@ -713,6 +713,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-61p: `this.handleOption (m, o, <literal>)` resolved to the base tier: the option value or the default argument.
      *  A string literal default names `ostr` (the runtime answers the stored option or that literal; a stored option of
      *  another kind reads as `None`, the same miss the `Value` form's `.as_str()` compare made). */
+    /** ral-62p: `this.handleOption (m, o, d) as Bool` (or `as boolean`) on the base handleOption. */
+    rust62pBoolCastOption(node: any): boolean;
     rustHandleOptionLiteralKind(expr: any): string | undefined;
     private static readonly RUST_BASE_SCALAR_RETURNS;
     /** Base `parseNumber(s)` with no default over a string (literal, string local, `Precise.string*`): the
@@ -977,6 +979,11 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  `Dict` (kucoin fetchBalance `result = this.mergeBalanceAccount (result, currencyCode, ..)` in a sibling block): the
      *  written local's type is its annotation and the argument boxes into the call, as the plain walk already prints it. */
     rust60kBaseCallArgDictWrite(n: any, write: any): boolean;
+    /** ral-62p: the key of an element read `m[k]` that is a direct argument of a base-class `this.f (..)` call, the call the
+     *  whole source of a write to a local declared `Dict` / `List` (indodax fetchDepositsWithdrawals
+     *  `transactions = this.arrayConcat (transactions, withdraw[key])`): the written local's type is its annotation, the
+     *  element read prints its own key form and the call takes the read's `Value` either way, never this key's box. */
+    rust62pBaseCallArgKeyWrite(n: any, write: any): boolean;
     /** ral-58k: the key argument of a base `this.safeDict (src, k, dflt)` that is the whole source of a write to a local
      *  declared `Dict` (bitget pro handleBalance `account = this.safeDict (this.balance, code, account)`): the written local's
      *  type is its annotation, never this key's, and the reader takes the key as a boxed `Value` either way. */
