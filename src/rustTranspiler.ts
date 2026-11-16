@@ -25219,6 +25219,8 @@ export class RustTranspiler extends BaseTranspiler {
         // ral-55h: a handler argument of a by-name dispatch `method.call (this, .., x)` (an `any` handle routed to
         // `dispatch_ws_handler(&method, &[..])`): the slice takes `Value`s, so `None` boxes to the `Null` the reader answered
         if (this.rustWsDispatchCallArg(n)) return true;
+        // ral-84a: the argument of `book.cache.push (x)` on a typed book local (the book's `cache_push(v: Value)`)
+        if (this.rust84aBookCachePushArg(n)) return true;
         if (!isCallExpression(up) || up.expression === n || !isPropertyAccessExpression(up.expression) || up.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
         const callee = String(up.expression.name.text);
         if (RustTranspiler.RUST_HANDED_DICT_EXTEND.has(callee) || RustTranspiler.RUST_HANDED_DICT_OMIT.has(callee)) return false;
@@ -29803,6 +29805,18 @@ export class RustTranspiler extends BaseTranspiler {
         const call: any = access.parent;
         if (!isCallExpression(call) || call.expression !== access || call.arguments.length !== 1 || call.arguments[0].kind === SyntaxKind.SpreadElement) return undefined;
         return call.parent?.kind === SyntaxKind.ExpressionStatement ? call : undefined;
+    }
+
+    /** ral-84a: `n` is the sole argument of a `x.cache.push (n)` statement whose `x` is a typed book local: the book's
+     *  `cache_push(v: Value)` takes the box, so a map local enters as `Value::Dict` (or the `Null` its optional form held). */
+    rust84aBookCachePushArg(n: Node): boolean {
+        const call: Node | undefined = n.parent;
+        if (call === undefined || !isCallExpression(call) || call.arguments.length !== 1 || call.arguments[0] !== n || !isPropertyAccessExpression(call.expression)) return false;
+        const access: Node | undefined = this.rustStripWrappers(call.expression.expression);
+        if (access === undefined || !isPropertyAccessExpression(access) || String(access.name.text) !== 'cache' || !isIdentifier(access.expression)) return false;
+        if (call.parent?.kind !== SyntaxKind.ExpressionStatement || String(call.expression.name.text) !== 'push') return false;
+        // decide the book local first (its use walk records the `cpush` form the print hook reads)
+        return this.rustWsBookLocal(this.rustDeclarationOfIdentifier(access.expression)) !== undefined && this.rustWsBookUses.get(access.expression) === 'cpush';
     }
 
     /** `x.cache.push (v)` on a typed book local: the book's `cache_push`. */

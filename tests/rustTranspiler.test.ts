@@ -24241,3 +24241,25 @@ describe('ral-84a: a Dict[] row handed inside an array literal to a self-method 
         expect(out).not.toContain('let mut fee: crate::value::Dict');
     });
 });
+
+describe('ral-84a: an optional safeDict delta pushed into a typed book cache is boxed once there', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport class OrderBook { bids: any; asks: any; cache: any[] = []; reset (s: any = undefined) { } }\nexport default class Exchange {\n    orderbooks: Dict = {};\n    orderBook (s: any = {}, d: any = undefined): OrderBook { return new OrderBook (); }\n    safeInteger (o: any, k: any, d: any = undefined): number { return o[k]; }\n    safeDict (o: any, k: any, d: Dict = undefined): Dict | undefined { return o; }\n    consume (x: any): void { }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.mkdirSync (path.join (dir, 'ts/src/pro'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/pro/venue.ts'), "import Exchange from '../base/Exchange.js';\nimport type { Dict, Str } from '../base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/pro/venue.ts')).content;
+    };
+    const buffer = "    buffer (message: Dict) {\n        const delta = this.safeDict (message, 'result');\n        const start = this.safeInteger (delta, 'U');\n        const orderbook = this.orderBook ({}, 10);\n        if (this.safeInteger (orderbook, 'nonce') === undefined) {\n            orderbook.cache.push (delta);\n        } else {\n            this.consume (start);\n        }\n    }\n";
+    test('the delta is Option<Dict>, read natively and boxed into cache_push', () => {
+        const out = write ('84a-cpush', buffer);
+        expect(out).toContain('let mut delta: Option<crate::value::Dict> = ');
+        expect(out).toContain('orderbook.cache_push(delta.map_or(Value::Null, Value::Dict));');
+    });
+    test('negative: a push into a plain list local is no book cache push', () => {
+        const out = write ('84a-cpush-neg', buffer.replace ('orderbook.cache.push (delta);', 'const rows = [];\n            rows.cache.push (delta);'));
+        expect(out).not.toContain('let mut delta: Option<crate::value::Dict>');
+    });
+});
