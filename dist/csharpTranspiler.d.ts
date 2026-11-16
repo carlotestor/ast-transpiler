@@ -204,6 +204,7 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpBooleanArgumentProven(call: any, index: any, accepted: any): boolean;
     printParameter(node: any, defaultValue?: boolean): string;
     csharpIsDictParamsBag(node: any): boolean;
+    printParameteCustomName(node: any, name: any, defaultValue?: boolean): any;
     csharpMissingKeyFieldRead(expression: any, argumentExpression: any, isStringKey: any): string | undefined;
     csharpBaseDictionaryView(node: any): string | undefined;
     csharpBaseDictionaryViewKeyKind(key: any): 'string' | 'object' | undefined;
