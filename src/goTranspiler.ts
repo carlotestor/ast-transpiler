@@ -15147,6 +15147,11 @@ const GO_HELPER_RETURN_TYPES: { [name: string]: string } = {
     ...goSafeAccessorTypes([ 'SafeFloat' ], '*float64'),
     // absent flag → nil pointer, present flag → its value, mirroring the string/number accessors
     ...goSafeAccessorTypes([ 'SafeBool' ], '*bool'),
+    // ral-77g4: `omitZero (stringNumber: string | undefined)` answers the string or undefined on every
+    // path; the hand-written Go twin (exchange_generic.go, ICoreExchange) returns *string. Listing it
+    // here also tells goAnyLocalHoldsPointer / goWritePrintsPointerBox that an `any` box it feeds
+    // may hold a typed-nil pointer, so its nil tests keep the deref-aware IsEqual
+    'this.OmitZero': '*string',
     // SafeDict*/SafeList* stay untyped: the Go accessors return `any` because the value
     // may be a *sync.Map, a Dict or an order-book side, none of which is a map[string]any / []any
     // Precise arithmetic returns a numeric string, or nil when an operand is
