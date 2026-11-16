@@ -35014,3 +35014,83 @@ GoTranspiler.prototype.goTernaryJoinDeclaration = function (statement, declarati
     const iden = this.getIden(identation);
     return `${iden}var ${name} ${parts.goType}\n${iden}if ${this.goStripControlClauseParens(condition)} {\n${iden}\t${name} = ${whenTrue}\n${iden}} else {\n${iden}\t${name} = ${whenFalse}\n${iden}}`;
 };
+
+// ===== ral-87g8 R1 (begin): map-producer locals redeclared in disjoint sibling blocks =====
+// `goDeclaredLocalTypeIfSafe` refuses a market/parse* map local whenever another declaration of the
+// same name exists in the function. A `const parsed = this.parseMarket (..)` repeated in disjoint
+// blocks (gemini fetchMarketsFromAPI: three loops) binds distinct checker symbols and prints distinct
+// Go `var`s in distinct Go blocks, so the values never mix. The caller's own skipUse already resolves
+// each use through the checker; here only same-named let/const declarations whose enclosing blocks are
+// disjoint from ours are ignored. The rule runs only for the map type and only when at least one use
+// of OUR declaration is a nil comparison (prints natively as `x != nil` on the typed map), so every
+// freed local gains a native use; nested shadows and parameters still refuse.
+function go87g8BlockScoped(decl): boolean {
+    const list = decl?.parent;
+    return (list?.kind === SyntaxKind.VariableDeclarationList) && ((list.flags & (ts.NodeFlags.Let | ts.NodeFlags.Const)) !== 0)
+        && (decl.name?.kind === SyntaxKind.Identifier);
+}
+function go87g8EnclosingBlock(node) {
+    let current = node?.parent;
+    while ((current !== undefined) && (current.kind !== SyntaxKind.Block) && (current.kind !== SyntaxKind.SourceFile)) {
+        current = current.parent;
+    }
+    return current;
+}
+function go87g8Contains(outer, inner): boolean {
+    for (let current = inner; current !== undefined; current = current.parent) {
+        if (current === outer) {
+            return true;
+        }
+    }
+    return false;
+}
+const goDeclaredLocalTypeIfSafeBase87g8 = GoTranspiler.prototype.goDeclaredLocalTypeIfSafe;
+GoTranspiler.prototype.goDeclaredLocalTypeIfSafe = function (declaration, goType: string, readsTheValue: (n: Node) => boolean, skipUse?: (n: Node) => boolean): string | undefined {
+    const shipped = goDeclaredLocalTypeIfSafeBase87g8.call(this, declaration, goType, readsTheValue, skipUse);
+    if ((shipped !== undefined) || (goType !== GO_MARKET_LOCAL_TYPE) || (skipUse === undefined) || !go87g8BlockScoped(declaration)) {
+        return shipped;
+    }
+    const sourceName = declaration.name.text as string;
+    const scope = this.goEnclosingFunction(declaration);
+    const ownBlock = go87g8EnclosingBlock(declaration);
+    if ((scope === undefined) || (ownBlock === undefined) || (ownBlock === scope)) {
+        return undefined;
+    }
+    let siblings = 0;
+    let nilTests = 0;
+    const unsafe = this.hasNodeWhere(scope, (n) => {
+        if ((n.kind === SyntaxKind.Parameter) && (n.name?.kind === SyntaxKind.Identifier) && (n.name.text === sourceName)) {
+            return true;
+        }
+        if ((n.kind === SyntaxKind.VariableDeclaration) && (n !== declaration) && (n.name?.kind === SyntaxKind.Identifier) && (n.name.text === sourceName)) {
+            const otherBlock = go87g8EnclosingBlock(n);
+            if (!go87g8BlockScoped(n) || (otherBlock === undefined) || (otherBlock === scope)
+                || go87g8Contains(otherBlock, ownBlock) || go87g8Contains(ownBlock, otherBlock)) {
+                return true; // nested or function-level: a real shadow
+            }
+            siblings += 1;
+            return false;
+        }
+        if ((n.kind !== SyntaxKind.Identifier) || (n.text !== sourceName) || (n === declaration.name)) {
+            return false;
+        }
+        if ((n.parent?.kind === SyntaxKind.VariableDeclaration) && (n.parent.name === n)) {
+            return false; // a sibling's own name, counted above
+        }
+        if (skipUse(n)) {
+            return false; // property name, or the checker resolves it to another binding
+        }
+        if (!go87g8Contains(ownBlock, n)) {
+            return true;
+        }
+        if (this.goIsNilComparisonOperand(n, n.parent)) {
+            nilTests += 1;
+        }
+        return !readsTheValue(n);
+    });
+    if (unsafe || (siblings === 0) || (nilTests === 0) || this.goTypeNameIsShadowed(scope, goType)) {
+        return undefined;
+    }
+    return goType;
+};
+// ===== ral-87g8 R1 (end) =====

@@ -15014,3 +15014,64 @@ describe('84g7 R2 int64 pointer arm next to an int arm', () => {
         expect(out).toContain('var since *int64 = GetArgInt64Ptr(optionalArgs, 0, nil)');
     });
 });
+
+function goTranspile87g8(source: string): string {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ral-87g8-'));
+    fs.mkdirSync(path.join(dir, 'ts', 'src'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'ts', 'src', 'ex.ts'), source);
+    const cwd = process.cwd();
+    try {
+        process.chdir(dir);
+        const x = new Transpiler({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        installCcxtGoLocalTypes(x.goTranspiler);
+        return x.transpileGoByPath('ts/src/ex.ts').content;
+    } finally {
+        process.chdir(cwd);
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+}
+
+describe('ral-87g8 R1 map-producer locals redeclared in disjoint sibling blocks', () => {
+    const head = 'interface MarketInterface { id: string; symbol: string; }\n'
+        + 'type Market = MarketInterface | undefined;\n'
+        + 'export class ex {\n'
+        + '    parseMarket (m: any): Market { return { id: m, symbol: m }; }\n';
+    test('two same-named parseMarket locals in sibling loops each type as a map with a native nil test', () => {
+        const out = goTranspile87g8(head
+            + '    f (a: any[], b: any[]) {\n'
+            + '        const result = [];\n'
+            + '        for (let i = 0; i < a.length; i++) {\n'
+            + '            const parsed = this.parseMarket (a[i]);\n'
+            + '            if (parsed !== undefined) {\n'
+            + '                result.push (parsed);\n'
+            + '            }\n'
+            + '        }\n'
+            + '        for (let j = 0; j < b.length; j++) {\n'
+            + '            const parsed = this.parseMarket (b[j]);\n'
+            + '            if (parsed !== undefined) {\n'
+            + '                result.push (parsed);\n'
+            + '            }\n'
+            + '        }\n'
+            + '        return result;\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).not.toContain('var parsed any');
+        expect(out).toContain('if parsed != nil {');
+    });
+    test('a nested same-named shadow still keeps the box', () => {
+        const out = goTranspile87g8(head
+            + '    f (a: any[]) {\n'
+            + '        const result = [];\n'
+            + '        for (let i = 0; i < a.length; i++) {\n'
+            + '            const parsed = this.parseMarket (a[i]);\n'
+            + '            if (parsed !== undefined) {\n'
+            + '                const parsed = this.parseMarket (a[0]);\n'
+            + '                result.push (parsed);\n'
+            + '            }\n'
+            + '        }\n'
+            + '        return result;\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('var parsed any');
+    });
+});
