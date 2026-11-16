@@ -3504,6 +3504,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBuiltKeyWriteLineOk(n: any, extra?: number): boolean;
     rustNullTestedDictLocal(init: any, nullTests: number, writes: number): boolean;
     rustDictElementSource(init: any): boolean;
+    /** ral-73d: an object interface declared only in the base `ts/src/base/types.ts` (a unified record such as `Trade`,
+     *  `Position`, `Account`, `PredictionPosition`): no call signature, no array, no union. */
+    rust73dBaseRecordType(type: any): boolean;
     /** te: `this.urls['<lit>']` where the base `Exchange` declaration types that entry as a string-keyed map
      *  (`urls!: { api: Dict, .. }`). The read leaves its box as the shared map (the same Arc bump the copy paid);
      *  a missing or non-map entry reads Null at every string key, exactly as the empty map `into_dict()` leaves. */

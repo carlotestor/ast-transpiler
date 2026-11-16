@@ -75609,7 +75609,23 @@ ${iden}}`;
     const element = this.typeOfNodeIfAny(init);
     if (element === void 0 || (element.flags & (TypeFlags6.Any | TypeFlags6.Unknown | TypeFlags6.Union)) !== 0)
       return false;
+    if (isNumericLiteral4(key) || this.primitiveKindOfType(this.typeOfNodeIfAny(key)) === "number") {
+      if (this.rust73dBaseRecordType(element))
+        return true;
+    }
     return this.primitiveKindOfType(element) === void 0 && this.getChecker().getIndexTypeOfType(element, IndexKind4.String) !== void 0 && !this.getChecker().isArrayType(element);
+  }
+  /** ral-73d: an object interface declared only in the base `ts/src/base/types.ts` (a unified record such as `Trade`,
+   *  `Position`, `Account`, `PredictionPosition`): no call signature, no array, no union. */
+  rust73dBaseRecordType(type) {
+    if (type === void 0 || (type.flags & (TypeFlags6.Any | TypeFlags6.Unknown | TypeFlags6.Union)) !== 0 || this.getChecker().isArrayType(type))
+      return false;
+    if ((type.flags & TypeFlags6.Object) === 0 || this.primitiveKindOfType(type) !== void 0)
+      return false;
+    const declarations = symbolDeclarations(this.typeSymbolOf(type));
+    if (declarations.length === 0 || !declarations.every((d) => d.kind === SyntaxKind7.InterfaceDeclaration && /ts[\\/]src[\\/]base[\\/]types\.ts$/.test(String(d.getSourceFile?.()?.fileName ?? ""))))
+      return false;
+    return this.getChecker().getSignaturesOfType(type, SignatureKind2.Call).length === 0;
   }
   /** te: `this.urls['<lit>']` where the base `Exchange` declaration types that entry as a string-keyed map
    *  (`urls!: { api: Dict, .. }`). The read leaves its box as the shared map (the same Arc bump the copy paid);
