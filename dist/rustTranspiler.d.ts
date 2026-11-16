@@ -2947,6 +2947,14 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  not mutated again by the statement after the push. The printer prints the push AND the write-back insert itself (arrPush),
      *  so the bind no longer leans on ccxt's write-back pass (which reads only the boxed `k.as_str()` text). */
     rustOwnedWriteBackPushBind(access: any): boolean;
+    /** ral-62e: `if (!(k in m)) { m[k] = []; } const b = m[k]; b.push (v);` (kucoin / okx borrow-rate buckets): the printer-owned
+     *  push bind (rustOwnedWriteBackPushBind) whose only other reference is that push. The guard right before the bind wrote a list
+     *  under `k`, and every element write of `m` in the function stores an array literal or an array-typed value, so the read is
+     *  always an `Arr` for a present key: the bind is a `List` local. A `None` key reads an empty list where the box read Null; its
+     *  push is dropped with the local and nothing is written back in either form (`if let Some(__k)`). */
+    private rustOwnedBucketListDecisions;
+    rustOwnedBucketListBind(declaration: any): boolean;
+    rustOwnedBucketListBindUncached(declaration: any): boolean;
     /** ral-xf: `const x = m[k]` mutated by the next statement, where `m` is a map-literal local and `k` a plain
      *  identifier key: the printer's native read (`m.get(k.as_str().unwrap_or("")).cloned()..`) is a form ccxt's
      *  write-back pass (`writeBackIndexedMutations`) and push pass (`rustVecPushInline`) read as the same get. */
