@@ -14408,6 +14408,9 @@ describe('ral-84g6 omit results and copies of a proven map', () => {
         "        if (flag > 1) {\n" +
         "            query = params;\n" +
         "        }\n" +
+        "        if (query === undefined) {\n" +
+        "            return undefined;\n" +
+        "        }\n" +
         "        return this.safeString (query, 'x');\n" +
         "    }\n");
         expect(output).toContain('var query map[string]any = paramsFlag');
@@ -14451,5 +14454,25 @@ describe('ral-84g6 map copies rebound by omit or a params-tuple element stay map
         "}\n";
         const output = inst.transpileGo(input).content;
         expect(output).toContain('var rest any = this.Omit(paramsFlag, "b")');
+    });
+});
+
+describe('ral-84g6 a map typing needs a native use', () => {
+    test('a copy of a joined params map read only through helpers keeps the box', () => {
+        const inst = new Transpiler({ 'verbose': false });
+        installCcxtGoLocalTypes((inst as any).goTranspiler);
+        const input =
+        "type Dict = { [key: string]: any };\n" +
+        "class T {\n" +
+        "    safeString (a, b) { return a; }\n" +
+        "    handleOptionIntegerAndParams (params: Dict, m: string, o: string, d: number = undefined): [number, Dict] { return [ d, params ]; }\n" +
+        "    f (params: Dict = {}) {\n" +
+        "        const [ flag, paramsFlag ] = this.handleOptionIntegerAndParams (params, 'f', 'flag', 2);\n" +
+        "        const query = paramsFlag;\n" +
+        "        return [ this.safeString (query, 'x'), flag ];\n" +
+        "    }\n" +
+        "}\n";
+        const output = inst.transpileGo(input).content;
+        expect(output).toContain('var query any = paramsFlag');
     });
 });

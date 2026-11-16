@@ -34053,6 +34053,33 @@ function ral84g6NameBacksIn(goTranspiler: GoTranspiler, scope, name: string, dep
         return (target?.kind === SyntaxKind.Identifier) && (target.text !== name) && ral84g6NameBacksIn(goTranspiler, scope, target.text, depth + 1);
     });
 }
+// a use the typed map reads natively (the "what counts" bar: a typing with no native use is not admitted):
+// a nil test (`x === undefined` prints `x == nil`), an element read or store (`x[k]`), the map argument of
+// `this.omit (x, ..)` (prints OmitDict), or a rebind `x = this.omit (..)` (prints the OmitDict write)
+function ral84g6HasNativeUse(goTranspiler: GoTranspiler, scope, declaration): boolean {
+    const name = declaration.name.text;
+    const isNil = (e: any) => (e?.kind === SyntaxKind.NullKeyword) || ((e?.kind === SyntaxKind.Identifier) && (e.text === 'undefined'));
+    return goTranspiler.hasNodeWhere(scope, (n: any) => {
+        if ((n.kind !== SyntaxKind.Identifier) || (n.text !== name) || (n === declaration.name)
+            || (ccxtGoParamDeclarationOf(goTranspiler, n) !== declaration)) {
+            return false;
+        }
+        const parent: any = n.parent;
+        if (parent?.kind === SyntaxKind.BinaryExpression) {
+            const op = parent.operatorToken?.kind;
+            if (((op === SyntaxKind.EqualsEqualsEqualsToken) || (op === SyntaxKind.ExclamationEqualsEqualsToken)
+                || (op === SyntaxKind.EqualsEqualsToken) || (op === SyntaxKind.ExclamationEqualsToken))
+                && isNil((parent.left === n) ? parent.right : parent.left)) {
+                return true;
+            }
+            return (parent.left === n) && (op === SyntaxKind.EqualsToken) && (ral84g6OmitCall(parent.right) !== undefined);
+        }
+        if ((parent?.kind === SyntaxKind.ElementAccessExpression) && (parent.expression === n)) {
+            return true;
+        }
+        return (parent?.kind === SyntaxKind.CallExpression) && (parent.arguments?.[0] === n) && (ral84g6OmitCall(parent) !== undefined);
+    });
+}
 function ral84g6OmitLocalType(goTranspiler: GoTranspiler, declaration): string | undefined {
     if ((declaration?.kind !== SyntaxKind.VariableDeclaration) || (declaration.name?.kind !== SyntaxKind.Identifier)
         || (declaration.parent?.parent?.kind !== SyntaxKind.FirstStatement) || (declaration.parent.declarations?.length !== 1)) {
@@ -34067,7 +34094,7 @@ function ral84g6OmitLocalType(goTranspiler: GoTranspiler, declaration): string |
     const scope: any = goTranspiler.goEnclosingFunction(declaration);
     if ((call !== undefined) && (scope !== undefined) && ral84g6OmitArgIsMap(goTranspiler, call.arguments[0])
         && !goTranspiler.goTypeNameIsShadowed(scope, GO_SAFE_DICT_LOCAL_TYPE)
-        && !ral84g6NameBacksIn(goTranspiler, scope, declaration.name.text)) {
+        && !ral84g6NameBacksIn(goTranspiler, scope, declaration.name.text) && ral84g6HasNativeUse(goTranspiler, scope, declaration)) {
         const name = declaration.name.text;
         // uses resolved through the checker: a same-named local of a sibling block is another declaration
         const unsafe = goTranspiler.hasNodeWhere(scope, (n: any) => {
@@ -34136,7 +34163,9 @@ GoTranspiler.prototype.goTypeOfInitializer = function (initializer, printedValue
         return undefined;
     }
     const scope = this.goEnclosingFunction(parent);
-    return ((scope !== undefined) && !ral84g6NameBacksIn(this, scope, target.text)) ? GO_SAFE_DICT_LOCAL_TYPE : undefined;
+    // a declaration needs a native use of its own; a write `y = m` only joins an already typed local
+    return ((scope !== undefined) && !ral84g6NameBacksIn(this, scope, target.text)
+        && ((parent.kind !== SyntaxKind.VariableDeclaration) || ral84g6HasNativeUse(this, scope, parent))) ? GO_SAFE_DICT_LOCAL_TYPE : undefined;
 };
 // (4) a map local (copy of a proven map) whose other writes are `x = this.omit (x | m, ..)`: omit of a map is a
 //     fresh map, so every value the local holds is a map.
