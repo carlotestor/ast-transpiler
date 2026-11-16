@@ -14389,3 +14389,29 @@ describe ('84g1 nil-declared tuple bags re-bound by a self-omit', () => {
         expect(out).toContain('var paramsPaginate any = nil');
     });
 });
+
+describe ('84g1 nil-declared *string slot handed to an optional parameter', () => {
+    const PRELUDE = 'type Dict = { [key: string]: any };\n'
+        + 'type Str = string | undefined;\n'
+        + 'class Base {\n'
+        + '    handleMarginModeAndParams (m: string, params: Dict = {}, d: Str = undefined): [Str, Dict] { return [ d, params ]; }\n'
+        + '}\n';
+    const go = (body: string): string => {
+        const t = new Transpiler({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        installCcxtGoHooks(t.goTranspiler);
+        return t.transpileGo(PRELUDE + 'class V extends Base {\n' + body + '}\n').content;
+    };
+    test('an optional-parameter slot reads a nil *string as omitted', () => {
+        const out = go('    g (a: boolean = false, mode: Str = undefined): Str { return mode; }\n'
+            + '    f (params: Dict = {}): any {\n'
+            + '        let marginMode: Str = undefined;\n'
+            + '        let rest = undefined;\n'
+            + "        [ marginMode, rest ] = this.handleMarginModeAndParams ('f', params);\n"
+            + "        if (marginMode === 'isolated') {\n"
+            + '            return 1;\n'
+            + '        }\n'
+            + '        return this.g (true, marginMode);\n'
+            + '    }\n');
+        expect(out).toContain('var marginMode *string = nil');
+    });
+});

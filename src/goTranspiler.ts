@@ -8837,6 +8837,12 @@ function ccxtGoTupleStringWriteNeedsLift (goTranspiler, right) {
 }
 
 function ccxtGoTupleStringReadIsSafe (goTranspiler, node) {
+    // 84g1: an optional parameter slot of a transpiled method binds GetArg / GetArgStringPtr, which read a
+    // nil *string as the omitted argument, exactly as they read the absent box
+    if ((node.parent?.kind === ts.SyntaxKind.CallExpression) && (node.parent.expression !== node)
+        && ccxtGoNilJoinArgumentSeesAbsent (goTranspiler, node.parent, node.parent.arguments.indexOf (node))) {
+        return true;
+    }
     let current = node;
     while (current.parent?.kind === ts.SyntaxKind.ParenthesizedExpression) {
         current = current.parent;
