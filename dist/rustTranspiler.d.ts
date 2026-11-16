@@ -1299,6 +1299,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     printElemKeyInOp(key: any, obj: any): string | undefined;
     /** ral-58k: `n` is the whole right side of a statement `this.f[k] = n`, `k` another identifier (decided from the AST). */
     rust58kThisFieldIdentKeyWrite(n: any): boolean;
+    /** ral-64b: a local declared from a base safeString-family reader with no default argument (its box is `Str` or `Null`). */
+    rust64bReaderLocal(declaration: any): boolean;
     rustThisFieldLiteralWrite(n: any): boolean;
     /** ud: `n` is the whole right side of `x[k1][k2] = n` with `x` a typed two-level local map (`rustNestedBearerInsert`). */
     rustUdNestedBearerValue(n: any): boolean;

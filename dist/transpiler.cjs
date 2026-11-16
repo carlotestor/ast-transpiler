@@ -59455,6 +59455,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "box";
     if ((kind === "str" || kind === "ostr") && this.rustThisFieldLiteralWrite(n) && this.rustLocalLastUse(n, this.rustDeclaredNode(n)))
       return "box";
+    if (kind === "ostr" && this.rustThisFieldLiteralWrite(n) && this.rust64bReaderLocal(this.rustDeclaredNode(n)))
+      return "box";
     if ((kind === "str" || kind === "ostr") && this.rust58kThisFieldIdentKeyWrite(n))
       return "box";
     if ((kind === "str" || kind === "ostr") && this.rustNestedFieldKeyUse(n))
@@ -60391,6 +60393,15 @@ ${binding(plan.indent)}` : ""), head: "" };
       return false;
     const key = this.rustSkipWrappers(left.argumentExpression);
     return key !== void 0 && _is.isIdentifier.call(void 0, key) && key.text !== n.text && key.text !== "undefined";
+  }
+  /** ral-64b: a local declared from a base safeString-family reader with no default argument (its box is `Str` or `Null`). */
+  rust64bReaderLocal(declaration) {
+    if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || !_is.isIdentifier.call(void 0, declaration.name) || declaration.initializer === void 0)
+      return false;
+    const init = this.unwrapParens(declaration.initializer);
+    if (!this.rustUdReaderStr(init) || String(init.expression.name.text) === "safeCurrencyCode")
+      return false;
+    return init.arguments.length <= (_nullishCoalesce(_RustTranspiler.RUST_SAFE_STRING_KEY_ARGS[String(init.expression.name.text)], () => ( 2)));
   }
   rustThisFieldLiteralWrite(n) {
     const write = n.parent;
