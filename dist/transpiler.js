@@ -56451,7 +56451,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (copied > 0 && this.rustValueCaseInit(declaration.initializer))
       return void 0;
     if (copied > 0 && (kind === "str" || kind === "ostr") && this.rustStrMethodRecvLocal(declaration)) {
-      if (this.rustStrNoLend || !this.rustUdReaderStr(declaration.initializer) || this.rustStrReturnedLocal(declaration, scope) || !this.rustReaderLendBoxes(declaration))
+      const aliasLent = kind === "ostr" && !this.rustTestTierSource(declaration) && this.rustReaderLendBoxes(declaration, false, false, true);
+      if (this.rustStrNoLend || !this.rustUdReaderStr(declaration.initializer) || this.rustStrReturnedLocal(declaration, scope) || !(this.rustReaderLendBoxes(declaration) || aliasLent))
         return void 0;
       this.rustStrLentLocals.add(declaration);
     }
@@ -61084,7 +61085,7 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (form !== "box" && form !== "xbox")
       return void 0;
     const name = super.printIdentifier(node);
-    const last = isReturnStatement4(node.parent) || this.rustWsClientLastUse(node, local.declaration) || this.rustLocalLastUse(node, local.declaration) || form === "box" && this.rustOwnedHandOff(node) && this.rustOwnedLastUse(node, local.declaration);
+    const last = isReturnStatement4(node.parent) || this.rustWsClientLastUse(node, local.declaration) || this.rustLocalLastUse(node, local.declaration) || form === "box" && this.rustOwnedHandOff(node) && this.rustOwnedLastUse(node, local.declaration) || form === "box" && this.rust59xAliasDecl(local.declaration) && node.parent?.kind === SyntaxKind7.PropertyAssignment && node.parent.initializer === node && this.rustOwnedLastUse(node, local.declaration);
     const moved = last ? name : `${name}.clone()`;
     const lent = !last && (this.rustStrLentLocals.has(local.declaration) || local.kind === "ostr" && this.rustNilStrLentLocals.has(local.declaration));
     if (local.kind === "ostr" && this.rustInArrayNeedle(node))
@@ -61098,6 +61099,11 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (local.kind === "obool")
       return `${name}.map_or(Value::Null, Value::Bool)`;
     return local.kind === "bool" ? `Value::Bool(${name})` : `Value::from(${name})`;
+  }
+  /** ral-59x: a local declared `let y = x` / `const y = x` from another local (an alias of it). */
+  rust59xAliasDecl(declaration) {
+    const init = declaration === void 0 ? void 0 : this.unwrapParens(declaration.initializer);
+    return init !== void 0 && isIdentifier3(init) && init.text !== "undefined" && isVariableDeclaration3(this.rustDeclaredNode(init));
   }
   /** The native value of a scalar expression for a local of `kind` (`Some(..)` for optional kinds). */
   rustScalarNativeText(kind, expr) {
