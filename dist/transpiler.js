@@ -53922,7 +53922,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (node.declarations.length === 1 && this.rustSubscriptionPresenceFlag(declaration, parsedValue))
       return `${indent}let ${varName}: bool = ${parsedValue} != Value::Null`;
     if (node.declarations.length === 1 && this.rust73cRejectOnlyError(declaration))
-      return `${indent}let mut ${varName}: crate::ExchangeError = (${parsedValue})`;
+      return `${indent}let mut ${varName}: crate::ExchangeError = ${parsedValue}`;
     if (declaration.initializer.kind === SyntaxKind7.NewExpression) {
       return `${indent}let mut ${varName} = ${parsedValue}`;
     }
@@ -68352,7 +68352,8 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     if (typeof expression === "string" && (errorClassPattern.test(expression) || _RustTranspiler.RUST_NAME_VALUE_IMPORTS.has(expression) && /^[A-Z]/.test(expression))) {
       const snake = this.rustErrorConstructorName(expression);
       const args2 = node.arguments.map((a, index) => this.printErrorConstructorArg(snake, index, a, identation)).join(", ");
-      return `crate::exchange_errors::${snake}(${args2})`;
+      const built = `crate::exchange_errors::${snake}(${args2})`;
+      return this.rustErrorCtorValueTarget(node) ? `Value::from(${built})` : built;
     }
     const dynamicClass = this.rustDynamicErrorClass(node);
     if (dynamicClass !== void 0) {
@@ -68362,6 +68363,19 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     }
     const args = typeof expression === "string" ? node.arguments.map((a, index) => this.printErrorConstructorArg(this.rustErrorConstructorName(expression), index, a, identation)).join(", ") : node.arguments.map((a) => this.printNode(a, identation)).join(", ");
     return this.rustWsCacheCtorBox(node, `${expression}::new(${args})`);
+  }
+  /** ral-76a: a routed error constructor (returns `ExchangeError`) stored straight into an untyped local, by its
+   *  declaration or by a plain `x = new XError (..);` statement, is boxed by the printer: the target is a `Value`. The
+   *  ral-73c reject-only local keeps the bare `ExchangeError`. Decided from the AST parent chain, not printed text. */
+  rustErrorCtorValueTarget(node) {
+    const parent = node.parent;
+    if (parent !== void 0 && isVariableDeclaration3(parent) && parent.initializer === node) {
+      const list = parent.parent;
+      if (list?.kind !== SyntaxKind7.VariableDeclarationList || list.parent?.kind !== SyntaxKind7.VariableStatement)
+        return false;
+      return !(list.declarations.length === 1 && this.rust73cRejectOnlyError(parent));
+    }
+    return parent !== void 0 && isBinaryExpression5(parent) && parent.right === node && isIdentifier3(parent.left) && parent.operatorToken.kind === SyntaxKind7.EqualsToken && parent.parent?.kind === SyntaxKind7.ExpressionStatement;
   }
   /** Printed class expression of a `new` whose class is a runtime value, else undefined. */
   rustDynamicErrorClass(node) {

@@ -2430,6 +2430,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     printErrorConstructorArg(name: string, index: number, node: any, identation: number): string;
     rustErrorConstructorName(className: string): string;
     printNewExpression(node: any, identation: any): any;
+    /** ral-76a: a routed error constructor (returns `ExchangeError`) stored straight into an untyped local, by its
+     *  declaration or by a plain `x = new XError (..);` statement, is boxed by the printer: the target is a `Value`. The
+     *  ral-73c reject-only local keeps the bare `ExchangeError`. Decided from the AST parent chain, not printed text. */
+    rustErrorCtorValueTarget(node: any): boolean;
     /** Printed class expression of a `new` whose class is a runtime value, else undefined. */
     rustDynamicErrorClass(node: any): string | undefined;
     /** `param.member` where `param` is a class-typed parameter, the member is
