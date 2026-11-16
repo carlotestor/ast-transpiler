@@ -73409,6 +73409,8 @@ ${iden}}`;
           return reuseProducerWrites.push(up) > 0 && ++selfOmitWrites > 0 && ++sameKindWrites > 0;
         if (!nilDeclared && (from === "dict" || from === "list") && this.rustSameKindRewrite(rhs, from))
           return (this.rustSelfExtendWrite(n, declaration) ? ++sameKindWrites : 1) > 0 && String(rhs.getText()).split("\n")[0].length <= 240;
+        if (optAliasInit && from === "dict" && this.rust65iDeclaredDictEndpointWrite(rhs))
+          return String(rhs.getText()).split("\n")[0].length <= 240;
         const aliasKind = nilDeclared ? this.rustOptAliasSourceKind(rhs, fn) : void 0;
         if (aliasKind !== void 0) {
           if (from !== void 0 && from !== aliasKind)
@@ -73717,6 +73719,8 @@ ${iden}}`;
           const rhs = this.rustSkipWrappers(up.right);
           if (this.literalKindOfNode(rhs) === "null")
             return;
+          if (this.rust65iSelfExtendLiteral(up, d))
+            return;
           if (rhs?.kind !== SyntaxKind7.AwaitExpression || !this.rustDeclaredEndpointWrite(rhs)) {
             ok = false;
             return;
@@ -73734,6 +73738,20 @@ ${iden}}`;
     };
     visit(fn);
     return ok && writes > 0;
+  }
+  /** ral-65i: a statement `x = this.extend (x, {..})`: base runtime `extend`, two arguments, the head the local itself, the
+   *  operand an object literal that does not name x (decided from the call node and the callee declaration). */
+  rust65iSelfExtendLiteral(up, d) {
+    const rhs = this.rustSkipWrappers(up.right);
+    if (!isCallExpression6(rhs) || rhs.arguments.length !== 2 || !this.rustBaseCallNamed(rhs, _RustTranspiler.RUST_SELF_EXTEND))
+      return false;
+    const head = this.rustSkipWrappers(rhs.arguments[0]);
+    const operand = this.rustSkipWrappers(rhs.arguments[1]);
+    if (!isIdentifier3(head) || !this.rustIdentifierRefersToDeclaration(head, d) || !isObjectLiteralExpression4(operand))
+      return false;
+    const name = String(d.name.text);
+    const names = (x) => isIdentifier3(x) && String(x.text) === name && this.rustIdentifierRefersToDeclaration(x, d) || (x.forEachChild(names) ?? false);
+    return !names(operand) && String(up.getText()).split("\n")[0].length <= 240;
   }
   /** The source side: `t = n` (statement) whose target `t` holds the optional form of n's kind through rustOptAliasSourceKind. */
   rustOptAliasTargetUse(n, declaration, fn) {
@@ -75591,6 +75609,12 @@ ${iden}}`;
     this.rustNilResponseLocals.add(declaration);
     return "dict";
   }
+  /** ral-65i: `await this.<endpoint> (..)` whose abstract declaration spells `Promise<Dict>`. */
+  rust65iDeclaredDictEndpointWrite(rhs) {
+    if (rhs?.kind !== SyntaxKind7.AwaitExpression || !this.rustDeclaredEndpointWrite(rhs))
+      return false;
+    return this.rustDeclaredEndpointKind(this.rustSkipWrappers(rhs.expression)) === "dict";
+  }
   /** ral-kc: `await this.<endpoint> (..)` whose abstract declaration spells `Promise<Dict>` / `Promise<List>`. */
   rustDeclaredEndpointWrite(rhs) {
     let call = rhs;
@@ -76988,6 +77012,8 @@ ${iden}}`;
     if (this.rustDefaultedListRead(init) && isIdentifier3(declaration.name) && this.rustLocalIsReassigned(declaration, String(declaration.name.text)))
       return this.rustBuiltListLocal(declaration);
     if (this.rustBuiltListConcatInit(init) && isIdentifier3(declaration.name) && this.rustLocalIsReassigned(declaration, String(declaration.name.text)))
+      return this.rustBuiltListLocal(declaration);
+    if (this.rust65iFilterByCall(init) && isIdentifier3(declaration.name) && this.rustLocalIsReassigned(declaration, String(declaration.name.text)))
       return this.rustBuiltListLocal(declaration);
     if (!this.rustLentListSource(init))
       return false;
@@ -80184,7 +80210,7 @@ ${iden}}`;
       return false;
     const init = declaration.initializer;
     const nilAssigned = this.rustNilListAssignedFirst(declaration);
-    const read = init !== void 0 && (this.rustDefaultedListRead(this.rustSkipWrappers(init)) || this.rustBuiltListConcatInit(this.rustSkipWrappers(init)));
+    const read = init !== void 0 && (this.rustDefaultedListRead(this.rustSkipWrappers(init)) || this.rustBuiltListConcatInit(this.rustSkipWrappers(init)) || this.rust65iFilterByCall(this.rustSkipWrappers(init)));
     if (!nilAssigned && (init === void 0 || !read && (!isArrayLiteralExpression4(init) || init.elements.some((e) => e.kind === SyntaxKind7.SpreadElement))))
       return false;
     const type = nilAssigned ? void 0 : this.typeOfNodeIfAny(read ? init : declaration.name);
@@ -80504,7 +80530,14 @@ ${iden}}`;
       return false;
     if (isArrayLiteralExpression4(rhs))
       return !rhs.elements.some((e) => e.kind === SyntaxKind7.SpreadElement || isIdentifier3(this.rustSkipWrappers(e)) && !this.rustBuiltListMovedElement(e)) && (!rhs.elements.some((e) => isIdentifier3(this.rustSkipWrappers(e))) || this.rustBuiltListMovedLiteral(rhs) !== void 0) || this.rustBuiltListBoxedLiteral(rhs) !== void 0;
-    return this.rustAlwaysListProducer(rhs) || this.rustDefaultedListRead(rhs) || this.rustDeclaredListProducer(rhs) || this.rustVenueListWriteSource(rhs);
+    return this.rustAlwaysListProducer(rhs) || this.rustDefaultedListRead(rhs) || this.rustDeclaredListProducer(rhs) || this.rustVenueListWriteSource(rhs) || this.rust65iFilterByCall(rhs);
+  }
+  /** ral-65i: a base runtime `this.filterBy (..)` (RUST_BUILT_HELPER_RETURNS: exchange_stubs.rs filter_by answers
+   *  `Value::Array` on every path, the empty list for a non-list input), outside the test tier. */
+  rust65iFilterByCall(call) {
+    if (call === void 0 || !isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    return String(call.expression.name.text) === "filterBy" && this.rustBuiltReturnSourceKind(call) === "list";
   }
   rustDeclaredArrayCallWriteSource(right) {
     const rhs = this.rustSkipWrappers(right);

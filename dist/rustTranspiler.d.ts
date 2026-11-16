@@ -3167,6 +3167,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-61i: `let x = undefined` / `let x: T;` (a statement, one declarator) written only as statements `x = await this.<endpoint> (..)`
      *  of REST endpoints declared `Promise<Dict>` (or `x = undefined`): the optional map the declared-endpoint rule holds. */
     rustDeclaredDictEndpointLet(d: any): boolean;
+    /** ral-65i: a statement `x = this.extend (x, {..})`: base runtime `extend`, two arguments, the head the local itself, the
+     *  operand an object literal that does not name x (decided from the call node and the callee declaration). */
+    rust65iSelfExtendLiteral(up: any, d: any): boolean;
     /** The source side: `t = n` (statement) whose target `t` holds the optional form of n's kind through rustOptAliasSourceKind. */
     rustOptAliasTargetUse(n: any, declaration: any, fn: any): boolean;
     /** ral-45f: the source side of `let t = n` whose target holds the optional form through the initialised alias rule. */
@@ -3447,6 +3450,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustNilResponseLocals;
     /** The container kind of a write to a borrowed local; an endpoint write to an empty `let` counts as a map. */
     rustNilResponseWriteKind(rhs: any, nilDeclared: boolean, declaration: any): 'dict' | 'list' | 'api' | undefined;
+    /** ral-65i: `await this.<endpoint> (..)` whose abstract declaration spells `Promise<Dict>`. */
+    rust65iDeclaredDictEndpointWrite(rhs: any): boolean;
     /** ral-kc: `await this.<endpoint> (..)` whose abstract declaration spells `Promise<Dict>` / `Promise<List>`. */
     rustDeclaredEndpointWrite(rhs: any): boolean;
     /** A base `safeDict*` / `safeList*` call (default absent, nullish or an empty literal of its kind), or a base `extend`/`omit`. */
@@ -4044,6 +4049,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBuiltListSelfWriteArg(n: any, name: string): boolean;
     /** A right-hand side that answers a `Value::Arr` on every path. */
     rustBuiltListWriteSource(right: any): boolean;
+    /** ral-65i: a base runtime `this.filterBy (..)` (RUST_BUILT_HELPER_RETURNS: exchange_stubs.rs filter_by answers
+     *  `Value::Array` on every path, the empty list for a non-list input), outside the test tier. */
+    rust65iFilterByCall(call: any): boolean;
     /** ral-54i: `[await] this.m (..)` whose declaration spells an array return (`T[]`, or `Promise<T[]>` awaited here) and whose
      *  printed body answers a list on every path (rustCallBuildsContainer over its returns; a venue `Promise<Market[]>` by the zf
      *  table). The callee must not be dispatched virtually, carry a typed signature or be redeclared: a base method no venue
