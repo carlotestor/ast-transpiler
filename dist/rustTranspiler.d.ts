@@ -2244,6 +2244,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     printTranspiledVariadicCall(node: any, receiver: string, methodName: string, identation: number): string | undefined;
     rustTranspiledCalleeParams(node: any, methodName: string): any[] | undefined;
     printArgsForCallExpression(node: any, identation: any): string;
+    /** ral-67f: true when the value of a helper write `r[..][k] = v` reads the write's root: the same local identifier, or
+     *  any `this` / `super` when the root is a `this.x` field (`&mut self.x` borrows all of `self`). */
+    rustHelperWriteReadsRoot(baseExpr: any, value: any): boolean;
     /** A bare local argument whose hand-off needs no clone (`rustOwnedUseIsFree`) carries the owned-use mark. */
     rustOwnedArgText(arg: any, text: string): string;
     rustPrintedArgs(node: any, identation: any, params?: any[]): string[];

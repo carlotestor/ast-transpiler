@@ -53745,8 +53745,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       for (const key of keyStrs.slice(0, -1))
         acc = `get_value_mut(${acc}, &${key})`;
       const rhs = this.printNode(right, 0);
-      if (keyStrs.length === 1 && this.rustAeoWrites.has(node))
-        return `add_element_to_object(${acc}, &${keyStrs[0]}, ${this.rustOwnedArgText(right, rhs.trim())})`;
+      if (keyStrs.length === 1 && this.rustAeoWrites.has(node)) {
+        return this.rustHelperWriteReadsRoot(baseExpr, right) ? `{ let __be_tmp = ${rhs.trim()}; add_element_to_object(${acc}, &${keyStrs[0]}, __be_tmp); }` : `add_element_to_object(${acc}, &${keyStrs[0]}, ${_RustTranspiler.cloneIfBareLocal(rhs.trim())})`;
+      }
       const nestedKeyWrite = keyStrs.length > 1 ? this.printNestedFieldKeyWrite(left, acc, ((owned) => owned.startsWith("") ? owned : _RustTranspiler.cloneIfBareLocal(owned))(this.rustOwnedArgText(right, rhs.trim()))) : void 0;
       if (nestedKeyWrite !== void 0)
         return nestedKeyWrite;
@@ -53758,8 +53759,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         return slotNested;
       const counterKey = keyStrs.length === 1 ? this.rustSkipWrappers(keys[0]) : void 0;
       const counterKeyText = counterKey !== void 0 && this.rustI64CounterOperand(counterKey) ? `Value::Int(${String(counterKey.text)})` : void 0;
-      const helperCall = `add_element_to_object(${acc}, &${counterKeyText ?? keyStrs[keyStrs.length - 1]}, ${this.rustOwnedArgText(right, rhs.trim())})`;
-      const helperWrite = this.rustDictHoistHosts.has(node) ? `{ let __be_tmp = ${rhs}; add_element_to_object(${acc}, &${counterKeyText ?? keyStrs[keyStrs.length - 1]}, __be_tmp); }` : helperCall;
+      const helperCall = `add_element_to_object(${acc}, &${counterKeyText ?? keyStrs[keyStrs.length - 1]}, ${_RustTranspiler.cloneIfBareLocal(rhs.trim())})`;
+      const helperWrite = this.rustDictHoistHosts.has(node) || this.rustHelperWriteReadsRoot(baseExpr, right) ? `{ let __be_tmp = ${rhs.trim()}; add_element_to_object(${acc}, &${counterKeyText ?? keyStrs[keyStrs.length - 1]}, ${this.rustDictHoistHosts.has(node) ? "" : ""}__be_tmp); }` : helperCall;
       const nestedInsert = keyStrs.length === 2 ? this.rustNestedBearerInsert(baseExpr, keys[0], keyStrs[0], keys[1], keyStrs[1], rhs) ?? this.nestedDictWrite(baseExpr, keys, keyStrs, rhs, helperWrite) : this.nestedDictWrite(baseExpr, keys, keyStrs, rhs, helperWrite) ?? this.rustNestedBearerBucket(baseExpr, keys[0], keyStrs[0], right);
       if (nestedInsert !== void 0)
         return nestedInsert;
@@ -67143,6 +67144,29 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
   // the truthiness the callee's own use sites applied.
   printArgsForCallExpression(node, identation) {
     return this.rustPrintedArgs(node, identation).map((text, at) => at < node.arguments.length ? this.rustOwnedArgText(node.arguments[at], text) : text).join(", ");
+  }
+  /** ral-67f: true when the value of a helper write `r[..][k] = v` reads the write's root: the same local identifier, or
+   *  any `this` / `super` when the root is a `this.x` field (`&mut self.x` borrows all of `self`). */
+  rustHelperWriteReadsRoot(baseExpr, value) {
+    let root = baseExpr;
+    while (isElementAccessExpression4(root) || isPropertyAccessExpression3(root) || isParenthesizedExpression3(root))
+      root = root.expression;
+    const self = root.kind === SyntaxKind7.ThisKeyword;
+    if (!self && !isIdentifier3(root))
+      return false;
+    const name = self ? void 0 : String(root.text);
+    const reads = (x) => {
+      if (self && (x.kind === SyntaxKind7.ThisKeyword || x.kind === SyntaxKind7.SuperKeyword))
+        return true;
+      if (!self && isIdentifier3(x) && String(x.text) === name) {
+        const p = x.parent;
+        const isName = isPropertyAccessExpression3(p) && p.name === x || p?.kind === SyntaxKind7.PropertyAssignment && p.name === x;
+        if (!isName)
+          return true;
+      }
+      return x.forEachChild(reads) ?? false;
+    };
+    return reads(value);
   }
   /** A bare local argument whose hand-off needs no clone (`rustOwnedUseIsFree`) carries the owned-use mark. */
   rustOwnedArgText(arg, text) {
