@@ -1,6 +1,11 @@
 import { BaseTranspiler } from "./baseTranspiler.js";
 import { type Block, type CallExpression, type Declaration, type Identifier, type Node, type ParameterDeclaration, type VariableDeclaration } from "typescript/unstable/ast";
 import { type Symbol as TsSymbol, type Type } from "typescript/unstable/sync";
+/** A ts/src index scan reads real `*.ts` sources and this process's own stripped base copy only: no `.d.ts`, no
+ *  dot-file temp copy, no other process's `*.nooverloads.<pid>.ts` (it can vanish or change mid-scan). */
+export declare function isRustTsIndexSource(name: string): boolean;
+/** The text of a listed ts/src file; undefined when it vanished between listing and reading, any other error throws. */
+export declare function readRustTsIndexSource(file: string): string | undefined;
 /** Answer of `RustTranspiler.rustDeclaredLocalTypeResolver` for a local whose
  *  value provably holds a `Value::Dict` at every use. */
 export type RustDeclaredLocalKind = 'dict';

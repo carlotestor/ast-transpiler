@@ -51233,6 +51233,19 @@ import { isArrayBindingPattern, isArrayLiteralExpression as isArrayLiteralExpres
 import { IndexKind as IndexKind4, ObjectFlags, SignatureKind as SignatureKind2, SymbolFlags as SymbolFlags3, TypeFlags as TypeFlags6 } from "typescript/unstable/sync";
 import * as fs3 from "fs";
 import * as tsSync2 from "typescript/unstable/sync";
+function isRustTsIndexSource(name) {
+  const temp = /\.nooverloads\.(\d+)\.ts$/.exec(name);
+  return name.endsWith(".ts") && !name.endsWith(".d.ts") && !name.startsWith(".") && (temp === null || temp[1] === String(process.pid));
+}
+function readRustTsIndexSource(file) {
+  try {
+    return fs3.readFileSync(file, "utf8");
+  } catch (e) {
+    if (e?.code === "ENOENT")
+      return void 0;
+    throw e;
+  }
+}
 var RUST_PLAIN_PLACE = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/;
 var parserConfig6 = {
   "ELSEIF_TOKEN": "else if",
@@ -58831,12 +58844,12 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     for (const dir of ["", "/pro", "/prediction"]) {
       let entries = [];
       try {
-        entries = fs3.readdirSync(srcRoot + dir).filter((f) => f.endsWith(".ts"));
+        entries = fs3.readdirSync(srcRoot + dir).filter(isRustTsIndexSource);
       } catch (e) {
         continue;
       }
       for (const f of entries) {
-        for (const m of fs3.readFileSync(`${srcRoot}${dir}/${f}`, "utf8").matchAll(header)) {
+        for (const m of (readRustTsIndexSource(`${srcRoot}${dir}/${f}`) ?? "").matchAll(header)) {
           const types = table.get(m[1]) ?? /* @__PURE__ */ new Set();
           types.add(String(m[3] ?? "").trim());
           table.set(m[1], types);
@@ -58855,12 +58868,15 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     for (const dir of ["", "pro/", "prediction/"]) {
       let entries = [];
       try {
-        entries = fs3.readdirSync(`${srcRoot}/${dir}`).filter((f) => f.endsWith(".ts"));
+        entries = fs3.readdirSync(`${srcRoot}/${dir}`).filter(isRustTsIndexSource);
       } catch (e) {
         continue;
       }
-      for (const f of entries)
-        texts.set(dir + f, fs3.readFileSync(`${srcRoot}/${dir}${f}`, "utf8"));
+      for (const f of entries) {
+        const text = readRustTsIndexSource(`${srcRoot}/${dir}${f}`);
+        if (text !== void 0)
+          texts.set(dir + f, text);
+      }
     }
     const up = /* @__PURE__ */ new Map();
     const find = (x) => {
@@ -81588,7 +81604,8 @@ ${iden}}`;
       try {
         decision = this.rustVenueLentKindUncached(param) ?? null;
       } catch (e) {
-        decision = null;
+        this.rustLentVenueDecisions.delete(param);
+        throw e;
       }
       this.rustLentVenueDecisions.set(param, decision);
     }
@@ -81684,12 +81701,12 @@ ${iden}}`;
     const declared = /^ {4}(?:(?:override|async|public|protected|private|static)\s+)*([A-Za-z_]\w*)\s*(?:<[^>]*>)?\s*\(/gm;
     let entries = [];
     try {
-      entries = fs3.readdirSync(srcRoot + "/base").filter((f) => f.endsWith(".ts"));
+      entries = fs3.readdirSync(srcRoot + "/base").filter(isRustTsIndexSource);
     } catch (e) {
       entries = [];
     }
     for (const f of entries) {
-      for (const m of fs3.readFileSync(`${srcRoot}/base/${f}`, "utf8").matchAll(declared))
+      for (const m of (readRustTsIndexSource(`${srcRoot}/base/${f}`) ?? "").matchAll(declared))
         names.add(m[1]);
     }
     this.rustBaseTierMethodNamesByRoot.set(srcRoot, names);
@@ -82187,12 +82204,12 @@ ${iden}}`;
     for (const dir of ["", "/pro", "/prediction"]) {
       let entries = [];
       try {
-        entries = fs3.readdirSync(srcRoot + dir).filter((f) => f.endsWith(".ts"));
+        entries = fs3.readdirSync(srcRoot + dir).filter(isRustTsIndexSource);
       } catch (e) {
         continue;
       }
       for (const f of entries) {
-        for (const m of fs3.readFileSync(`${srcRoot}${dir}/${f}`, "utf8").matchAll(declared))
+        for (const m of (readRustTsIndexSource(`${srcRoot}${dir}/${f}`) ?? "").matchAll(declared))
           names.add(m[1]);
       }
     }
@@ -82221,12 +82238,12 @@ ${iden}}`;
     for (const [dir, weight] of [["", 1], ["/pro", 1], ["/prediction", 1], ["/base", 2]]) {
       let entries = [];
       try {
-        entries = fs3.readdirSync(srcRoot + dir).filter((f) => f.endsWith(".ts"));
+        entries = fs3.readdirSync(srcRoot + dir).filter(isRustTsIndexSource);
       } catch (e) {
         continue;
       }
       for (const f of entries) {
-        for (const m of fs3.readFileSync(`${srcRoot}${dir}/${f}`, "utf8").matchAll(declared))
+        for (const m of (readRustTsIndexSource(`${srcRoot}${dir}/${f}`) ?? "").matchAll(declared))
           counts.set(m[1], (counts.get(m[1]) ?? 0) + weight);
       }
     }
@@ -85181,12 +85198,12 @@ ${this.getIden(identation)}}`;
       for (const dir of ["", "/pro", "/prediction", "/base"]) {
         let entries = [];
         try {
-          entries = fs3.readdirSync(root + dir).filter((f) => f.endsWith(".ts") && (dir !== "/base" || f === "Exchange.ts" || f === "PredictionExchange.ts"));
+          entries = fs3.readdirSync(root + dir).filter((f) => isRustTsIndexSource(f) && (dir !== "/base" || f === "Exchange.ts" || f === "PredictionExchange.ts"));
         } catch (e) {
           continue;
         }
         for (const f of entries) {
-          for (const m of fs3.readFileSync(`${root}${dir}/${f}`, "utf8").matchAll(header)) {
+          for (const m of (readRustTsIndexSource(`${root}${dir}/${f}`) ?? "").matchAll(header)) {
             seen++;
             if (m[1].replace(/\s+/g, "") !== `${pname}:string`)
               agree = false;
