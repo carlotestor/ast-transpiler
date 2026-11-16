@@ -6863,6 +6863,25 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** The local's last use is the whole right side of a statement `y = x;`: the boxed local moves there,
      *  a typed one keeps the clone ccxt adds to that write. */
+    /** ral-80h: every bare last-use write `y = x;` of the typed local `x` targets `other`, the compared optional-number local
+     *  (base safeOrder `lastTradeTimeTimestamp = tradeTimestamp` beside `tradeTimestamp > lastTradeTimeTimestamp`): both are
+     *  `Option<i64>` / `Option<f64>` of one kind, so the write copies a Copy value and no clone is ever added. */
+    rust80hCopyWriteInto(node: Node, other: Node): boolean {
+        const declaration = isIdentifier(node) ? this.rustDeclaredNode(node) : undefined;
+        const target = isIdentifier(other) ? this.rustDeclaredNode(other) : undefined;
+        if (declaration === undefined || target === undefined || !isVariableDeclaration(declaration) || !isIdentifier(declaration.name)) return false;
+        const kind = this.rustScalarLocalOf(node)?.kind;
+        if ((kind !== 'oint' && kind !== 'onum') || this.rustScalarLocalOf(other)?.kind !== kind) return false;
+        let ok = true;
+        this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n: Node) => {
+            const up = n.parent;
+            if (isBinaryExpression(up) && up.right === n && up.operatorToken.kind === SyntaxKind.EqualsToken && isIdentifier(up.left)
+                && up.parent?.kind === SyntaxKind.ExpressionStatement && this.rustLocalLastUse(n, declaration) && this.rustDeclaredNode(up.left) !== target) ok = false;
+            return true;
+        });
+        return ok;
+    }
+
     rustScalarBareLastWrite(node: any): boolean {
         const declaration: any = isIdentifier(node) ? this.rustDeclaredNode(node) : undefined;
         if (declaration === undefined || !isVariableDeclaration(declaration) || !isIdentifier(declaration.name)) return false;
@@ -11968,7 +11987,8 @@ export class RustTranspiler extends BaseTranspiler {
             // (ordered as `f64`, like the helper's `as_f64` of each `Int` / `Float`)
             if (!isIdentifier(left) || !isIdentifier(right)) return `matches!((${text(lk, left)}, ${text(rk, right)}), (Some(__l), Some(__r)) if (__l as f64) ${sign} (__r as f64))`;
             // base tier: the moved `Value` at a bare last-use write `y = x;` becomes a ccxt-added clone of the typed local
-            if (/ts[\\/]src[\\/]base[\\/]/.test(String(node.getSourceFile?.()?.fileName ?? '')) && (this.rustScalarBareLastWrite(left) || this.rustScalarBareLastWrite(right))) return undefined;
+            if (/ts[\\/]src[\\/]base[\\/]/.test(String(node.getSourceFile?.()?.fileName ?? '')) && ((this.rustScalarBareLastWrite(left) && !this.rust80hCopyWriteInto(left, right))
+                || (this.rustScalarBareLastWrite(right) && !this.rust80hCopyWriteInto(right, left)))) return undefined;
             return `(${text(lk, left)}.is_some() && ${text(rk, right)}.is_some() && ${text(lk, left)} ${sign} ${text(rk, right)})`;
         }
         if (lo || ro) {
