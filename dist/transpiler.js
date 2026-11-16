@@ -42148,7 +42148,7 @@ function ral84g6OmitLocalType(goTranspiler, declaration) {
         return target === void 0;
       }
       if (ral87g6PairMapWrite(n)) {
-        return false;
+        return ral87g6ForeignOmitWrite(goTranspiler, scope, declaration);
       }
       if (parent?.kind === SyntaxKind5.BinaryExpression && parent.left === n && parent.operatorToken?.kind === SyntaxKind5.EqualsToken) {
         const write = ral84g6OmitCall(parent.right);
@@ -42172,6 +42172,13 @@ function ral87g6PairMapWrite(n) {
   const pattern = n?.parent;
   const assignment = pattern?.parent;
   return n?.kind === SyntaxKind5.Identifier && pattern?.kind === SyntaxKind5.ArrayLiteralExpression && assignment?.kind === SyntaxKind5.BinaryExpression && assignment.left === pattern && assignment.parent?.kind === SyntaxKind5.ExpressionStatement && tupleJoinWriteType(assignment, n.text) === GO_SAFE_DICT_LOCAL_TYPE;
+}
+function ral87g6ForeignOmitWrite(goTranspiler, scope, declaration) {
+  const name = declaration.name.text;
+  return goTranspiler.hasNodeWhere(scope, (n) => {
+    const write = n.kind === SyntaxKind5.BinaryExpression && n.operatorToken?.kind === SyntaxKind5.EqualsToken && n.left?.kind === SyntaxKind5.Identifier && n.left.text === name ? ral84g6OmitCall(n.right) : void 0;
+    return write !== void 0 && write.arguments[0].text !== name;
+  });
 }
 var ral84g6ShippedDictUnbox = GoTranspiler.prototype.goSafeDictLocalUnbox;
 GoTranspiler.prototype.goSafeDictLocalUnbox = function(declaration) {
@@ -42231,6 +42238,9 @@ GoTranspiler.prototype.goLocalIsSafeToType = function(scope, declaration, varNam
       if (this.goTypeOfInitializer(parent.right, this.printNode(parent.right, 0)) === goType) {
         return false;
       }
+    }
+    if (ral87g6PairMapWrite(n) && ral87g6ForeignOmitWrite(this, scope, declaration)) {
+      return true;
     }
     if (ral84g6MapWriteIsMap(this, declaration, n, parent) || ral87g6PairMapWrite(n)) {
       rebinds += 1;
