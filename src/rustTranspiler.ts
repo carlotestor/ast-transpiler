@@ -27287,6 +27287,19 @@ export class RustTranspiler extends BaseTranspiler {
         return declaration !== undefined && RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile().fileName));
     }
 
+    /** ral-87rd R1: some statement `name.push (v)` on this very binding inside its own function. */
+    rust87rdPushedLocal(declaration: VariableDeclaration, name: string): boolean {
+        const fn: Node | undefined = this.rustEnclosingFunction(declaration);
+        if (fn === undefined || isSourceFile(fn)) return false;
+        for (const n of this.rustScopeNameNodes(fn, name)) {
+            const up: Node | undefined = n.parent;
+            if (up !== undefined && isIdentifier(n) && isPropertyAccessExpression(up) && up.expression === n && String(up.name.text) === 'push'
+                && isCallExpression(up.parent) && up.parent.expression === up && up.parent.parent?.kind === SyntaxKind.ExpressionStatement
+                && this.rustIdentifierRefersToDeclaration(n, declaration)) return true;
+        }
+        return false;
+    }
+
     rustLentListLocalUncached(declaration: any): boolean {
         if (declaration.name?.kind !== SyntaxKind.Identifier) return false;
         const list: any = declaration.parent;
@@ -27300,6 +27313,9 @@ export class RustTranspiler extends BaseTranspiler {
         if (isArrayLiteralExpression(init)) return this.rustBuiltListLocal(declaration);
         // ral-ra: a reassigned `[]`-defaulted `safeList*` read whose every write is a list producer is a built list too
         if (this.rustDefaultedListRead(init) && isIdentifier(declaration.name) && this.rustLocalIsReassigned(declaration, String(declaration.name.text))) return this.rustBuiltListLocal(declaration);
+        // ral-87rd R1: a `[]`-defaulted `safeList*` read pushed onto (`xs.push (v)` statement): a `Value::Arr` on every path, so it is
+        // the built list too (native `Arc::make_mut(&mut xs).push(v)` instead of the `if let Value::Arr` guard)
+        if (this.rustDefaultedListRead(init) && isIdentifier(declaration.name) && this.rust87rdPushedLocal(declaration, String(declaration.name.text))) return this.rustBuiltListLocal(declaration);
         // ral-56s: a reassigned base `arrayConcat (a, b)` initializer whose every write is a list producer is a built list too
         if (this.rustBuiltListConcatInit(init) && isIdentifier(declaration.name) && this.rustLocalIsReassigned(declaration, String(declaration.name.text))) return this.rustBuiltListLocal(declaration);
         // ral-65i: a reassigned base `filterBy (..)` initializer (the runtime table's list answer) whose every write is a list producer

@@ -24706,3 +24706,29 @@ describe('ral-84h R2: `i + 1` of an always-Int for counter at a declaration is a
         expect(out).not.toContain('let mut iteration: Value');
     });
 });
+describe('ral-87rd R1: a []-defaulted safeList local pushed onto is a typed list', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    safeList (o: any, k: any, d: any = undefined): any[] { return o; }\n    parseAccounts (o: any, p: any = {}): any[] { return o; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        transpiler.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts'));
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('cryptocom fetchAccounts: push then hand to parseAccounts', () => {
+        const out = write ('ral-87rd-r1a', "    m (result: Dict, master: Dict, params = {}) {\n        const accounts = this.safeList (result, 'sub_account_list', []);\n        accounts.push (master);\n        return this.parseAccounts (accounts, params);\n    }\n");
+        expect(out).toContain('let mut accounts: crate::value::List = ');
+        expect(out).toContain('std::sync::Arc::make_mut(&mut accounts).push(');
+        expect(out).not.toContain('if let Value::Arr(__a) = &mut accounts');
+    });
+    test('aster handleMyTrade: push then store back into the order', () => {
+        const out = write ('ral-87rd-r1b', "    m (order: Dict, trade: Dict) {\n        const orderTrades = this.safeList (order, 'trades', []);\n        orderTrades.push (trade);\n        order['trades'] = orderTrades;\n    }\n");
+        expect(out).toContain('let mut orderTrades: crate::value::List = ');
+        expect(out).toContain('Value::Arr(orderTrades)');
+    });
+    test('negative: a safeList with no default stays Value', () => {
+        const out = write ('ral-87rd-r1n', "    m (order: Dict, trade: Dict) {\n        const orderTrades = this.safeList (order, 'trades');\n        orderTrades.push (trade);\n        order['trades'] = orderTrades;\n    }\n");
+        expect(out).not.toContain('let mut orderTrades: crate::value::List');
+    });
+});
