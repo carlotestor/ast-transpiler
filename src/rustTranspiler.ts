@@ -3568,7 +3568,10 @@ export class RustTranspiler extends BaseTranspiler {
     /** ral-76a S1: `return x` of the method's own local that another rule already prints `Option<String>` (a `safeString`
      *  read, checker `string | undefined`): under a `: Str` signature it is the payload itself, so the method prints
      *  `-> Option<String>` and its callers' string locals read it natively. Decided from the AST and the local's own rule. */
+    private rust76aS1Off = false;
+
     rust76aOptStrReturnLocal(n: any, fn: any): boolean {
+        if (this.rust76aS1Off) return false;
         if (n === undefined || !isIdentifier(n) || !isReturnStatement(n.parent) || findAncestor(n.parent.parent, isFunctionLike) !== fn) return false;
         const declaration: any = this.rustDeclaredNode(n);
         if (declaration === undefined || !isVariableDeclaration(declaration) || this.rustEnclosingFunction(declaration) !== fn) return false;
@@ -3593,6 +3596,15 @@ export class RustTranspiler extends BaseTranspiler {
     /** ral-76a S1: the method prints `-> Option<String>` only because a return is its own reader local (rust76aOptStrReturnLocal). */
     rust76aOptStrReturnMethod(fn: any): boolean {
         if (fn === undefined || fn.kind !== SyntaxKind.MethodDeclaration || fn.body === undefined || this.rustNativeStrReturnKind(fn) !== 'str') return false;
+        // a method the other return rules already type (no S1 needed) keeps the arm set it had
+        this.rust76aS1Off = true;
+        let without: boolean;
+        try {
+            without = this.rust57xStrReturnMethod(fn);
+        } finally {
+            this.rust76aS1Off = false;
+        }
+        if (without) return false;
         let hit = false;
         const visit = (n: any) => {
             if (hit || (n !== fn.body && isFunctionLike(n))) return;
