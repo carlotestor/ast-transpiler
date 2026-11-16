@@ -24258,3 +24258,24 @@ describe('ral-84b: a prediction literal map read by Object.keys is a native map'
         expect(out).not.toContain('let mut updated: Value');
     });
 });
+
+describe('ral-84b: an implodeParams path appended into a String url builder is a String', () => {
+    const files: Record<string, string> = {
+        'ts/src/base/Exchange.ts': "export default class Exchange {\n    urls: any = {};\n    safeString (obj: any, key: any, d: any = undefined): string { return obj[key]; }\n    implodeParams (path: string, params: any): string { return path; }\n    urlencode (p: any): string { return ''; }\n    isEmpty (p: any): boolean { return true; }\n}\n",
+        'ts/src/venue.ts': "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n    sign (path: string, api: string = 'public', method: string = 'GET', params: any = {}) {\n        const pathWithParams = this.implodeParams (path, params);\n        const apiUrl = this.safeString (this.urls, api);\n        let url = apiUrl + '/v1/';\n        if (api === 'public') {\n            url += pathWithParams;\n            if (!this.isEmpty (params)) {\n                url += '?' + this.urlencode (params);\n            }\n        } else {\n            url += pathWithParams;\n        }\n        return { 'url': url, 'method': method };\n    }\n}\n",
+    };
+    let out: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-84b4-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = transpiler.transpileRustByPath(path.join (root, 'ts/src/venue.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test('modetrade sign pathWithParams: String, appended natively into the url builder', () => {
+        expect(out).not.toContain('let mut pathWithParams: Value');
+        expect(out).toMatch(/let mut pathWithParams: String = /);
+    });
+});

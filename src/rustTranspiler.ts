@@ -6058,10 +6058,27 @@ export class RustTranspiler extends BaseTranspiler {
             while (isParenthesizedExpression(top.parent)) top = top.parent;
             const parent: any = top.parent;
             if (isBinaryExpression(parent) && parent.right === top && (parent.operatorToken.kind === SyntaxKind.PlusEqualsToken
-                || (parent.operatorToken.kind === SyntaxKind.PlusToken && isBinaryExpression(parent.parent) && parent.parent.operatorToken.kind === SyntaxKind.EqualsToken))) appended = true;
+                || (parent.operatorToken.kind === SyntaxKind.PlusToken && isBinaryExpression(parent.parent) && parent.parent.operatorToken.kind === SyntaxKind.EqualsToken))
+                && !this.rust84bAppendTargetString(parent)) appended = true;
             return true;
         });
         return appended;
+    }
+
+    /** ral-84b: the append `.. + x` / `t += x` writes a local the printer already holds as a native string (a scalar
+     *  `String` / `Option<String>` decision or the url-builder `String` let): the append prints the same `format!` operand
+     *  whatever this local's type, so typing it retypes nothing. */
+    rust84bAppendTargetString(parent: any): boolean {
+        let assign: any = parent;
+        while (assign !== undefined && !(isBinaryExpression(assign) && rustIsAssignmentOperator(assign.operatorToken.kind))) {
+            if (!(isBinaryExpression(assign) && assign.operatorToken.kind === SyntaxKind.PlusToken) && !isParenthesizedExpression(assign)) return false;
+            assign = assign.parent;
+        }
+        if (assign === undefined || !isIdentifier(assign.left)) return false;
+        const target: any = this.rustDeclaredNode(assign.left);
+        if (target === undefined || !isVariableDeclaration(target)) return false;
+        const kind = this.rustScalarDecisions.get(target);
+        return kind === 'str' || kind === 'ostr';
     }
 
     /** Call hook: the `String` result is boxed once (`Value::from`) wherever a `Value` is expected. */
