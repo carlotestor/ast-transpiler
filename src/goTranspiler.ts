@@ -2803,6 +2803,12 @@ function ccxtGoSafeCollectionRestUse (goTranspiler, node, family, defaulted) {
             && (parent.expression.expression !== node)) {
             return defaulted;
         }
+        // ral-84g5: an append on an ohlcv cache local R1 typed keeps the verdict the asserted `.(Appender).Append` print gave
+        if ((parent.expression?.kind === ts.SyntaxKind.PropertyAccessExpression) && (parent.expression.name?.text === 'append')
+            && (parent.expression.expression?.kind === ts.SyntaxKind.Identifier) && (typeof goTranspiler.goOhlcvsReadCacheType === 'function')
+            && (goTranspiler.goOhlcvsReadCacheType (goTranspiler.goDeclarationOfIdentifier (parent.expression.expression)) !== undefined)) {
+            return false;
+        }
         const callee = typeof goTranspiler.goPrintedCallee === 'function' ? goTranspiler.goPrintedCallee (goTranspiler.printNode (parent, 0)) : undefined;
         if ((callee === undefined) || (CCXT_GO_SAFE_COLLECTION_VETO_CALLEES.indexOf (callee) >= 0)) {
             return false;

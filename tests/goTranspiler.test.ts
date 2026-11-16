@@ -14429,3 +14429,30 @@ describe ('ral-84g5 R1 unproven key', () => {
         }
     });
 });
+
+describe ('ral-84g5 R1 append argument', () => {
+    test('a defaulted safeList local appended to an R1 cache keeps its box (no SafeListTypedDefault)', () => {
+        const head = 'type Dict = { [key: string]: any };\ntype Str = string | undefined;\n'
+            + 'class ArrayCacheByTimestamp { constructor (limit: any) {} append (x: any) {} }\n'
+            + 'class BaseExchange {\n'
+            + '    ohlcvs: { [key: string]: { [key: string]: ArrayCacheByTimestamp } } = {};\n'
+            + '    safeString (d: any, k: any, def: any = undefined): Str { return d; }\n'
+            + '    safeList (d: any, k: any, def: any = undefined): any[] { return d; }\n'
+            + '    safeDict (d: any, k: any, def: any = undefined): Dict { return d; }\n'
+            + '    safeValue (d: any, k: any, def: any = undefined): any { return d; }\n';
+        const tmp = fs.mkdtempSync (path.join (os.tmpdir (), 'go84g5c-'));
+        try {
+            const dir = path.join (tmp, 'ts', 'src', 'pro');
+            fs.mkdirSync (dir, { recursive: true });
+            const file = path.join (dir, 'venue.ts');
+            fs.writeFileSync (file, head + "    handle (message: Dict) {\n        const symbol = this.safeString (message, 's', '');\n        const timeframe = this.safeString (message, 't', '');\n        const ohlcv = this.safeList (message, 'price', []);\n        this.ohlcvs[symbol] = this.safeDict (this.ohlcvs, symbol, {});\n        let stored = this.safeValue (this.ohlcvs[symbol], timeframe);\n        if (stored === undefined) {\n            stored = new ArrayCacheByTimestamp (10);\n            this.ohlcvs[symbol][timeframe] = stored;\n        }\n        stored.append (ohlcv);\n    }\n}\n");
+            const t = new Transpiler ({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+            installCcxtGoLocalTypes (t.goTranspiler);
+            const out = t.transpileGoByPath (file).content;
+            expect (out).toContain ('var stored WsArrayCache');
+            expect (out).not.toContain ('SafeListTypedDefault');
+        } finally {
+            fs.rmSync (tmp, { recursive: true, force: true });
+        }
+    });
+});
