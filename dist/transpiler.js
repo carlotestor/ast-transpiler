@@ -41059,7 +41059,16 @@ GoTranspiler.prototype.goSafeListEmptyDefaultLocals = /* @__PURE__ */ new WeakSe
     if (this.goSourceTreeKind(declaration) !== "rest" || this.goSafeListLocalArgs(call) === void 0 || call.arguments.length !== 3 || fallback?.kind !== SyntaxKind5.ArrayLiteralExpression || fallback.elements.length !== 0) {
       return void 0;
     }
-    const typed = this.goDeclaredLocalTypeIfSafe(declaration, GO_SAFE_LIST_LOCAL_TYPE, (n) => this.goListLocalSinkReadsAsList(n, true));
+    const scope = this.goEnclosingFunction(declaration);
+    const indexReadTarget = (n) => {
+      const parent = n.parent;
+      if (parent?.kind !== SyntaxKind5.BinaryExpression || parent.right !== n || parent.operatorToken?.kind !== SyntaxKind5.EqualsToken || parent.left?.kind !== SyntaxKind5.Identifier) {
+        return false;
+      }
+      const target = parent.left.text;
+      return this.hasNodeWhere(scope, (m) => m.kind === SyntaxKind5.ElementAccessExpression && m.expression?.kind === SyntaxKind5.Identifier && m.expression.text === target);
+    };
+    const typed = this.goDeclaredLocalTypeIfSafe(declaration, GO_SAFE_LIST_LOCAL_TYPE, (n) => !indexReadTarget(n) && this.goListLocalSinkReadsAsList(n, true));
     if (typed !== void 0) {
       this.goSafeListEmptyDefaultLocals.add(declaration);
     }
@@ -41073,6 +41082,36 @@ GoTranspiler.prototype.goSafeListEmptyDefaultLocals = /* @__PURE__ */ new WeakSe
     }
     const args = this.goSafeListLocalArgs(declaration.initializer);
     return `SafeListTypedDefault(${this.printNode(args.container, identation)}, ${this.printNode(args.key, 0)}, []any{})`;
+  };
+}
+GoTranspiler.prototype.goHandleOptionTrueLocal = function(declaration) {
+  const call = declaration?.initializer;
+  if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier || declaration.parent?.parent?.kind !== SyntaxKind5.FirstStatement || declaration.type !== void 0 || call?.kind !== SyntaxKind5.CallExpression || call.expression?.kind !== SyntaxKind5.PropertyAccessExpression || call.expression.expression?.kind !== SyntaxKind5.ThisKeyword || call.expression.name?.text !== "handleOption" || call.arguments.length < 2 || call.arguments.length > 3) {
+    return false;
+  }
+  const comparesWithTrue = (n) => {
+    const parent = n.parent;
+    const op = parent?.operatorToken?.kind;
+    if (parent?.kind !== SyntaxKind5.BinaryExpression || op !== SyntaxKind5.EqualsEqualsEqualsToken && op !== SyntaxKind5.EqualsEqualsToken && op !== SyntaxKind5.ExclamationEqualsEqualsToken && op !== SyntaxKind5.ExclamationEqualsToken) {
+      return false;
+    }
+    return (parent.left === n ? parent.right : parent.left)?.kind === SyntaxKind5.TrueKeyword;
+  };
+  return this.goDeclaredLocalTypeIfSafe(
+    declaration,
+    "bool",
+    comparesWithTrue,
+    (n) => n.parent?.kind === SyntaxKind5.PropertyAccessExpression && n.parent.name === n || n.parent?.kind === SyntaxKind5.PropertyAssignment && n.parent.name === n
+  ) === "bool";
+};
+{
+  const marketLocal = GoTranspiler.prototype.goMarketLocalUnbox;
+  GoTranspiler.prototype.goMarketLocalUnbox = function(declaration) {
+    return this.goHandleOptionTrueLocal(declaration) ? "bool" : marketLocal.call(this, declaration);
+  };
+  const marketValue = GoTranspiler.prototype.goMarketUnboxValue;
+  GoTranspiler.prototype.goMarketUnboxValue = function(declaration, parsedValue) {
+    return this.goHandleOptionTrueLocal(declaration) ? `${parsedValue.trim()} == true` : marketValue.call(this, declaration, parsedValue);
   };
 }
 

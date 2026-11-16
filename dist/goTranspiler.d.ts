@@ -1974,3 +1974,6 @@ export interface GoTranspiler {
 export interface GoTranspiler {
     goSafeListEmptyDefaultLocals: WeakSet<object>;
 }
+export interface GoTranspiler {
+    goHandleOptionTrueLocal(declaration: any): boolean;
+}
