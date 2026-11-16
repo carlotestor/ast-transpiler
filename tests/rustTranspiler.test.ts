@@ -20749,3 +20749,48 @@ describe('ral-62p: a client.subscriptions key read by a typed indexOf with a cas
         expect(out).toContain('let mut key: Value = ');
     });
 });
+
+describe('ral-62p: Object.keys element read as a key inside a base call that rewrites a declared Dict / List local', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type List = Array<any>;\nconst arrayConcat = (a: any[], b: any[]): any[] => a.concat (b);\nexport default class Exchange {\n    arrayConcat = arrayConcat;\n    safeDict (o: any, k: any, d: any = undefined): Dict | undefined { return d; }\n    keep (o: any): any { return o; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, List } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        return path.join (dir, 'ts/src/venue.ts');
+    };
+    const loop = (decl: string) => "    m (data: Dict) {\n        const withdraw = this.safeDict (data, 'withdraw', {});\n        let transactions" + decl + " = [];\n        const withdrawKeys = Object.keys (withdraw);\n        for (let i = 0; i < withdrawKeys.length; i++) {\n            const key = withdrawKeys[i];\n            transactions = this.arrayConcat (transactions, withdraw[key]);\n        }\n        const depositKeys = Object.keys (data);\n        for (let i = 0; i < depositKeys.length; i++) {\n            const key = depositKeys[i];\n            transactions = this.arrayConcat (transactions, data[key]);\n        }\n        return transactions;\n    }\n";
+    test('the key is a borrowed string (indodax fetchDepositsWithdrawals)', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-62p-concat-key', loop (': List'))).content;
+        expect(out).toMatch(/let mut key: Option<(&str|String)> = withdrawKeys\.get\(i as usize\)/);
+    });
+    test('negative: the written local is declared any', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-62p-concat-key-neg', loop (': any'))).content;
+        expect(out).toContain('let mut key: Value = ');
+    });
+});
+
+describe('ral-62p: a base handleOption with a bool literal default (cast or annotated) is an Option<bool>', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Bool = boolean | undefined;\nexport default class Exchange {\n    options: Dict = {};\n    handleOption (methodName: string, optionName: string, defaultValue: any = undefined) { return this.options[optionName] ?? defaultValue; }\n    keep (o: any): any { return o; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Bool } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        return path.join (dir, 'ts/src/venue.ts');
+    };
+    test('`as Bool` with a strict true test (binance createOrderRequest quoteOrderQty)', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-62p-opt-bool-cast', "    m (x: Dict) {\n        const q = this.handleOption ('createOrder', 'q', true) as Bool;\n        if (q === true) {\n            return this.keep (x);\n        }\n        return undefined;\n    }\n")).content;
+        expect(out).toContain('let mut q: Option<bool> = self.handleOption(');
+        expect(out).toContain('.as_bool();');
+    });
+    test('`: boolean` annotation read in a logical condition (independentreserve pro checksum)', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-62p-opt-bool-ann', "    m (x: Dict, snap: boolean) {\n        const c: boolean = this.handleOption ('watchOrderBook', 'checksum', true);\n        if ((c) && (snap)) {\n            return this.keep (x);\n        }\n        return undefined;\n    }\n")).content;
+        expect(out).toContain('let mut c: Option<bool> = self.handleOption(');
+        expect(out).toContain('(c == Some(true))');
+    });
+    test('negative: a bool option only boxed straight back stays Value', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-62p-opt-bool-box', "    m (x: Dict) {\n        const c: boolean = this.handleOption ('m', 'c', false);\n        return this.keep (c);\n    }\n")).content;
+        expect(out).toContain('let mut c: Value = ');
+    });
+});
