@@ -68132,6 +68132,10 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
         }
         const form = this.rustScalarUseForm(n, kind);
         this.rustScalarUseForms.set(n, form);
+        if (form === "targ" && kind === "oint" && this.rust64xOintParamArg(n)) {
+          nativeUses++;
+          return true;
+        }
         if (form === void 0 || form === "xbox" || form === "err" || form === "key" || form === "okey" || form === "targ")
           return false;
         if (loose && (form !== "test" || this.literalKindOfNode(this.unwrapParens(n.parent.left === n ? n.parent.right : n.parent.left)) === "null"))
@@ -85838,6 +85842,8 @@ ${this.getIden(identation)}}`;
       return false;
     for (const call of calls) {
       const arg = call.arguments[at];
+      if (arg !== void 0 && isIdentifier3(arg) && this.rust64xLentStrParamArg(arg, method, at))
+        continue;
       if (arg === void 0 || arg.kind !== SyntaxKind7.StringLiteral && arg.kind !== SyntaxKind7.NoSubstitutionTemplateLiteral)
         return false;
     }
@@ -85869,6 +85875,15 @@ ${this.getIden(identation)}}`;
     if (hidden !== void 0 && hidden !== method)
       return false;
     return this.rustNativeStrReturnHead(method);
+  }
+  /** ral-64x: `n` is a whole argument of a `this.m (..)` call whose parameter at that index prints `Option<i64>`
+   *  (rustVenueStrParamType). The slot local is passed as it is (Copy, no box). */
+  rust64xOintParamArg(n) {
+    const call = n.parent;
+    if (!isCallExpression6(call) || call.expression === n)
+      return false;
+    const at = Array.from(call.arguments).indexOf(n);
+    return at >= 0 && this.rustVenueStrSlot(this.rustCalleeParams(call), at) === "Option<i64>";
   }
   /** The first parameter of a listed override group when ALL declarations (base, prediction base, every venue,
    *  pro and prediction override) spell it `<name>: string`; one disagreeing declaration keeps the whole group `Value`. */
@@ -85978,10 +85993,43 @@ ${this.getIden(identation)}}`;
     }
     if (isIdentifier3(inner) && ["int", "oint"].includes(this.rustOptParamKind(inner) ?? ""))
       return this.rustOptParamKind(inner) === "int" || rustType === "Option<i64>";
+    const slot = isIdentifier3(inner) ? this.rustDeclaredNode(inner) : void 0;
+    if (slot?.kind === SyntaxKind7.BindingElement && slot.name !== inner && this.rustExactCopySlotSeed(slot) === "oint")
+      return rustType === "Option<i64>";
     const declaration = isIdentifier3(inner) ? this.rustDeclaredNode(inner) : void 0;
     const typeNode = declaration?.type;
     const alias = typeNode?.kind === SyntaxKind7.TypeReference && isIdentifier3(typeNode.typeName) ? String(typeNode.typeName.text) : "";
     return alias === "int" || alias === "Int" && rustType === "Option<i64>";
+  }
+  /** ral-64x: `arg` is the caller's own required `&str` parameter, and every read of it is either a ws url / hash
+   *  slot or the argument at `at` of a call to `method` (syntactic, so deciding `method`'s slot does not ask back). */
+  rust64xLentStrParamArg(arg, method, at) {
+    const param = this.rustDeclaredNode(arg);
+    if (param?.kind !== SyntaxKind7.Parameter || param.name === arg || !isIdentifier3(param.name) || param.parent === method)
+      return false;
+    if (this.rustVenueStrParamType(param) !== "&str")
+      return false;
+    return this.rust64xStrParamReadsLent(param, (call, i) => i === at && this.rustScalarCallee(call) === method);
+  }
+  /** ral-64x: every read of `param` is a ws url / hash slot (ral-yc) or a call argument `other` accepts. */
+  rust64xStrParamReadsLent(param, other) {
+    let uses = 0;
+    for (const n of this.rustScopeNameNodes(param.parent, String(param.name.text))) {
+      if (n === param.name || n === param || n.parent === param)
+        continue;
+      if (!isIdentifier3(n) || this.rustDeclaredNode(n) !== param)
+        return false;
+      const call = n.parent;
+      if (!isCallExpression6(call) || call.expression === n || !isPropertyAccessExpression3(call.expression))
+        return false;
+      const i = Array.from(call.arguments).indexOf(n);
+      const name = String(call.expression.name.text);
+      const ws = (name === "client" || name === "watch" || name === "watchMultiple") && call.arguments.length <= 5 && this.rustWsWatchSlot(call, i);
+      if (!ws && !(call.expression.expression.kind === SyntaxKind7.ThisKeyword && other(call, i)))
+        return false;
+      uses++;
+    }
+    return uses > 0;
   }
   /** `this.<m>(..)` / `super.<m>(..)` calls in the method's own file that resolve to it. */
   rustVenueStrCallSites(method) {
@@ -86043,24 +86091,7 @@ ${this.getIden(identation)}}`;
   rustVenueStrParamUnboundUncached(param) {
     if (this.rustVenueStrParamType(param) !== "&str")
       return false;
-    const method = param.parent;
-    let uses = 0;
-    for (const n of this.rustScopeNameNodes(method, String(param.name.text))) {
-      if (n === param.name || n === param || n.parent === param)
-        continue;
-      if (!isIdentifier3(n) || this.rustDeclaredNode(n) !== param)
-        return false;
-      const call = n.parent;
-      if (!isCallExpression6(call) || call.expression === n || !isPropertyAccessExpression3(call.expression))
-        return false;
-      const name = String(call.expression.name.text);
-      if (!((name === "client" || name === "watch" || name === "watchMultiple") && call.arguments.length <= 5))
-        return false;
-      if (!this.rustWsWatchSlot(call, Array.from(call.arguments).indexOf(n)))
-        return false;
-      uses++;
-    }
-    return uses > 0;
+    return this.rust64xStrParamReadsLent(param, (call, at) => this.rustVenueStrSlot(this.rustCalleeParams(call), at) === "&str");
   }
   rustVenueStrParamUnboundRead(node) {
     const param = this.rustDeclaredNode(node);
@@ -86162,6 +86193,8 @@ ${this.getIden(identation)}}`;
     const inner = this.unwrapParens(arg);
     if (type !== "&str" && type !== "Option<&str>")
       return this.rustVenueScalarArgText(arg, type, identation);
+    if (isIdentifier3(inner) && this.rustVenueStrParamUnboundRead(inner))
+      return type === "&str" ? _RustTranspiler.rustLentMark(super.printIdentifier(inner)) : `Some(${super.printIdentifier(inner)})`;
     if (isIdentifier3(inner) && this.rustWsUrlLocalOf(inner))
       return type === "&str" ? `${super.printIdentifier(inner)}.as_deref().unwrap_or_default()` : `${super.printIdentifier(inner)}.as_deref()`;
     const slot = isIdentifier3(inner) ? this.rustDeclaredNode(inner) : void 0;

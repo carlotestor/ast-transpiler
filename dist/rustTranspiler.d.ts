@@ -4726,6 +4726,9 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  handler arm) and no override, trait slot or typed-return entry. Its string parameters may print typed; should
      *  the return still print `Value`, a string slot is one an arm decodes (rustDispatch.wsArg `str` / `optstr`). */
     rust63xNoArmStrMethod(method: any): boolean;
+    /** ral-64x: `n` is a whole argument of a `this.m (..)` call whose parameter at that index prints `Option<i64>`
+     *  (rustVenueStrParamType). The slot local is passed as it is (Copy, no box). */
+    rust64xOintParamArg(n: any): boolean;
     private static readonly RUST_BASE_SCALAR_PARAM_METHODS;
     private static readonly RUST_BASE_ASYNC_SCALAR_PARAM_METHODS;
     private static readonly RUST_OVERRIDE_GROUP_STR_PARAMS;
@@ -4743,6 +4746,11 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  source alone: `null` only for an `Option`, and an `i64` slot takes an integer literal or a value declared
      *  `int` / `Int` (a `number` could carry a fraction). */
     rustVenueScalarArgExact(arg: any, rustType: string): boolean;
+    /** ral-64x: `arg` is the caller's own required `&str` parameter, and every read of it is either a ws url / hash
+     *  slot or the argument at `at` of a call to `method` (syntactic, so deciding `method`'s slot does not ask back). */
+    rust64xLentStrParamArg(arg: any, method: any, at: number): boolean;
+    /** ral-64x: every read of `param` is a ws url / hash slot (ral-yc) or a call argument `other` accepts. */
+    rust64xStrParamReadsLent(param: any, other: (call: any, at: number) => boolean): boolean;
     /** `this.<m>(..)` / `super.<m>(..)` calls in the method's own file that resolve to it. */
     rustVenueStrCallSites(method: any): any[];
     /** ral-ve: an identifier bound once (`const`) to a `this.urls[..]` literal-key read: a url string or Null. */
