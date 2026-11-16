@@ -33365,3 +33365,31 @@ GoTranspiler.prototype.goBaseCacheInitText = function (node) {
     }
     return `${this.printNode(node.left, 0)} = ${this.goWsCacheEmptyLiteral(node.left) ?? 'map[string]any'}{}`;
 };
+
+// ===== ral-77g2: reader-result locals =====
+// R1. A safeDict-seeded Dict local in a prediction source (ts/src/prediction/*, base/PredictionExchange)
+// is typed by the same rule as a ws source: those files embed BaseExchange, so the SafeDictMap twin
+// reads the same member, and the ws container checks (no cache / client / class-typed receiver) apply
+// because the prediction venues also hold stream state. Every other caller of goSourceTreeKind keeps
+// treating the tree as skipped.
+export interface GoTranspiler {
+    goSafeDictMapPredictionAsWs: boolean;
+}
+GoTranspiler.prototype.goSafeDictMapPredictionAsWs = false;
+{
+    const sourceTreeKind = GoTranspiler.prototype.goSourceTreeKind;
+    GoTranspiler.prototype.goSourceTreeKind = function (node) {
+        const kind = sourceTreeKind.call(this, node);
+        return ((kind === 'skip') && this.goSafeDictMapPredictionAsWs && this.goNodeIsInPredictionTree(node)) ? 'ws' : kind;
+    };
+    const safeDictMapLocal = GoTranspiler.prototype.goSafeDictMapLocalUncached;
+    GoTranspiler.prototype.goSafeDictMapLocalUncached = function (declaration) {
+        const outer = this.goSafeDictMapPredictionAsWs;
+        this.goSafeDictMapPredictionAsWs = true;
+        try {
+            return safeDictMapLocal.call(this, declaration);
+        } finally {
+            this.goSafeDictMapPredictionAsWs = outer;
+        }
+    };
+}

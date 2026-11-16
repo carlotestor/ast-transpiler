@@ -14097,3 +14097,37 @@ describe('go proven return families (config provenReturnFamilies)', () => {
         expect(output).not.toContain('other == int64(0)');
     });
 });
+
+describe ('ral-77g2 reader-result locals', () => {
+    const PRELUDE =
+        'type Dict = { [key: string]: any };\n' +
+        'type Str = string | undefined;\n' +
+        'export class Exchange {\n' +
+        '    options: Dict;\n' +
+        '    safeDict (a: any, k: any, d: any = undefined): Dict { return a; }\n' +
+        '    safeList (a: any, k: any, d: any = undefined): any[] { return a; }\n' +
+        '    safeString (a: any, k: any, d: any = undefined): Str { return a; }\n' +
+        '    extend (a: any, b: any): Dict { return a; }\n';
+    const run = (members: string, dir: string, name = 'x.ts'): string => {
+        const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'r77g2-'));
+        try {
+            const src = path.join(tmp, dir);
+            fs.mkdirSync(src, { recursive: true });
+            const file = path.join(src, name);
+            fs.writeFileSync(file, PRELUDE + members + '}\n');
+            const t = new Transpiler({ verbose: false, go: { parser: { NUM_LINES_END_FILE: 0 } } });
+            return t.transpileGoByPath(file).content;
+        } finally {
+            fs.rmSync(tmp, { recursive: true, force: true });
+        }
+    };
+    test('R1: a prediction source types a never-nil safeDict local like a ws source', () => {
+        const body = '    f (raw: Dict): any {\n        const d = this.safeDict (raw, "outcome", {});\n        d["seen"] = true;\n        return this.extend (d, {});\n    }\n';
+        expect(run(body, 'ts/src/prediction')).toContain('var d map[string]any = this.SafeDictMap(raw, "outcome", map[string]any{})');
+        expect(run(body, 'ts/src/base', 'PredictionExchange.ts')).toContain('var d map[string]any = this.SafeDictMap(raw, "outcome", map[string]any{})');
+        // the ws container checks still hold, and the base Exchange stays boxed
+        const field = '    f (raw: Dict): any {\n        const d = this.safeDict (this.markets, "x", {});\n        return this.extend (d, {});\n    }\n    markets: Dict;\n';
+        expect(run(field, 'ts/src/prediction')).not.toContain('SafeDictMap');
+        expect(run(body, 'ts/src/base', 'Exchange.ts')).not.toContain('SafeDictMap');
+    });
+});
