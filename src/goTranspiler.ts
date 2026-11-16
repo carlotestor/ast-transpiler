@@ -1083,7 +1083,9 @@ export const CCXT_GO_BOOL_METHOD_NAMES = [
 
 // Base methods whose every TS return is a string or undefined (`Str`): build/goTranspiler.ts
 // coerceStringPtrMethods retypes the base copy and every venue override to `*string`.
-export const CCXT_GO_STRING_PTR_METHOD_NAMES = [ 'NetworkIdToCode', 'FindTimeframe', 'AmountToPrecision', 'PriceToPrecision' ];
+// ral-77g4: `omitZero (stringNumber: string | undefined)` (base/functions/number.ts) answers the
+// string or undefined on every path; its hand-written Go twin (exchange_generic.go) returns *string
+export const CCXT_GO_STRING_PTR_METHOD_NAMES = [ 'NetworkIdToCode', 'FindTimeframe', 'AmountToPrecision', 'PriceToPrecision', 'OmitZero' ];
 
 export const CCXT_GO_HELPER_RETURN_TYPES = {
     // Typed twins of GetArg (go/v4/exchange_helpers.go) -- the `var x <T> = GetArg<T>(...)`
