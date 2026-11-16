@@ -133,6 +133,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustVirtualDispatch: Record<string, string[]>;
     /** Virtual base methods whose overrides call `super.X()`: the base body prints as `X_non_virtual`. */
     rustNonVirtualShims: Set<string>;
+    /** `DerivedExchange` slots whose first parameter is `impl Into<crate::Value>`: every venue override takes it lent. */
+    rustLentSlots: Set<string>;
     /** ccxt error classes with a subclass (`errorHierarchy`): `e instanceof K` on a caught error walks the hierarchy. */
     rustErrorClassesWithSubclasses: Set<string>;
     constructor(config?: {});
@@ -1903,6 +1905,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustTypedIsAsync(node: any): boolean;
     rustTypedBody(node: any, typed: any, identation: number, inner: string): string;
     printTypedUnifiedCall(node: any): string | undefined;
+    printTypedUnifiedCallUnlifted(node: any): string | undefined;
     /** `await this.loadMarkets ();` as its own statement (the value is dropped). */
     rustTypedCallIsDiscarded(node: any): boolean;
     private static readonly RUST_MARKET_STR_FIELDS;
@@ -2130,6 +2133,14 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static rustBalancedClose;
     private static rustSplitTopLevel;
     printCallExpression(node: any, identation: any): string;
+    /** First parameter of a venue override of a lent `DerivedExchange` slot (same arity as the slot): `impl Into<crate::Value>`. */
+    rustLentSlotParam(param: any): boolean;
+    /** A venue (not base-tier) method overriding a lent slot with the slot's arity. */
+    rustLentSlotOverride(method: any): boolean;
+    /** `this.m(..)` to the calling file's own override of a lent slot: that override lives only in the
+     *  `DerivedExchange` impl, so the call names the trait (the base method of the same name takes a `Value`). */
+    rustLentSlotCallText(node: any, text: string): string;
+    printCallExpressionUnlifted(node: any, identation: any): string;
     printFreeFnDefaultArgsCall(node: any, identation: any): string | undefined;
     printDynamicSelfRead(node: any): string | undefined;
     printDynamicSelfCall(node: any, identation: any): string | undefined;
