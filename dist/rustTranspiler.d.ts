@@ -411,6 +411,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustSiblingStrBoxesMove(declaration: any, scope: any): boolean;
     /** Static kind of a write's right-hand side: `null`, or the `Option` payload it yields exactly. */
     rustNilWriteKind(rhs: any): string | undefined;
+    /** ral-68b: `parseInt (s)` with one argument whose checker type is `string`, or that call times an integer literal. */
+    rust68bParseIntWrite(expr: any): boolean;
     /** za: a ternary whose arms are an `undefined` and a boolean literal (either order). */
     rustNilBoolNullTernary(expr: any): boolean;
     /** A boolean that is never undefined: `!x`, a ternary of boolean literals, or `&&` / `||` / parens over such operands. */
@@ -423,6 +425,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** How a read of a typed nil local prints: `'test'` (null / literal compare), `'cond'` (bool
      *  condition slot) or `'box'` (a `Value` argument, field, element, return or plain copy). */
     rustNilReadForm(n: any, kind: string): string | undefined;
+    /** ral-68b: `n` is a direct argument of a `this.<typed unified>(..)` call whose typed slot there is `Option<i64>`
+     *  (luno fetchLedgerByEntries `since`): the call prints the nil `Int` local's own `Option<i64>` in place of the box
+     *  the slot would read back through `.as_i64()`, the same `None` / `Some(n)` either way. */
+    rust68bNilIntTypedArg(call: any, n: any): boolean;
     /** rb: `y = !x;` as a whole statement, where `y` is another nil local typed `Option<bool>` (decided first; a cycle stays boxed). */
     rustNilNegatedBoolWrite(n: any): boolean;
     /** Box reads go only into plain `Value` slots: no `&mut` receivers, no native-typed callee slots. */

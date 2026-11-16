@@ -54364,6 +54364,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "bool";
     if (this.rustNilDefiniteBool(node))
       return "bool";
+    if (this.rust68bParseIntWrite(node))
+      return "int";
     if (!isCallExpression6(node))
       return void 0;
     if (this.rustBaseTypedReturnKind(node) === "bool")
@@ -54389,6 +54391,20 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return args.length === boolBase || args.length === boolBase + 1 && this.literalKindOfNode(args[boolBase]) === "boolean" ? "bool" : void 0;
     }
     return void 0;
+  }
+  /** ral-68b: `parseInt (s)` with one argument whose checker type is `string`, or that call times an integer literal. */
+  rust68bParseIntWrite(expr) {
+    const node = this.unwrapParens(expr);
+    if (node === void 0)
+      return false;
+    if (isBinaryExpression5(node) && node.operatorToken.kind === SyntaxKind7.AsteriskToken) {
+      const [a, b] = [this.unwrapParens(node.left), this.unwrapParens(node.right)];
+      return this.rust68bParseIntWrite(a) && this.rustNilIntLiteral(b) !== void 0 || this.rustNilIntLiteral(a) !== void 0 && this.rust68bParseIntWrite(b);
+    }
+    if (!isCallExpression6(node) || !isIdentifier3(node.expression) || String(node.expression.text) !== "parseInt" || node.arguments.length !== 1)
+      return false;
+    const type = this.getCheckedTypeOf(node.arguments[0]);
+    return type !== void 0 && this.isStringType(type.flags);
   }
   /** za: a ternary whose arms are an `undefined` and a boolean literal (either order). */
   rustNilBoolNullTernary(expr) {
@@ -54459,6 +54475,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (kind === "bool" && this.rustClimbLogicalWrappers(n) !== n && this.rustConditionBoolSlot(n))
       return "cond";
     if (isCallExpression6(parent) && parent.expression !== n && parent.arguments.some((a) => a === n)) {
+      if (kind === "int" && this.rust68bNilIntTypedArg(parent, n))
+        return "targ";
       return this.rustNilBoxCallOk(parent, parent.arguments.indexOf(n)) ? "box" : void 0;
     }
     if (parent.kind === SyntaxKind7.PropertyAssignment && parent.initializer === n)
@@ -54471,6 +54489,17 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return this.rustNativeStrReturnKind(findAncestor(parent.parent, isFunctionLike)) === "str" ? void 0 : "box";
     }
     return void 0;
+  }
+  /** ral-68b: `n` is a direct argument of a `this.<typed unified>(..)` call whose typed slot there is `Option<i64>`
+   *  (luno fetchLedgerByEntries `since`): the call prints the nil `Int` local's own `Option<i64>` in place of the box
+   *  the slot would read back through `.as_i64()`, the same `None` / `Some(n)` either way. */
+  rust68bNilIntTypedArg(call, n) {
+    if (call === void 0 || !isCallExpression6(call) || !isIdentifier3(n))
+      return false;
+    const at = call.arguments.indexOf(n);
+    if (at < 0)
+      return false;
+    return this.rustScalarTypedParamType(call, at) === "Option<i64>";
   }
   /** rb: `y = !x;` as a whole statement, where `y` is another nil local typed `Option<bool>` (decided first; a cycle stays boxed). */
   rustNilNegatedBoolWrite(n) {
@@ -65750,6 +65779,8 @@ ${i1}}`;
       const scalarArg = this.rustScalarTypedArgText(args[i], p.rustType);
       if (scalarArg !== void 0)
         return scalarArg;
+      if (p.rustType === "Option<i64>" && isIdentifier3(args[i]) && this.rustNilLocalOfIdentifier(args[i])?.kind === "int")
+        return _RustTranspiler.rustLentMark(super.printIdentifier(args[i]));
       if (p.rustType === "bool") {
         if (args[i].kind === SyntaxKind7.TrueKeyword)
           return "true";
