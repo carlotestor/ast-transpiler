@@ -3586,6 +3586,21 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-52e: a list index key proved i64: an integer literal, or `+` / `-` over integer literals and i64 scalar locals (at least one literal);
      *  ral-53e: or, as the whole key of a plain element read, an int / Option<i64> local (rust53eElemReadKey). */
     rustListIndexIntKey(key: any, top?: boolean): boolean;
+    /** ral-84d R2: statement writes `x[k] = v` printed as a native insert on a typed `safeDict (this.options, ..)` copy. */
+    private rust84dStoreWrites;
+    /** ral-84d R2: `n[k] = v` (statement, one level, `=`, non-literal key) on `const n = this.safeDict (this.options, 'lit', {})`
+     *  (a base reader, an object-literal default: a map on every path). `this.options` is a plain field the runtime never tags
+     *  (no ws subscription, cache bucket or book id), so the untyped printer already writes it as a native copy-on-write insert
+     *  (printNativeDictInsert); on the typed map the same insert runs without the `if let Value::Dict` (always a map). */
+    rust84dStoreKeyWrite(n: any, init: any): boolean;
+    /** ral-84d: a base `safeDict*` reader whose default is a map literal (a `Value::Dict` on every path: the typed map holds
+     *  exactly what the box held). */
+    rust84dNeverNullMapInit(init: any): boolean;
+    rust84dStoreKeyArg(n: any, keyNode: any): string | undefined;
+    /** ral-84d R2: `delete n[k]` (statement) on the `this.options` store copy, `k` a string local printed in the `dkey` form. */
+    rust84dStoreDelete(n: any, init: any): boolean;
+    print84dStoreDelete(node: any): string | undefined;
+    print84dStoreKeyWrite(left: any, right: any, valueText: string): string | undefined;
     /** ral-48b: `n['k'] = v` (statement, literal non-digit key) whose value does not read `n`. */
     rustAeoTargetWrite(n: any): boolean;
     /** The source statement of a box (`Value::Dict(x)`, +13 chars) leaves the printed line within 400 chars. */
