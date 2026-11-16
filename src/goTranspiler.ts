@@ -34742,7 +34742,7 @@ function ral84g6OmitLocalType(goTranspiler: GoTranspiler, declaration): string |
                 return (target === undefined); // unresolved: fail closed
             }
             if (ral87g6PairMapWrite(n)) {
-                return false; // 87g6: the joined pair's map slot
+                return ral87g6ForeignOmitWrite(goTranspiler, scope, declaration); // 87g6: the joined pair's map slot
             }
             if ((parent?.kind === SyntaxKind.BinaryExpression) && (parent.left === n) && (parent.operatorToken?.kind === SyntaxKind.EqualsToken)) {
                 const write = ral84g6OmitCall(parent.right);
@@ -34777,6 +34777,17 @@ function ral87g6PairMapWrite(n): boolean {
         && (assignment?.kind === SyntaxKind.BinaryExpression) && (assignment.left === pattern)
         && (assignment.parent?.kind === SyntaxKind.ExpressionStatement)
         && (tupleJoinWriteType(assignment, n.text) === GO_SAFE_DICT_LOCAL_TYPE);
+}
+// a local rebound by a pair write may be re-omitted only from itself: `x = this.omit (y, ..)` with y another local asks
+// y's proof, which follows y's producer back to x while x's own verdict is in flight (the re-entry answers the box and
+// the write sites keep that answer: okx createOrderRequest `orderParams`, gate 15588 buildGO)
+function ral87g6ForeignOmitWrite(goTranspiler: GoTranspiler, scope, declaration): boolean {
+    const name = declaration.name.text;
+    return goTranspiler.hasNodeWhere(scope, (n) => {
+        const write = ((n.kind === SyntaxKind.BinaryExpression) && (n.operatorToken?.kind === SyntaxKind.EqualsToken)
+            && (n.left?.kind === SyntaxKind.Identifier) && (n.left.text === name)) ? ral84g6OmitCall(n.right) : undefined;
+        return (write !== undefined) && (write.arguments[0].text !== name);
+    });
 }
 const ral84g6ShippedDictUnbox = GoTranspiler.prototype.goSafeDictLocalUnbox;
 GoTranspiler.prototype.goSafeDictLocalUnbox = function (declaration) {
@@ -34852,6 +34863,9 @@ GoTranspiler.prototype.goLocalIsSafeToType = function (scope, declaration, varNa
             if (this.goTypeOfInitializer(parent.right, this.printNode(parent.right, 0)) === goType) {
                 return false;
             }
+        }
+        if (ral87g6PairMapWrite(n) && ral87g6ForeignOmitWrite(this, scope, declaration)) {
+            return true;
         }
         if (ral84g6MapWriteIsMap(this, declaration, n, parent) || ral87g6PairMapWrite(n)) {
             rebinds += 1;

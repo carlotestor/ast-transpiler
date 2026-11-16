@@ -15057,3 +15057,28 @@ describe('ral-87g6 omit locals rebound by a joined pair map slot', () => {
         expect(output).toContain('var paramsOmitted any = this.Omit(params, \"internal\")');
     });
 });
+
+describe('ral-87g6 a pair-rebound omit local re-omitted from another local keeps the box', () => {
+    test('okx createOrderRequest shape', () => {
+        const inst = new Transpiler({ 'verbose': false });
+        installCcxtGoLocalTypes((inst as any).goTranspiler);
+        const input =
+        "type Dict = { [key: string]: any };\n" +
+        "class T {\n" +
+        "    omit (a, ...k) { return a; }\n" +
+        "    safeString (a, b) { return a; }\n" +
+        "    handleOptionBoolAndParams (params: Dict, m: string, o: string, d: boolean = false): [boolean, Dict] { return [ d, params ]; }\n" +
+        "    f (x, params: Dict = {}) {\n" +
+        "        let paramsOmitted = this.omit (params, 'internal');\n" +
+        "        let paginate = false;\n" +
+        "        [ paginate, paramsOmitted ] = this.handleOptionBoolAndParams (paramsOmitted, 'f', 'paginate', false);\n" +
+        "        if (x) {\n" +
+        "            paramsOmitted = this.omit (params, 'cost');\n" +
+        "        }\n" +
+        "        return this.safeString (paramsOmitted, 'x');\n" +
+        "    }\n" +
+        "}\n";
+        const output = inst.transpileGo(input).content;
+        expect(output).toContain('var paramsOmitted any = this.Omit(params, "internal")');
+    });
+});
