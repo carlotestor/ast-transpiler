@@ -438,6 +438,20 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_NIL_SCALAR_NATIVE_FORMS;
     /** `ostr|oint|onum` for an empty local the scalar rule types, else undefined. */
     rustNilScalarKind(declaration: any): string | undefined;
+    /** ral-64p: the integer kind (`oint`) of `(x === undefined) ? y : Math.min|max (x, y)` (or `y` / `x` swapped in the
+     *  call) written to the nil-declared local x, where y's own kind is `int` / `oint`; else undefined. Seeding only. */
+    rust64pSelfMinTernaryKind(rhs: any, declaration: any): string | undefined;
+    /** ral-65p: `-x` (prefix minus) where x is a scalar local the solver types `int` / `oint`: its kind and printed name. */
+    rust65pNegatedIntLocal(node: any): {
+        kind: string;
+        name: string;
+    } | undefined;
+    /** ral-65p: `n` is x's own operand of the `Math.min|max (x, y)` arm of a `x = (x === undefined) ? y : Math.min|max (x, y)`
+     *  statement write that rust64pSelfMinTernaryKind types `oint`. */
+    rust65pSelfMinOperand(n: any): boolean;
+    /** ral-64p: while seeding, a `const y = this.sum (..)` / `Math.min|max (..)` local's kind is its initializer's
+     *  combinator kind (rustArithCallKind), before y's own decision is seeded. */
+    rust64pConstArithKind(node: any): string | undefined;
     /** ral-47d: `rhs` names another nil-declared (`let y: Str = undefined`) string local of the same function. */
     rustNilStrPartner(rhs: any, declaration: any, scope: any): boolean;
     /** ral-45b: the local has a `x = x.slice(..)` / case self write or a `x += ..` append (the forms lift 1 / 2 admit). */

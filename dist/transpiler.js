@@ -54588,6 +54588,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         write = "ostr";
       if (write === void 0 && this.rustScalarSeeding && this.rustNilStrPartner(rhs, declaration, scope))
         write = "ostr";
+      if (write === void 0)
+        write = this.rust64pSelfMinTernaryKind(rhs, declaration);
       joined = this.rustScalarJoinKinds(joined, write, write === "bool" && this.rustPreciseCompareCall(rhs));
       if (joined === void 0)
         return void 0;
@@ -54627,6 +54629,69 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (boxed.length > 0)
       this.rustScalarGuarded.add(declaration);
     return kind;
+  }
+  /** ral-64p: the integer kind (`oint`) of `(x === undefined) ? y : Math.min|max (x, y)` (or `y` / `x` swapped in the
+   *  call) written to the nil-declared local x, where y's own kind is `int` / `oint`; else undefined. Seeding only. */
+  rust64pSelfMinTernaryKind(rhs, declaration) {
+    if (rhs === void 0 || !isConditionalExpression4(rhs))
+      return void 0;
+    const self = (a2) => {
+      const u = this.unwrapParens(a2);
+      return u !== void 0 && isIdentifier3(u) && this.rustDeclaredNode(u) === declaration;
+    };
+    const cond = this.unwrapParens(rhs.condition);
+    if (!isBinaryExpression5(cond) || cond.operatorToken.kind !== SyntaxKind7.EqualsEqualsEqualsToken || !self(cond.left) || this.literalKindOfNode(cond.right) !== "null")
+      return void 0;
+    const call = this.unwrapParens(rhs.whenFalse);
+    if (!isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || !isIdentifier3(call.expression.expression) || call.expression.expression.text !== "Math")
+      return void 0;
+    const fn = String(call.expression.name.text);
+    if (fn !== "min" && fn !== "max" || call.arguments.length !== 2)
+      return void 0;
+    const a = call.arguments[0];
+    const b = call.arguments[1];
+    const other = self(a) ? b : self(b) ? a : void 0;
+    if (other === void 0 || self(other))
+      return void 0;
+    const k = this.rustScalarValueKind(rhs.whenTrue, true) ?? (this.rustScalarSeeding ? this.rust64pConstArithKind(rhs.whenTrue) : void 0);
+    const o = this.rustArithOperandKind(other) ?? (this.rustScalarSeeding ? this.rust64pConstArithKind(other) : void 0);
+    return (k === "int" || k === "oint") && (o === "int" || o === "oint") ? "oint" : void 0;
+  }
+  /** ral-65p: `-x` (prefix minus) where x is a scalar local the solver types `int` / `oint`: its kind and printed name. */
+  rust65pNegatedIntLocal(node) {
+    const inner = this.unwrapParens(node);
+    if (inner === void 0 || !isPrefixUnaryExpression3(inner) || inner.operator !== SyntaxKind7.MinusToken || !isIdentifier3(inner.operand))
+      return void 0;
+    const kind = this.rustScalarLocalOf(inner.operand)?.kind;
+    return kind === "int" || kind === "oint" ? { kind, name: super.printIdentifier(inner.operand) } : void 0;
+  }
+  /** ral-65p: `n` is x's own operand of the `Math.min|max (x, y)` arm of a `x = (x === undefined) ? y : Math.min|max (x, y)`
+   *  statement write that rust64pSelfMinTernaryKind types `oint`. */
+  rust65pSelfMinOperand(n) {
+    const call = n.parent;
+    if (!isIdentifier3(n) || call === void 0 || !isCallExpression6(call) || call.expression === n)
+      return false;
+    const tern = this.rustSkipWrappersUp(call.parent);
+    if (tern === void 0 || !isConditionalExpression4(tern) || this.unwrapParens(tern.whenFalse) !== call)
+      return false;
+    const write = this.rustSkipWrappersUp(tern.parent);
+    if (write === void 0 || !isBinaryExpression5(write) || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const left = this.unwrapParens(write.left);
+    const declaration = isIdentifier3(left) ? this.rustDeclaredNode(left) : void 0;
+    return declaration !== void 0 && this.rustDeclaredNode(n) === declaration && this.rust64pSelfMinTernaryKind(tern, declaration) === "oint";
+  }
+  /** ral-64p: while seeding, a `const y = this.sum (..)` / `Math.min|max (..)` local's kind is its initializer's
+   *  combinator kind (rustArithCallKind), before y's own decision is seeded. */
+  rust64pConstArithKind(node) {
+    const u = this.unwrapParens(node);
+    if (u === void 0 || !isIdentifier3(u))
+      return void 0;
+    const d = this.rustDeclaredNode(u);
+    if (d === void 0 || !isVariableDeclaration3(d) || d.initializer === void 0 || (d.parent?.flags & NodeFlags4.Const) === 0)
+      return void 0;
+    const init = this.unwrapParens(d.initializer);
+    return this.rustArithCombinator(init) ? this.rustArithCallKind(init) : void 0;
   }
   /** ral-47d: `rhs` names another nil-declared (`let y: Str = undefined`) string local of the same function. */
   rustNilStrPartner(rhs, declaration, scope) {
@@ -59412,6 +59477,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (isBinaryExpression5(parent) && parent.left === n && parent.operatorToken.kind === SyntaxKind7.EqualsToken) {
       if (parent.parent?.kind !== SyntaxKind7.ExpressionStatement)
         return void 0;
+      if (kind === "oint" && this.rust64pSelfMinTernaryKind(this.unwrapParens(parent.right), this.rustDeclaredNode(n)) === "oint")
+        return "write";
       return this.rustScalarWriteOk(kind, parent.right, 0) ? this.rustLimitCall(parent.right) ? "lwrite" : "write" : void 0;
     }
     if (isBinaryExpression5(parent) && this.isEqualityOp(parent.operatorToken.kind)) {
@@ -59517,6 +59584,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if ((kind === "str" || kind === "ostr") && this.rustInKeyTop(n) !== void 0 && !this.rustTestTierSource(n) && this.rustInKeyInitialised(n))
       return "inbox";
     if (isCallExpression6(parent) && parent.expression !== n && this.rustArithCombinator(parent) && this.rustArithCallKind(parent) !== void 0)
+      return "native";
+    if (kind === "oint" && this.rust65pSelfMinOperand(n))
+      return "native";
+    if ((kind === "int" || kind === "oint") && n.parent?.kind === SyntaxKind7.PrefixUnaryExpression && this.rust65pNegatedIntLocal(n.parent) !== void 0)
       return "native";
     if ((kind === "int" || kind === "num" || kind === "oint" || kind === "onum") && this.rustMathMinMaxValueOperand(n) && this.rustInlineIfMatchInit(this.rustDeclaredNode(n)))
       return "box";
@@ -62228,6 +62299,9 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       }
       return this.rustScalarCompareText(node, true) !== void 0 ? "bool" : void 0;
     }
+    const negated = this.rust65pNegatedIntLocal(node);
+    if (negated !== void 0)
+      return negated.kind;
     if (this.rustScalarLengthRecv(node, true) !== void 0)
       return "int";
     const method = this.rustScalarStrMethod(node, false, true);
@@ -63116,6 +63190,9 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       return void 0;
     const optional = kind.startsWith("o");
     const wrap = (t) => own === kind ? t : optional && own === kind.slice(1) ? `Some(${t})` : void 0;
+    const negated = this.rust65pNegatedIntLocal(node);
+    if (negated !== void 0)
+      return wrap(negated.kind === "int" ? `(-${negated.name})` : `(if let Some(__v) = ${negated.name} { Some(-__v) } else { None })`);
     if (this.rust51kLitModKind(node) !== void 0) {
       if (own !== kind)
         return void 0;
@@ -70601,6 +70678,9 @@ ${idn}}`;
     }
     if (operator !== SyntaxKind7.MinusToken)
       return idn + this.PrefixFixOperators[operator] + this.printNode(operand, 0);
+    const negated = this.rust65pNegatedIntLocal(node);
+    if (negated !== void 0)
+      return idn + (negated.kind === "int" ? `Value::Int(-${negated.name})` : `Value::from((if let Some(__v) = ${negated.name} { Some(-__v) } else { None }))`);
     const operandText = this.printNode(operand, 0);
     return idn + (this.foldNegateLiteral(operandText) ?? this.printRustNativeNegate(operand, operandText) ?? `negate(&${operandText})`);
   }
