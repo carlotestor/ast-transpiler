@@ -80652,7 +80652,7 @@ ${iden}}`;
     const visit = (n) => {
       if (isIdentifier3(n) && this.rustDeclarationOfIdentifier(n)?.kind === SyntaxKind7.Parameter)
         param = true;
-      n.forEachChild?.(visit);
+      n.forEachChild(visit);
     };
     visit(v);
     return param ? void 0 : v;
@@ -80661,7 +80661,7 @@ ${iden}}`;
    *  (a venue override may resolve anything, so it is not this). */
   rustWsBaseCleanUnsubscription(call) {
     const callee = this.rustScalarCallee(call);
-    return callee !== void 0 && isMethodDeclaration5(callee) && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(callee.getSourceFile?.()?.fileName ?? ""));
+    return callee !== void 0 && isMethodDeclaration5(callee) && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(callee.getSourceFile().fileName));
   }
   /** When `site` sits in a method of `cls` with parameters: the parameter bindings of every call of that method
    *  (`this.m (..)`, or `this.spawn (this.m, ..)`), so a hash or value built from a parameter reads each caller's

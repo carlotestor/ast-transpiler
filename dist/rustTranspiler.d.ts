@@ -4162,10 +4162,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     }> | null;
     /** ral-80a: a helper's resolved value kept for the tuple-slot proof only when it is an array literal whose elements name
      *  no parameter of the helper (so reading them outside the caller's bindings reads the same nodes). */
-    rustWsSiteTupleValue(x: any): any;
+    rustWsSiteTupleValue(x: Node | undefined): Node | undefined;
     /** ral-80a: `this.cleanUnsubscription (..)` bound to the base tier's method, whose only resolve is `client.resolve (true, unsubHash)`
      *  (a venue override may resolve anything, so it is not this). */
-    rustWsBaseCleanUnsubscription(call: any): boolean;
+    rustWsBaseCleanUnsubscription(call: CallExpression): boolean;
     /** When `site` sits in a method of `cls` with parameters: the parameter bindings of every call of that method
      *  (`this.m (..)`, or `this.spawn (this.m, ..)`), so a hash or value built from a parameter reads each caller's
      *  argument. Undefined when the method is referenced any other way (a handler table entry) or never called. */
