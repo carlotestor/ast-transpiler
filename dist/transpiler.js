@@ -41541,6 +41541,34 @@ GoTranspiler.prototype.printVariableDeclarationList = function(node, identation)
   }
   return goTernaryJoinUpstreamPrintDeclarationList.call(this, node, identation);
 };
+GoTranspiler.prototype.goTernaryJoinProvisional = function() {
+  return (this.goGetArgTypeComputing?.size ?? 0) > 0;
+};
+var goTernaryJoinSettledParts = GoTranspiler.prototype.goTernaryJoinParts;
+GoTranspiler.prototype.goTernaryJoinParts = function(declaration) {
+  if (declaration === void 0 || !this.goTernaryJoinProvisional() || GO_TERNARY_JOIN_MEMO.has(declaration) || this.goUnwrapParenthesizedNode(declaration.initializer)?.kind !== SyntaxKind5.ConditionalExpression) {
+    return goTernaryJoinSettledParts.call(this, declaration);
+  }
+  const parts = goTernaryJoinSettledParts.call(this, declaration);
+  GO_TERNARY_JOIN_MEMO.delete(declaration);
+  return parts;
+};
+var goTernaryJoinSettledDeclaredType = GoTranspiler.prototype.goDeclaredTypeOfIdentifier;
+GoTranspiler.prototype.goDeclaredTypeOfIdentifier = function(node) {
+  if (!this.goTernaryJoinProvisional() || node?.kind !== SyntaxKind5.Identifier) {
+    return goTernaryJoinSettledDeclaredType.call(this, node);
+  }
+  const declaration = this.checkerOrUndefined()?.getSymbolAtLocation(node)?.valueDeclaration?.resolve();
+  const owner = declaration?.kind === SyntaxKind5.VariableDeclaration && this.goUnwrapParenthesizedNode(declaration.initializer)?.kind === SyntaxKind5.ConditionalExpression ? goTernaryJoinOwner(declaration.initializer) : void 0;
+  if (owner !== declaration || owner === void 0 || this.goDeclaredTypeCache.has(owner) || GO_TERNARY_JOIN_MEMO.has(owner)) {
+    return goTernaryJoinSettledDeclaredType.call(this, node);
+  }
+  const answer = goTernaryJoinSettledDeclaredType.call(this, node);
+  this.goDeclaredTypeCache.delete(owner);
+  this.goLocalStaticTypeCache.delete(owner);
+  this.goLocalSafeVerdicts.delete(owner);
+  return answer;
+};
 
 // src/javaTranspiler.ts
 init_esm_shims();
