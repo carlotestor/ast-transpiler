@@ -20457,6 +20457,220 @@ describe('ral-60p: a pro-tier Object.keys element that is an indexOf needle and 
     });
 });
 
+describe('ral-60n: a null test of a never-null reader container local prints its one answer', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    handleRows (c: any, x: any): any { return x; }\n    safeDict (o: any, k: any, d: Dict = undefined): Dict | undefined { return o; }\n    safeList (o: any, k: any, d: any[] = undefined): any[] | undefined { return o; }\n}\n";
+    const run = (body: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-60n-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        try {
+            t.transpileRustByPath(path.join(root, 'ts/src/base/Exchange.ts'));
+            return t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
+        } finally { fs.rmSync(root, { recursive: true, force: true }); }
+    };
+    // Truth table. The runtime reader `safe_list_k` / `safe_dict_k` (and the generated safeList / safeDict) answers the read
+    // when it is a `Value::Arr` / `Value::Dict`, else the default. With a literal `[]` / `{}` default every read row lands on a
+    // container, so the boxed test `x != Value::Null` was true and `x == Value::Null` false on every row; the new print is
+    // that constant. Rows: [read value, reader kind, boxed held value, old `!= Null`, new print for `!==`].
+    type V = 'Null' | 'Missing' | 'Str' | 'Int' | 'Float' | 'Bool' | 'Arr' | 'Dict';
+    // safe_list_k: `if matches!(v, Value::Arr(_)) { v } else { arg_default(optional_args) }` (safe_dict_k the same with Dict);
+    // the default is the literal `[]` / `{}` the rule requires
+    const reader = (kind: 'list' | 'dict', v: V): V => { const want: V = kind === 'list' ? 'Arr' : 'Dict'; const dflt: V = want; return v === want ? v : dflt; };
+    const rows: V[] = [ 'Null', 'Missing', 'Str', 'Int', 'Float', 'Bool', 'Arr', 'Dict' ];
+    test('truth table: every read row answers the container, so the boxed null test is constant', () => {
+        for (const kind of [ 'list', 'dict' ] as const) {
+            for (const v of rows) {
+                const held = reader(kind, v);
+                const oldNotNull = held !== 'Null';
+                expect([ kind, v, oldNotNull ]).toEqual([ kind, v, true ]);
+                expect([ kind, v, !oldNotNull ]).toEqual([ kind, v, false ]);
+            }
+        }
+    });
+    test('a defaulted safeList local tested !== undefined holds a List and the test prints true', () => {
+        const out = run("    a (message: Dict): any {\n        const fills = this.safeList (message, 'fills', []);\n        if (fills !== undefined) {\n            this.handleRows (undefined, fills);\n        }\n        return 1;\n    }\n");
+        expect(out).toContain('let mut fills: crate::value::List = ');
+        expect(out).toContain('if (true) {');
+        expect(out).not.toContain('fills != Value::Null');
+    });
+    test('a defaulted safeDict local tested === undefined holds a Dict and the test prints false', () => {
+        const out = run("    b (message: Dict): any {\n        const mids = this.safeDict (message, 'mids', {});\n        if (mids === undefined) {\n            return undefined;\n        }\n        const keys = Object.keys (mids);\n        return this.hold (mids['price']) + keys.length;\n    }\n");
+        expect(out).toContain('let mut mids: crate::value::Dict = ');
+        expect(out).toContain('if (false) {');
+    });
+    test('guard: a reader local without a default keeps the optional is_none test', () => {
+        const out = run("    c (message: Dict): any {\n        const d = this.safeDict (message, 'data');\n        if (d === undefined) {\n            return undefined;\n        }\n        return this.hold (d);\n    }\n");
+        expect(out).toContain('d.is_none()');
+        expect(out).not.toContain('if (false)');
+    });
+    test('guard: a non-empty literal default is not taken by this rule', () => {
+        const out = run("    f (message: Dict): any {\n        const filled = this.safeDict (message, 'filled', { 'x': 1 });\n        if (filled !== undefined) {\n            return this.hold (filled['x']);\n        }\n        return 1;\n    }\n");
+        expect(out).not.toContain('if (true)');
+    });
+    test('guard: a rewritten defaulted local keeps a real null test', () => {
+        const out = run("    e (message: Dict, other: Dict): any {\n        let rows = this.safeList (message, 'rows', []);\n        rows = this.safeList (other, 'rows');\n        if (rows !== undefined) {\n            this.handleRows (undefined, rows);\n        }\n        return 1;\n    }\n");
+        expect(out).not.toContain('if (true)');
+    });
+});
+
+describe('ral-60i: a nil-declared optional map from declared Promise<Dict> endpoints used as its own safeDict default', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type List = any[];\nexport default class Exchange {\n    safeDict (o: any, k: any, d: any = undefined): Dict { return o; }\n    keep (o: any): any { return o; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync (path.join (dir, 'ts/src/abstract'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/abstract/venue.ts'), "import Exchange from '../base/Exchange.js';\nimport type { Dict, List } from '../base/Exchange.js';\nexport default abstract class venueApi extends Exchange {\n    publicGetA (params = {}): Promise<Dict> { return this.keep (params); }\n    publicGetB (params = {}): Promise<Dict> { return this.keep (params); }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import venueApi from './abstract/venue.js';\nimport type { Dict, List } from './base/Exchange.js';\nexport default class venue extends venueApi {\n    async m (flag: boolean, params: Dict = {}) {\n        let response: Dict;\n        if (flag) {\n            response = await this.publicGetA (params);\n        } else {\n            response = await this.publicGetB (params);\n        }\n" + body + "    }\n}\n");
+        return path.join (dir, 'ts/src/venue.ts');
+    };
+    test('safeDict (x, k, x) lends x and boxes its own default from the optional map', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-60i-pos', "        const data = this.safeDict (response, 'data', response);\n        return data;\n")).content;
+        expect(out).toContain('let mut response: Option<crate::value::Dict> = None;');
+        expect(out).toContain('.await.into_opt_dict();');
+        expect(out).toContain('self.safe_dict_k(&response, "data", &[response.clone().map_or(Value::Null, Value::Dict)])');
+    });
+    test('the default of another map keeps the local Value', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-60i-neg', "        const other = this.safeDict (params, 'x', response);\n        return other;\n")).content;
+        expect(out).not.toContain('let mut response: Option<crate::value::Dict>');
+    });
+});
+
+describe('ral-60i: an element of a declared Dict[] read at a string-typed variable key', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type List = any[];\nexport default class Exchange {\n    safeString (o: any, k: any, d: any = undefined): string | undefined { return o; }\n    safeList (o: any, k: any, d: any = undefined): List { return o; }\n    safeValue (o: any, k: any, d: any = undefined): any { return o; }\n}\n";
+    const write = (name: string, keyDecl: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, List } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    m (message: Dict) {\n        const rows: Dict[] = this.safeList (message, 'B', []);\n" + keyDecl + "        const out = [];\n        for (let i = 0; i < rows.length; i++) {\n            const entry = rows[i];\n            out.push (this.safeString (entry, 'a'));\n            out.push (this.safeString (entry, key));\n        }\n        return out;\n    }\n}\n");
+        return path.join (dir, 'ts/src/venue.ts');
+    };
+    test('a string-typed key keeps the Dict element typed and lent', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-60i-elem-pos', "        const key = this.safeString (message, 'w', 'wb');\n")).content;
+        expect(out).toContain('let mut entry: crate::value::Dict = ');
+        expect(out).toContain('(&entry, Value::from(key.clone()), &[])');
+    });
+    test('an untyped key keeps the element Value', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-60i-elem-neg', "        const key = this.safeValue (message, 'w');\n")).content;
+        expect(out).not.toContain('let mut entry: crate::value::Dict');
+    });
+});
+
+describe('ral-60i: a nil-assigned declared list used as its own safeList default', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type List = any[];\nexport default class Exchange {\n    safeList (o: any, k: any, d: any = undefined): List { return o; }\n    keep (o: any): any { return o; }\n}\n";
+    const write = (name: string, def: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync (path.join (dir, 'ts/src/abstract'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/abstract/venue.ts'), "import Exchange from '../base/Exchange.js';\nimport type { Dict, List } from '../base/Exchange.js';\nexport default abstract class venueApi extends Exchange {\n    publicGetA (params = {}): Promise<List> { return this.keep (params); }\n    publicGetB (params = {}): Promise<List> { return this.keep (params); }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import venueApi from './abstract/venue.js';\nimport type { Dict, List } from './base/Exchange.js';\nexport default class venue extends venueApi {\n    async m (flag: boolean, params: Dict = {}) {\n        let response = undefined;\n        if (flag) {\n            response = await this.publicGetA (params);\n        } else {\n            response = await this.publicGetB (params);\n        }\n        const rows = this.safeList (response, 'data', " + def + ");\n        return [ rows, response.length ];\n    }\n}\n");
+        return path.join (dir, 'ts/src/venue.ts');
+    };
+    test('the list lends its head and boxes its own default', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-60i-sl-pos', 'response as any')).content;
+        expect(out).toContain('let mut response: crate::value::List = std::sync::Arc::new(Vec::new());');
+        expect(out).toContain('Value::Str("data".into()), &[Value::Arr(response.clone())])');
+        expect(out).toContain('response.len()');
+    });
+    test('a list handed as the default of another read keeps it Value', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-60i-sl-neg', 'params as any')).content;
+        expect(out).not.toContain('let mut response: crate::value::List');
+    });
+});
+
+describe('ral-60k: the first key of a two-key write x[k][\'lit\'] = v on a map bearer takes the insert-key text (whitebit parseDepositWithdrawFees code)', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeDict (o: any, k: any, d: any = undefined): Dict | undefined { return o; }\n    safeCurrencyCode (currencyId: Str, currency: any = undefined): Str { return currencyId; }\n    hold (x: any, y: any = undefined, z: any = undefined): any { return x; }\n    depositWithdrawFee (info: any): Dict { return {}; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    const fees = (reader: string) => "    parse (response: any[], codes: any) {\n        const result: Dict = {};\n        for (let i = 0; i < response.length; i++) {\n            const entry = this.safeDict (response, i);\n            const code = " + reader + " (this.safeString (entry, 'ccy'));\n            if ((code !== undefined) && (codes === undefined || this.hold (code, codes))) {\n                if (this.safeDict (result, code) === undefined) {\n                    result[code] = this.depositWithdrawFee ({});\n                }\n                result[code]['withdraw'] = entry;\n            }\n        }\n        return result;\n    }\n";
+    test('the key is Option<String> and the two-key write enters by its insert-key text', () => {
+        const out = write ('60k-two', fees ('this.safeCurrencyCode'));
+        expect(out).toContain('let mut code: Option<String> = ');
+        expect(out).toContain('result.entry(code.as_deref().unwrap_or("null").to_string()).or_default()');
+        expect(out).not.toContain('stringify_param(&code)');
+    });
+    test('negative: a hold() key stays Value', () => {
+        const out = write ('60k-two-neg', fees ('this.hold'));
+        expect(out).toMatch(/let mut code: Value = /);
+    });
+});
+
+describe('ral-60k: a sibling-block currency code handed to a base call whose result is written back to a Dict local (kucoin fetchBalance currencyCode)', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeDict (o: any, k: any, d: any = undefined): Dict | undefined { return o; }\n    safeList (o: any, k: any, d: any = undefined): any[] | undefined { return o; }\n    safeCurrencyCode (currencyId: Str, currency: any = undefined): Str { return currencyId; }\n    mergeBalanceAccount (result: Dict, code: string, account: Dict): Dict { return result; }\n    parseBalanceHelper (x: any): Dict { return {}; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    const body = (decl: string) => "    parse (accounts: Dict[], isIsolated: boolean) {\n        let result" + decl + " = {};\n        if (isIsolated) {\n            for (let i = 0; i < accounts.length; i++) {\n                const currencyEntry = this.safeDict (accounts, i, {});\n                const currencyId = this.safeString (currencyEntry, 'currency');\n                const currencyCode = this.safeCurrencyCode (currencyId);\n                if (currencyCode !== undefined) {\n                    result = this.mergeBalanceAccount (result, currencyCode, this.parseBalanceHelper (currencyEntry));\n                }\n            }\n        } else {\n            for (let i = 0; i < accounts.length; i++) {\n                const currencyEntry = this.safeDict (accounts, i, {});\n                const currencyId = this.safeString (currencyEntry, 'currency');\n                const currencyCode = this.safeCurrencyCode (currencyId);\n                if (currencyCode !== undefined) {\n                    result[currencyCode] = this.parseBalanceHelper (currencyEntry);\n                }\n            }\n        }\n        return result;\n    }\n";
+    test('both bindings are Option<String>; the base-call argument boxes', () => {
+        const out = write ('60k-mba', body (': Dict'));
+        expect(out).not.toContain('let mut currencyCode: Value = ');
+        expect(out).toContain('result = self.mergeBalanceAccount(Value::Dict(result), currencyCode.map(Value::from).unwrap_or(Value::Null), ');
+    });
+    test('negative: an unannotated written local keeps the code a Value', () => {
+        const out = write ('60k-mba-neg', body (''));
+        expect(out).toContain('let mut currencyCode: Value = ');
+    });
+});
+
+describe('ral-60e: the string id of a typed currency record is an optional string local', () => {
+    const build = (name: string, idType: string) => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-60e-' + name + '-'));
+        fs.mkdirSync (path.join (root, 'ts/src/base'), { recursive: true });
+        const file = path.join (root, 'ts/src/base/Exchange.ts');
+        fs.writeFileSync (file, 'type Str = string | undefined;\n'
+            + 'type Dict = any;\n'
+            + 'interface CurrencyInterface { id: ' + idType + '; code: Str; }\n'
+            + 'export default class Exchange {\n'
+            + '    currencies: Dict = {};\n'
+            + '    currency (code: Str): CurrencyInterface {\n'
+            + '        const currencies = this.currencies;\n'
+            + '        if (code in currencies) {\n'
+            + '            return currencies[code];\n'
+            + '        }\n'
+            + "        throw new Error ('no currency');\n"
+            + '    }\n'
+            + '    fetchIt (code: Str): any {\n'
+            + '        const currency = this.currency (code);\n'
+            + "        const currencyId = currency['id'];\n"
+            + "        const request: Dict = { 'coin': currencyId };\n"
+            + '        return request;\n'
+            + '    }\n'
+            + '}\n');
+        return new Transpiler({ 'verbose': false }).transpileRustByPath (file).content;
+    };
+    test('positive: `currency[\'id\']` declared string reads the record as Option<String>', () => {
+        expect(build ('a', 'string')).toContain('let mut currencyId: Option<String> = crate::value::KeyRead::key_read(&&currency, "id").as_str().map(str::to_owned);');
+    });
+    test('guard: an id not declared string stays a Value', () => {
+        expect(build ('b', 'any')).toContain('let mut currencyId: Value = crate::value::KeyRead::key_read(&&currency, "id");');
+    });
+});
+
+describe('ral-60x: a Str parameter whose caller passes `this.safeString (this.<field>, ..)` prints Option<&str>', () => {
+    test('the `this.options` argument no longer keeps the slot Value; the local written from it is typed', () => {
+        const dir = path.join (rustFixtureRoot, 'ral60x-strparam');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    options: Dict = {};\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    makeId (_accountId: Str): string {\n        let accountId: string = '';\n        if ((_accountId !== undefined) && (_accountId !== '')) {\n            accountId = _accountId;\n        }\n        return 'x-' + accountId;\n    }\n    first (): string {\n        return this.makeId (this.safeString (this.options, 'accountId'));\n    }\n    second (acct: Str): string {\n        return this.makeId (acct);\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('_accountId: Option<&str>');
+        expect(out).toContain('let mut accountId: Option<String> = ');
+        expect(out).not.toMatch(/let mut accountId: Value/);
+    });
+});
+
 describe('ral-61p: a handleOption local typed from its literal default argument', () => {
     const base = "export interface Dict { [key: string]: any }\nexport type Int = number | undefined;\nexport default class Exchange {\n    options: Dict = {};\n    handleOption (methodName: string, optionName: string, defaultValue: any = undefined) { return this.options[optionName] ?? defaultValue; }\n    keep (o: any): any { return o; }\n}\n";
     const write = (name: string, body: string) => {
