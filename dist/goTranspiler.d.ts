@@ -1968,3 +1968,13 @@ export interface GoTranspiler {
     goBaseCacheField(node: any): string | undefined;
     goBaseCacheInitText(node: any): string | undefined;
 }
+export interface GoTranspiler {
+    goTernaryJoinParts(declaration: any): {
+        goType: string;
+        derefTrue: boolean;
+        derefFalse: boolean;
+    } | undefined;
+    goTernaryJoinArmType(node: any): string | undefined;
+    goTernaryJoinConditionDefines(condition: any, name: string, outcome: boolean): boolean;
+    goTernaryJoinDeclaration(statement: any, declaration: any, identation: number): string | undefined;
+}

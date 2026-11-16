@@ -41015,6 +41015,168 @@ GoTranspiler.prototype.goBaseCacheInitText = function(node) {
   }
   return `${this.printNode(node.left, 0)} = ${this.goWsCacheEmptyLiteral(node.left) ?? "map[string]any"}{}`;
 };
+var GO_TERNARY_JOIN_TYPES = [
+  "string",
+  "int64",
+  "float64",
+  "bool",
+  "int",
+  "map[string]any",
+  "[]any",
+  "[]string",
+  "*string",
+  "*int64",
+  "*float64",
+  "*bool"
+];
+var GO_TERNARY_POINTEE = { "*string": "string", "*int64": "int64", "*float64": "float64", "*bool": "bool" };
+function goTernaryJoinOwner(node) {
+  let current = node;
+  while (current?.parent?.kind === SyntaxKind5.ParenthesizedExpression) {
+    current = current.parent;
+  }
+  const declaration = current?.parent;
+  return declaration?.kind === SyntaxKind5.VariableDeclaration && declaration.initializer === current && declaration.name?.kind === SyntaxKind5.Identifier && declaration.parent?.parent?.kind === SyntaxKind5.FirstStatement && declaration.parent.declarations?.length === 1 ? declaration : void 0;
+}
+GoTranspiler.prototype.goTernaryJoinArmType = function(node) {
+  const arm = this.goUnwrapParenthesizedNode(node);
+  if (arm?.kind === SyntaxKind5.NullKeyword || arm?.kind === SyntaxKind5.Identifier && arm.text === "undefined") {
+    return "nil";
+  }
+  if (arm?.kind === SyntaxKind5.NumericLiteral || this.goIsSignedNumericLiteral(arm)) {
+    const kind = this.goNumericLiteralKind(arm);
+    return kind === "int" ? this.goLiteralFitsKind(arm, "int") ? "const-int" : void 0 : kind === "float64" ? "const-float" : void 0;
+  }
+  if (arm?.kind === SyntaxKind5.ConditionalExpression || arm?.kind === SyntaxKind5.AwaitExpression) {
+    return void 0;
+  }
+  const printed = this.printNode(arm, 0);
+  if (printed.includes("\n")) {
+    return void 0;
+  }
+  const goType = this.goTypeOfInitializer(arm, printed) ?? this.goOperandStaticType(arm, printed);
+  return goType === "const-int" || goType === "const-float" || GO_TERNARY_JOIN_TYPES.indexOf(goType) >= 0 ? goType : void 0;
+};
+GoTranspiler.prototype.goTernaryJoinConditionDefines = function(condition, name, outcome) {
+  const node = this.goUnwrapParenthesizedNode(condition);
+  if (node?.kind === SyntaxKind5.PrefixUnaryExpression && node.operator === SyntaxKind5.ExclamationToken) {
+    return this.goTernaryJoinConditionDefines(node.operand, name, !outcome);
+  }
+  if (node?.kind !== SyntaxKind5.BinaryExpression) {
+    return false;
+  }
+  const op = node.operatorToken.kind;
+  if (op === SyntaxKind5.AmpersandAmpersandToken && outcome) {
+    return this.goTernaryJoinConditionDefines(node.left, name, true) || this.goTernaryJoinConditionDefines(node.right, name, true);
+  }
+  if (op === SyntaxKind5.BarBarToken && !outcome) {
+    return this.goTernaryJoinConditionDefines(node.left, name, false) || this.goTernaryJoinConditionDefines(node.right, name, false);
+  }
+  const equal = op === SyntaxKind5.EqualsEqualsToken || op === SyntaxKind5.EqualsEqualsEqualsToken;
+  const notEqual = op === SyntaxKind5.ExclamationEqualsToken || op === SyntaxKind5.ExclamationEqualsEqualsToken;
+  if (!equal && !notEqual) {
+    return false;
+  }
+  const isNil = (n) => {
+    const u = this.goUnwrapParenthesizedNode(n);
+    return u?.kind === SyntaxKind5.NullKeyword || u?.kind === SyntaxKind5.Identifier && u.text === "undefined";
+  };
+  const isName = (n) => {
+    const u = this.goUnwrapParenthesizedNode(n);
+    return u?.kind === SyntaxKind5.Identifier && u.text === name;
+  };
+  if (!(isName(node.left) && isNil(node.right) || isName(node.right) && isNil(node.left))) {
+    return false;
+  }
+  return notEqual ? outcome : !outcome;
+};
+GoTranspiler.prototype.goTernaryJoinParts = function(declaration) {
+  const ternary = this.goUnwrapParenthesizedNode(declaration?.initializer);
+  if (ternary?.kind !== SyntaxKind5.ConditionalExpression) {
+    return void 0;
+  }
+  const whenTrue = this.goTernaryJoinArmType(ternary.whenTrue);
+  const whenFalse = this.goTernaryJoinArmType(ternary.whenFalse);
+  if (whenTrue === void 0 || whenFalse === void 0 || this.goWithExprDepth(1, () => this.printCondition(ternary.condition, 0)).includes("\n")) {
+    return void 0;
+  }
+  const plain = (goType) => ({ goType, derefTrue: false, derefFalse: false });
+  if (whenTrue === whenFalse) {
+    return whenTrue.startsWith("const-") || whenTrue === "nil" ? void 0 : plain(whenTrue);
+  }
+  if (whenTrue === "nil" || whenFalse === "nil") {
+    return void 0;
+  }
+  const constantFits = (constant, goType) => constant === "const-int" && (goType === "int64" || goType === "int") || constant === "const-float" && goType === "float64";
+  if (constantFits(whenTrue, whenFalse)) {
+    return plain(whenFalse);
+  }
+  if (constantFits(whenFalse, whenTrue)) {
+    return plain(whenTrue);
+  }
+  const derefs = (armNode, pointer, outcome, other) => {
+    const pointee = GO_TERNARY_POINTEE[pointer];
+    const arm = this.goUnwrapParenthesizedNode(armNode);
+    if (pointee === void 0 || arm?.kind !== SyntaxKind5.Identifier || !(other === pointee || constantFits(other, pointee) || pointee === "string" && other === "string")) {
+      return void 0;
+    }
+    return this.goTernaryJoinConditionDefines(ternary.condition, arm.text, outcome) ? pointee : void 0;
+  };
+  const trueValue = derefs(ternary.whenTrue, whenTrue, true, whenFalse);
+  if (trueValue !== void 0) {
+    return { goType: trueValue, derefTrue: true, derefFalse: false };
+  }
+  const falseValue = derefs(ternary.whenFalse, whenFalse, false, whenTrue);
+  if (falseValue !== void 0) {
+    return { goType: falseValue, derefTrue: false, derefFalse: true };
+  }
+  return void 0;
+};
+var goTernaryJoinUpstreamTypeOfInitializer = GoTranspiler.prototype.goTypeOfInitializer;
+GoTranspiler.prototype.goTypeOfInitializer = function(initializer, printedValue) {
+  const known = goTernaryJoinUpstreamTypeOfInitializer.call(this, initializer, printedValue);
+  if (known !== void 0) {
+    return known;
+  }
+  const declaration = goTernaryJoinOwner(initializer);
+  return declaration === void 0 ? void 0 : this.goTernaryJoinParts(declaration)?.goType;
+};
+GoTranspiler.prototype.goTernaryJoinDeclaration = function(statement, declaration, identation) {
+  if (statement?.parent?.kind !== SyntaxKind5.FirstStatement || statement.declarations?.length !== 1 || goTernaryJoinOwner(declaration.initializer) !== declaration) {
+    return void 0;
+  }
+  const parts = this.goTernaryJoinParts(declaration);
+  if (parts === void 0 || this.getGoLocalType(declaration, this.printNode(declaration.initializer, identation)) !== parts.goType) {
+    return void 0;
+  }
+  const ternary = this.goUnwrapParenthesizedNode(declaration.initializer);
+  const condition = this.goWithExprDepth(1, () => this.printCondition(ternary.condition, 0));
+  const arm = (node, deref) => {
+    const printed = this.goPrintTernaryBranch(node, 1).trim();
+    return deref ? "*" + printed : printed;
+  };
+  const whenTrue = arm(ternary.whenTrue, parts.derefTrue);
+  const whenFalse = arm(ternary.whenFalse, parts.derefFalse);
+  const name = this.printNode(declaration.name, 0);
+  const iden = this.getIden(identation);
+  return `${iden}var ${name} ${parts.goType}
+${iden}if ${this.goStripControlClauseParens(condition)} {
+${iden}	${name} = ${whenTrue}
+${iden}} else {
+${iden}	${name} = ${whenFalse}
+${iden}}`;
+};
+var goTernaryJoinUpstreamPrintDeclarationList = GoTranspiler.prototype.printVariableDeclarationList;
+GoTranspiler.prototype.printVariableDeclarationList = function(node, identation) {
+  const declaration = node?.declarations?.[0];
+  if (declaration?.initializer !== void 0 && declaration.name?.kind === SyntaxKind5.Identifier) {
+    const joined = this.goTernaryJoinDeclaration(node, declaration, identation);
+    if (joined !== void 0) {
+      return joined;
+    }
+  }
+  return goTernaryJoinUpstreamPrintDeclarationList.call(this, node, identation);
+};
 
 // src/javaTranspiler.ts
 init_esm_shims();
