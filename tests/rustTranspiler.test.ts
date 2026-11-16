@@ -21407,3 +21407,23 @@ describe('ral-63i: an empty-declared endpoint response as the arm of a ternary w
         expect(out).not.toContain('let mut response: Option<crate::value::Dict>');
     });
 });
+
+describe('ral-63i: a Dict[] row stored as the element of an array literal written whole into a map slot', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeList (o: any, k: any, d: any[] = undefined): any[] | undefined { return o; }\n    hold (x: any): any { return x; }\n}\n";
+    const write = (name: string, store: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    bucket (data: Dict) {\n        const buckets: Dict = {};\n        const rows: Dict[] = this.safeList (data, 'rows', []);\n        for (let i = 0; i < rows.length; i++) {\n            const row = rows[i];\n            const slug = this.safeString (row, 'slug');\n            if (slug !== undefined) {\n" + store + "\n            }\n        }\n        return buckets;\n    }\n}\n");
+        return path.join (dir, 'ts/src/venue.ts');
+    };
+    test('the row holds the shared map and boxes once inside the literal', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-63i-lit-pos', '                buckets[slug] = [ row ];')).content;
+        expect(out).toContain('let mut row: crate::value::Dict = ');
+        expect(out).toContain('vec![Value::Dict(row)]');
+    });
+    test('a literal handed to a call slot keeps the row Value', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-63i-lit-neg', '                this.hold ([ row ]);')).content;
+        expect(out).not.toContain('let mut row: crate::value::Dict');
+    });
+});

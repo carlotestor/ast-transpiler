@@ -23112,6 +23112,9 @@ export class RustTranspiler extends BaseTranspiler {
         const watched = watchedKind === 'dict' || watchedKind === 'list';
         if (!watched && !this.rustDictElementSource(init) && !this.rustListElementSource(init) || up === undefined || this.rustScalarInNestedWrite(n, true)) return false;
         if (up.kind === SyntaxKind.PropertyAssignment) return up.initializer === n;
+        // ral-63i: an element of an array literal that is the whole right side of `x = [..]` / `m[k] = [..]` or a base
+        // safeList* default (rust62nListLiteralSink): the literal boxes each element, so the row enters as the shared map
+        if (isArrayLiteralExpression(up) && this.rustDictElementSource(init) && this.rust62nListLiteralSink(up)) return true;
         // `rows.push (row)` into another local list: the list keeps its own type, the element enters as the shared map
         if (isCallExpression(up) && isPropertyAccessExpression(up.expression) && isIdentifier(up.expression.expression) && up.arguments.length === 1 && up.arguments[0] === n
             && String(up.expression.name.text) === 'push') return !this.rustIdentifierRefersToDeclaration(up.expression.expression, this.rustDeclarationOfIdentifier(n) as any);
