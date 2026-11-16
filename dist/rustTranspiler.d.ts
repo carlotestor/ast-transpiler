@@ -2024,7 +2024,6 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustTypedIsAsync(node: any): boolean;
     rustTypedBody(node: any, typed: any, identation: number, inner: string): string;
     printTypedUnifiedCall(node: any): string | undefined;
-    printTypedUnifiedCallUnlifted(node: any): string | undefined;
     /** `await this.loadMarkets ();` as its own statement (the value is dropped). */
     rustTypedCallIsDiscarded(node: any): boolean;
     private static readonly RUST_MARKET_STR_FIELDS;
@@ -2251,19 +2250,33 @@ export declare class RustTranspiler extends BaseTranspiler {
     static cloneHelperWriteValues(text: string): string;
     private static rustBalancedClose;
     private static rustSplitTopLevel;
-    printCallExpression(node: any, identation: any): string;
+    printCallHead(node: any, parsedExpression: string, parsedArgs: string): string;
     /** First parameter of a venue override of a lent `DerivedExchange` slot (same arity as the slot): `impl Into<crate::Value>`. */
     rustLentSlotParam(param: any): boolean;
+    /** Parameters a method prints: a sync venue override of a `DerivedExchange` slot drops a trailing run of optional
+     *  parameters its body never names when that leaves exactly the slot's arity (foxbit `parseTransaction (t, currency,
+     *  since, limit)`): the override then matches the slot and is printed once, inside the trait impl. */
+    rustPrintedParams(method: any): any[];
     /** A venue (not base-tier) method overriding a lent slot with the slot's arity. */
     rustLentSlotOverride(method: any): boolean;
     /** A sync venue method overriding a `DerivedExchange` slot with the slot's arity (its body may sit in the trait impl). */
     rustSlotOverrideBody(method: any): boolean;
     /** File of the base-tier class above the venue override `method` when it declares `name` (its base trait has the method). */
     rustBaseTierDeclarer(method: any, name: string): string | undefined;
-    /** `this.m(..)` to the calling file's own override of a lent slot: that override lives only in the
-     *  `DerivedExchange` impl, so the call names the trait (the base method of the same name takes a `Value`). */
-    rustLentSlotCallText(node: any, text: string): string;
-    printCallExpressionUnlifted(node: any, identation: any): string;
+    /** Trait path of a `this.m(..)` / ws `super.m(..)` call whose callee only one trait reaches unambiguously, from the AST:
+     *  the calling file's own lent slot override lives only in the `DerivedExchange` impl (the base method of the same
+     *  name takes a `Value`); inside any slot override (printed in the trait impl, closures included) both traits are in
+     *  scope, so a base slot or another venue override is named by its base trait (what the inherent body resolved to;
+     *  its preamble reaches the override). A ws `super.m(..)` to the REST parent's lifted override goes through the
+     *  trait on the parent core (`receiver` 'parent'). */
+    rustSlotCallPath(node: any): {
+        path: string;
+        snake: string;
+        receiver: 'self' | 'parent';
+    } | undefined;
+    /** The whole call printed through its trait path (`rustSlotCallPath`), or undefined when method syntax stays. */
+    rustSlotCallHead(node: any, args: string): string | undefined;
+    printCallExpression(node: any, identation: any): string;
     printFreeFnDefaultArgsCall(node: any, identation: any): string | undefined;
     printDynamicSelfRead(node: any): string | undefined;
     printDynamicSelfCall(node: any, identation: any): string | undefined;
