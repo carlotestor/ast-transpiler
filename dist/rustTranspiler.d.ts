@@ -3069,6 +3069,13 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  value of a ws `client.resolve|reject|send (m, ..)`: each takes the boxed `Value` by value, so the map's last
      *  use moves into `Value::Map(m)`, exactly the shared map the boxed local handed over. */
     rustLiteralMoveSlot(n: any): boolean;
+    /** ral-73a: `y = x` (statement), y another plain `let` of the same function declared `undefined` (no initializer value) and
+     *  annotated `NullableDict` / `Dict`: x moves whole into y's `Option<Dict>` / `Value` box (`Value::Map(x)`, the box the helper
+     *  form made at the write; no copy) at x's last use. */
+    rust73aNilDictAliasWrite(n: any): boolean;
+    /** ral-73a: `this.f = x` (statement, a direct property of `this`, outside the test tier): the field is a `Value` slot that
+     *  stores the reference, so a native map moves into it whole as `Value::Map(x)` at x's last use. */
+    rust73aThisFieldStore(n: any): boolean;
     /** `client.resolve|reject (x, ..)` on a ws handle, x the settled value. */
     rustWsSettleMove(n: any): boolean;
     /** A prediction venue: `ts/src/prediction/<id>.ts` builds nested request maps in one method. */
@@ -4194,6 +4201,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustWsSubscriptionWriteValue(n: any): boolean;
     private rustBuiltLists;
     rustBuiltListLocal(declaration: any): boolean;
+    /** ral-73a: `this.f[..] = x` / `m[k] = x` (m another local or parameter, k a literal or a plain identifier other than x) at
+     *  x's last use, or at its last use on its path (rustGuardedBranchLastUse: every later use sits in the else branch of the
+     *  nearest if whose then-branch holds the store). */
+    rust73aStoreLastUse(place: any, n: any, declaration: any): boolean;
     /** ral-56s: a base `this.arrayConcat (a, b)` (two operands, non-test tier): always a `Value::Arr`. */
     rustBuiltListConcatInit(init: any): boolean;
     /** ral-56s: `t = x` (statement) where `t` is a nil-declared (`let t: T = undefined` / `let t;`) local of the same function

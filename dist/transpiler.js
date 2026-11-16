@@ -72575,6 +72575,41 @@ ${iden}}`;
       return up.arguments.length === 1 && this.rustCallsRuntimeHandle(up);
     return (method === "resolve" || method === "reject") && this.rustWsSettleCall(up);
   }
+  /** ral-73a: `y = x` (statement), y another plain `let` of the same function declared `undefined` (no initializer value) and
+   *  annotated `NullableDict` / `Dict`: x moves whole into y's `Option<Dict>` / `Value` box (`Value::Map(x)`, the box the helper
+   *  form made at the write; no copy) at x's last use. */
+  rust73aNilDictAliasWrite(n) {
+    const up = n?.parent;
+    if (!isBinaryExpression5(up) || up.right !== n || up.operatorToken.kind !== SyntaxKind7.EqualsToken || up.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const left = up.left;
+    if (!isIdentifier3(left) || String(left.text) === String(n.text) || this.rustTestTierSource(up))
+      return false;
+    const target = this.rustDeclarationOfIdentifier(left);
+    if (target === void 0 || !isVariableDeclaration3(target) || target.name === left || !isIdentifier3(target.name))
+      return false;
+    if (this.rustEnclosingFunction(target) !== this.rustEnclosingFunction(up))
+      return false;
+    const list = target.parent;
+    if (list?.kind !== SyntaxKind7.VariableDeclarationList || (list.flags & NodeFlags4.Const) !== 0 || list.declarations?.length !== 1)
+      return false;
+    const init = this.rustSkipWrappers(target.initializer);
+    if (init !== void 0 && this.literalKindOfNode(init) !== "null")
+      return false;
+    const type = this.typeOfNodeIfAny(target.name);
+    if (type === void 0)
+      return false;
+    const parts = type.flags & TypeFlags6.Union ? (typeParts(type) ?? []).filter((p) => !this.rustTypeIsNullish(p)) : [type];
+    return parts.length === 1 && this.isProvenMapType(parts[0]);
+  }
+  /** ral-73a: `this.f = x` (statement, a direct property of `this`, outside the test tier): the field is a `Value` slot that
+   *  stores the reference, so a native map moves into it whole as `Value::Map(x)` at x's last use. */
+  rust73aThisFieldStore(n) {
+    const up = n?.parent;
+    if (!isBinaryExpression5(up) || up.right !== n || up.operatorToken.kind !== SyntaxKind7.EqualsToken || up.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    return isPropertyAccessExpression3(up.left) && up.left.expression.kind === SyntaxKind7.ThisKeyword && !this.rustTestTierSource(up);
+  }
   /** `client.resolve|reject (x, ..)` on a ws handle, x the settled value. */
   rustWsSettleMove(n) {
     const up = n?.parent;
@@ -72701,6 +72736,14 @@ ${iden}}`;
         moveEscapes.push(n);
         return true;
       }
+      if (!produced && !prediction && this.rust73aNilDictAliasWrite(n)) {
+        moveEscapes.push(n);
+        return true;
+      }
+      if (!produced && this.rust73aThisFieldStore(n)) {
+        moveEscapes.push(n);
+        return true;
+      }
       return false;
     });
     const siblings = this.literalSiblingBindings;
@@ -72720,7 +72763,7 @@ ${iden}}`;
     if (siblings > 0 && elementUses === 0 && !siblingMove)
       return false;
     if (moveEscapes.length > 0) {
-      if (moveEscapes.length > 1 || escapes.length > 0 || rebuilds > 0 || widened && !siblingMove && !this.rustWsSettleMove(moveEscapes[0]) || enumUses > 0 || prediction || !this.rustLocalLastUse(moveEscapes[0], declaration) || !this.rustBoxLineOk(moveEscapes[0]))
+      if (moveEscapes.length > 1 || escapes.length > 0 || rebuilds > 0 || widened && !siblingMove && !this.rustWsSettleMove(moveEscapes[0]) && !this.rust73aThisFieldStore(moveEscapes[0]) || enumUses > 0 || prediction && !this.rust73aThisFieldStore(moveEscapes[0]) || !this.rustLocalLastUse(moveEscapes[0], declaration) || !this.rustBoxLineOk(moveEscapes[0]))
         return false;
       this.rustLiteralMoves.add(moveEscapes[0]);
     }
@@ -75273,6 +75316,8 @@ ${iden}}`;
       return void 0;
     if (this.rustEnclosingFunction(source) !== this.rustEnclosingFunction(declaration))
       return void 0;
+    if (this.rustDictLocalIsTyped(source) && this.rustLiteralMoves.has(rhs))
+      return source;
     if (this.rustNilLocalKind(source) !== void 0 || this.rustScalarLocalKind(source) !== void 0 || this.rustBorrowedLocalKind(source) !== void 0 || this.rustDictLocalIsTyped(source) || this.rustVecLocalIsTyped(source) || this.rustMarketLocalKind(source) !== false || this.rustOptListLocal(source) || this.rustNilMapLocal(source))
       return void 0;
     return source;
@@ -75388,6 +75433,8 @@ ${iden}}`;
     const mapSource = this.rust67cMapLocalSource(rhs, this.rustNilMapOf(left));
     if (mapSource !== void 0) {
       const s = super.transformIdentifier(rhs, this.ReservedKeywordsReplacements[rhs.text] ?? rhs.text);
+      if (this.rustLiteralMoves.has(rhs) && this.rustDictLocalIsTyped(mapSource))
+        return `${name} = Some(crate::value::Dict::new(${s}))`;
       return `${name} = ${this.rustLocalLastUse(rhs, mapSource) ? s : `${s}.clone()`}.into_opt_dict()`;
     }
     if (this.rust67cNilMapExtendWrite(left, this.rustNilMapOf(left)))
@@ -81263,6 +81310,11 @@ ${iden}}`;
           handOffs++;
           return true;
         }
+        if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && (isElementAccessExpression4(up.left) || isPropertyAccessExpression3(up.left)) && short(n) && this.rust73aStoreLastUse(up.left, n, declaration)) {
+          boxes.push([n, "move"]);
+          handOffs++;
+          return true;
+        }
         if (up?.kind === SyntaxKind7.PropertyAssignment && up.initializer === n && short(n) && this.rustBuiltListFrozenAfter(n, declaration, name)) {
           boxes.push([n, "clone"]);
           handOffs++;
@@ -81306,6 +81358,44 @@ ${iden}}`;
       this.rustLentListBoxes.set(n, form);
     this.rustBuiltLists.add(declaration);
     return true;
+  }
+  /** ral-73a: `this.f[..] = x` / `m[k] = x` (m another local or parameter, k a literal or a plain identifier other than x) at
+   *  x's last use, or at its last use on its path (rustGuardedBranchLastUse: every later use sits in the else branch of the
+   *  nearest if whose then-branch holds the store). */
+  rust73aStoreLastUse(place, n, declaration) {
+    if (this.rustTestTierSource(place))
+      return false;
+    const name = String(n.text);
+    let mentions = false;
+    const visit = (m) => {
+      if (mentions)
+        return;
+      if (isIdentifier3(m) && String(m.text) === name) {
+        mentions = true;
+        return;
+      }
+      m.forEachChild?.(visit);
+    };
+    visit(place);
+    if (mentions)
+      return false;
+    if (!this.rustThisRootedPlace(place)) {
+      const recv = place.expression;
+      if (!isIdentifier3(recv))
+        return false;
+      const d = this.rustDeclarationOfIdentifier(recv);
+      if (d === void 0 || d === recv || d.name === recv || !(isVariableDeclaration3(d) || d.kind === SyntaxKind7.Parameter))
+        return false;
+      if (isElementAccessExpression4(place)) {
+        const key = this.rustSkipWrappers(place.argumentExpression);
+        if (!isStringLiteralLikeNode4(key) && !isIdentifier3(key))
+          return false;
+      }
+    }
+    if (this.rustLocalLastUse(n, declaration))
+      return true;
+    const guard = findAncestor(n, (a) => a.kind === SyntaxKind7.IfStatement || isFunctionLike(a));
+    return guard !== void 0 && guard.kind === SyntaxKind7.IfStatement && this.rustGuardedBranchLastUse(n, declaration, guard);
   }
   /** ral-56s: a base `this.arrayConcat (a, b)` (two operands, non-test tier): always a `Value::Arr`. */
   rustBuiltListConcatInit(init) {
