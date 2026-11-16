@@ -1996,3 +1996,6 @@ export interface GoTranspiler {
     goTernaryJoinConditionDefines(condition: any, name: string, outcome: boolean): boolean;
     goTernaryJoinDeclaration(statement: any, declaration: any, identation: number): string | undefined;
 }
+export interface GoTranspiler {
+    goOhlcvsReadCacheType(declaration: any): string | undefined;
+}
