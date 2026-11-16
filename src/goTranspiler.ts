@@ -34138,38 +34138,18 @@ GoTranspiler.prototype.goTypeOfInitializer = function (initializer, printedValue
     const scope = this.goEnclosingFunction(parent);
     return ((scope !== undefined) && !ral84g6NameBacksIn(this, scope, target.text)) ? GO_SAFE_DICT_LOCAL_TYPE : undefined;
 };
-// (4) a map local (copy of a proven map) whose other writes are `x = this.omit (x | m, ..)` or element 1
-//     of a base params-tuple helper `[ v, x ] = this.handleX (.., x | m, ..)`: omit of a map is a fresh map,
-//     and every base return path of those helpers hands back the params argument, its omit or an extend,
-//     so the element is a map box; the element-1 printer reads it through MapTyped (identity on a map).
+// (4) a map local (copy of a proven map) whose other writes are `x = this.omit (x | m, ..)`: omit of a map is a
+//     fresh map, so every value the local holds is a map.
 function ral84g6MapWriteIsMap(goTranspiler: GoTranspiler, declaration, n, parent): boolean {
-    const isSelfOrMap = (arg) => (arg?.kind === SyntaxKind.Identifier)
+    // only `x = this.omit (x | m, ..)`: a params-tuple element write would print MapTyped(h[1]) at the write (a counted
+    // conversion), so those locals keep the box
+    if ((parent?.kind !== SyntaxKind.BinaryExpression) || (parent.left !== n) || (parent.operatorToken?.kind !== SyntaxKind.EqualsToken)) {
+        return false;
+    }
+    const write = ral84g6OmitCall(parent.right);
+    const arg: any = write?.arguments[0];
+    return (arg?.kind === SyntaxKind.Identifier)
         && ((ccxtGoParamDeclarationOf(goTranspiler, arg) === declaration) || ral84g6OmitArgIsMap(goTranspiler, arg));
-    if ((parent?.kind === SyntaxKind.BinaryExpression) && (parent.left === n) && (parent.operatorToken?.kind === SyntaxKind.EqualsToken)) {
-        const write = ral84g6OmitCall(parent.right);
-        return (write !== undefined) && isSelfOrMap(write.arguments[0]);
-    }
-    const assignment: any = parent?.parent;
-    if ((parent?.kind !== SyntaxKind.ArrayLiteralExpression) || (assignment?.kind !== SyntaxKind.BinaryExpression)
-        || (assignment.left !== parent) || (assignment.operatorToken?.kind !== SyntaxKind.EqualsToken)
-        || (parent.elements.length !== 2) || (parent.elements.indexOf(n) !== 1)) {
-        return false;
-    }
-    const call: any = assignment.right;
-    const callee: any = call?.expression;
-    if ((call?.kind !== SyntaxKind.CallExpression) || (call.questionDotToken !== undefined)
-        || (callee?.kind !== SyntaxKind.PropertyAccessExpression) || (callee.expression?.kind !== SyntaxKind.ThisKeyword)) {
-        return false;
-    }
-    const slot = CCXT_GO_ELEMENT_1_PARAMS_SLOT[String(callee.name?.text ?? '')];
-    let signature: any;
-    try {
-        signature = goTranspiler.getChecker().getResolvedSignature(call)?.declaration?.resolve();
-    } catch (e) {
-        return false;
-    }
-    return (slot !== undefined) && CCXT_GO_ELEMENT_1_BASE_FILE.test(signature?.getSourceFile?.()?.fileName ?? '')
-        && isSelfOrMap(call.arguments[slot]);
 }
 const ral84g6ShippedLocalIsSafeToType = GoTranspiler.prototype.goLocalIsSafeToType;
 GoTranspiler.prototype.goLocalIsSafeToType = function (scope, declaration, varName: string, goType: string, stringWriteProven = false): boolean {
