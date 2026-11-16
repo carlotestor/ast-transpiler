@@ -21508,6 +21508,10 @@ export class RustTranspiler extends BaseTranspiler {
             // `Promise<Dict>` endpoint) whose target is a typed reuse map: the optional map hands its map over
             // (`x.clone().unwrap_or_default()`), the empty map for `None` exactly as the boxed `x.clone().into_dict()` did
             if (nilDeclared && from === 'dict' && this.rustEndpointAliasSourceUse(n, declaration)) return ++reads > 0;
+            // ral-62i: `y = x` (statement) of a never-null defaulted list reader local (ral-60n) into a built list local of the
+            // same function: the List handle moves (or is shared at a later read) into the typed target, which took
+            // `x.into_list()` of the very `Value::Arr` the boxed local held
+            if (neverNullInit && from === 'list' && this.rustNnListHandOff(n, declaration)) return ++reads > 0;
             // ral-40h: `const|let y = x` of a container local (phase 1): the alias takes the container whole
             // ral-53n: the initializer / a whole write of a never-null alias of this kind is lent (`Value::from(&x)` shares the Arc)
             if (!nilDeclared && (from === 'dict' || from === 'list') && this.rustNnAliasSourceUse(n, from)) return ++reads > 0;
@@ -28316,11 +28320,56 @@ export class RustTranspiler extends BaseTranspiler {
         const declaration: any = this.rustDeclarationOfIdentifier(y);
         if (declaration === undefined || declaration.name === y || !isVariableDeclaration(declaration)) return undefined;
         if (this.rustEnclosingFunction(declaration) !== this.rustEnclosingFunction(write) || this.rustLocalIsReassigned(declaration, String(y.text))) return undefined;
-        if (!this.rustDefaultedListValue(declaration, y)) return undefined;
+        // ral-62i: or the same defaulted reader local while (or after) it is decided the never-null List itself
+        const nnList = this.rustDefaultedListRead(this.rustSkipWrappers(declaration.initializer))
+            && (this.rustBorrowedPending.has(declaration) || this.rustBorrowedLocalKind(declaration) === 'list');
+        if (!nnList && !this.rustDefaultedListValue(declaration, y)) return undefined;
         let branch: any = write.parent?.parent;
         if (!isBlock(branch)) branch = write.parent;
         const guard: any = branch?.parent?.kind === SyntaxKind.IfStatement && branch.parent.thenStatement === branch ? branch.parent : undefined;
         return this.rustLocalLastUse(y, declaration) || (guard !== undefined && this.rustGuardedBranchLastUse(y, declaration, guard)) ? declaration : undefined;
+    }
+
+    private rustNnListHandOffs = new WeakSet<any>();
+
+    /** ral-62i: `y = x` (statement), y a built list local of x's function (not x itself): the never-null list x hands over. */
+    rustNnListHandOff(n: any, declaration: any): boolean {
+        const up: any = n.parent;
+        if (!isBinaryExpression(up) || up.right !== n || up.operatorToken.kind !== SyntaxKind.EqualsToken || up.parent?.kind !== SyntaxKind.ExpressionStatement || !isIdentifier(up.left)) return false;
+        const target: any = this.rustDeclarationOfIdentifier(up.left);
+        if (target === undefined || target === declaration || target.name === up.left || !isVariableDeclaration(target) || this.rustBorrowedPending.has(target)) return false;
+        if (this.rustEnclosingFunction(target) !== this.rustEnclosingFunction(declaration) || this.rustBuiltListOf(up.left) === undefined) return false;
+        // only under its own null test (`if (x !== undefined) { y = x; }`), moved there (no copy is added)
+        if (!this.rustNnGuardedWrite(up, n)) return false;
+        if (this.rustDefaultedAliasMove(up) === undefined) return false;
+        // every other read of x is the guard's null test: nothing boxes x back (a box-only container stays Value)
+        const guardIf: any = findAncestor(up, (a: any) => a.kind === SyntaxKind.IfStatement);
+        const guardTest: any = this.rustSkipWrappers(guardIf?.expression);
+        const scope = this.rustEnclosingFunction(declaration);
+        for (const m of this.rustScopeNameNodes(scope, String(declaration.name.text)) as any[]) {
+            if (m === n || m === declaration.name || !isIdentifier(m) || this.rustIdentifierIsPropertyName(m) || !this.rustIdentifierRefersToDeclaration(m, declaration)) continue;
+            if (m.parent !== guardTest) return false;
+        }
+        this.rustNnListHandOffs.add(up);
+        return true;
+    }
+
+    /** ral-62i: `y = x` is the only statement of the then-branch of `if (x !== undefined)` (or `!=`). */
+    rustNnGuardedWrite(write: any, x: any): boolean {
+        const statement: any = write.parent;
+        let branch: any = statement?.parent;
+        if (isBlock(branch)) {
+            if (branch.statements.length !== 1) return false;
+        } else branch = statement;
+        const guard: any = branch?.parent;
+        if (guard === undefined || guard.kind !== SyntaxKind.IfStatement || guard.thenStatement !== branch) return false;
+        const test: any = this.rustSkipWrappers(guard.expression);
+        if (!isBinaryExpression(test) || (test.operatorToken.kind !== SyntaxKind.ExclamationEqualsEqualsToken && test.operatorToken.kind !== SyntaxKind.ExclamationEqualsToken)) return false;
+        const l: any = this.rustSkipWrappers(test.left);
+        const r: any = this.rustSkipWrappers(test.right);
+        const tested: any = isIdentifier(l) && l.text === x.text ? l : (isIdentifier(r) && r.text === x.text ? r : undefined);
+        if (tested === undefined || this.rustDeclarationOfIdentifier(tested) !== this.rustDeclarationOfIdentifier(x)) return false;
+        return this.literalKindOfNode(tested === l ? r : l) === 'null';
     }
 
     rustBuiltListOf(node: any): any {
@@ -28513,6 +28562,11 @@ export class RustTranspiler extends BaseTranspiler {
     printBuiltListWrite(left: any, right: any): string | undefined {
         if (this.rustBuiltListOf(left) === undefined) return undefined;
         const rhs: any = this.rustSkipWrappers(right);
+        // ral-62i: the never-null list local handed over whole (moved at its last use, else the shared handle)
+        if (isIdentifier(rhs) && isBinaryExpression(rhs.parent) && this.rustNnListHandOffs.has(rhs.parent)) {
+            const src: any = this.rustDeclarationOfIdentifier(rhs);
+            if (src !== undefined && this.rustBorrowedLocalKind(src) === 'list') return `${this.printNode(left, 0).trim()} = \u0004${this.rustOptListName(rhs)}`;
+        }
         const guarded: any = isIdentifier(rhs) && isBinaryExpression(rhs.parent) ? this.rustOptListGuardedMove(rhs.parent) : undefined;
         if (guarded !== undefined) return `${this.printNode(left, 0).trim()} = ${rhs.text}.${this.rustDefaultedListValue(guarded, rhs) ? 'into_list' : 'unwrap_or_default'}()`;
         if (isIdentifier(rhs) && isBinaryExpression(rhs.parent) && this.rustDefaultedAliasMove(rhs.parent) !== undefined) return `${this.printNode(left, 0).trim()} = ${rhs.text}.into_list()`;
