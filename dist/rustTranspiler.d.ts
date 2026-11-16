@@ -1788,6 +1788,11 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  typed-container rule holds: the boxed read is `get_value(&m, &k)`; the typed key is handed to `get_value` as is
      *  (`impl ValueKey` boxes it inside, so the lookup is the same `Str` / `Null` key the boxed read took). */
     rustAnyGetValueKeyUse(n: any): boolean;
+    /** ral-64e: the bind `const b = m[k]` is a single-declaration statement whose next sibling statement is a compound
+     *  statement (`if` / loop / block), not an expression statement: the local's mutation sits only inside that statement
+     *  (base featuresMapper `featureBlock`), so no write-back statement follows the bind directly, and the element is read
+     *  with the same `get_value(&m, &k)` call whatever the key's type (`impl ValueKey`). */
+    rust64eNestedOnlyMutationBind(read: any): boolean;
     /** ral-49e: the read's checker type is a declared record (`Dictionary<Dict>` receiver): its bind prints as the held
      *  `Option<Dict>` form, which ccxt's `Value`-bind write-back pass never matched, so the borrowed key changes no write-back. */
     rustOwnKeysTypedRowRead(read: any): boolean;
