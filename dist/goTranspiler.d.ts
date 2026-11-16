@@ -785,6 +785,7 @@ export declare class GoNilDeclaredValueAssignmentScan extends GoNilDeclaredAssig
     valueTypeOf(rhs: any): "bool" | "float64" | "int";
     classifyIdentifier(node: any, assigned: any): any;
     isStringWrite(rhs: any): boolean;
+    boolSlotWrite(node: any): boolean;
 }
 export declare function installCcxtGoNilDeclaredValueJoins(goTranspiler: any): void;
 export declare function ccxtGoNilDeclaredParseNumberJoin(goTranspiler: any, declaration: any): any;

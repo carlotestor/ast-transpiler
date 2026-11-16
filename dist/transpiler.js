@@ -12081,13 +12081,19 @@ function tupleJoinWriteType(expression, name) {
   const callee = tupleJoinCalleeName(expression.right);
   const mapSlots = callee === void 0 ? void 0 : GO_TUPLE_JOIN_MAP_SLOTS[callee];
   if (mapSlots === void 0 || !mapSlots.includes(index)) {
-    return void 0;
+    return tupleJoinPairResultWriteType(expression.right, index);
   }
   if (expression.right?.kind !== ts.SyntaxKind.CallExpression) {
     return void 0;
   }
   const defaultSlot = GO_TUPLE_JOIN_DEFAULT_SLOT[callee];
   if (defaultSlot !== void 0 && !tupleJoinDefaultIsValue(expression.right.arguments[defaultSlot])) {
+    return void 0;
+  }
+  return GO_TUPLE_JOIN_TYPE;
+}
+function tupleJoinPairResultWriteType(right, index) {
+  if (index !== 1 || right?.kind !== ts.SyntaxKind.CallExpression || !ccxtGoTupleResultCall(right)) {
     return void 0;
   }
   return GO_TUPLE_JOIN_TYPE;
@@ -12574,9 +12580,9 @@ function goNilJoinTypeSelfTest() {
   joins(method("let bag = undefined;\n        let count = 0;\n        [ count, bag ] = this.handleOptionIntegerAndParams (a, b, c, 0);\n        return bag;"), "bag map[string]any");
   joins(method("let bag = undefined;\n        [ a, bag ] = this.handleUntilOption (a, b);\n        [ c, bag ] = this.handleUntilOption (a, c);\n        return bag;"), "bag map[string]any");
   joins(method("let bag = undefined;\n        let flag = false;\n        [ flag, bag ] = this.handleOptionBoolAndParams (a, b, c, a);\n        return bag;"), "");
-  joins(method("let bag = undefined;\n        [ a, bag ] = this.handleMarginModeAndParams (a, b);\n        return bag;"), "");
+  joins(method("let bag = undefined;\n        [ a, bag ] = this.handleMarginModeAndParams (a, b);\n        return bag;"), "bag map[string]any");
+  joins(method("let bag = undefined;\n        [ a, bag ] = this.handleParamString (a, b);\n        return bag;"), "bag map[string]any");
   joins(method("let bag = undefined;\n        [ a, bag ] = this.handlePostOnly (a, b);\n        return bag;"), "");
-  joins(method("let bag = undefined;\n        [ a, bag ] = this.handleParamString (a, b);\n        return bag;"), "");
   joins(method("let bag = undefined;\n        if (a) {\n            [ a, bag ] = this.handleUntilOption (a, b);\n        }\n        return bag;"), "");
   joins(method("let bag = undefined;\n        if (b in bag) {\n            return 1;\n        }\n        [ a, bag ] = this.handleUntilOption (a, b);\n        return bag;"), "bag map[string]any");
   joins(method('let bag = undefined;\n        this.safeString (bag, "x");\n        [ a, bag ] = this.handleUntilOption (a, b);\n        return bag;'), "bag map[string]any");
@@ -20780,6 +20786,10 @@ var GoNilDeclaredValueAssignmentScan = class extends GoNilDeclaredAssignmentScan
   }
   // `x == true` / `x === 1` against a literal of the joined kind compiles on the value type
   classifyIdentifier(node, assigned) {
+    const slotWrite = this.boolSlotWrite(node);
+    if (slotWrite !== void 0) {
+      return slotWrite ? true : assigned;
+    }
     const parent = node.parent;
     if (parent?.kind === ts.SyntaxKind.BinaryExpression && COMPARISON_TOKENS.includes(parent.operatorToken.kind) && this.joinType !== void 0 && !this.inNestedFunction(node)) {
       const other = parent.left === node ? parent.right : parent.left;
@@ -20799,6 +20809,29 @@ var GoNilDeclaredValueAssignmentScan = class extends GoNilDeclaredAssignmentScan
       return false;
     }
     this.joinType = goType;
+    return true;
+  }
+  // 77g1: slot 0 of a statement-level `[ x, p ] = this.handleOptionBoolAndParams[2] (.., <bool literal>)`.
+  // The tuple-result join prints `x, p = this.HandleOptionBoolAndParams(..)`, whose hand-written Go twin
+  // returns (bool, map[string]any): the box only ever held that bool, so x joins as a bool write.
+  // undefined = not this shape; false = this shape but another join type (rejected).
+  boolSlotWrite(node) {
+    const pattern = node.parent;
+    const assignment = pattern?.parent;
+    if (pattern?.kind !== ts.SyntaxKind.ArrayLiteralExpression || pattern.elements[0] !== node || assignment?.kind !== ts.SyntaxKind.BinaryExpression || assignment.left !== pattern || assignment.operatorToken.kind !== ts.SyntaxKind.EqualsToken || assignment.parent?.kind !== ts.SyntaxKind.ExpressionStatement) {
+      return void 0;
+    }
+    const call = assignment.right;
+    const callee = call?.expression?.name?.text;
+    if (pattern.elements.length !== 2 || !pattern.elements.every((e) => e.kind === ts.SyntaxKind.Identifier) || !ccxtGoTupleResultCall(call) || CCXT_GO_TUPLE_RESULT_ELEMENT_0[callee] !== "GetValueBool" || this.inNestedFunction(node)) {
+      return void 0;
+    }
+    this.sawWrite = true;
+    if (this.joinType !== void 0 && this.joinType !== "bool") {
+      this.rejected = true;
+      return false;
+    }
+    this.joinType = "bool";
     return true;
   }
 };
