@@ -24206,3 +24206,22 @@ describe('ral-84g R1: parseNumber of a venue string method', () => {
         expect(out).toContain('let mut raw: Value = ');
     });
 });
+
+describe('ral-84g R2: `c ? this.omit (m, k) : m` over a proven non-parameter map holds the map on both arms', () => {
+    test('the bare arm is the other arm\'s proven omit head, so the reassigned handed local is a Dict', () => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-84g-'));
+        const files: Record<string, string> = {
+            'ts/src/base/Exchange.ts': "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Int = number | undefined;\nexport default class Exchange {\n    extend (...args: any[]): any { return Object.assign ({}, ...args); }\n    omit (x: any, ...args: any[]): any { return x; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return o; }\n    async privatePostX (p: any = {}): Promise<any> { return p; }\n}\n",
+            'ts/src/venue.ts': "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n"
+                + "    async fetchTransfers (code: Str = undefined, params: Dict = {}): Promise<any> {\n        const request: Dict = {};\n        const paramsRequest: Dict = this.omit (params, 'paginate');\n        const until = this.safeInteger (paramsRequest, 'until');\n        let paramsOmitted: Dict = (until !== undefined) ? this.omit (paramsRequest, 'until') : paramsRequest;\n        if (until !== undefined) {\n            paramsOmitted = this.omit (paramsOmitted, 'x');\n        }\n        return await this.privatePostX (this.extend (request, paramsOmitted));\n    }\n}\n",
+        };
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['fetchTransfers'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        t.transpileRustByPath(path.join (root, 'ts/src/base/Exchange.ts'));
+        const out = t.transpileRustByPath(path.join (root, 'ts/src/venue.ts')).content;
+        expect(out).toMatch(/let mut paramsOmitted: crate::value::Dict = \(if/);
+    });
+});

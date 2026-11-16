@@ -31608,7 +31608,13 @@ export class RustTranspiler extends BaseTranspiler {
                 if (a !== undefined && isCallExpression(a)) return this.rustBaseCallNamed(a, RustTranspiler.RUST_ALWAYS_MAP_HELPERS) || (this.rustOmitOfDict(a) && this.rustOmitLineFits(a));
                 if (a === undefined || !isIdentifier(a)) return false;
                 const d: Node | undefined = this.rustDeclarationOfIdentifier(a);
-                return d !== undefined && d !== a && isParameterDeclaration(d) && this.rustProvenMapParam(d) && !this.rustLocalIsReassigned(d, String(a.text));
+                if (d !== undefined && d !== a && isParameterDeclaration(d) && this.rustProvenMapParam(d) && !this.rustLocalIsReassigned(d, String(a.text))) return true;
+                // ral-84g R2: the bare head of the other arm's omit, when that omit's head proof (rustOmitOfDict) admits it:
+                // the same proven map unchanged on the other path
+                const other: Expression | undefined = this.rustSkipWrappers(x === init.whenTrue ? init.whenFalse : init.whenTrue);
+                if (other === undefined || !isCallExpression(other) || !this.rustOmitOfDict(other) || !this.rustOmitLineFits(other)) return false;
+                const head: Expression | undefined = this.rustSkipWrappers(other.arguments[0]);
+                return head !== undefined && isIdentifier(head) && this.rustDeclarationOfIdentifier(head) === d;
             };
             return arm(init.whenTrue) && arm(init.whenFalse) && String(declaration.initializer.getText()).split('\n')[0].length <= 240;
         }
