@@ -3574,7 +3574,33 @@ export class RustTranspiler extends BaseTranspiler {
         if (declaration === undefined || !isVariableDeclaration(declaration) || this.rustEnclosingFunction(declaration) !== fn) return false;
         // a kept-arm venue method (RUST_VENUE_KEPT_STR_ARMS) stays `-> Value` and boxes its reader string once (ral-sd)
         if (this.rustVenueKeptStrArm(fn)) return false;
-        return this.rustScalarLocalOf(n)?.kind === 'ostr';
+        if (this.rustScalarLocalOf(n)?.kind !== 'ostr') return false;
+        // every other bare-identifier return must be such a local too: a `Value` local returned beside it would be
+        // re-decided under the new signature (blofin `suffix`: typed only by moving its conversion, one more clone)
+        let ok = true;
+        const visit = (m: any) => {
+            if (!ok || (m !== fn.body && isFunctionLike(m))) return;
+            if (isReturnStatement(m)) {
+                const e: any = this.unwrapParensNode(m.expression);
+                if (e !== undefined && isIdentifier(e) && e.text !== 'undefined' && e !== n && this.rustScalarLocalOf(e)?.kind !== 'ostr') { ok = false; return; }
+            }
+            m.forEachChild(visit);
+        };
+        fn.body?.forEachChild(visit);
+        return ok;
+    }
+
+    /** ral-76a S1: the method prints `-> Option<String>` only because a return is its own reader local (rust76aOptStrReturnLocal). */
+    rust76aOptStrReturnMethod(fn: any): boolean {
+        if (fn === undefined || fn.kind !== SyntaxKind.MethodDeclaration || fn.body === undefined || this.rustNativeStrReturnKind(fn) !== 'str') return false;
+        let hit = false;
+        const visit = (n: any) => {
+            if (hit || (n !== fn.body && isFunctionLike(n))) return;
+            if (isReturnStatement(n) && this.rust76aOptStrReturnLocal(this.unwrapParensNode(n.expression), fn)) { hit = true; return; }
+            n.forEachChild(visit);
+        };
+        fn.body.forEachChild(visit);
+        return hit;
     }
 
     rust56xStrReturnText(exp: any, fn: any): string | undefined {
@@ -14099,6 +14125,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (ret === 'ostr' && this.rustBaseNativeStrMethod(node)) ret = 'keptostr';
         // mh1: a venue method that printed `-> Value` (with a by-name arm) until its `: Str` return was spelled keeps that arm
         if (ret === 'ostr' && this.rustVenueKeptStrArm(node)) ret = 'keptostr';
+        // ral-76a S1: a venue method typed `-> Option<String>` by its returned reader local keeps the by-name arm it had as `-> Value`
+        if (ret === 'ostr' && this.rust76aOptStrReturnMethod(node)) ret = 'keptostr';
         // ral-43e: a venue `Market` record producer keeps every by-name arm it had as `-> Value` (ws handler arm too)
         if (ret === 'struct' && returnType === 'crate::types::Market' && isMethodDeclaration(node) && isIdentifier(node.name) && String(node.name.text) !== 'safeMarket') ret = 'keptstruct';
         this.rustSignatureTable.set(node, {
