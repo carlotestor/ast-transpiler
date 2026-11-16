@@ -12130,7 +12130,27 @@ function tupleJoinIndexWriteType(goTranspiler, right) {
 function tupleJoinIsSelfOmit(right) {
   const target = right?.parent;
   const callee = right?.expression;
-  return right?.kind === ts.SyntaxKind.CallExpression && right.questionDotToken === void 0 && target?.kind === ts.SyntaxKind.BinaryExpression && target.right === right && target.operatorToken.kind === ts.SyntaxKind.EqualsToken && target.left?.kind === ts.SyntaxKind.Identifier && callee?.kind === ts.SyntaxKind.PropertyAccessExpression && callee.expression?.kind === ts.SyntaxKind.ThisKeyword && callee.name?.text === "omit" && right.arguments.length >= 2 && !right.arguments.some((a) => a.kind === ts.SyntaxKind.SpreadElement) && right.arguments[0]?.kind === ts.SyntaxKind.Identifier && right.arguments[0].text === target.left.text;
+  return right?.kind === ts.SyntaxKind.CallExpression && right.questionDotToken === void 0 && !tupleJoinReturnedInTuple(target) && target?.kind === ts.SyntaxKind.BinaryExpression && target.right === right && target.operatorToken.kind === ts.SyntaxKind.EqualsToken && target.left?.kind === ts.SyntaxKind.Identifier && callee?.kind === ts.SyntaxKind.PropertyAccessExpression && callee.expression?.kind === ts.SyntaxKind.ThisKeyword && callee.name?.text === "omit" && right.arguments.length >= 2 && !right.arguments.some((a) => a.kind === ts.SyntaxKind.SpreadElement) && right.arguments[0]?.kind === ts.SyntaxKind.Identifier && right.arguments[0].text === target.left.text;
+}
+function tupleJoinReturnedInTuple(assignment) {
+  const name = assignment?.left?.text;
+  let scope = assignment;
+  while (scope !== void 0 && !ts.isFunctionLike(scope)) {
+    scope = scope.parent;
+  }
+  let found = false;
+  const visit = (n) => {
+    if (found) {
+      return;
+    }
+    if (n.kind === ts.SyntaxKind.ReturnStatement && n.expression?.kind === ts.SyntaxKind.ArrayLiteralExpression && n.expression.elements.some((e) => e.kind === ts.SyntaxKind.Identifier && e.text === name)) {
+      found = true;
+      return;
+    }
+    n.forEachChild(visit);
+  };
+  scope?.body?.forEachChild(visit);
+  return scope === void 0 || found;
 }
 function tupleJoinPrintedCallee(goTranspiler, call) {
   if (call?.kind !== ts.SyntaxKind.CallExpression) {
@@ -19116,9 +19136,6 @@ function ccxtGoTupleStringWriteNeedsLift(goTranspiler, right) {
   return goTranspiler.goTypeOfInitializer(right, goTranspiler.printNode(right, 0)) === "string";
 }
 function ccxtGoTupleStringReadIsSafe(goTranspiler, node) {
-  if (node.parent?.kind === ts.SyntaxKind.CallExpression && node.parent.expression !== node && ccxtGoNilJoinArgumentSeesAbsent(goTranspiler, node.parent, node.parent.arguments.indexOf(node))) {
-    return true;
-  }
   let current = node;
   while (current.parent?.kind === ts.SyntaxKind.ParenthesizedExpression) {
     current = current.parent;
@@ -19207,6 +19224,10 @@ function ccxtGoTupleStringCopyTargetIsSafe(goTranspiler, target, source) {
     }
   }
 }
+function ccxtGoTupleStringOptionalArgument(goTranspiler, node) {
+  const call = node.parent;
+  return call?.kind === ts.SyntaxKind.CallExpression && call.expression !== node && ccxtGoNilJoinArgumentSeesAbsent(goTranspiler, call, call.arguments.indexOf(node));
+}
 function ccxtGoTupleStringJoinTypeUncached(goTranspiler, declaration) {
   const name = declaration.name.text;
   const scope = goTranspiler.goEnclosingFunction(declaration);
@@ -19216,6 +19237,7 @@ function ccxtGoTupleStringJoinTypeUncached(goTranspiler, declaration) {
   let producers = 0;
   let writes = 0;
   let ok = true;
+  let optionalArgs = 0;
   const visit = (n) => {
     if (!ok) {
       return;
@@ -19235,6 +19257,8 @@ function ccxtGoTupleStringJoinTypeUncached(goTranspiler, declaration) {
       } else if (parent?.kind === ts.SyntaxKind.BinaryExpression && parent.left === n && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
         ok = ccxtGoTupleStringWriteIsProven(goTranspiler, parent.right);
         writes += 1;
+      } else if (ccxtGoTupleStringOptionalArgument(goTranspiler, n)) {
+        optionalArgs += 1;
       } else if (isDestructuringTarget(n) || !ccxtGoTupleStringReadIsSafe(goTranspiler, n)) {
         ok = false;
       }
@@ -19242,6 +19266,9 @@ function ccxtGoTupleStringJoinTypeUncached(goTranspiler, declaration) {
     n?.forEachChild(visit);
   };
   scope?.forEachChild(visit);
+  if (optionalArgs > 0 && writes > 0) {
+    return void 0;
+  }
   const bound = declaration.kind === ts.SyntaxKind.BindingElement || ccxtGoTupleStringIsCopyDeclaration(declaration) ? 1 : 0;
   if (!ok || producers + bound + writes === 0) {
     return void 0;
@@ -20811,6 +20838,12 @@ var GoNilDeclaredValueAssignmentScan = class extends GoNilDeclaredAssignmentScan
       return slotWrite ? true : assigned;
     }
     const parent = node.parent;
+    if (parent?.kind === ts.SyntaxKind.PrefixUnaryExpression && parent.operator === ts.SyntaxKind.ExclamationToken && this.joinType === "bool" && !this.inNestedFunction(node)) {
+      if (!assigned) {
+        this.rejected = true;
+      }
+      return assigned;
+    }
     if (parent?.kind === ts.SyntaxKind.BinaryExpression && COMPARISON_TOKENS.includes(parent.operatorToken.kind) && this.joinType !== void 0 && !this.inNestedFunction(node)) {
       const other = parent.left === node ? parent.right : parent.left;
       const otherType = other.kind === ts.SyntaxKind.TrueKeyword || other.kind === ts.SyntaxKind.FalseKeyword ? "bool" : this.valueTypeOf(other);
