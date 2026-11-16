@@ -60611,6 +60611,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "mkey";
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustOkeyReadUse(n))
       return "okey";
+    if (kind === "ostr" && this.rust84cNilStrKeyLocal(n) && this.rustOkeyReadUse(n))
+      return "okey";
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rust63eChainLinkKeyRead(n))
       return "okey";
     if ((kind === "str" || kind === "ostr") && this.rust64kBookKeyRead(n))
@@ -62813,7 +62815,7 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (form !== "box" && form !== "xbox")
       return void 0;
     const name = super.printIdentifier(node);
-    const last = isReturnStatement4(node.parent) || this.rustWsClientLastUse(node, local.declaration) || this.rustLocalLastUse(node, local.declaration) || form === "box" && this.rustOwnedHandOff(node) && this.rustOwnedLastUse(node, local.declaration) || form === "box" && this.rust59xAliasDecl(local.declaration) && node.parent?.kind === SyntaxKind7.PropertyAssignment && node.parent.initializer === node && this.rustOwnedLastUse(node, local.declaration);
+    const last = isReturnStatement4(node.parent) || this.rustWsClientLastUse(node, local.declaration) || this.rustLocalLastUse(node, local.declaration) || form === "box" && this.rustOwnedHandOff(node) && this.rustOwnedLastUse(node, local.declaration) || form === "box" && (this.rust59xAliasDecl(local.declaration) || isVariableDeclaration3(local.declaration) && this.rust84cNilStrInKey(local.declaration)) && node.parent?.kind === SyntaxKind7.PropertyAssignment && node.parent.initializer === node && this.rustOwnedLastUse(node, local.declaration);
     const moved = last ? name : `${name}.clone()`;
     const lent = !last && (this.rustStrLentLocals.has(local.declaration) || local.kind === "ostr" && this.rustNilStrLentLocals.has(local.declaration));
     if (local.kind === "ostr" && this.rustInArrayNeedle(node))
@@ -64375,7 +64377,26 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
     if (isPropertyAccessExpression3(recv) && /^(?:subscriptions|futures)$/.test(String(recv.name.text)) && this.rustIsWsClientType(this.typeOfNodeIfAny(recv.expression)))
       return false;
     const declaration = this.rustDeclaredNode(n);
+    if (declaration !== void 0 && isVariableDeclaration3(declaration) && this.rust84cNilStrInKey(declaration))
+      return true;
     return declaration !== void 0 && isVariableDeclaration3(declaration) && declaration.initializer !== void 0 && this.literalKindOfNode(this.unwrapParens(declaration.initializer)) !== "null";
+  }
+  /** ral-84c R3: `n` names a nil-declared `let k: Str = undefined` local (rust84cNilStrInKey). */
+  rust84cNilStrKeyLocal(n) {
+    const declaration = this.rustDeclaredNode(n);
+    return declaration !== void 0 && isVariableDeclaration3(declaration) && this.rust84cNilStrInKey(declaration);
+  }
+  /** ral-84c R1: a nil-declared `let k: Str = undefined` (one declarator, a `let` statement) keys an `in` test too: the
+   *  nil-scalar rule types it `Option<String>`, and the `inbox` key reads `None` as a miss exactly as `in_op` read the
+   *  `Null` the `Value` local held (latoken parseTicker / parseTrade / parseOrder `symbol in this.markets`). */
+  rust84cNilStrInKey(declaration) {
+    const init = declaration.initializer;
+    if (init !== void 0 && this.literalKindOfNode(this.unwrapParens(init)) !== "null")
+      return false;
+    const list = declaration.parent;
+    if (!isIdentifier3(declaration.name) || !isVariableDeclarationList2(list) || list.declarations.length !== 1 || (list.flags & NodeFlags4.Const) !== 0 || list.parent?.kind !== SyntaxKind7.VariableStatement)
+      return false;
+    return declaration.type !== void 0 && this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name)) === "string";
   }
   /** qf: a typed local against an untyped `Value` partner (a local or parameter) that the checker types like the local:
    *  the `Value` pair printed `a.<payload>() == p.<payload>()` (PAYLOAD_ACCESSORS by checker kind), and the typed local
@@ -65276,7 +65297,7 @@ ${ind}];`;
   }
   rustScalarOptKeyUse(n) {
     const local = this.rustDeclaredNode(n);
-    if (local === void 0 || !isVariableDeclaration3(local) || local.initializer === void 0 || this.literalKindOfNode(local.initializer) === "null")
+    if (local === void 0 || !isVariableDeclaration3(local) || (local.initializer === void 0 || this.literalKindOfNode(local.initializer) === "null") && !this.rust84cNilStrInKey(local))
       return false;
     const keyNode = this.rustKeyWrapped(n);
     const access = keyNode.parent;

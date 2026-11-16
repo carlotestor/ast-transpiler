@@ -1855,6 +1855,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-65b: `n` is the bare key of `n in client.subscriptions|futures` on a ws `Client` that the handle does not print. */
     rust65bWsInKey(n: any): boolean;
     rustInKeyInitialised(n: any): boolean;
+    /** ral-84c R3: `n` names a nil-declared `let k: Str = undefined` local (rust84cNilStrInKey). */
+    rust84cNilStrKeyLocal(n: Node): boolean;
+    /** ral-84c R1: a nil-declared `let k: Str = undefined` (one declarator, a `let` statement) keys an `in` test too: the
+     *  nil-scalar rule types it `Option<String>`, and the `inbox` key reads `None` as a miss exactly as `in_op` read the
+     *  `Null` the `Value` local held (latoken parseTicker / parseTrade / parseOrder `symbol in this.markets`). */
+    rust84cNilStrInKey(declaration: VariableDeclaration): boolean;
     /** qf: a typed local against an untyped `Value` partner (a local or parameter) that the checker types like the local:
      *  the `Value` pair printed `a.<payload>() == p.<payload>()` (PAYLOAD_ACCESSORS by checker kind), and the typed local
      *  is exactly `a.<payload>()` (`None` where the `Value` was `Null`), so the same compare reads `own == p.<payload>()`.
