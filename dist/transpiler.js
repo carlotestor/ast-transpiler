@@ -47737,7 +47737,14 @@ var JavaTranspiler = class extends BaseTranspiler {
   // a key proven by the checker to be a string prints as a java String: the read is
   // the same expression, only the key needs the (String) cast the typed put demands
   elementWriteKeyText(key, keyText) {
-    return isStringLiteral2(key) ? keyText : `(String)${keyText}`;
+    if (isStringLiteral2(key)) {
+      return keyText;
+    }
+    const inner = this.unwrapParenthesized(key);
+    if (inner?.kind === SyntaxKind6.AsExpression && inner.type?.kind === SyntaxKind6.StringKeyword && this.javaDeclaredStringElementLocal(inner.expression, keyText.replace(/^\((.*)\)$/, "$1"))) {
+      return keyText;
+    }
+    return `(String)${keyText}`;
   }
   // Receivers that are a plain java.util.HashMap at runtime, where ".put" and the helper's map branch
   // are the same write: a local initialized with an object literal or a call whose every return is
