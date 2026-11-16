@@ -24216,3 +24216,28 @@ describe('ral-84c R1: a nil-declared Str local written once from a concatenation
         expect(out).not.toMatch(/let mut symbol: Value/);
     });
 });
+
+describe('ral-84c R2: a nil-declared Str local keys an insert into a typed literal map', () => {
+    const files: Record<string, string> = {
+        "ts/src/base/Exchange.ts": "export interface Dictionary<T> { [key: string]: T }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (obj: any, key: any, defaultValue: string = undefined): string { return obj[key]; }\n    networkIdToCode (id: Str, code: Str = undefined): string { return id; }\n    hold (x: any): any { return x; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n",
+        "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parseNetworks (raw: any, code: Str = undefined): any {\n        const networks = {};\n        const networkId = this.safeString (raw, 'n');\n        let networkCode: Str = undefined;\n        if (networkId !== undefined) {\n            networkCode = this.networkIdToCode (networkId, code);\n            if (networkCode !== undefined) {\n                networks[networkCode] = {\n                    'id': networkId,\n                    'network': networkCode,\n                };\n            }\n        }\n        return this.hold ({ 'all': networks, 'id': networkCode, 'last': networkCode });\n    }\n}\n"
+    };
+    let out: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-84c2-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = transpiler.transpileRustByPath(path.join (root, 'ts/src/venue.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test('the key local is an Option<String> printed as the insert key text', () => {
+        expect(out).toMatch(/let mut networkCode: Option<String> = None;/);
+        expect(out).toMatch(/networks\.insert\(networkCode\.as_deref\(\)\.unwrap_or\("null"\)\.to_string\(\)/);
+    });
+    test('the last box in an object literal moves the local, earlier boxes clone it', () => {
+        expect(out).toMatch(/"id"\.to_string\(\), networkCode\.clone\(\)\.map\(Value::from\)/);
+        expect(out).toMatch(/"last"\.to_string\(\), networkCode\.map\(Value::from\)/);
+    });
+});
