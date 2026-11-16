@@ -1998,4 +1998,5 @@ export interface GoTranspiler {
 }
 export interface GoTranspiler {
     goTernaryJoinProvisional(): boolean;
+    goTernaryJoinFeedsAnotherTernary(declaration: any): boolean;
 }

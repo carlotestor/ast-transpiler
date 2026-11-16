@@ -41544,14 +41544,38 @@ GoTranspiler.prototype.printVariableDeclarationList = function(node, identation)
 GoTranspiler.prototype.goTernaryJoinProvisional = function() {
   return (this.goGetArgTypeComputing?.size ?? 0) > 0;
 };
+var GO_TERNARY_JOIN_PROVISIONAL = /* @__PURE__ */ new WeakSet();
 var goTernaryJoinSettledParts = GoTranspiler.prototype.goTernaryJoinParts;
 GoTranspiler.prototype.goTernaryJoinParts = function(declaration) {
-  if (declaration === void 0 || !this.goTernaryJoinProvisional() || GO_TERNARY_JOIN_MEMO.has(declaration) || this.goUnwrapParenthesizedNode(declaration.initializer)?.kind !== SyntaxKind5.ConditionalExpression) {
+  if (declaration === void 0 || GO_TERNARY_JOIN_MEMO.has(declaration) || this.goUnwrapParenthesizedNode(declaration.initializer)?.kind !== SyntaxKind5.ConditionalExpression) {
     return goTernaryJoinSettledParts.call(this, declaration);
   }
+  if (!this.goTernaryJoinProvisional()) {
+    const settled = goTernaryJoinSettledParts.call(this, declaration);
+    if (settled === void 0 || !GO_TERNARY_JOIN_PROVISIONAL.has(declaration) || settled.goType.startsWith("*") || !this.goTernaryJoinFeedsAnotherTernary(declaration)) {
+      return settled;
+    }
+    GO_TERNARY_JOIN_MEMO.set(declaration, { parts: void 0 });
+    return void 0;
+  }
+  GO_TERNARY_JOIN_PROVISIONAL.add(declaration);
   const parts = goTernaryJoinSettledParts.call(this, declaration);
   GO_TERNARY_JOIN_MEMO.delete(declaration);
   return parts;
+};
+GoTranspiler.prototype.goTernaryJoinFeedsAnotherTernary = function(declaration) {
+  const scope = this.goEnclosingFunction(declaration);
+  const name = declaration.name;
+  return scope === void 0 || this.hasNodeWhere(scope, (n) => {
+    if (n.kind !== SyntaxKind5.Identifier || n.text !== name.text || n === name) {
+      return false;
+    }
+    let current = n;
+    while (current.parent?.kind === SyntaxKind5.ParenthesizedExpression) {
+      current = current.parent;
+    }
+    return current.parent?.kind === SyntaxKind5.ConditionalExpression && current.parent.condition !== current;
+  });
 };
 var goTernaryJoinSettledDeclaredType = GoTranspiler.prototype.goDeclaredTypeOfIdentifier;
 GoTranspiler.prototype.goDeclaredTypeOfIdentifier = function(node) {
