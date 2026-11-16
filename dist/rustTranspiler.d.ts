@@ -2785,6 +2785,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  argument shape keeps the helper call the ccxt post-pass rewrites. */
     /** ral-41a: `parseInt (x as string)` whose one argument is the cast `top` of an `Option<String>` local. */
     rustParseIntOfOptStr(call: any, top: any): boolean;
+    /** ral-73h: `str` / `ostr` when `arg` is a bare identifier of a typed string local (the one argument of `parseInt` / `parseFloat`). */
+    rust73hParseStrLocalKind(arg: any): string | undefined;
+    /** ral-73h: `n` is the sole bare argument of a global `parseInt` / `parseFloat` call. */
+    rust73hParseArgUse(n: any): boolean;
     printNativeParseCall(node: CallExpression): string | undefined;
     isNodeInsideNode(node: Node, container: Node): boolean;
     /** Root place of an access chain (`x` for `x['a']['b']`, `this.balance` for

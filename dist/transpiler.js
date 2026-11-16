@@ -65041,6 +65041,8 @@ ${ind}];`;
    *  (typed-signature argument), `err` (error message) or `box` (alias, key, push, initializer). */
   rustScalarExpressionUseForm(n, kind) {
     const parent = n.parent;
+    if ((kind === "str" || kind === "ostr") && this.rust73hParseArgUse(n))
+      return "native";
     if ((kind === "str" || kind === "ostr") && isAsExpression3(parent) && this.rustStrCastLocal(parent) === n) {
       let top = parent;
       while (isParenthesizedExpression3(top.parent))
@@ -70561,6 +70563,18 @@ ${ind}let ${view}: &${map} = &${arc};
   rustParseIntOfOptStr(call, top) {
     return call !== void 0 && isCallExpression6(call) && isIdentifier3(call.expression) && String(call.expression.text) === "parseInt" && call.arguments.length === 1 && call.arguments[0] === top;
   }
+  /** ral-73h: `str` / `ostr` when `arg` is a bare identifier of a typed string local (the one argument of `parseInt` / `parseFloat`). */
+  rust73hParseStrLocalKind(arg) {
+    if (arg === void 0 || !isIdentifier3(arg))
+      return void 0;
+    const kind = this.rustScalarIdentifierKind(arg);
+    return kind === "str" || kind === "ostr" ? kind : void 0;
+  }
+  /** ral-73h: `n` is the sole bare argument of a global `parseInt` / `parseFloat` call. */
+  rust73hParseArgUse(n) {
+    const call = n?.parent;
+    return call !== void 0 && isCallExpression6(call) && isIdentifier3(call.expression) && _RustTranspiler.RUST_PARSE_HELPERS[String(call.expression.text)] !== void 0 && call.arguments.length === 1 && call.arguments[0] === n && isIdentifier3(n);
+  }
   printNativeParseCall(node) {
     const callee = node.expression;
     if (!isIdentifier3(callee))
@@ -70576,6 +70590,14 @@ ${ind}let ${view}: &${map} = &${arc};
       return `(match ${super.printIdentifier(optLocal)}.as_deref() { Some(__parse_s) => __parse_s.trim().parse::<i64>().map(Value::Int).unwrap_or(Value::Null), None => Value::Null })`;
     }
     const arg = node.arguments[0];
+    const strLocal = this.rust73hParseStrLocalKind(arg);
+    if (strLocal !== void 0) {
+      const [ty, ctor] = helper === "i64" ? ["i64", "Int"] : ["f64", "Float"];
+      const name2 = super.printIdentifier(arg);
+      if (strLocal === "str")
+        return `${name2}.trim().parse::<${ty}>().map(Value::${ctor}).unwrap_or(Value::Null)`;
+      return `(match ${name2}.as_deref() { Some(__parse_s) => __parse_s.trim().parse::<${ty}>().map(Value::${ctor}).unwrap_or(Value::Null), None => Value::Null })`;
+    }
     const type = this.getCheckedTypeOf(arg);
     if (type === void 0 || !this.isStringType(type.flags))
       return void 0;
