@@ -66197,7 +66197,7 @@ ${i1}}`;
     if (keyDecl === void 0 || !(isVariableDeclaration3(keyDecl) || isParameterDeclaration3(keyDecl)))
       return false;
     const keyLocal = this.rustScalarLocalOf(key);
-    return keyLocal === void 0 || keyLocal.kind === "str" && this.rust65kPlainStringKey(key);
+    return keyLocal === void 0 || (keyLocal.kind === "str" || keyLocal.kind === "ostr") && this.rust65kPlainStringKey(key);
   }
   /** ral-65k: the checker types `k` as plain `string` (no `undefined` / `null` member). */
   rust65kPlainStringKey(k) {
@@ -66223,6 +66223,9 @@ ${i1}}`;
     if ((elem === "map" || elem === "map2") && isIdentifier3(key) && this.rustScalarLocalOf(key)?.kind === "str") {
       return `crate::value::KeyRead::key_read(&&${name}, ${super.printIdentifier(key)}.as_str())`;
     }
+    if ((elem === "map" || elem === "map2") && isIdentifier3(key) && this.rustScalarLocalOf(key)?.kind === "ostr") {
+      return `(match ${super.printIdentifier(key)}.as_deref() { Some(__k) => crate::value::KeyRead::key_read(&&${name}, __k), None => Value::Null })`;
+    }
     if (elem === "map" || elem === "map2")
       return `crate::value::KeyRead::read(&&${name}, &${this.printNode(key, 0).trim()})`;
     return `${name}.get(${this.printTypedResultIndex(key)}).map(crate::Value::from).unwrap_or_default()`;
@@ -66238,7 +66241,7 @@ ${i1}}`;
     if (call === void 0 || !isCallExpression6(call) || call.arguments[0] !== n || call.arguments.length < 2 || call.arguments.length > 3)
       return false;
     const callee = call.expression;
-    if (!isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword || String(callee.name.text) !== "safeDict")
+    if (!isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword || !["safeDict", "safeValue"].includes(String(callee.name.text)))
       return false;
     if (call.arguments.some((a) => a.kind === SyntaxKind7.SpreadElement))
       return false;
@@ -66272,7 +66275,8 @@ ${i1}}`;
     if (index === void 0)
       return void 0;
     const fallback = node.arguments.length > 2 ? this.printNode(node.arguments[2], identation).trim() : "Value::Null";
-    return `(match ${super.printIdentifier(recv)}.get(${index}) { Some(__row) if matches!(__row.raw, Value::Dict(_)) => crate::Value::from(__row), _ => ${fallback} })`;
+    const guard = String(node.expression.name.text) === "safeValue" ? '!__row.raw.is_null() && __row.raw.as_str() != Some("")' : "matches!(__row.raw, Value::Dict(_))";
+    return `(match ${super.printIdentifier(recv)}.get(${index}) { Some(__row) if ${guard} => crate::Value::from(__row), _ => ${fallback} })`;
   }
   printTypedResultIndex(key) {
     if (isNumericLiteral4(key))
@@ -89219,7 +89223,9 @@ _RustTranspiler.RUST_RAW_RECORD_TYPES = /* @__PURE__ */ new Set([
   "Conversion",
   "ADL",
   "LongShortRatio",
-  "BorrowInterest"
+  "BorrowInterest",
+  // ral-68g: a `fetchMarkets` row (`Market::from_value` keeps the element as `raw`; `From<&Market>` shares it)
+  "Market"
 ]);
 // ── ral-we: the handleDelta / handleDeltas group (base Exchange declaration + every ts/src/pro override) ──
 // The base calls handle_deltas by name (dispatch_to_derived) and every override shares the base signature, so slot 0
