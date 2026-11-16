@@ -74038,6 +74038,14 @@ ${iden}}`;
           from = from ?? aliasKind;
           return ++optAliasWrites > 0;
         }
+        const venueKind = nilDeclared ? this.rust68cVenueWriteKind(rhs) : void 0;
+        if (venueKind !== void 0) {
+          declaredEndpointWrites++;
+          if (from !== void 0 && from !== venueKind)
+            mixed = true;
+          from = from ?? venueKind;
+          return String(rhs.getText()).split("\n")[0].length <= 240;
+        }
         const kind = this.rustNilResponseWriteKind(rhs, nilDeclared, declaration);
         const declaredWrite = nilDeclared && this.rustDeclaredEndpointWrite(rhs);
         if (declaredWrite)
@@ -74569,8 +74577,11 @@ ${iden}}`;
   }
   /** ral-61i: `n` is the bare source of `t = n` (rustEndpointAliasWrite) and `t` another local that holds a typed reuse map. */
   rustEndpointAliasSourceUse(n, declaration) {
-    const up = n.parent;
-    if (!isBinaryExpression5(up) || up.right !== n || !isIdentifier3(up.left) || this.rustEndpointAliasWrite(up) === void 0)
+    let at = n;
+    while ((isAsExpression3(at.parent) || isParenthesizedExpression3(at.parent)) && at.parent.expression === at)
+      at = at.parent;
+    const up = at.parent;
+    if (!isBinaryExpression5(up) || up.right !== at || !isIdentifier3(up.left) || this.rustEndpointAliasWrite(up) === void 0)
       return false;
     const t = this.rustDeclarationOfIdentifier(up.left);
     if (t === void 0 || t === declaration || !isVariableDeclaration3(t) || t.name === up.left || this.rustBorrowedPending.has(t))
@@ -76285,6 +76296,17 @@ ${iden}}`;
       return declared;
     this.rustNilResponseLocals.add(declaration);
     return "dict";
+  }
+  /** ral-68c R1: `await this.m (..)` of a same-class async venue method whose declared return is a never-null container
+   *  (`Promise<Dict>` / `Promise<List>`, every declaration of the name alike), not a base builder. */
+  rust68cVenueWriteKind(rhs) {
+    if (rhs?.kind !== SyntaxKind7.AwaitExpression)
+      return void 0;
+    const call = this.rustSkipWrappers(rhs.expression);
+    if (call === void 0 || !isCallExpression6(call) || this.rustBuiltReturnSourceKind(call) !== void 0 || this.rustBorrowedSourceKind(call) !== void 0)
+      return void 0;
+    const venue = this.rustVenueContainerReturnKind(call);
+    return venue !== void 0 && !venue.nullable ? venue.kind : void 0;
   }
   /** ral-65i: `await this.<endpoint> (..)` whose abstract declaration spells `Promise<Dict>`. */
   rust65iDeclaredDictEndpointWrite(rhs) {
