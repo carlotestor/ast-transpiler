@@ -82857,7 +82857,7 @@ ${this.getIden(identation)}}`;
       return false;
     if (isIdentifier3(recv) && (this.rustStringLocalIdentifierIsTyped(recv) || this.rustScalarLocalOf(recv) !== void 0 || this.rustScalarIdentifierKind(recv) !== void 0))
       return false;
-    return !this.rust41bWsKeyLocal(n);
+    return !this.rust41bWsKeyLocal(n, true);
   }
   // `x.indexOf(y)` with a proven-string needle: `-1` when either side is not a `Str` (byte index).
   printNativeStringIndexOfString(node, receiverText) {
