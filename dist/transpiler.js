@@ -64038,9 +64038,28 @@ ${ind}];`;
       return false;
     if (isBinaryExpression5(up) && up.left === read && rustIsAssignmentOperator(up.operatorToken.kind))
       return false;
-    if (!this.isNativeAccessPositionSafe(read) || this.isNativeWriteTargetBase(read) || this.isWriteBackBindRead(read) && !(ownKeys && this.rustOwnKeysTypedRowRead(read)))
+    if (!this.isNativeAccessPositionSafe(read) || this.isNativeWriteTargetBase(read) || this.isWriteBackBindRead(read) && !(ownKeys && (this.rustOwnKeysTypedRowRead(read) || this.rust64eNestedOnlyMutationBind(read))))
       return false;
     return !this.isTestSource(recv) && this.rustMapParamDeclaration(recv) === void 0 && this.rustOkeyKind(recv, read) === void 0 && this.rustReadBearerKind(recv) === void 0 && this.rustParamShadowOf(recv) === void 0 && !this.rustLentListUse(recv) && this.printOptListElement(recv, n) === void 0;
+  }
+  /** ral-64e: the bind `const b = m[k]` is a single-declaration statement whose next sibling statement is a compound
+   *  statement (`if` / loop / block), not an expression statement: the local's mutation sits only inside that statement
+   *  (base featuresMapper `featureBlock`), so no write-back statement follows the bind directly, and the element is read
+   *  with the same `get_value(&m, &k)` call whatever the key's type (`impl ValueKey`). */
+  rust64eNestedOnlyMutationBind(read) {
+    const declaration = read?.parent;
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.initializer !== read)
+      return false;
+    const list = declaration.parent;
+    const statement = list?.parent;
+    if (statement?.kind !== SyntaxKind7.VariableStatement || list.declarations.length !== 1)
+      return false;
+    const siblings = statement.parent?.statements ?? [];
+    const at = siblings.indexOf(statement);
+    if (at < 0 || at + 1 >= siblings.length)
+      return false;
+    const next = siblings[at + 1];
+    return next.kind === SyntaxKind7.IfStatement || next.kind === SyntaxKind7.ForStatement || next.kind === SyntaxKind7.Block || next.kind === SyntaxKind7.WhileStatement || next.kind === SyntaxKind7.ForOfStatement || next.kind === SyntaxKind7.ForInStatement;
   }
   /** ral-49e: the read's checker type is a declared record (`Dictionary<Dict>` receiver): its bind prints as the held
    *  `Option<Dict>` form, which ccxt's `Value`-bind write-back pass never matched, so the borrowed key changes no write-back. */
