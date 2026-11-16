@@ -60037,7 +60037,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "dkey";
     if (kind === "ostr" && this.rust65bWsInKey(n) && this.rust64bReaderLocal(this.rustDeclaredNode(n)))
       return "box";
-    if ((kind === "str" || kind === "ostr") && this.rustInKeyTop(n) !== void 0 && !this.rustTestTierSource(n) && this.rustInKeyInitialised(n))
+    if ((kind === "str" || kind === "ostr") && this.rustInKeyTop(n) !== void 0 && !this.rustTestTierSource(n) && this.rustInKeyInitialised(n) && !this.rust80bClientStateInKey(n))
       return "inbox";
     if (isCallExpression6(parent) && parent.expression !== n && this.rustArithCombinator(parent) && this.rustArithCallKind(parent) !== void 0)
       return "native";
@@ -63734,6 +63734,16 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
     const kind = this.rustScalarLocalOf(inner)?.kind;
     const name = super.printIdentifier(inner);
     return kind === "str" ? `Some(${name}.as_str())` : kind === "ostr" ? `${name}.as_deref()` : void 0;
+  }
+  /** ral-80b: the key of `k in client.subscriptions|futures` the client handle does not serve (read after the method wrote
+   *  that field): ccxt's container pass folds that `in_op` into its own membership test only for a bare `Value` key, so a
+   *  boxed typed key would leave the helper call. Decided from the AST (the handle plan). */
+  rust80bClientStateInKey(n) {
+    const top = this.rustInKeyTop(n);
+    const right = this.unwrapParens(top?.parent?.right);
+    if (right === void 0 || !isPropertyAccessExpression3(right) || !isIdentifier3(right.expression) || right.expression.text !== "client" || !_RustTranspiler.RUST_CLIENT_HANDLE_KEYS.has(String(right.name.text)))
+      return false;
+    return this.rustClientHandleAccess(right) === void 0;
   }
   /** td: the left operand of a `k in obj` test that is `k` itself or `k` under parens / `as` casts, else undefined. */
   rustInKeyTop(n) {
