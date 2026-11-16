@@ -14354,3 +14354,38 @@ describe ('ral-77g8 ws struct parser results', () => {
         expect (out).toContain ('defaultType = *this.SafeString(this.Options, "defaultType", defaultType)');
     });
 });
+
+describe ('84g1 nil-declared tuple bags re-bound by a self-omit', () => {
+    const PRELUDE = 'type Dict = { [key: string]: any };\n'
+        + 'type Bool = boolean | undefined;\n'
+        + 'class Base {\n'
+        + '    handleOptionBoolAndParams (params: Dict, m: string, k: string, d: boolean = false): [boolean, Dict] { return [ d, params ]; }\n'
+        + '    omit (a: any, ...k: any[]): any { return a; }\n'
+        + '    other (a: any): any { return a; }\n'
+        + '}\n';
+    const go = (body: string): string => {
+        const t = new Transpiler({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        installCcxtGoHooks(t.goTranspiler);
+        return t.transpileGo(PRELUDE + 'class V extends Base {\n' + body + '}\n').content;
+    };
+    test('`x = this.omit (x, ..)` after the tuple write keeps the bag a map', () => {
+        const out = go('    f (params: Dict = {}): any {\n'
+            + '        let paginate = undefined;\n'
+            + '        let paramsPaginate = undefined;\n'
+            + "        [ paginate, paramsPaginate ] = this.handleOptionBoolAndParams (params, 'f', 'paginate', false);\n"
+            + "        paramsPaginate = this.omit (paramsPaginate, 'until');\n"
+            + '        return this.other (paramsPaginate);\n'
+            + '    }\n');
+        expect(out).toContain('var paramsPaginate map[string]any = nil');
+    });
+    test('an omit of another local keeps the box', () => {
+        const out = go('    f (params: Dict = {}): any {\n'
+            + '        let paginate = undefined;\n'
+            + '        let paramsPaginate = undefined;\n'
+            + "        [ paginate, paramsPaginate ] = this.handleOptionBoolAndParams (params, 'f', 'paginate', false);\n"
+            + "        paramsPaginate = this.omit (params, 'until');\n"
+            + '        return this.other (paramsPaginate);\n'
+            + '    }\n');
+        expect(out).toContain('var paramsPaginate any = nil');
+    });
+});

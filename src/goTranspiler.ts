@@ -404,6 +404,11 @@ function tupleJoinPairResultWriteType (right, index) {
 // `x = holder[i]` where the holder is a local the printer already declared `[]map[string]any`
 // (the PromiseAllTyped destructuring): the element is that map on every path, no conversion needed
 function tupleJoinIndexWriteType (goTranspiler, right) {
+    // 84g1: `x = this.omit (x, ..)` re-binds the joined bag itself; the write-site family prints
+    // MapTyped(this.Omit(x, ..)) (folded to the OmitDict twin), a fresh non-nil map on every path
+    if (tupleJoinIsSelfOmit (right)) {
+        return GO_TUPLE_JOIN_TYPE;
+    }
     if ((right?.kind !== ts.SyntaxKind.ElementAccessExpression) || (right.expression?.kind !== ts.SyntaxKind.Identifier)) {
         return undefined;
     }
@@ -419,6 +424,19 @@ function tupleJoinIndexWriteType (goTranspiler, right) {
         return undefined;
     }
     return (holderType.substring (2) === GO_TUPLE_JOIN_TYPE) ? GO_TUPLE_JOIN_TYPE : undefined;
+}
+
+// 84g1: `this.omit (x, k..)` whose first argument is the assignment's own target `x`
+function tupleJoinIsSelfOmit (right) {
+    const target = right?.parent;
+    const callee = right?.expression;
+    return (right?.kind === ts.SyntaxKind.CallExpression) && (right.questionDotToken === undefined)
+        && (target?.kind === ts.SyntaxKind.BinaryExpression) && (target.right === right)
+        && (target.operatorToken.kind === ts.SyntaxKind.EqualsToken) && (target.left?.kind === ts.SyntaxKind.Identifier)
+        && (callee?.kind === ts.SyntaxKind.PropertyAccessExpression) && (callee.expression?.kind === ts.SyntaxKind.ThisKeyword)
+        && (callee.name?.text === 'omit') && (right.arguments.length >= 2)
+        && !right.arguments.some ((a) => a.kind === ts.SyntaxKind.SpreadElement)
+        && (right.arguments[0]?.kind === ts.SyntaxKind.Identifier) && (right.arguments[0].text === target.left.text);
 }
 
 // a callee whose first argument is read as a dictionary at entry
