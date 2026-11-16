@@ -2875,7 +2875,9 @@ export class RustTranspiler extends BaseTranspiler {
             if (this.rustIdentifierIsPropertyName(n)) return true;
             const parent: any = n.parent;
             const box = (parent?.kind === SyntaxKind.PropertyAssignment && parent.initializer === n) || isArrayLiteralExpression(parent);
-            if (box && !this.rustLocalLastUse(n, declaration)) moves = false;
+            // ral-84c R4: a nil-declared `Str` local's last property box in an object literal moves (the ral-84c R2 print arm)
+            const ownedLast = parent?.kind === SyntaxKind.PropertyAssignment && isVariableDeclaration(declaration) && this.rust84cNilStrInKey(declaration) && this.rustOwnedLastUse(n, declaration);
+            if (box && !this.rustLocalLastUse(n, declaration) && !ownedLast) moves = false;
             return true;
         });
         return walked && moves;

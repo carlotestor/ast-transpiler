@@ -24262,3 +24262,24 @@ describe('ral-84c R3: a nil-declared Str local keys a read of a typed literal-de
         expect(out).toMatch(/modes\.get\(marginMode\.as_deref\(\)\.unwrap_or\(""\)\)/);
     });
 });
+
+describe('ral-84c R4: a nil-declared Str local with a same-named sibling declaration moves its last literal box', () => {
+    const files: Record<string, string> = {
+        "ts/src/base/Exchange.ts": "export type Str = string | undefined;\nexport default class Exchange {\n    safeString (obj: any, key: any, defaultValue: string = undefined): string { return obj[key]; }\n    safeCurrencyCode (id: Str): string { return id; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n",
+        "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parseRows (rows: any[]): any[] {\n        const result = [];\n        for (let i = 0; i < rows.length; i++) {\n            const marketId = this.safeString (rows[i], 'm');\n            let base: Str = undefined;\n            if (marketId !== undefined) {\n                base = this.safeCurrencyCode (marketId);\n            }\n            if (base === undefined) {\n                continue;\n            }\n            result.push ({ 'symbol': base + '/X', 'base': base });\n        }\n        for (let j = 0; j < rows.length; j++) {\n            const base = this.safeString (rows[j], 'b');\n            result.push ({ 'base': base });\n        }\n        return result;\n    }\n}\n"
+    };
+    let out: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-84c4-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = transpiler.transpileRustByPath(path.join (root, 'ts/src/venue.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test('the nil-declared base is an Option<String> moved into its last literal slot', () => {
+        expect(out).toMatch(/let mut base: Option<String> = None;/);
+        expect(out).toMatch(/"base"\.to_string\(\), base\.map\(Value::from\)/);
+    });
+});
