@@ -15547,7 +15547,7 @@ export class RustTranspiler extends BaseTranspiler {
             const marker = String(sourceFile.text ?? '').indexOf('METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT');
             if (marker < 0 || decl.end < marker) return undefined;
         }
-        return Array.from(decl.parameters);
+        return this.rustPrintedParams(decl);
     }
 
     // Arguments in a native-`bool` parameter slot print a Rust `bool`, carrying

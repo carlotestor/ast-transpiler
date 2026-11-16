@@ -10400,7 +10400,8 @@ describe('rust by-name dispatch signature table', () => {
         const out = t.transpileRustByPath(venue).content;
         expect(out).toContain('let currency = get_arg(optional_args, 0, Value::Null);');
         expect(out).not.toMatch(/let (?:since|limit) = get_arg/);
-        expect(out).toContain('<Self as crate::exchange::DerivedExchange>::parse_transaction(self, ');
+        // the own-file call reaches the lifted override through the trait
+        expect(out).toContain('<Self as crate::exchange::DerivedExchange>::parse_transaction(self, Value::Map(r), &[]);');
         // a body that names a trailing parameter keeps it in the slice
         const used = path.join(root, 'ts/src/used.ts');
         fs.writeFileSync(used, "import Exchange from './base/Exchange.js';\nexport default class used extends Exchange {\n"
