@@ -21491,3 +21491,31 @@ describe('ral-63i: a Dict[] row stored as the element of an array literal writte
         expect(out).not.toContain('let mut row: crate::value::Dict');
     });
 });
+
+describe('ral-64i: a base arraySlice of a declared string[] local is a lent list joined natively', () => {
+    const base = "export type Str = string | undefined;\nexport type Int = number | undefined;\nexport default class Exchange {\n    arraySlice (array: any, first: any, second: Int = undefined) {\n        if (second === undefined) {\n            return array.slice (first);\n        }\n        return array.slice (first, second);\n    }\n    hold (x: any): any { return x; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        return path.join (dir, 'ts/src/venue.ts');
+    };
+    test('an annotated Str[] slice holds a List and joins it in place', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-64i-slice-ann', "    net (networkId: string) {\n        const idParts = networkId.split ('-');\n        const parts: Str[] = this.arraySlice (idParts, 1);\n        const chainPart = parts.join ('-');\n        return this.hold (chainPart);\n    }\n")).content;
+        expect(out).toContain('let mut parts: crate::value::List = self.arraySlice(idParts, Value::Int(1), &[]).into_list();');
+        expect(out).toContain('parts.iter().map(Value::to_string).collect::<Vec<String>>().join("-")');
+    });
+    test('an unannotated slice of a split holds a List and joins it in place', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-64i-slice-bare', "    ser (eventTicker: Str) {\n        let seriesTicker = eventTicker;\n        if (eventTicker !== undefined) {\n            const eventParts = eventTicker.split ('-');\n            const n = eventParts.length;\n            if (n > 1) {\n                const seriesParts = this.arraySlice (eventParts, 0, n - 1);\n                seriesTicker = seriesParts.join ('-');\n            }\n        }\n        return seriesTicker;\n    }\n")).content;
+        expect(out).toContain('let mut seriesParts: crate::value::List = ');
+    });
+    test('a slice whose source is not a declared string list keeps Value', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-64i-slice-neg', "    raw (rows: any) {\n        const head = this.arraySlice (rows, 0, 1);\n        return this.hold (head.join ('-'));\n    }\n")).content;
+        expect(out).not.toContain('let mut head: crate::value::List');
+    });
+    test('a slice handed whole to a base Value slot (boxed straight back) keeps Value', () => {
+        const out = transpiler.transpileRustByPath (write ('ral-64i-slice-box', "    box (t: string) {\n        const p = t.split ('-');\n        const head = this.arraySlice (p, 1);\n        return this.hold (head);\n    }\n")).content;
+        expect(out).not.toContain('let mut head: crate::value::List');
+    });
+});

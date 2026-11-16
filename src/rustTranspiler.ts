@@ -25163,6 +25163,9 @@ export class RustTranspiler extends BaseTranspiler {
         // `allowEmpty: false` throws on an empty or missing input instead of returning it.
         if (method === 'marketSymbols') return args.length >= 3 && this.rustSkipWrappers(args[2])?.kind === SyntaxKind.FalseKeyword;
         if (method === 'marketIds') return args.length === 1 && this.rustLentListUse(this.rustSkipWrappers(args[0]));
+        // ral-64i: base `arraySlice (x, a[, b])` answers `Value::Array(..)` on every path (exchange_stubs.rs array_slice;
+        // the ral-57i table rustBaseArraySliceCall), so `.into_list()` takes exactly that list
+        if (method === 'arraySlice') return !this.rustTestTierSource(init) && this.rustBaseArraySliceCall(init);
         return this.rustDefaultedListRead(init);
     }
 
@@ -25180,6 +25183,24 @@ export class RustTranspiler extends BaseTranspiler {
         if (isNumericLiteral(key)) return Number.isInteger(Number(key.text)) && Number(key.text) >= 0;
         // a literal-initialised number counter (`let i = 0`): the hop key prints `&Value::Int(i)` (i64) or the `Value` it held
         return this.isRustValueIndexKey(key);
+    }
+
+    /** ral-64i: a never-reassigned local initialised from a base `this.arraySlice (src, ..)` whose `src` is an identifier the
+     *  checker types `string[]` (a split): every element is a `Str`, so `Display` joins exactly what the helper joined. */
+    rust64iStringSliceDeclaration(declaration: any): boolean {
+        if (declaration === undefined || !isVariableDeclaration(declaration) || !isIdentifier(declaration.name)) return false;
+        const init: any = this.rustSkipWrappers(declaration.initializer);
+        if (!this.rust64iBaseSliceInit(init)) return false;
+        const source: any = this.rustSkipWrappers(init.arguments[0]);
+        const checker: any = this.checkerOrUndefined();
+        const type: any = source !== undefined && isIdentifier(source) ? this.typeOfNodeIfAny(source) : undefined;
+        return checker !== undefined && type !== undefined && checker.isArrayType(type) && this.primitiveKindOfType(checker.getTypeArguments?.(type)?.[0]) === 'string';
+    }
+
+    /** ral-64i: `this.arraySlice (..)` of the base tier (no venue redeclares it), outside the test tier. */
+    rust64iBaseSliceInit(init: any): boolean {
+        if (!isCallExpression(init) || !isPropertyAccessExpression(init.expression) || init.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
+        return String(init.expression.name.text) === 'arraySlice' && !this.rustTestTierSource(init) && this.rustBaseArraySliceCall(init);
     }
 
     /** A base `safeList*` read with an empty `[]` default: a list on every path. */
@@ -25215,7 +25236,9 @@ export class RustTranspiler extends BaseTranspiler {
         let indexed = 0;
         // The initializer's resolved overload (`string[]`) decides, so a wider `Strings` annotation does not reject it.
         const type: any = this.typeOfNodeIfAny(declaration.initializer);
-        if (type === undefined || !this.getChecker().isArrayType(type)) return false;
+        // ral-64i: the base slice is declared without a return type (`any`): its runtime list answer decides instead
+        const slice = this.rust64iBaseSliceInit(init);
+        if (!slice && (type === undefined || !this.getChecker().isArrayType(type))) return false;
         const name = String(declaration.name.text);
         const fn: any = this.rustEnclosingFunction(declaration);
         if (fn === undefined || isSourceFile(fn) || this.rustLocalIsReassigned(declaration, name)) return false;
@@ -29415,7 +29438,10 @@ export class RustTranspiler extends BaseTranspiler {
             const checker: any = this.checkerOrUndefined();
             const type: any = checker === undefined ? undefined : this.typeOfNodeIfAny(n);
             const list: any = type === undefined ? undefined : ((type.flags & TypeFlags.Union) ? (typeParts(type) ?? []).find((t: any) => checker.isArrayType(t)) : type);
-            if (list === undefined || !checker.isArrayType(list) || this.primitiveKindOfType(checker.getTypeArguments?.(list)?.[0]) !== 'string') return undefined;
+            if (list === undefined || !checker.isArrayType(list) || this.primitiveKindOfType(checker.getTypeArguments?.(list)?.[0]) !== 'string') {
+                // ral-64i: an unannotated base slice of a declared `string[]` local holds only that list's `Str` elements
+                return this.rust64iStringSliceDeclaration(declaration) ? 'join' : undefined;
+            }
             return 'join';
         }
         if (up?.kind === SyntaxKind.PropertyAssignment && up.initializer === n && up.parent?.kind === SyntaxKind.ObjectLiteralExpression) {
