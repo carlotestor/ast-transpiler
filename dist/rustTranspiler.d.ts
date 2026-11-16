@@ -3546,6 +3546,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustNilResponseLocals;
     /** The container kind of a write to a borrowed local; an endpoint write to an empty `let` counts as a map. */
     rustNilResponseWriteKind(rhs: any, nilDeclared: boolean, declaration: any): 'dict' | 'list' | 'api' | undefined;
+    /** ral-68c R1: `await this.m (..)` of a same-class async venue method whose declared return is a never-null container
+     *  (`Promise<Dict>` / `Promise<List>`, every declaration of the name alike), not a base builder. */
+    rust68cVenueWriteKind(rhs: any): 'dict' | 'list' | undefined;
     /** ral-65i: `await this.<endpoint> (..)` whose abstract declaration spells `Promise<Dict>`. */
     rust65iDeclaredDictEndpointWrite(rhs: any): boolean;
     /** ral-kc: `await this.<endpoint> (..)` whose abstract declaration spells `Promise<Dict>` / `Promise<List>`. */
