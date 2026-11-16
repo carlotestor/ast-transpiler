@@ -987,6 +987,11 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  local: only uses bound to its own symbol are walked. Any other second binding keeps the plain walk. */
     rustBlockLocalUsesAll(declaration: any, name: string, acceptUse: (n: any) => boolean, scalar?: boolean, skipPropertyNames?: boolean): boolean;
     rustBindingUsesWalk(declaration: any, nodes: any[], own: any, home: any, skip: any[], skipPropertyNames: boolean, acceptUse: (n: any) => boolean, scalar: boolean): boolean;
+    /** ral-64n: a typed-signature argument (`targ`: printed `x.as_deref().unwrap_or_default()` / `x.as_deref()` / the Copy
+     *  payload, never a boxed operand) of the call that is the whole source of a write to a typed scalar local (bitflyer
+     *  `expiry = this.parseExpiryDate (expiryDate)` with `expiryDate` declared in two sibling blocks): the written local
+     *  prints its own conversion of the call's `Value`, so no build/ pass reads a boxed text of this argument there. */
+    rust64nTypedArgWrite(n: any, write: any, form: string | undefined): boolean;
     /** ral-60k: a direct argument of a base-class `this.m (..)` call that is the whole source of a write to a local declared
      *  `Dict` (kucoin fetchBalance `result = this.mergeBalanceAccount (result, currencyCode, ..)` in a sibling block): the
      *  written local's type is its annotation and the argument boxes into the call, as the plain walk already prints it. */
@@ -1560,6 +1565,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustStrFindText(recvKind: string, name: string, needle: any): string;
     /** `s.split(d)` on a typed string local with a literal or `String` delimiter: the helper's array of parts, empty for null. */
     rustStrLocalSplitText(node: any): string | undefined;
+    /** ral-64n: the sole argument of `s.split(..)` when it is `(d as string)` (parentheses / a `string` assertion only) over an
+     *  `Option<String>` local `d`; a bare identifier keeps the old decision (no assertion, no new form). */
+    rust64nOptSplitDelim(call: any): any;
+    /** ral-64n: `n` (through its parentheses / `as string`) is the delimiter `rust64nOptSplitDelim` prints from the local. */
+    rust64nOptSplitDelimUse(n: any): boolean;
     /** `s.slice(a)` / `s.slice(a, b)` on a typed string local with literal bounds (a non-negative end): the runtime's
      *  char-indexed slice without a closure. A start past the end clamps to an empty `skip`, `b < a` takes nothing (the
      *  helper's `i <= j` arm), a negative start counts from the char length floored at 0; a `None` receiver is `Null`. */
