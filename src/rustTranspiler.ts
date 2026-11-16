@@ -24921,6 +24921,8 @@ export class RustTranspiler extends BaseTranspiler {
             && isElementAccessExpression(up.left) && this.rustBalanceOptionsPlace(up.left)) return true;
         if (this.rustScalarInNestedWrite(n, true)) return false;
         if (up.kind === SyntaxKind.PropertyAssignment) return up.initializer === n;
+        // ral-84a: `book.cache.push (x)` on a typed book local (`cache_push(v: Value)`)
+        if (this.rust84aBookCachePushArg(n)) return true;
         if (!isCallExpression(up) || up.expression === n || !isPropertyAccessExpression(up.expression) || up.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
         const callee = String(up.expression.name.text);
         if (RustTranspiler.RUST_HANDED_DICT_EXTEND.has(callee) || RustTranspiler.RUST_HANDED_DICT_OMIT.has(callee)) return false;

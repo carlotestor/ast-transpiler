@@ -24258,6 +24258,11 @@ describe('ral-84a: an optional safeDict delta pushed into a typed book cache is 
         expect(out).toContain('let mut delta: Option<crate::value::Dict> = ');
         expect(out).toContain('orderbook.cache_push(delta.map_or(Value::Null, Value::Dict));');
     });
+    test('a defaulted ws message field (`safeDict (message, k, {})`) pushed into the book is the shared map, boxed there', () => {
+        const out = write ('84a-cpush-ws', buffer.replace ("this.safeDict (message, 'result')", "this.safeDict (message, 'result', {})"));
+        expect(out).toContain('let mut delta: crate::value::Dict = ');
+        expect(out).toContain('orderbook.cache_push(Value::Dict(delta));');
+    });
     test('negative: a push into a plain list local is no book cache push', () => {
         const out = write ('84a-cpush-neg', buffer.replace ('orderbook.cache.push (delta);', 'const rows = [];\n            rows.cache.push (delta);'));
         expect(out).not.toContain('let mut delta: Option<crate::value::Dict>');
