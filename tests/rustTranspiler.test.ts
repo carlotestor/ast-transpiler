@@ -24194,3 +24194,25 @@ describe('ral-80a: a non-boolean settle under an unknown hash keeps the tuple sl
         expect(out).toMatch(/let mut candles: Value = get_value\(/);
     });
 });
+describe('ral-84h R1: a defaulted base `Str` parameter as a ternary arm types the local when it has a native use', () => {
+    const base = (methods: string) => "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    id: string = '';\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n" + methods + "}\n";
+    const run = (methods: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-84h-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base(methods));
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        try {
+            return t.transpileRustByPath(path.join(root, 'ts/src/base/Exchange.ts')).content;
+        } finally { fs.rmSync(root, { recursive: true, force: true }); }
+    };
+    test('requireValue-style message: Option<String> local, concatenated natively', () => {
+        const out = run("    requireValue (value: any, message: Str = undefined): any {\n        if (value === undefined) {\n            const errorMessage = (message !== undefined) ? message : 'value is required';\n            throw new Error (this.id + ' ' + errorMessage);\n        }\n        return value;\n    }\n");
+        expect(out).toContain('let mut errorMessage: Option<String> = ');
+        expect(out).toContain('message.as_str().map(str::to_owned)');
+        expect(out).not.toContain('let mut errorMessage: Value');
+    });
+    test('negative: a local only handed back to a Value slot stays Value', () => {
+        const out = run("    pick (o: Dict, message: Str = undefined): Str {\n        const k = (message !== undefined) ? message : 'x';\n        return this.safeString (o, k);\n    }\n");
+        expect(out).toContain('let mut k: Value');
+    });
+});
