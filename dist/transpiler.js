@@ -41541,6 +41541,44 @@ GoTranspiler.prototype.printVariableDeclarationList = function(node, identation)
   }
   return goTernaryJoinUpstreamPrintDeclarationList.call(this, node, identation);
 };
+{
+  const sinkReads = GoTranspiler.prototype.goListLocalSinkReadsAsList;
+  GoTranspiler.prototype.goListLocalSinkReadsAsList = function(node, nilTestSafe) {
+    let outer = node;
+    while ((outer.parent?.kind === SyntaxKind5.AsExpression || outer.parent?.kind === SyntaxKind5.ParenthesizedExpression || outer.parent?.kind === SyntaxKind5.NonNullExpression) && outer.parent.expression === outer) {
+      outer = outer.parent;
+    }
+    return sinkReads.call(this, outer, nilTestSafe);
+  };
+}
+{
+  const trueLocal = GoTranspiler.prototype.goHandleOptionTrueLocal;
+  GoTranspiler.prototype.goHandleOptionTrueLocal = function(declaration) {
+    const annotation = declaration?.type;
+    if (annotation === void 0) {
+      return trueLocal.call(this, declaration);
+    }
+    const call = declaration.initializer;
+    const boolAnnotation = annotation.kind === SyntaxKind5.BooleanKeyword || annotation.kind === SyntaxKind5.TypeReference && annotation.typeName?.kind === SyntaxKind5.Identifier && annotation.typeName.text === "Bool";
+    if (!boolAnnotation || declaration.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier || declaration.parent?.parent?.kind !== SyntaxKind5.FirstStatement || call?.kind !== SyntaxKind5.CallExpression || call.expression?.kind !== SyntaxKind5.PropertyAccessExpression || call.expression.expression?.kind !== SyntaxKind5.ThisKeyword || call.expression.name?.text !== "handleOption" || call.arguments.length < 2 || call.arguments.length > 3) {
+      return false;
+    }
+    const comparesWithTrue = (n) => {
+      const parent = n.parent;
+      const op = parent?.operatorToken?.kind;
+      if (parent?.kind !== SyntaxKind5.BinaryExpression || op !== SyntaxKind5.EqualsEqualsEqualsToken && op !== SyntaxKind5.EqualsEqualsToken && op !== SyntaxKind5.ExclamationEqualsEqualsToken && op !== SyntaxKind5.ExclamationEqualsToken) {
+        return false;
+      }
+      return (parent.left === n ? parent.right : parent.left)?.kind === SyntaxKind5.TrueKeyword;
+    };
+    return this.goDeclaredLocalTypeIfSafe(
+      declaration,
+      "bool",
+      comparesWithTrue,
+      (n) => n.parent?.kind === SyntaxKind5.PropertyAccessExpression && n.parent.name === n || n.parent?.kind === SyntaxKind5.PropertyAssignment && n.parent.name === n
+    ) === "bool";
+  };
+}
 
 // src/javaTranspiler.ts
 init_esm_shims();
