@@ -83237,6 +83237,18 @@ ${iden}}`;
     const init = this.rustSkipWrappers(declaration.initializer);
     if (init !== void 0 && this.rustOmitOfDict(init) && this.rustOmitDeclLineFits(declaration))
       return true;
+    if (init !== void 0 && isConditionalExpression4(init) && this.rustDictTernaryInit(init)) {
+      const arm = (x) => {
+        const a = this.rustSkipWrappers(x);
+        if (a !== void 0 && isCallExpression6(a))
+          return this.rustBaseCallNamed(a, _RustTranspiler.RUST_ALWAYS_MAP_HELPERS) || this.rustOmitOfDict(a) && this.rustOmitLineFits(a);
+        if (a === void 0 || !isIdentifier3(a))
+          return false;
+        const d = this.rustDeclarationOfIdentifier(a);
+        return d !== void 0 && d !== a && isParameterDeclaration3(d) && this.rustProvenMapParam(d) && !this.rustLocalIsReassigned(d, String(a.text));
+      };
+      return arm(init.whenTrue) && arm(init.whenFalse) && String(declaration.initializer.getText()).split("\n")[0].length <= 240;
+    }
     return init !== void 0 && (this.rustBaseCallNamed(init, _RustTranspiler.RUST_ALWAYS_MAP_HELPERS) || this.rustOmitOfDict(init) && this.rustOmitLineFits(init)) && String(declaration.initializer.getText()).split("\n")[0].length <= 240;
   }
   /** ral-55a: `let x: Dict = this.omit (y, [ 'a', .. ])` (identifier head, literal keys, one line): the typed declaration
