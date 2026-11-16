@@ -54887,7 +54887,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         return true;
       const parent = n.parent;
       const box = parent?.kind === SyntaxKind7.PropertyAssignment && parent.initializer === n || isArrayLiteralExpression4(parent);
-      if (box && !this.rustLocalLastUse(n, declaration))
+      const ownedLast = parent?.kind === SyntaxKind7.PropertyAssignment && isVariableDeclaration3(declaration) && this.rust84cNilStrInKey(declaration) && this.rustOwnedLastUse(n, declaration);
+      if (box && !this.rustLocalLastUse(n, declaration) && !ownedLast)
         moves = false;
       return true;
     });
