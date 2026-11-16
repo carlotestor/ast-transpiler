@@ -2364,6 +2364,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustTupleSlotDecisions;
     rustTupleSlotKind(element: any): string | undefined;
     private rustTupleSlotKindUncached;
+    /** ral-66s1: every boxed hand-off of a string slot fits the line budget and none sits in a nested-write key position. */
+    rust66s1StrSlotCopyBoxesOk(element: any, fn: any): boolean;
     /** Every boxed read of the slot keeps its statement within the 400-char line budget once the box text is added
      *  (a longer line would make the line guard veto other typed locals on it). */
     rustStrSlotBoxesFit(element: any, fn: any): boolean;
@@ -4489,6 +4491,9 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  (`handleTriggerPricesAndParams`: `[Str, Str, Str, Dict]`) is the params map handed back, exactly as slot 1 of the
      *  two-slot helpers. Non-test sources only (the caller checks the tier). */
     rustBaseHandleLastDictSlot(element: any): boolean;
+    /** ral-66s1: slot 1 of `const [ a, p ] = super.handle*AndParams (..)` inside a venue override, the base helper's own
+     *  tuple return declaring that slot a bare `Dict`: the params map handed back, exactly as for a `this.` call. */
+    rust66s1SuperHandleParamsSlot(element: any): boolean;
     rustCallDeclaresDictSlot(init: any, at: number): boolean;
     /** Every `return` of the callee's own body is an array literal whose element `at` is a map literal or a `const`
      *  local initialised with one (a map on every path, whatever keys are written into it). */

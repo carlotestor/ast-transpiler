@@ -67984,6 +67984,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     let nativeUses = 0;
     let copies = 0;
     let concats = 0;
+    let rust66s1 = false;
     const safe = this.rustLocalUsesAll(element, name, true, (n) => {
       if (this.rustDeclaredNode(n) !== element || this.rustEnclosingFunction(n) !== fn)
         return false;
@@ -67995,7 +67996,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
       const ok = kind === "string" ? this.rustStringLocalUseIsNative(n) || this.rustVenueStrArgSlot(n) : this.rustIdentifierUseIsCondition(n) || this.rustBoolSlotTrueTest(n) || this.rustBoolSlotLogicalUse(n);
       if (ok)
         nativeUses++;
-      const box = !ok && kind === "string" && this.rustStrSlotBoxUse(n) && (isCallExpression6(n.parent) || isReturnStatement4(n.parent) || this.rustStrSlotThrownConcat(n) || this.rustSlotUseOutsideLoop(n, element));
+      const box = !ok && kind === "string" && this.rustStrSlotBoxUse(n) && (isCallExpression6(n.parent) || isReturnStatement4(n.parent) || this.rustStrSlotThrownConcat(n) || this.rustSlotUseOutsideLoop(n, element) || (rust66s1 = true));
       if (box && !(isReturnStatement4(n.parent) || this.rustStrSlotThrownConcat(n) || this.rustStrSlotLastUse(n, element)))
         copies++;
       return ok || box;
@@ -68006,7 +68007,15 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     }
     if (!safe && concats > 0)
       this.rustScalarSolved.delete(fn);
-    return safe && (nativeUses > 0 || kind === "string" && copies === 0) ? kind === "string" ? "str" : "bool" : void 0;
+    if (safe && kind === "string" && (rust66s1 || nativeUses === 0 && copies > 0) && !this.rust66s1StrSlotCopyBoxesOk(element, fn))
+      return void 0;
+    return safe && (nativeUses > 0 || kind === "string") ? kind === "string" ? "str" : "bool" : void 0;
+  }
+  /** ral-66s1: every boxed hand-off of a string slot fits the line budget and none sits in a nested-write key position. */
+  rust66s1StrSlotCopyBoxesOk(element, fn) {
+    if (fn.kind !== SyntaxKind7.MethodDeclaration || this.rustSlotJoinsSolve(element))
+      return false;
+    return this.rustStrSlotBoxesFit(element, fn);
   }
   /** Every boxed read of the slot keeps its statement within the 400-char line budget once the box text is added
    *  (a longer line would make the line guard veto other typed locals on it). */
@@ -81714,7 +81723,7 @@ ${iden}}`;
         return false;
       const init = this.rustAwaitedCall(owner.initializer);
       const callee = init?.expression;
-      if (!allSlot && (!isCallExpression6(init) || !isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword || !/^handle\w*AndParams\d*$/.test(String(callee.name.text)) && !this.rustLentSlotSource(init, declaration) && !this.rustDeclaredDictSlot(declaration)))
+      if (!allSlot && !this.rust66s1SuperHandleParamsSlot(declaration) && (!isCallExpression6(init) || !isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword || !/^handle\w*AndParams\d*$/.test(String(callee.name.text)) && !this.rustLentSlotSource(init, declaration) && !this.rustDeclaredDictSlot(declaration)))
         return false;
     } else {
       const list = declaration.parent;
@@ -83615,6 +83624,23 @@ ${iden}}`;
     const at = element.parent.elements.indexOf(element);
     const slot = type.elements?.[at];
     return at >= 2 && at === type.elements.length - 1 && slot?.kind === SyntaxKind7.TypeReference && isIdentifier3(slot.typeName) && slot.typeName.text === "Dict" && slot.typeArguments === void 0;
+  }
+  // ── ral-66s1: tuple slots handed straight on ─────────────────────────────
+  // A slot stored once and handed back to a `Value` place is typed at the destructure and boxed at the hand-off.
+  /** ral-66s1: slot 1 of `const [ a, p ] = super.handle*AndParams (..)` inside a venue override, the base helper's own
+   *  tuple return declaring that slot a bare `Dict`: the params map handed back, exactly as for a `this.` call. */
+  rust66s1SuperHandleParamsSlot(element) {
+    const owner = element?.parent?.parent;
+    if (element?.parent?.kind !== SyntaxKind7.ArrayBindingPattern || !isVariableDeclaration3(owner) || owner.name !== element.parent || element.parent.elements.indexOf(element) !== 1)
+      return false;
+    const init = this.rustAwaitedCall(owner.initializer);
+    const callee = init?.expression;
+    if (!isCallExpression6(init) || !isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.SuperKeyword || !/^handle\w*AndParams\d*$/.test(String(callee.name.text)) || !this.rustNativeListSource(init) || !this.rustCalleeIsRuntimeBase(init))
+      return false;
+    const declaration = this.rustCalleeDeclaration(init);
+    const type = declaration?.type;
+    const slot = type?.kind === SyntaxKind7.TupleType ? type.elements?.[1] : void 0;
+    return type?.elements?.length === 2 && slot?.kind === SyntaxKind7.TypeReference && isIdentifier3(slot.typeName) && slot.typeName.text === "Dict" && slot.typeArguments === void 0;
   }
   rustCallDeclaresDictSlot(init, at) {
     const declaration = this.rustCalleeDeclaration(init);
