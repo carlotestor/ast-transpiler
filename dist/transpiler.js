@@ -68519,7 +68519,26 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
   /** wi: a bare read under `!` / `&&` / `||` whose whole logical sits in a slot the printer already prints `bool`
    *  (a condition, `Value::Bool(..)`, a `bool` local): the slot's truthiness, `None` (Null) false as `is_true`. */
   rustBoolSlotLogicalUse(n) {
-    return this.rustClimbLogicalWrappers(n) !== n && this.rustConditionBoolSlot(n);
+    return this.rustClimbLogicalWrappers(n) !== n && (this.rustConditionBoolSlot(n) || this.rust68dBoolSlotLogicalInit(n));
+  }
+  /** ral-68d: the whole `&&` / `||` the leaf sits in is the initializer of a single-binding local the checker types
+   *  `boolean` (or `Bool`), every leaf a boolean-or-undefined identifier / call (`const isStockOrUta = (isStockSpot || uta)`):
+   *  the logical prints native (`is_true` over a `bool` is the identity), so the slot's truthiness reads the same. */
+  rust68dBoolSlotLogicalInit(n) {
+    const top = this.rustClimbLogicalWrappers(n);
+    const declaration = top?.parent;
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.initializer !== top || !isIdentifier3(declaration.name) || declaration.parent?.declarations?.length !== 1)
+      return false;
+    const inner = this.unwrapParens(top);
+    if (inner === void 0 || !isBinaryExpression5(inner) || !this.isLogicalOp(inner.operatorToken.kind) || !this.isBooleanOrUndefinedType(this.typeOfNodeIfAny(top)) || !this.rustOptBoolChain(top))
+      return false;
+    let first = inner;
+    while (first !== void 0 && (isParenthesizedExpression3(first) || isBinaryExpression5(first) && this.isLogicalOp(first.operatorToken.kind)))
+      first = isParenthesizedExpression3(first) ? first.expression : first.left;
+    if (first === void 0 || !isIdentifier3(first) || first === n)
+      return false;
+    const lead = this.rustDeclaredNode(first);
+    return lead !== void 0 && isVariableDeclaration3(lead) && lead.name !== first && !this.rustDeclarationPrintsNativeBool(lead);
   }
   /** qe: `x === true` / `x !== true` on a bool tuple slot: the slot reads `as_bool() == Some(true)`, so the native
    *  bool answers the strict test exactly (Null and a non-bool are `false` on both sides). Never `=== false`. */
@@ -82742,7 +82761,7 @@ ${iden}}`;
   /** `n` is the first operand of a two-operand base `this.extend (n, x)`. */
   rustExtendHeadUse(n) {
     const call = n.parent;
-    return isCallExpression6(call) && call.arguments.length === 2 && call.arguments[0] === n && isIdentifier3(n) && this.rustBaseCallNamed(call, _RustTranspiler.RUST_EXTEND_HEAD_CALLS);
+    return isCallExpression6(call) && call.arguments[0] === n && isIdentifier3(n) && (call.arguments.length === 2 && this.rustBaseCallNamed(call, _RustTranspiler.RUST_EXTEND_HEAD_CALLS) || call.arguments.length === 1 && this.rustBaseCallNamed(call, _RustTranspiler.RUST_OPT_EXTEND));
   }
   /** qe: slot 0 of `const [ x, p ] = this.handleUntilOption (k, r, ..)` with `r` a map literal or a typed map local:
    *  the base helper hands `r` back (inserting the until key), so the slot is that map on every path. */
@@ -83813,6 +83832,8 @@ ${iden}}`;
       return true;
     if (isArrayLiteralExpression4(up) && isReturnStatement4(up.parent) && declaration?.kind === SyntaxKind7.BindingElement && declaration.parent?.elements?.indexOf(declaration) === 1)
       return true;
+    if (isReturnStatement4(up) && up.expression === n && declaration?.kind === SyntaxKind7.BindingElement && declaration.parent?.elements?.indexOf(declaration) === 1 && this.rustEnclosingFunction(up) === this.rustEnclosingFunction(declaration) && this.rust68dReturnedParamsSlot(declaration))
+      return true;
     if (isVariableDeclaration3(up) && up.initializer === n && isVariableDeclaration3(declaration) && this.rustHandedTernaryLocal(declaration) && this.rustEnclosingFunction(up) === this.rustEnclosingFunction(declaration) && this.rustAliasInitOutsideLoop(up, declaration))
       return this.rustSlotTargetStaysValue(up);
     if (!isCallExpression6(up) || up.expression === n || !isPropertyAccessExpression3(up.expression) || up.expression.expression.kind !== SyntaxKind7.ThisKeyword && up.expression.expression.kind !== SyntaxKind7.SuperKeyword)
@@ -83825,6 +83846,33 @@ ${iden}}`;
     if (this.rustTypedParamsSlot(up, Array.from(up.arguments).indexOf(n)))
       return true;
     return this.rustNilBoxSlotOk(up, Array.from(up.arguments).indexOf(n));
+  }
+  /** ral-68d: a params slot of `const [ a, p ] = this.handle*AndParams (x, ..)` returned whole: `x` is an identifier the
+   *  checker types a `Dict` (the base helper hands back that map or a copy of it), and `p` is never written at a key. */
+  rust68dReturnedParamsSlot(declaration) {
+    const owner = declaration.parent?.parent;
+    const init = isVariableDeclaration3(owner) ? this.rustAwaitedCall(owner.initializer) : void 0;
+    if (init === void 0 || !isCallExpression6(init) || !isPropertyAccessExpression3(init.expression) || init.expression.expression.kind !== SyntaxKind7.ThisKeyword || !/^handle\w*AndParams\d*$/.test(String(init.expression.name.text)) || !this.rustCalleeIsRuntimeBase(init))
+      return false;
+    const source = this.rustSkipWrappers(init.arguments[0]);
+    if (source === void 0 || !isIdentifier3(source))
+      return false;
+    let declared;
+    try {
+      declared = this.getChecker().typeToString(this.getChecker().getTypeAtLocation(source));
+    } catch (e) {
+      return false;
+    }
+    if (declared !== "Dict")
+      return false;
+    let written = false;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), true, (n) => {
+      const up = n.parent;
+      if (isElementAccessExpression4(up) && up.expression === n && isBinaryExpression5(up.parent) && up.parent.left === up)
+        written = true;
+      return true;
+    });
+    return !written;
   }
   /** ral-59a: a local initialised or rewritten whole from another identifier (`let x = y` / `x = y`): handing it to a
    *  `Value` slot moved its source before; typing it would copy the source at the write instead. */

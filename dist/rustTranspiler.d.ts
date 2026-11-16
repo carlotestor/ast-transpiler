@@ -2453,6 +2453,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** wi: a bare read under `!` / `&&` / `||` whose whole logical sits in a slot the printer already prints `bool`
      *  (a condition, `Value::Bool(..)`, a `bool` local): the slot's truthiness, `None` (Null) false as `is_true`. */
     rustBoolSlotLogicalUse(n: any): boolean;
+    /** ral-68d: the whole `&&` / `||` the leaf sits in is the initializer of a single-binding local the checker types
+     *  `boolean` (or `Bool`), every leaf a boolean-or-undefined identifier / call (`const isStockOrUta = (isStockSpot || uta)`):
+     *  the logical prints native (`is_true` over a `bool` is the identity), so the slot's truthiness reads the same. */
+    rust68dBoolSlotLogicalInit(n: any): boolean;
     /** qe: `x === true` / `x !== true` on a bool tuple slot: the slot reads `as_bool() == Some(true)`, so the native
      *  bool answers the strict test exactly (Null and a non-bool are `false` on both sides). Never `=== false`. */
     rustBoolSlotTrueTest(n: any): boolean;
@@ -4530,6 +4534,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** The call a slot destructures, past parentheses, casts and one `await`. */
     rustAwaitedCall(node: any): any;
     rustHandedSlotBoxUse(n: any, declaration: any): boolean;
+    /** ral-68d: a params slot of `const [ a, p ] = this.handle*AndParams (x, ..)` returned whole: `x` is an identifier the
+     *  checker types a `Dict` (the base helper hands back that map or a copy of it), and `p` is never written at a key. */
+    rust68dReturnedParamsSlot(declaration: any): boolean;
     /** ral-59a: a local initialised or rewritten whole from another identifier (`let x = y` / `x = y`): handing it to a
      *  `Value` slot moved its source before; typing it would copy the source at the write instead. */
     rustRewrittenFromLocal(declaration: any): boolean;
