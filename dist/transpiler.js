@@ -61803,10 +61803,53 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       return this.rustStrFindNeedle(args[0], false) === void 0 ? void 0 : { recv, recvKind, method, kind: "int" };
     if ((shape === "pad" || shape === "slice") && this.rustScalarIdentifierKind(recv) === void 0 && this.rustScalarParamRead(recv) === void 0)
       return void 0;
-    const ostrSelf = recvKind === "ostr" && method === "toString" && !this.rustTestTierSource(call) && this.rust48fSlotAliasConcatRecv(call, recv);
+    const ostrSelf = recvKind === "ostr" && method === "toString" && !this.rustTestTierSource(call) && (this.rust48fSlotAliasConcatRecv(call, recv) || this.rust65xNeverNullStrRecv(recv));
     if (recvKind === "ostr" && shape !== "case" && shape !== "replace" && shape !== "pad" && shape !== "slice" && !ostrSelf)
       return void 0;
     return { recv, recvKind, method, kind: recvKind };
+  }
+  /** ral-65x: `x.toString()` of an `Option<String>` local that can never hold `None`: the checker types this read
+   *  `string` and every write of the local (initializer included) is a string the checker types `string` where it is
+   *  written (a required string parameter, a guarded non-undefined local, a literal or a `+` chain with a string literal
+   *  operand). The `Value` form's `format!` then displayed a `Str` box, so the local itself is the same text. */
+  rust65xNeverNullStrRecv(recv) {
+    const d = this.rustDeclaredNode(recv);
+    if (d === void 0 || !isVariableDeclaration3(d) || !isIdentifier3(d.name) || d.initializer === void 0)
+      return false;
+    const here = this.typeOfNodeIfAny(recv);
+    if (here === void 0 || !this.isStringLikeType(here))
+      return false;
+    const fn = this.rustEnclosingFunction(d);
+    const strAt = (e) => {
+      const n = this.unwrapParens(e);
+      if (n === void 0)
+        return false;
+      if (n.kind === SyntaxKind7.StringLiteral || n.kind === SyntaxKind7.NoSubstitutionTemplateLiteral)
+        return true;
+      if (isBinaryExpression5(n) && n.operatorToken.kind === SyntaxKind7.PlusToken) {
+        const lit = (x) => {
+          const y = this.unwrapParens(x);
+          return y.kind === SyntaxKind7.StringLiteral || y.kind === SyntaxKind7.NoSubstitutionTemplateLiteral;
+        };
+        return lit(n.left) || lit(n.right);
+      }
+      if (!isIdentifier3(n))
+        return false;
+      const t = this.typeOfNodeIfAny(n);
+      return t !== void 0 && this.isStringLikeType(t);
+    };
+    if (!strAt(d.initializer))
+      return false;
+    return this.rustLocalUsesAll(d, String(d.name.text), true, (n) => {
+      if (this.rustEnclosingFunction(n) !== fn)
+        return false;
+      const parent = n.parent;
+      if ((parent?.kind === SyntaxKind7.PrefixUnaryExpression || parent?.kind === SyntaxKind7.PostfixUnaryExpression) && parent.operator !== SyntaxKind7.ExclamationToken)
+        return false;
+      if (!isBinaryExpression5(parent) || parent.left !== n || !rustIsAssignmentOperator(parent.operatorToken.kind))
+        return true;
+      return parent.operatorToken.kind === SyntaxKind7.EqualsToken && strAt(parent.right);
+    });
   }
   /** ral-48f: `x.toString()` read as a `+` operand, `x` a destructured handle*AndParams slot or a local declared `Str` whose
    *  initializer is such a slot read whole (the slot and the alias are decided together by the joint scalar solve). */

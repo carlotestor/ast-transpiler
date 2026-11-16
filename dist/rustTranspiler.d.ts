@@ -1505,6 +1505,11 @@ export declare class RustTranspiler extends BaseTranspiler {
         method: string;
         kind: string;
     } | undefined;
+    /** ral-65x: `x.toString()` of an `Option<String>` local that can never hold `None`: the checker types this read
+     *  `string` and every write of the local (initializer included) is a string the checker types `string` where it is
+     *  written (a required string parameter, a guarded non-undefined local, a literal or a `+` chain with a string literal
+     *  operand). The `Value` form's `format!` then displayed a `Str` box, so the local itself is the same text. */
+    rust65xNeverNullStrRecv(recv: any): boolean;
     /** ral-48f: `x.toString()` read as a `+` operand, `x` a destructured handle*AndParams slot or a local declared `Str` whose
      *  initializer is such a slot read whole (the slot and the alias are decided together by the joint scalar solve). */
     rust48fSlotAliasConcatRecv(call: any, recv: any): boolean;
