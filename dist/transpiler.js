@@ -59410,6 +59410,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "okey";
     if ((kind === "str" || kind === "ostr") && this.rust61kNestedFieldMiddleKey(n))
       return "mkey";
+    if ((kind === "str" || kind === "ostr") && this.rust62kLocalNestedLastKey(n))
+      return "mkey";
     if (this.rustScalarInNestedWrite(n))
       return void 0;
     if (kind === "str" && this.rustScalarInsertKeyUse(n))
@@ -60593,6 +60595,38 @@ ${binding(plan.indent)}` : ""), head: "" };
       return `add_element_to_object(get_value_mut(&mut self.${field}, &Value::from(${uname}${ukind === "str" ? ".as_str()" : ".as_deref()"})), &${lastKey}, ${value})`;
     }
     return insert;
+  }
+  /** ral-62k: `n` is the last key of a statement write `x[..][n] = v` whose chain root is a plain local identifier
+   *  (two or more hops) and whose value never names `n` or `this`. */
+  rust62kLocalNestedLastKey(n) {
+    const keyNode = this.rustKeyWrapped(n);
+    const access = keyNode.parent;
+    if (!isElementAccessExpression4(access) || access.argumentExpression !== keyNode || !isElementAccessExpression4(access.expression))
+      return false;
+    const write = access.parent;
+    if (!isBinaryExpression5(write) || write.left !== access || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    let root = access.expression;
+    while (isElementAccessExpression4(root)) {
+      const k = this.rustSkipWrappers(root.argumentExpression);
+      if (k === void 0 || !isStringLiteral3(k) && !isNumericLiteral4(k))
+        return false;
+      root = root.expression;
+    }
+    if (!isIdentifier3(root) || this.rustSymbolOf(root) === this.rustSymbolOf(n))
+      return false;
+    const rd = this.rustDeclarationOfIdentifier(root);
+    if (rd === void 0 || !isVariableDeclaration3(rd))
+      return false;
+    const own = this.rustSymbolOf(n);
+    let named = false;
+    const visit = (x) => {
+      if (x.kind === SyntaxKind7.ThisKeyword || isIdentifier3(x) && this.rustSymbolOf(x) === own)
+        named = true;
+      x.forEachChild(visit);
+    };
+    visit(write.right);
+    return !named;
   }
   /** ral-61k: `n` keys a middle hop of a statement write `this.balance|options[..][n][..] = v`: an element read whose
    *  receiver is itself an element read and which is itself the receiver of the outermost written element access. */
@@ -63614,11 +63648,33 @@ ${ind}];`;
         return this.rustScalarInsertKeyUse(n);
       if (enumerated && keyRead && isElementAccessExpression4(this.rustSkipWrappers(local.initializer)) && this.rust61kSelfReassignOnlyRead(declaration, name, n))
         return this.rustScalarInsertKeyUse(n);
+      if (enumerated && keyRead && isElementAccessExpression4(this.rustSkipWrappers(local.initializer)) && this.rust62kOwnKeyOnlyRead(declaration, name, n))
+        return this.rustScalarInsertKeyUse(n);
       if (enumerated)
         return !keyRead && (isElementAccessExpression4(this.rustSkipWrappers(local.initializer)) || this.rustTbNetworkCodeInit(local.initializer) || this.rust55xGuardedSafeStringKey(n, local)) && this.rustScalarInsertKeyUse(n);
       return this.rustBearerWriteKeyOk(n, name) || this.rustScalarInsertKeyUse(n);
     }
     return this.rustScalarInsertKeyUse(n);
+  }
+  /** ral-62k: every element read of the map `m` (declared by `declaration`) is keyed by `n`'s own binding; write targets
+   *  (and hops of one) are not reads. */
+  rust62kOwnKeyOnlyRead(declaration, name, n) {
+    const own = this.rustSymbolOf(n);
+    if (own === void 0)
+      return false;
+    let ok = true;
+    this.rustLocalUsesAll(declaration, name, false, (u) => {
+      const acc = u.parent;
+      if (!isElementAccessExpression4(acc) || acc.expression !== u)
+        return true;
+      if (isBinaryExpression5(acc.parent) && acc.parent.left === acc || this.isNativeWriteTargetBase(u))
+        return true;
+      const kk = this.rustSkipWrappers(acc.argumentExpression);
+      if (kk === void 0 || !isIdentifier3(kk) || this.rustSymbolOf(kk) !== own)
+        ok = false;
+      return true;
+    });
+    return ok;
   }
   /** ral-61k: `n` keys a read `m[n]` inside `v` of the statement write `m[n] = v` (same map and key bindings) on a typed
    *  one-level map bearer. */
