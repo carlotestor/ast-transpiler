@@ -60249,7 +60249,7 @@ ${binding(plan.indent)}` : ""), head: "" };
       base = base.expression;
       depth++;
     }
-    if (depth < 3 || !_is.isIdentifier.call(void 0, base))
+    if (depth < 2 || !_is.isIdentifier.call(void 0, base) || depth === 2 && access.expression !== base)
       return void 0;
     const declaration = this.rustDeclarationOfIdentifier(base);
     if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || !_is.isObjectLiteralExpression.call(void 0, this.rustSkipWrappers(declaration.initializer)) || this.rustLocalReassigned(declaration))
