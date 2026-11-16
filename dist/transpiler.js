@@ -47386,6 +47386,10 @@ var JavaTranspiler = class extends BaseTranspiler {
     if (primitive !== void 0) {
       return { kind: primitive === "double" ? "double" : "long", boxed: false };
     }
+    const baseField = this.javaPrimitiveBaseFieldKind(inner);
+    if (baseField !== void 0) {
+      return { kind: baseField, boxed: false };
+    }
     if (!isIdentifier2(inner) || !this.javaIdentifierPrintsDeclaredName(inner)) {
       return void 0;
     }
@@ -47398,6 +47402,26 @@ var JavaTranspiler = class extends BaseTranspiler {
     }
     const kind = declared === "Double" || declared === "double" ? "double" : "long";
     return { kind, boxed: JAVA_BOXED_NUMERIC_TYPES.has(declared) };
+  }
+  // ral-77j3: `this.<field>` read of a numeric field the hand-written BaseExchange declares as a Java
+  // primitive (`public int minFundingAddressLength`, `public double rateLimit`): never null, and
+  // its static kind is fixed whatever a venue's describe() writes into it. Only a field whose TS
+  // declaration is the base class's own (no venue redeclares it) qualifies.
+  javaPrimitiveBaseFieldKind(node) {
+    if (node === void 0 || !isPropertyAccessExpression2(node) || node.expression.kind !== SyntaxKind6.ThisKeyword) {
+      return void 0;
+    }
+    const kind = { minFundingAddressLength: "long", fetchHistoryCacheSize: "long", rateLimit: "double" }[String(node.name.text)];
+    if (kind === void 0) {
+      return void 0;
+    }
+    const checker = this.checkerOrUndefined();
+    const declaration = checker?.getSymbolAtLocation(node.name)?.valueDeclaration?.resolve();
+    const file = String(declaration?.getSourceFile?.()?.fileName ?? "");
+    if (!/(^|[\\/])ts[\\/]src[\\/]base[\\/]Exchange(\.nooverloads\.\d+)?\.ts$/.test(file)) {
+      return void 0;
+    }
+    return kind;
   }
   printDeclaredNumericComparison(left, right, op) {
     const l = this.javaComparisonOperand(left);

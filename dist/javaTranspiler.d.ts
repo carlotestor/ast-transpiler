@@ -351,6 +351,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
         boxed: boolean;
         text?: string;
     } | undefined;
+    javaPrimitiveBaseFieldKind(node: any): 'long' | 'double' | undefined;
     printDeclaredNumericComparison(left: any, right: any, op: any): string | undefined;
     javaIntegralModOperand(node: any): boolean;
     printJavaModComparison(left: any, right: any, op: any): string | undefined;
