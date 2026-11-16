@@ -24215,3 +24215,25 @@ describe('ral-84b: a clock string concatenated with a nil-declared string local 
         expect(out).not.toContain('let mut timestamp: Value');
     });
 });
+
+describe('ral-84b: a built list shared into an object literal before its pushes is a List', () => {
+    const files: Record<string, string> = {
+        'ts/src/base/Exchange.ts': "export default class Exchange {\n    safeString (obj: any, key: any, d: any = undefined): string { return obj[key]; }\n    extend (a: any, b: any = {}): any { return a; }\n    keep (url: string, request: any, hashes: string[]): any { return request; }\n}\n",
+        'ts/src/pro/venue.ts': "import Exchange from '../base/Exchange.js';\nexport default class venue extends Exchange {\n    watchTickers (url: string, ids: string[]) {\n        const subscriptionArgs: string[] = [];\n        const messageHashes: string[] = [];\n        const request: any = {\n            'method': 'SUBSCRIBE',\n            'params': subscriptionArgs,\n        };\n        for (let i = 0; i < ids.length; i++) {\n            subscriptionArgs.push (ids[i] + '@ticker');\n            messageHashes.push ('ticker:' + ids[i]);\n        }\n        return this.keep (url, this.extend (request), messageHashes);\n    }\n}\n",
+    };
+    let out: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-84b2-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = transpiler.transpileRustByPath(path.join (root, 'ts/src/pro/venue.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test('aster watchTickers subscriptionArgs: List, shared into the request literal (Arc bump), native pushes', () => {
+        expect(out).toContain('let mut subscriptionArgs: crate::value::List = ');
+        expect(out).toContain('Value::Arr(subscriptionArgs.clone())');
+        expect(out).toContain('std::sync::Arc::make_mut(&mut subscriptionArgs).push(');
+    });
+});
