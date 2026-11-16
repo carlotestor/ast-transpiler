@@ -62279,6 +62279,8 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
     if (narrowed !== void 0 && (narrowed.kind === kind || `o${narrowed.kind}` === kind))
       return kind === narrowed.kind ? narrowed.text : `Some(${narrowed.text})`;
     const own = this.rustOptParamKind(node);
+    if (own !== void 0 && kind === `o${own}` && (own === "str" || own === "int" || own === "num"))
+      return `${super.printIdentifier(node)}.${_RustTranspiler.RUST_PARAM_READ[kind]}`;
     if (own === void 0 || own !== kind)
       return void 0;
     return `${super.printIdentifier(node)}.${_RustTranspiler.RUST_PARAM_READ[own]}`;
