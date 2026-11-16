@@ -13980,6 +13980,9 @@ function ccxtGoSafeCollectionRestUse(goTranspiler, node, family, defaulted) {
     if (parent.expression?.kind === ts.SyntaxKind.PropertyAccessExpression && parent.expression.name?.text === "push" && parent.expression.expression !== node) {
       return defaulted;
     }
+    if (parent.expression?.kind === ts.SyntaxKind.PropertyAccessExpression && parent.expression.name?.text === "append" && parent.expression.expression?.kind === ts.SyntaxKind.Identifier && typeof goTranspiler.goOhlcvsReadCacheType === "function" && goTranspiler.goOhlcvsReadCacheType(goTranspiler.goDeclarationOfIdentifier(parent.expression.expression)) !== void 0) {
+      return false;
+    }
     const callee = typeof goTranspiler.goPrintedCallee === "function" ? goTranspiler.goPrintedCallee(goTranspiler.printNode(parent, 0)) : void 0;
     if (callee === void 0 || CCXT_GO_SAFE_COLLECTION_VETO_CALLEES.indexOf(callee) >= 0) {
       return false;
