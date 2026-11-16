@@ -703,6 +703,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** The scalar kind an expression yields exactly (`null` for nullish); `fresh` admits the
      *  non-null literal kinds (`str|int|num|bool`) a declaration may seed. */
     rustScalarValueKind(expr: any, fresh: boolean): string | undefined;
+    /** ral-61p: `this.handleOption (m, o, <literal>)` resolved to the base tier: the option value or the default argument.
+     *  A string literal default names `ostr` (the runtime answers the stored option or that literal; a stored option of
+     *  another kind reads as `None`, the same miss the `Value` form's `.as_str()` compare made). */
+    rustHandleOptionLiteralKind(expr: any): string | undefined;
     private static readonly RUST_BASE_SCALAR_RETURNS;
     /** Base `parseNumber(s)` with no default over a string (literal, string local, `Precise.string*`): the
      *  runtime parses a `Str` to `Float` and answers `Null` otherwise, so the result is exactly an `Option<f64>`. */
