@@ -67972,11 +67972,27 @@ ${i1}}`;
     if (key === void 0 || key === "length")
       return void 0;
     const outer = parent.parent;
+    if (key === "precision" && this.rust87rhPrecisionRead(outer, parent))
+      return key;
     if (outer !== void 0 && (isCallExpression6(outer) || isPropertyAccessExpression3(outer) || isElementAccessExpression4(outer)) && outer.expression === parent)
       return void 0;
     if (outer !== void 0 && (isDeleteExpression2(outer) || isBinaryExpression5(outer) && outer.left === parent && rustIsAssignmentOperator(outer.operatorToken.kind)))
       return void 0;
     return key;
+  }
+  /** ral-87rh R1: `outer` is a plain read `<inner>['k']` (string-literal key) of `inner`: no write target, update, delete,
+   *  call or deeper chain link. */
+  rust87rhPrecisionRead(outer, inner) {
+    if (outer === void 0 || !isElementAccessExpression4(outer) || outer.expression !== inner || !isStringLiteralLikeNode4(outer.argumentExpression))
+      return false;
+    const up = outer.parent;
+    if (up === void 0 || (isCallExpression6(up) || isPropertyAccessExpression3(up) || isElementAccessExpression4(up)) && up.expression === outer)
+      return false;
+    if (isDeleteExpression2(up) || isPrefixUnaryExpression3(up) || isPostfixUnaryExpression3(up))
+      return false;
+    if (isBinaryExpression5(up) && up.left === outer && rustIsAssignmentOperator(up.operatorToken.kind))
+      return false;
+    return true;
   }
   /** The listed field a `this.safeString|safeBool (m, 'k')` call reads (no default, or a `false` default for a flag). */
   rustMarketSafeReadField(call) {
@@ -72347,6 +72363,11 @@ ${ind}let ${view}: &${map} = &${arc};
     if (isIdentifier3(receiverNode) && this.rustOptMarketLocalOf(receiverNode) !== void 0 && _RustTranspiler.rustBearerKeyTextOk(keyText)) {
       return `crate::value::KeyRead::key_read(&&${receiverText}, "${this.escapeRustStringLiteral(keyText)}")`;
     }
+    if (keyText === "precision" && isIdentifier3(receiverNode) && this.rust87rhPrecisionRead(receiverNode.parent?.parent, receiverNode.parent)) {
+      const declaration = this.rustTypedMarketLocalOf(receiverNode);
+      if (declaration !== void 0 && this.rustMarketLocalKind(declaration) === "struct")
+        return `crate::value::KeyRead::key_read(&&${receiverText}, "precision")`;
+    }
     if (keyText === "url" && this.rustIsWsClientType(this.getCheckedTypeOf(receiverNode)))
       return `${receiverText}.url()`;
     if (this.rustMapParamDeclaration(receiverNode) !== void 0 && _RustTranspiler.rustBearerKeyTextOk(keyText)) {
@@ -75857,6 +75878,8 @@ ${iden}}`;
   }
   rustReadBearerKindOfDeclaration(declaration) {
     if (declaration?.kind !== SyntaxKind7.VariableDeclaration || this.rustCurrencyLocalKind(declaration) !== false)
+      return false;
+    if (this.rustIsTypedMarketCall(declaration.initializer) && this.rustMarketLocalKind(declaration) === "struct")
       return false;
     let decision = this.rustReadBearerDecisions.get(declaration);
     if (decision === void 0) {
@@ -90747,12 +90770,9 @@ ${this.getIden(identation)}}`;
     const m = file.match(/^(.*(?:^|\/)ts\/src\/)([^/]+\.ts)$/);
     if (m === null)
       return false;
-    const fs5 = globalThis.process?.getBuiltinModule?.("fs");
-    if (fs5 === void 0)
-      return true;
     let text;
     try {
-      text = fs5.readFileSync(m[1] + "pro/" + m[2], "utf8");
+      text = fs3.readFileSync(m[1] + "pro/" + m[2], "utf8");
     } catch (e) {
       return false;
     }

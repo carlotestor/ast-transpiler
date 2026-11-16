@@ -2260,6 +2260,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustIsTypedMarketCall(node: any): boolean;
     /** The literal key of a struct-local read `m['k']` / `m.k` (not written, not called). */
     rustMarketReadKey(n: any): string | undefined;
+    /** ral-87rh R1: `outer` is a plain read `<inner>['k']` (string-literal key) of `inner`: no write target, update, delete,
+     *  call or deeper chain link. */
+    rust87rhPrecisionRead(outer: Node | undefined, inner: Node | undefined): boolean;
     /** The listed field a `this.safeString|safeBool (m, 'k')` call reads (no default, or a `false` default for a flag). */
     rustMarketSafeReadField(call: any): string | undefined;
     /** `this.safeString (m, 'k', '')`: three arguments, the last an empty string literal. */
