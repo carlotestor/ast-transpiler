@@ -1974,6 +1974,12 @@ export interface GoTranspiler {
         derefTrue: boolean;
         derefFalse: boolean;
     } | undefined;
+    goTernaryJoinPartsUncached(declaration: any): {
+        goType: string;
+        derefTrue: boolean;
+        derefFalse: boolean;
+    } | undefined;
+    goTernaryJoinHasForeignComparison(declaration: any, goType: string): boolean;
     goTernaryJoinArmType(node: any): string | undefined;
     goTernaryJoinConditionDefines(condition: any, name: string, outcome: boolean): boolean;
     goTernaryJoinDeclaration(statement: any, declaration: any, identation: number): string | undefined;

@@ -41090,7 +41090,50 @@ GoTranspiler.prototype.goTernaryJoinConditionDefines = function(condition, name,
   }
   return notEqual ? outcome : !outcome;
 };
+var GO_TERNARY_JOIN_MEMO = /* @__PURE__ */ new WeakMap();
 GoTranspiler.prototype.goTernaryJoinParts = function(declaration) {
+  if (declaration === void 0) {
+    return void 0;
+  }
+  const memo = GO_TERNARY_JOIN_MEMO.get(declaration);
+  if (memo !== void 0) {
+    return memo.parts;
+  }
+  GO_TERNARY_JOIN_MEMO.set(declaration, { parts: void 0 });
+  let parts = this.goTernaryJoinPartsUncached(declaration);
+  if (parts !== void 0 && this.goTernaryJoinHasForeignComparison(declaration, parts.goType)) {
+    parts = void 0;
+  }
+  GO_TERNARY_JOIN_MEMO.set(declaration, { parts });
+  return parts;
+};
+GoTranspiler.prototype.goTernaryJoinHasForeignComparison = function(declaration, goType) {
+  const scope = this.goEnclosingFunction(declaration);
+  const name = declaration.name;
+  if (scope === void 0) {
+    return true;
+  }
+  return this.hasNodeWhere(scope, (n) => {
+    if (n.kind !== SyntaxKind5.Identifier || n.text !== name.text || n === name) {
+      return false;
+    }
+    let current = n;
+    while (current.parent?.kind === SyntaxKind5.ParenthesizedExpression) {
+      current = current.parent;
+    }
+    const parent = current.parent;
+    if (parent?.kind !== SyntaxKind5.BinaryExpression || COMPARISON_TOKENS.indexOf(parent.operatorToken.kind) < 0 && ORDERED_COMPARISON_OPERATORS[parent.operatorToken.kind] === void 0) {
+      return false;
+    }
+    const other = this.goUnwrapParenthesizedNode(parent.left === current ? parent.right : parent.left);
+    if (other?.kind === SyntaxKind5.NullKeyword || other?.kind === SyntaxKind5.Identifier && other.text === "undefined" || other?.kind === SyntaxKind5.NumericLiteral || other?.kind === SyntaxKind5.StringLiteral || this.goIsSignedNumericLiteral(other)) {
+      return false;
+    }
+    const otherType = this.goOperandStaticType(other, this.printNode(other, 0));
+    return otherType !== void 0 && otherType !== goType;
+  });
+};
+GoTranspiler.prototype.goTernaryJoinPartsUncached = function(declaration) {
   const ternary = this.goUnwrapParenthesizedNode(declaration?.initializer);
   if (ternary?.kind !== SyntaxKind5.ConditionalExpression) {
     return void 0;
