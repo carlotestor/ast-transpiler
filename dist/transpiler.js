@@ -59477,6 +59477,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "key";
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustOkeyReadUse(n))
       return "okey";
+    if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rust63eChainLinkKeyRead(n))
+      return "okey";
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustUrlsKeyReadUse(n))
       return "okey";
     if (kind === "str" && this.rustStrLiteralTernaryLocal(n) && this.rustOkeyReadUse(n))
@@ -63881,6 +63883,40 @@ ${ind}];`;
     if (field !== void 0 && field !== "accounts" || this.rustProvenDynamicMapReceiver(receiver) !== void 0 || this.rustProvenDictThisField(receiver) !== void 0 || this.rustProvenDictThisFieldElement(receiver) || this.rustDictLocalProof(receiver) === "plain")
       return "value";
     return void 0;
+  }
+  /** ral-63e: `m[k]` as the inner link of a pure read chain `m[k][j]` / `j in m[k]` (base featureValueByType `parentKey`):
+   *  the link prints the same native map read a one-level `okey` read prints (`(if let (Some(__m), Some(__k)) = ..)`), only
+   *  handed to the outer `get_value` / `in_op` by reference; the chain is never a write target, delete or update. */
+  rust63eChainLinkKeyRead(n) {
+    const read = n.parent;
+    if (!isElementAccessExpression4(read) || read.argumentExpression !== n || isElementAccessExpression4(read.expression))
+      return false;
+    const up = read.parent;
+    let top;
+    if (isElementAccessExpression4(up) && up.expression === read)
+      top = up;
+    else if (isBinaryExpression5(up) && up.right === read && up.operatorToken.kind === SyntaxKind7.InKeyword)
+      top = up;
+    else
+      return false;
+    if (isElementAccessExpression4(top)) {
+      const above = top.parent;
+      if (above === void 0 || isElementAccessExpression4(above) && above.expression === top || above.kind === SyntaxKind7.DeleteExpression || isPrefixUnaryExpression3(above) || above.kind === SyntaxKind7.PostfixUnaryExpression)
+        return false;
+      if (isBinaryExpression5(above) && above.left === top && rustIsAssignmentOperator(above.operatorToken.kind))
+        return false;
+      if (!this.isNativeAccessPositionSafe(top) || this.isNativeWriteTargetBase(top) || this.isWriteBackBindRead(top))
+        return false;
+    }
+    if (this.isNativeWriteTargetBase(read) || this.isWriteBackBindRead(read))
+      return false;
+    if (!isIdentifier3(read.expression))
+      return false;
+    const recvDecl = this.rustDeclaredNode(read.expression);
+    if (recvDecl === void 0 || !(isVariableDeclaration3(recvDecl) || isParameterDeclaration3(recvDecl)) || recvDecl.type === void 0)
+      return false;
+    const kind = this.rustOkeyKind(read.expression, read);
+    return kind === "map" || kind === "value" && RUST_PLAIN_PLACE.test(this.printNode(read.expression, 0).trim());
   }
   /** A one-level read `m[k]` (not a write target, not a chain link) on an `rustOkeyKind` receiver. */
   rustOkeyReadUse(n) {
@@ -69776,6 +69812,13 @@ ${ind}let ${view}: &${map} = &${arc};
         const typedKey = isIdentifier3(key) && !borrowedKey ? this.rust62nTypedStrKey(key) : void 0;
         acc = `crate::value::KeyRead::read(&&${super.printIdentifier(receiver)}, &${borrowedKey ? `Value::from(${super.printIdentifier(key)})` : typedKey ?? this.rustI64HelperKeyText(key, node) ?? this.printNode(key, 0)})`;
         continue;
+      }
+      if (link === chain[0] && chain.length > 1 && isIdentifier3(key) && this.rustScalarUseForms.get(key) === "okey" && this.rust63eChainLinkKeyRead(key)) {
+        const okeyLink = this.printOkeyRead(link);
+        if (okeyLink !== void 0) {
+          acc = okeyLink;
+          continue;
+        }
       }
       const outerKey = this.rustSkipWrappers(key);
       if (link !== chain[0] && isIdentifier3(outerKey) && this.rustScalarUseForms.get(outerKey) === "fok") {

@@ -59476,6 +59476,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "key";
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustOkeyReadUse(n))
       return "okey";
+    if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rust63eChainLinkKeyRead(n))
+      return "okey";
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustUrlsKeyReadUse(n))
       return "okey";
     if (kind === "str" && this.rustStrLiteralTernaryLocal(n) && this.rustOkeyReadUse(n))
@@ -63880,6 +63882,40 @@ ${ind}];`;
     if (field !== void 0 && field !== "accounts" || this.rustProvenDynamicMapReceiver(receiver) !== void 0 || this.rustProvenDictThisField(receiver) !== void 0 || this.rustProvenDictThisFieldElement(receiver) || this.rustDictLocalProof(receiver) === "plain")
       return "value";
     return void 0;
+  }
+  /** ral-63e: `m[k]` as the inner link of a pure read chain `m[k][j]` / `j in m[k]` (base featureValueByType `parentKey`):
+   *  the link prints the same native map read a one-level `okey` read prints (`(if let (Some(__m), Some(__k)) = ..)`), only
+   *  handed to the outer `get_value` / `in_op` by reference; the chain is never a write target, delete or update. */
+  rust63eChainLinkKeyRead(n) {
+    const read = n.parent;
+    if (!_is.isElementAccessExpression.call(void 0, read) || read.argumentExpression !== n || _is.isElementAccessExpression.call(void 0, read.expression))
+      return false;
+    const up = read.parent;
+    let top;
+    if (_is.isElementAccessExpression.call(void 0, up) && up.expression === read)
+      top = up;
+    else if (_is.isBinaryExpression.call(void 0, up) && up.right === read && up.operatorToken.kind === _ast.SyntaxKind.InKeyword)
+      top = up;
+    else
+      return false;
+    if (_is.isElementAccessExpression.call(void 0, top)) {
+      const above = top.parent;
+      if (above === void 0 || _is.isElementAccessExpression.call(void 0, above) && above.expression === top || above.kind === _ast.SyntaxKind.DeleteExpression || _is.isPrefixUnaryExpression.call(void 0, above) || above.kind === _ast.SyntaxKind.PostfixUnaryExpression)
+        return false;
+      if (_is.isBinaryExpression.call(void 0, above) && above.left === top && rustIsAssignmentOperator(above.operatorToken.kind))
+        return false;
+      if (!this.isNativeAccessPositionSafe(top) || this.isNativeWriteTargetBase(top) || this.isWriteBackBindRead(top))
+        return false;
+    }
+    if (this.isNativeWriteTargetBase(read) || this.isWriteBackBindRead(read))
+      return false;
+    if (!_is.isIdentifier.call(void 0, read.expression))
+      return false;
+    const recvDecl = this.rustDeclaredNode(read.expression);
+    if (recvDecl === void 0 || !(_is.isVariableDeclaration.call(void 0, recvDecl) || _is.isParameterDeclaration.call(void 0, recvDecl)) || recvDecl.type === void 0)
+      return false;
+    const kind = this.rustOkeyKind(read.expression, read);
+    return kind === "map" || kind === "value" && RUST_PLAIN_PLACE.test(this.printNode(read.expression, 0).trim());
   }
   /** A one-level read `m[k]` (not a write target, not a chain link) on an `rustOkeyKind` receiver. */
   rustOkeyReadUse(n) {
@@ -69775,6 +69811,13 @@ ${ind}let ${view}: &${map} = &${arc};
         const typedKey = _is.isIdentifier.call(void 0, key) && !borrowedKey ? this.rust62nTypedStrKey(key) : void 0;
         acc = `crate::value::KeyRead::read(&&${super.printIdentifier(receiver)}, &${borrowedKey ? `Value::from(${super.printIdentifier(key)})` : _nullishCoalesce(_nullishCoalesce(typedKey, () => ( this.rustI64HelperKeyText(key, node))), () => ( this.printNode(key, 0)))})`;
         continue;
+      }
+      if (link === chain[0] && chain.length > 1 && _is.isIdentifier.call(void 0, key) && this.rustScalarUseForms.get(key) === "okey" && this.rust63eChainLinkKeyRead(key)) {
+        const okeyLink = this.printOkeyRead(link);
+        if (okeyLink !== void 0) {
+          acc = okeyLink;
+          continue;
+        }
       }
       const outerKey = this.rustSkipWrappers(key);
       if (link !== chain[0] && _is.isIdentifier.call(void 0, outerKey) && this.rustScalarUseForms.get(outerKey) === "fok") {
