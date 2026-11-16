@@ -8440,6 +8440,20 @@ export class RustTranspiler extends BaseTranspiler {
             && (list.flags & NodeFlags.Const) !== 0 && list.declarations?.length === 1;
     }
 
+    /** ral-80e: every read of `n`'s local is (through parentheses and casts) a whole `Math.min|max` argument: typing it would
+     *  only move the conversion from the declaration to the box at the call (not a lift), so the Math box form refuses it. */
+    rust80eMathArgOnlyLocal(n: any): boolean {
+        const d: any = this.rustDeclaredNode(n);
+        if (d === undefined || !isVariableDeclaration(d) || !isIdentifier(d.name)) return true;
+        return this.rustLocalUsesAll(d, String(d.name.text), true, (u: any) => {
+            let top: any = u;
+            while (isParenthesizedExpression(top.parent) || isAsExpression(top.parent)) top = top.parent;
+            const call: any = top.parent;
+            return isCallExpression(call) && call.expression !== top && isPropertyAccessExpression(call.expression) && isIdentifier(call.expression.expression)
+                && call.expression.expression.text === 'Math';
+        });
+    }
+
     rustScalarUseFormOwn(n, kind: string): string | undefined {
         const parent: any = n.parent;
         if (parent === undefined) return undefined;
@@ -13627,7 +13641,12 @@ export class RustTranspiler extends BaseTranspiler {
             if (paramType !== undefined) return this.rustScalarTypedArgText(n, paramType, true) !== undefined ? 'targ' : undefined;
             const callee: any = parent.expression;
             const push = isPropertyAccessExpression(callee) && callee.name.text === 'push' && callee.expression.kind !== SyntaxKind.ThisKeyword && parent.arguments.length === 1;
-            return push ? 'xbox' : undefined;
+            // ral-80e: a whole argument of the runtime `Math.min|max (a, b)` (`crate::runtime::Math::max(&a, &b)`) boxes there:
+            // `Value::from(x)` of an `i64` / `Option<i64>` / `f64` / `Option<f64>` is the Int / Null / Float the `Value` local held
+            const math = isPropertyAccessExpression(callee) && isIdentifier(callee.expression) && callee.expression.text === 'Math'
+                && (callee.name.text === 'min' || callee.name.text === 'max') && parent.arguments.length === 2
+                && (kind === 'int' || kind === 'oint' || kind === 'num' || kind === 'onum') && !this.rust80eMathArgOnlyLocal(n);
+            return push || math ? 'xbox' : undefined;
         }
         if (this.rustCacheCtorLimitArg(n, kind)) return this.rustCacheCtorFinalUse(n) ? 'targ' : 'box';
         if (parent.kind === SyntaxKind.NewExpression && isIdentifier(parent.expression) && (kind === 'str' || kind === 'ostr')) {
