@@ -8879,7 +8879,7 @@ export class RustTranspiler extends BaseTranspiler {
         // ral-50e: a number local as the key of base `safeDict` passes as is (its generated `key` takes `impl Into<Value>`: an
         // `i64` / `Option<i64>` / `f64` converts to the very Int / Null / Float its box held)
         if ((kind === 'int' || kind === 'oint' || kind === 'num' || kind === 'onum') && this.rustSafeDictKeyArg(n)) return 'parg';
-        // the price of `priceToPrecision` takes `impl Into<Value>`: a number local converts to the very Int / Float / Null its box held
+        // the value of `price|amount|costToPrecision` takes `impl Into<Value>`: a number local converts to the very Int / Float / Null its box held
         if ((kind === 'int' || kind === 'oint' || kind === 'num' || kind === 'onum') && this.rustPriceSlotArg(n)) return 'parg';
         // ral-50e: the same local as the key of a statement element write `x[n] = v` boxes there (`Value::from(n)`: the Int the
         // `Value` local held), only for a local whose other reads are all safeDict keys
@@ -10961,21 +10961,23 @@ export class RustTranspiler extends BaseTranspiler {
             && RustTranspiler.RUST_BASE_TIER_FILE.test(String(param.getSourceFile?.()?.fileName ?? '')) && !this.rustMethodReferencedAsValue(method);
     }
 
-    /** The `price` parameter (slot 1) of a `priceToPrecision` body (base or venue override): prints `impl Into<crate::Value>`
+    private static readonly RUST_LENT_PRECISION_SLOTS = new Set([ 'priceToPrecision', 'amountToPrecision', 'costToPrecision' ]);
+
+    /** The value parameter (slot 1) of a `price|amount|costToPrecision` body (base or venue override): prints `impl Into<crate::Value>`
      *  and binds `let mut price: Value = price.into();` (every `Value` argument still passes; a number local passes unboxed). */
     rustPriceSlotParam(param: Node | undefined): boolean {
         const method: Node | undefined = param?.parent;
         return param !== undefined && isParameterDeclaration(param) && method !== undefined && isMethodDeclaration(method) && method.body !== undefined && isIdentifier(method.name)
-            && String(method.name.text) === 'priceToPrecision' && method.parameters?.length === 2 && method.parameters[1] === param && isIdentifier(param.name)
+            && RustTranspiler.RUST_LENT_PRECISION_SLOTS.has(String(method.name.text)) && method.parameters?.length === 2 && method.parameters[1] === param && isIdentifier(param.name)
             && param.initializer === undefined && param.questionToken === undefined && param.dotDotDotToken === undefined
             && isClassDeclaration(method.parent) && !this.rustTestTierSource(param) && !this.rustMethodReferencedAsValue(method);
     }
 
-    /** `n` is the price (argument 1) of `this.priceToPrecision (s, n)` whose resolved body takes the lent price slot. */
+    /** `n` is the value (argument 1) of `this.price|amount|costToPrecision (s, n)` whose resolved body takes the lent price slot. */
     rustPriceSlotArg(n: Node | undefined): boolean {
         const call: Node | undefined = n?.parent;
         if (n === undefined || call === undefined || this.rustTestTierSource(n) || !isCallExpression(call) || call.arguments.length !== 2 || call.arguments[1] !== n || !isPropertyAccessExpression(call.expression)
-            || call.expression.expression.kind !== SyntaxKind.ThisKeyword || String(call.expression.name.text) !== 'priceToPrecision') return false;
+            || call.expression.expression.kind !== SyntaxKind.ThisKeyword || !RustTranspiler.RUST_LENT_PRECISION_SLOTS.has(String(call.expression.name.text))) return false;
         const declaration: Node | undefined = this.rustScalarCallee(call);
         return declaration !== undefined && isMethodDeclaration(declaration) && this.rustPriceSlotParam(declaration.parameters?.[1]);
     }
