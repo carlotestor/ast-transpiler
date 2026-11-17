@@ -15800,3 +15800,39 @@ describe('ral-90g8 R1 map-producer locals read through a cast and handed on past
         expect(out).toContain('var parsed any = this.ParseMarket(raw)');
     });
 });
+
+describe('ral-90g8 R2 prediction-venue parse*Market producers print the market map', () => {
+    const head = 'interface MarketInterface { id: string; symbol: string; }\n'
+        + 'type Market = MarketInterface | undefined;\n'
+        + 'type Dict = { [key: string]: unknown };\n'
+        + 'export class ex {\n'
+        + '    markets: Dict = {};\n'
+        + '    parseVenueMarket (raw: string): Market {\n'
+        + '        return { \'id\': raw, \'symbol\': raw } as unknown as Market;\n'
+        + '    }\n';
+    test('the producer signature names the map and a guarded local takes it with a native nil test', () => {
+        const out = goTranspile90g8(head
+            + '    f (raw: string) {\n'
+            + '        const market = this.parseVenueMarket (raw);\n'
+            + '        if (market === undefined) {\n'
+            + '            throw new Error (\'none\');\n'
+            + '        }\n'
+            + '        this.markets[raw] = market;\n'
+            + '        return market;\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain(') ParseVenueMarket(raw any) map[string]any {');
+        expect(out).toContain('var market map[string]any = this.ParseVenueMarket(raw)');
+        expect(out).toContain('if market == nil {');
+    });
+    test('a producer whose body returns a non-map keeps the any signature', () => {
+        const out = goTranspile90g8('interface MarketInterface { id: string; }\n'
+            + 'type Market = MarketInterface | undefined;\n'
+            + 'export class ex {\n'
+            + '    parseVenueMarket (raw: Market): Market {\n'
+            + '        return raw;\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('ParseVenueMarket(raw any) any {');
+    });
+});
