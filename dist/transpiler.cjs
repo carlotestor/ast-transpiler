@@ -15250,7 +15250,7 @@ var CCXT_GO_GENERAL_ANNOTATED_RETURN_NATIVE = {
 var CCXT_GO_TS_SRC_IMPORT_CACHE = /* @__PURE__ */ new Map();
 function ccxtGoGeneralAnnotatedReturnTypes(node, type, key) {
   const name = _optionalChain([node, 'access', _1970 => _1970.name, 'optionalAccess', _1971 => _1971.text]);
-  if (typeof name !== "string" || CCXT_GO_PARSE_METHOD.test(name)) {
+  if (typeof name !== "string" || CCXT_GO_PARSE_METHOD.test(name) && (key !== "string" || !ccxtGoGeneralAnnotatedMethodIsClosed(node, name))) {
     return void 0;
   }
   if (key === "Int" && _optionalChain([node, 'access', _1972 => _1972.type, 'optionalAccess', _1973 => _1973.getText, 'call', _1974 => _1974()]) === "Int") {
