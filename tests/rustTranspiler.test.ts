@@ -25777,3 +25777,23 @@ describe('ral-92rc R2: url locals read through a safeDict alias of a this.urls e
         expect(out).toContain('let mut url: Value = Value::Null;');
     });
 });
+
+describe('ral-92rc R3: a nil-declared Str local written from awaited venue string methods', () => {
+    const run = (name: string, use: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: Dict | string }\nexport type Str = string | undefined;\nexport default class Exchange {\n    client (url: Str): Str { return url; }\n    hold (m: unknown): unknown { return m; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    async getUtaUrl (): Promise<string> {\n        return 'wss://a';\n    }\n    async negotiate (privateChannel: boolean): Promise<string> {\n        return privateChannel ? 'wss://p' : 'wss://q';\n    }\n    async watchBalance (uta: boolean): Promise<unknown> {\n        let url: Str = undefined;\n        if (uta) {\n            url = await this.getUtaUrl ();\n        } else {\n            url = await this.negotiate (true);\n        }\n" + use + "    }\n}\n");
+        return new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } }).transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('kucoin watchBalance: the url is Option<String> lent as_deref to client', () => {
+        const out = run ('r92rc-r3-client', "        return this.hold (this.client (url));\n");
+        expect(out).toContain('let mut url: Option<String> = None;');
+        expect(out).toContain('.await.as_str().map(str::to_owned);');
+        expect(out).toContain('self.client(url.as_deref())');
+    });
+    test('negative: a url only boxed into a literal stays Value', () => {
+        const out = run ('r92rc-r3-boxonly', "        return this.hold ({ 'url': url });\n");
+        expect(out).toContain('let mut url: Value = Value::Null;');
+    });
+});

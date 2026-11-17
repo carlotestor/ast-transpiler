@@ -3207,8 +3207,9 @@ export class RustTranspiler extends BaseTranspiler {
             if (this.rustDeclaredNode(n) !== declaration) continue;
             const rhs: any = this.unwrapParens(parent.right);
             if (!this.rustNilDecodedWrite(rhs)) writes++;
-            // ral-90rc R3: a write from a base credential field (`x = this.secret`) or a literal-key `this.urls` read is admitted only for a native read (below)
-            if (this.rustBaseStrFieldRead(rhs) || this.rustWsUrlRead(rhs)) baseFieldWrite = true;
+            // ral-90rc R3: a write from a base credential field (`x = this.secret`), a literal-key `this.urls` read or a venue string
+            // method (rustVenueTypedCall) is admitted only for a native read (below)
+            if (this.rustBaseStrFieldRead(rhs) || this.rustWsUrlRead(rhs) || this.rustVenueTypedCall(rhs) === 'ostr') baseFieldWrite = true;
             let write = isIdentifier(rhs) && this.literalKindOfNode(rhs) !== 'null' ? (this.rustScalarIdentifierKind(rhs) ?? (this.rustNilValueStrAlias(rhs) ? 'ostr' : undefined)) : this.rustScalarValueKind(rhs, true);
             // ral-68a R1: `x = p` from an unwritten typed string parameter (`&str` / `Option<&str>` signature slot): the
             // parameter's rebinding holds that string (or Null), read back once as `Option<String>` (rustOptParamText)
@@ -5844,6 +5845,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (fresh && this.rustNilVenueWrite(node) && this.rustBaseStrFieldRead(node)) return 'ostr';
         // a literal-key `this.urls[..][..]` read as the whole right side of a nil write: a url `Str` or `Null` (rustWsUrlRead)
         if (fresh && this.rustNilVenueWrite(node) && this.rustWsUrlRead(node)) return 'ostr';
+        // a venue `string` / `Str` method (or an awaited `Promise` of one) as the whole right side of a nil write (rustVenueTypedCall)
+        if (fresh && this.rustNilVenueWrite(node) && this.rustVenueTypedCall(node) === 'ostr') return 'ostr';
         // ral-65n: a never-written base-tier parameter declared `Str` / `string` as an arm of a ternary initializer: a `Str` or `Null`
         if (fresh && this.rustTernaryArm(node) && this.rust65nBaseStrParamArm(node)) return 'ostr';
         // ral-53k: `c['code']` of an `Option<Dict>` local (a unified string key) as an arm of a ternary initializer
