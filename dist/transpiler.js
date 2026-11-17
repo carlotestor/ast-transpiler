@@ -12011,6 +12011,9 @@ function tupleJoinDefaultIsValue(arg) {
   if (arg?.kind === ts.SyntaxKind.TrueKeyword || arg?.kind === ts.SyntaxKind.FalseKeyword) {
     return true;
   }
+  if (ral87g5SelfDefaultBoolDecl(arg) !== void 0) {
+    return true;
+  }
   const literal2 = arg?.kind === ts.SyntaxKind.PrefixUnaryExpression && arg.operator === ts.SyntaxKind.MinusToken ? arg.operand : arg;
   return literal2?.kind === ts.SyntaxKind.NumericLiteral && /^\d+$/.test(literal2.text ?? "");
 }
@@ -18302,6 +18305,10 @@ function ccxtGoAwaitReceiveUnbox(goTranspiler, awaitNode, printedInitializer) {
   if (awaitNode === void 0 || awaitNode.kind !== ts.SyntaxKind.AwaitExpression) {
     return void 0;
   }
+  const selfDefaultBool = ral87g5AwaitBoolReceive(awaitNode);
+  if (selfDefaultBool !== void 0) {
+    return selfDefaultBool;
+  }
   const text = (printedInitializer ?? "").replace(/\s+/g, " ").trim();
   const wsList = ccxtGoWsListStreamReceive(goTranspiler, awaitNode);
   if (wsList !== void 0) {
@@ -21530,6 +21537,9 @@ var CCXT_GO_TUPLE_BOOL_DEFAULT_SLOT = {
   "handleOptionIntegerAndParams2": 4
 };
 function ccxtGoTupleDefaultIsValue(name, arg) {
+  if (!name.startsWith("handleOptionInteger") && ral87g5SelfDefaultBoolDecl(arg) !== void 0) {
+    return true;
+  }
   if (name.startsWith("handleOptionInteger")) {
     const lit = arg?.kind === ts.SyntaxKind.PrefixUnaryExpression && arg.operator === ts.SyntaxKind.MinusToken ? arg.operand : arg;
     return lit?.kind === ts.SyntaxKind.NumericLiteral && /^\d+$/.test(lit.text);
@@ -37551,7 +37561,7 @@ ${indent}}`);
       if (arg?.kind === SyntaxKind5.PrefixUnaryExpression && arg.operator === SyntaxKind5.MinusToken) {
         arg = arg.operand;
       }
-      const literal2 = entry.goType === "*bool" ? arg?.kind === SyntaxKind5.TrueKeyword || arg?.kind === SyntaxKind5.FalseKeyword : arg?.kind === SyntaxKind5.NumericLiteral && /^\d+$/.test(String(arg.text ?? ""));
+      const literal2 = entry.goType === "*bool" ? arg?.kind === SyntaxKind5.TrueKeyword || arg?.kind === SyntaxKind5.FalseKeyword || ral87g5SelfDefaultBoolDecl(arg) !== void 0 : arg?.kind === SyntaxKind5.NumericLiteral && /^\d+$/.test(String(arg.text ?? ""));
       if (literal2) {
         return void 0;
       }
@@ -42355,6 +42365,142 @@ ${iden}	${name} = ${whenTrue}
 ${iden}} else {
 ${iden}	${name} = ${whenFalse}
 ${iden}}`;
+};
+var RAL87G5_BOOL_OPTION_SLOTS = { "handleOptionBoolAndParams": 3, "handleOptionBoolAndParams2": 4 };
+var ral87g5SelfDefaultVerdicts = /* @__PURE__ */ new WeakMap();
+function ral87g5IsBoolLiteral(node) {
+  return node?.kind === ts.SyntaxKind.TrueKeyword || node?.kind === ts.SyntaxKind.FalseKeyword;
+}
+function ral87g5IsUtaAwait(node) {
+  const call = node?.kind === ts.SyntaxKind.AwaitExpression ? node.expression : void 0;
+  return call?.kind === ts.SyntaxKind.CallExpression && (call.arguments?.length ?? 0) === 0 && call.expression?.kind === ts.SyntaxKind.PropertyAccessExpression && call.expression.expression?.kind === ts.SyntaxKind.ThisKeyword && call.expression.name?.text === "isUTAEnabled";
+}
+function ral87g5BoolOptionCallOfDefault(arg) {
+  const call = arg?.parent;
+  const callee = call?.expression;
+  if (call?.kind !== ts.SyntaxKind.CallExpression || callee?.kind !== ts.SyntaxKind.PropertyAccessExpression || callee.expression?.kind !== ts.SyntaxKind.ThisKeyword) {
+    return void 0;
+  }
+  const slot = RAL87G5_BOOL_OPTION_SLOTS[String(callee.name?.text)];
+  return slot !== void 0 && call.arguments?.[slot] === arg && call.arguments.length === slot + 1 ? call : void 0;
+}
+function ral87g5EnclosingMethod(node) {
+  let scope = node?.parent;
+  while (scope !== void 0 && !ts.isFunctionLike(scope)) {
+    scope = scope.parent;
+  }
+  return scope;
+}
+function ral87g5DefaultIsOwnTarget(arg) {
+  const call = ral87g5BoolOptionCallOfDefault(arg);
+  const assign = call?.parent;
+  const left = assign?.left;
+  return assign?.kind === ts.SyntaxKind.BinaryExpression && assign.right === call && assign.operatorToken.kind === ts.SyntaxKind.EqualsToken && left?.kind === ts.SyntaxKind.ArrayLiteralExpression && left.elements[0]?.kind === ts.SyntaxKind.Identifier && left.elements[0].text === arg.text;
+}
+function ral87g5SelfDefaultBoolDecl(arg) {
+  if (arg?.kind !== ts.SyntaxKind.Identifier || !ral87g5DefaultIsOwnTarget(arg)) {
+    return void 0;
+  }
+  const name = arg.text;
+  let method = ral87g5EnclosingMethod(arg);
+  while (method !== void 0 && ral87g5EnclosingMethod(method) !== void 0) {
+    method = ral87g5EnclosingMethod(method);
+  }
+  if (method === void 0) {
+    return void 0;
+  }
+  const declarations = [];
+  const refs = [];
+  const visit = (n) => {
+    if (n.kind === ts.SyntaxKind.Identifier && n.text === name) {
+      if (n.parent?.kind === ts.SyntaxKind.VariableDeclaration && n.parent.name === n) {
+        declarations.push(n.parent);
+      } else {
+        refs.push(n);
+      }
+    } else if (n.kind === ts.SyntaxKind.Parameter || n.kind === ts.SyntaxKind.BindingElement) {
+      if (n.name?.kind !== ts.SyntaxKind.Identifier || n.name.text === name) {
+        declarations.push(n);
+      }
+    }
+    n.forEachChild(visit);
+  };
+  method.forEachChild(visit);
+  if (declarations.length !== 1) {
+    return void 0;
+  }
+  const declaration = declarations[0];
+  if (ral87g5SelfDefaultVerdicts.has(declaration)) {
+    return ral87g5SelfDefaultVerdicts.get(declaration) ?? void 0;
+  }
+  let ok = declaration.kind === ts.SyntaxKind.VariableDeclaration && declaration.type === void 0 && declaration.parent?.parent?.kind === ts.SyntaxKind.VariableStatement && declaration.parent.declarations.length === 1 && (ral87g5IsBoolLiteral(declaration.initializer) || ral87g5IsUtaAwait(declaration.initializer));
+  for (const ref of refs) {
+    if (!ok) {
+      break;
+    }
+    const parent = ref.parent;
+    if (ral87g5BoolOptionCallOfDefault(ref) !== void 0) {
+      continue;
+    }
+    if (parent?.kind === ts.SyntaxKind.ArrayLiteralExpression && parent.elements[0] === ref && parent.elements.length === 2 && parent.elements[1]?.kind === ts.SyntaxKind.Identifier && parent.parent?.kind === ts.SyntaxKind.BinaryExpression && parent.parent.left === parent && parent.parent.operatorToken.kind === ts.SyntaxKind.EqualsToken && parent.parent.parent?.kind === ts.SyntaxKind.ExpressionStatement) {
+      const right = parent.parent.right;
+      const slot = right?.kind === ts.SyntaxKind.CallExpression ? RAL87G5_BOOL_OPTION_SLOTS[String(right.expression?.name?.text)] : void 0;
+      ok = slot !== void 0 && right.arguments[slot]?.kind === ts.SyntaxKind.Identifier && right.arguments[slot].text === name && ral87g5BoolOptionCallOfDefault(right.arguments[slot]) === right;
+      continue;
+    }
+    if (parent?.kind === ts.SyntaxKind.BinaryExpression && parent.left === ref) {
+      const op = parent.operatorToken.kind;
+      if (op === ts.SyntaxKind.EqualsToken && ral87g5IsBoolLiteral(parent.right) && parent.parent?.kind === ts.SyntaxKind.ExpressionStatement) {
+        continue;
+      }
+      ok = op !== ts.SyntaxKind.EqualsToken && (op < ts.SyntaxKind.FirstCompoundAssignment || op > ts.SyntaxKind.LastCompoundAssignment);
+      continue;
+    }
+    if (parent?.kind === ts.SyntaxKind.PrefixUnaryExpression || parent?.kind === ts.SyntaxKind.PostfixUnaryExpression) {
+      ok = parent.operator === ts.SyntaxKind.ExclamationToken;
+      continue;
+    }
+    if (parent?.kind === ts.SyntaxKind.ArrayLiteralExpression || parent?.kind === ts.SyntaxKind.SpreadElement || parent?.kind === ts.SyntaxKind.ShorthandPropertyAssignment || parent?.kind === ts.SyntaxKind.DeleteExpression) {
+      ok = false;
+    }
+  }
+  const verdict = ok ? declaration : void 0;
+  ral87g5SelfDefaultVerdicts.set(declaration, verdict ?? null);
+  return verdict;
+}
+function ral87g5SelfDefaultBoolLocal(declaration) {
+  if (declaration?.kind !== ts.SyntaxKind.VariableDeclaration || declaration.name?.kind !== ts.SyntaxKind.Identifier) {
+    return false;
+  }
+  const method = ral87g5EnclosingMethod(declaration);
+  let found = false;
+  const visit = (n) => {
+    if (found) {
+      return;
+    }
+    if (n.kind === ts.SyntaxKind.Identifier && n.text === declaration.name.text && ral87g5BoolOptionCallOfDefault(n) !== void 0 && ral87g5SelfDefaultBoolDecl(n) === declaration) {
+      found = true;
+      return;
+    }
+    n.forEachChild(visit);
+  };
+  method?.forEachChild(visit);
+  return found;
+}
+function ral87g5AwaitBoolReceive(awaitNode) {
+  const declaration = awaitNode?.parent;
+  if (declaration?.kind !== ts.SyntaxKind.VariableDeclaration || declaration.initializer !== awaitNode || !ral87g5IsUtaAwait(awaitNode) || !ral87g5SelfDefaultBoolLocal(declaration)) {
+    return void 0;
+  }
+  return { goType: "bool", wrap: (recv) => "PanicOnError(" + recv.trim() + ").(bool)" };
+}
+var ral87g5UpstreamLocalType = GoTranspiler.prototype.getGoLocalType;
+GoTranspiler.prototype.getGoLocalType = function(declaration, parsedValue) {
+  const known = ral87g5UpstreamLocalType.call(this, declaration, parsedValue);
+  if (known !== "any" || !ral87g5IsBoolLiteral(declaration?.initializer) || !ral87g5SelfDefaultBoolLocal(declaration) || this.goTypeNameIsShadowed(this.goEnclosingFunction(declaration), "bool")) {
+    return known;
+  }
+  return "bool";
 };
 
 // src/javaTranspiler.ts
