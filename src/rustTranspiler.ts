@@ -37150,7 +37150,7 @@ export class RustTranspiler extends BaseTranspiler {
             if (optional && args[at] === undefined) continue;
             const argType: any = args[at] === undefined ? undefined : this.typeOfNodeIfAny(args[at]);
             if ((argType === undefined || (argType.flags & (TypeFlags.Any | TypeFlags.Unknown)) !== 0) && !this.rustWsUrlReadIdent(args[at])) return undefined;
-            if (!this.rustVenueStrSimpleArg(args[at]) && !(rustType === 'bool' && this.rustVenueNegatedArg(args[at])) && !(rustType.includes('str') && this.rustVenueStrCastOperand(args[at]) !== undefined)) return undefined;
+            if (!this.rustVenueStrSimpleArg(args[at]) && !(rustType === 'bool' && this.rustVenueNegatedArg(args[at])) && !(rustType.includes('str') && !RustTranspiler.RUST_HELD_ORDER_REQUEST.test(String(method.name.text)) && this.rustVenueStrCastOperand(args[at]) !== undefined)) return undefined;
             if (!this.rustVenueScalarArgExact(args[at], rustType)) return undefined;
             // an arithmetic operand in the same call prints a long numeric match: keep its line short
             if (!rustType.includes('str') && args.some((a: any) => this.rustVenueArithmeticArg(a))) return undefined;
@@ -37492,6 +37492,9 @@ export class RustTranspiler extends BaseTranspiler {
                 // ral-60x: or a plain `this.<field>` read (`this.safeString (this.options, 'k')`)
                 || (isPropertyAccessExpression(this.unwrapParens(a)) && this.unwrapParens(a).expression.kind === SyntaxKind.ThisKeyword));
     }
+
+    /** Order request builders whose amount / price slots stay as they are (held). */
+    private static readonly RUST_HELD_ORDER_REQUEST = /^(?:create|edit)Orders?Request$/;
 
     /** `(x as string)` over a simple operand the checker already types `string` / `Str`: a string slot takes the
      *  operand as it is (the cast changes no value), so the caller converts it once like a bare `x`. */

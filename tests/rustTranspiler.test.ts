@@ -25741,7 +25741,7 @@ describe('stack-90r: a list bearer admitted by a compare-left read moves its fre
 describe('ral-92rb R1: a `(x as string)` caller fills a per-venue string slot', () => {
     const files: Record<string, string> = {
         'ts/src/base/Exchange.ts': "export default class Exchange {\n    options: any;\n    numberToString (x: any): string { return String (x); }\n    safeDict (o: any, k: any, d: any = undefined): any { return o[k]; }\n    extend (...args: any[]): any { return args[0]; }\n}\n",
-        'ts/src/venue.ts': "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n    setEntry (accIdx: string, keyIdx: string, entry: any) {\n        this.options[accIdx] = this.extend (this.safeDict (this.options, keyIdx, {}), entry);\n    }\n    viaCast (accountIndex: string | undefined, apiKeyIndex: string | undefined) {\n        this.setEntry ((accountIndex as string), (apiKeyIndex as string), { 'a': 1 });\n    }\n    viaLocal (n: number) {\n        const strIndex = this.numberToString (n);\n        this.setEntry (strIndex, strIndex, { 'b': 2 });\n    }\n}\n",
+        'ts/src/venue.ts': "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n    setEntry (accIdx: string, keyIdx: string, entry: any) {\n        this.options[accIdx] = this.extend (this.safeDict (this.options, keyIdx, {}), entry);\n    }\n    viaCast (accountIndex: string | undefined, apiKeyIndex: string | undefined) {\n        this.setEntry ((accountIndex as string), (apiKeyIndex as string), { 'a': 1 });\n    }\n    viaLocal (n: number) {\n        const strIndex = this.numberToString (n);\n        this.setEntry (strIndex, strIndex, { 'b': 2 });\n    }\n    createOrderRequest (symbol: string, amount: string) {\n        return { 's': symbol, 'a': amount };\n    }\n    viaHeld (symbol: string, amount: string | undefined) {\n        return this.createOrderRequest (symbol, (amount as string));\n    }\n}\n",
     };
     let out: string;
     beforeAll(() => {
@@ -25758,5 +25758,8 @@ describe('ral-92rb R1: a `(x as string)` caller fills a per-venue string slot', 
         expect(out).toContain('self.setEntry(accountIndex.as_str().unwrap_or_default(), apiKeyIndex.as_str().unwrap_or_default(), ');
         expect(out).toContain('let mut strIndex: Option<String> = ');
         expect(out).toContain('self.setEntry(strIndex.as_deref().unwrap_or_default(), strIndex.as_deref().unwrap_or_default(), ');
+    });
+    test('an order request builder keeps its held amount slot', () => {
+        expect(out).toContain('fn createOrderRequest(&self, symbol: &str, amount: Value)');
     });
 });
