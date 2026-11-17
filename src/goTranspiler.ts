@@ -36405,15 +36405,6 @@ function ccxtGo90g2GuardedNonNil (goTranspiler, use, name: string): boolean {
         if ((cur.kind === SyntaxKind.IfStatement) && (cur.elseStatement === child) && ccxtGo90g2TestsNil(goTranspiler, cur.expression, name)) {
             return true;
         }
-        // M. the right operand of `x !== undefined && ..` / `x === undefined || ..`, and the else arm of `x === undefined ? .. : ..`
-        if ((cur.kind === SyntaxKind.BinaryExpression) && (cur.right === child)
-            && (((cur.operatorToken?.kind === SyntaxKind.AmpersandAmpersandToken) && goTranspiler.goGuardsNonNil(cur.left, name))
-                || ((cur.operatorToken?.kind === SyntaxKind.BarBarToken) && ccxtGo90g2TestsNil(goTranspiler, cur.left, name)))) {
-            return true;
-        }
-        if ((cur.kind === SyntaxKind.ConditionalExpression) && (cur.whenFalse === child) && ccxtGo90g2TestsNil(goTranspiler, cur.condition, name)) {
-            return true;
-        }
         if ((cur.kind === SyntaxKind.Block) || (cur.kind === SyntaxKind.CaseClause) || (cur.kind === SyntaxKind.DefaultClause)) {
             const statements = cur.statements;
             const index = statements.indexOf(child);
@@ -36509,7 +36500,7 @@ function ccxtGo90g2FilledBefore (goTranspiler, use, name: string): boolean {
 // J/K verdict: the extensions above answer only for a declaration the shipped rule leaves boxed, and such a local is
 // typed only when (a) it is never handed whole into another map (`m[k] = x`: a typed map value that may be nil is
 // stored through AddElementToObject, where the boxed value was stored natively) and (b) it has a native use on the map:
-// an element read, `k in x`, or an element write of a literal / non-pointer value.
+// an element read or an element write of a literal / non-pointer value.
 function ccxtGo90g2MapVerdictOk (goTranspiler, declaration): boolean {
     const scope = goTranspiler.goTopFunction(declaration);
     const checker: Checker | undefined = goTranspiler.checkerOrUndefined();
@@ -36549,8 +36540,6 @@ function ccxtGo90g2MapVerdictOk (goTranspiler, declaration): boolean {
             } else if (!goTranspiler.isGoElementAccessAssignmentTarget(parent)) {
                 natives++;
             }
-        } else if ((parent?.kind === SyntaxKind.BinaryExpression) && (parent.right === outer) && (parent.operatorToken?.kind === SyntaxKind.InKeyword)) {
-            natives++;
         }
         return false;
     });

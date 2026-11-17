@@ -15769,12 +15769,6 @@ describe ('ral-90g2 reader-result locals', () => {
         // a guard that does not leave the block proves nothing
         expect (run (body.replace ('return undefined;', 'id = "y";'), 'ts/src/pro')).not.toContain ('var prev map[string]any = ');
     });
-    test ('M: a no-default safeDict local read on the right of its own `!== undefined &&` test is a map', () => {
-        const body = '    f (message: Dict): any {\n        const data = this.safeDict (message, "data");\n        if ((data !== undefined) && (("oi" in data) || ("id" in data))) {\n            return 1;\n        }\n        return 0;\n    }\n';
-        expect (run (body, 'ts/src/pro')).toContain ('var data map[string]any = ');
-        // an `||` of the nil test does not guard its right operand
-        expect (run (body.replace ('(data !== undefined) &&', '(data !== undefined) ||'), 'ts/src/pro')).not.toContain ('var data map[string]any = ');
-    });
     test ('L: a safeList local joined and read by length is a []any', () => {
         const body = '    safeList (a: any, k: any, d: any = undefined): any[] { return a; }\n    f (params: Dict): any {\n        const ids = this.safeList (params, "ids", []);\n        if (ids.length > 0) {\n            return "[" + ids.join (",") + "]";\n        }\n        return "";\n    }\n';
         const out = run (body, 'ts/src');
