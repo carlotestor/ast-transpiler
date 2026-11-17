@@ -15138,3 +15138,35 @@ describe('87g1 R2/R3 more', () => {
         expect(out).toContain('var isAlgo any = nil');
     });
 });
+
+describe('87g1 R4 *string join handed to a parameter that only feeds safe readers', () => {
+    const go = (body: string): string => {
+        const t = new Transpiler({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        installCcxtGoHooks(t.goTranspiler);
+        return t.transpileGo('type Dict = { [key: string]: any };\ntype Str = string | undefined;\nclass V {\n'
+            + '    safeString (a: any, k: any, d: any = undefined): Str { return a; }\n' + body + '}\n').content;
+    };
+    const user = '    g (o: Dict, details: Dict): any {\n'
+        + '        let statusId: Str = undefined;\n'
+        + "        if (o['a']) {\n"
+        + "            statusId = this.safeString (o, 'status');\n"
+        + '        }\n'
+        + '        if (statusId === undefined) {\n'
+        + "            statusId = this.safeString (details, 's');\n"
+        + '        }\n'
+        + '        return this.parseOrderStatus (statusId);\n'
+        + '    }\n';
+    test('a status key handed to a safeString-only parser is a *string', () => {
+        const out = go('    parseOrderStatus (status: Str): Str {\n'
+            + "        const statuses: Dict = { 'placed': 'open' };\n"
+            + '        return this.safeString (statuses, (status as string), status);\n'
+            + '    }\n' + user);
+        expect(out).toContain('var statusId *string = nil');
+    });
+    test('a parser that returns its parameter keeps the box', () => {
+        const out = go('    parseOrderStatus (status: Str): Str {\n'
+            + '        return status;\n'
+            + '    }\n' + user);
+        expect(out).toContain('var statusId any = nil');
+    });
+});

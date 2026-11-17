@@ -4780,7 +4780,8 @@ function ccxtGoNilDeclaredStringArgumentRead (goTranspiler, node) {
         const text = String (goTranspiler.getChecker ().typeToString (type) ?? '');
         return /^(?:ArrayCache\w*|ArrayCacheBy\w+)(?:\s*\|\s*undefined)?$/.test (text);
     }
-    return ccxtGoNilJoinArgumentSeesAbsent (goTranspiler, call, index);
+    // 87g1 R4: a same-class method whose parameter only feeds this.safe* readers (defined at the end of the file)
+    return ccxtGoNilJoinArgumentSeesAbsent (goTranspiler, call, index) || ccxtGo87SafeReaderArgument (goTranspiler, node);
 }
 
 function installNilDeclaredJoin (goTranspiler) {
@@ -35322,3 +35323,71 @@ GoNilDeclaredValueAssignmentScan.prototype.classifyIdentifier = function (node, 
     }
     return goNilValueClassify87.call (this, node, assigned);
 };
+
+// R4: the scalar-pointer join may hand a *string local to a same-class transpiled method whose parameter at
+// that position is read ONLY as an argument of `this.safe*` readers (key or default). Those Go readers
+// derefScalar every argument at entry, so the pointer reads as the string (or nil) the box held; the
+// parameter is never returned, compared or stored, so nothing downstream sees the pointer.
+const CCXT_GO_87_SAFE_READER = /^safe(?:String|StringLower|StringUpper|Value|Integer|Number|Bool|Dict|List)(?:2|N)?$/;
+
+function ccxtGo87ParamOnlyFeedsSafeReaders (goTranspiler, call, index) {
+    let declaration;
+    try {
+        declaration = goTranspiler.getChecker ().getResolvedSignature (call)?.declaration?.resolve ();
+    } catch (e) {
+        return false;
+    }
+    const param = declaration?.parameters?.[index];
+    if ((declaration?.kind !== SyntaxKind.MethodDeclaration) || (declaration.body === undefined) || (param === undefined)
+        || !ts.isIdentifier (param.name) || (param.dotDotDotToken !== undefined) || (param.initializer !== undefined) || (param.questionToken !== undefined)
+        || /[\\/]base[\\/]/.test (declaration.getSourceFile?.()?.fileName ?? '/base/')
+        || (declaration.getSourceFile () !== call.getSourceFile ())) {
+        return false;
+    }
+    // only a parameter the printer leaves `any` (a `string` / `*string` signature would change what the call hands on)
+    if (goTranspiler.goNativeParameterType?.(param) !== undefined) {
+        return false;
+    }
+    const name = param.name.text;
+    let ok = true;
+    let reads = 0;
+    const visit = (n) => {
+        if (!ok) {
+            return;
+        }
+        if ((n !== param) && ((n.kind === SyntaxKind.VariableDeclaration) || (n.kind === SyntaxKind.Parameter) || (n.kind === SyntaxKind.BindingElement))
+            && bindingMentionsName (n.name, name)) {
+            ok = false;
+            return;
+        }
+        if ((n.kind === SyntaxKind.Identifier) && (n.text === name) && (n !== param.name)) {
+            let arg = n;                                     // `(status as string)` is the same read
+            while ((arg.parent?.kind === SyntaxKind.AsExpression) || (arg.parent?.kind === SyntaxKind.ParenthesizedExpression)) {
+                arg = arg.parent;
+            }
+            const parent = arg.parent;
+            const callee = parent?.expression;
+            if ((parent?.kind === SyntaxKind.CallExpression) && (parent.expression !== arg) && parent.arguments.includes (arg)
+                && (callee?.kind === SyntaxKind.PropertyAccessExpression) && (callee.expression?.kind === SyntaxKind.ThisKeyword)
+                && CCXT_GO_87_SAFE_READER.test (String (callee.name?.text ?? ''))) {
+                reads += 1;
+            } else {
+                ok = false;
+            }
+            return;
+        }
+        n.forEachChild (visit);
+    };
+    declaration.body.forEachChild (visit);
+    return ok && (reads > 0);
+}
+
+function ccxtGo87SafeReaderArgument (goTranspiler, node) {
+    const call = node?.parent;
+    const callee = call?.expression;
+    if ((call?.kind !== SyntaxKind.CallExpression) || (call.expression === node) || (callee?.kind !== SyntaxKind.PropertyAccessExpression)
+        || (callee.expression?.kind !== SyntaxKind.ThisKeyword)) {
+        return false;
+    }
+    return ccxtGo87ParamOnlyFeedsSafeReaders (goTranspiler, call, call.arguments.indexOf (node));
+}
