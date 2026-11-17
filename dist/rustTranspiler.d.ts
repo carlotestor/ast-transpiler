@@ -3274,6 +3274,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `this.<m>(…)` whose every return is a fresh untagged
      *  container of `kind` — the method's own body, no venue override (the
      *  checker resolves the most derived declaration for `this`). */
+    /** ral-90rg R4: `inner` is a `this.m (..)` call returned whole from `owner` (a base-tier method), `m` a base method no venue
+     *  declares (rustVenueReturnTypesHas), not dispatched virtually, not typed, not async, not `owner`: the implementation (the
+     *  same-named member with a body when the checker resolves a bodiless overload, as ral-55i reads it), else undefined. */
+    rust90rgBaseTailForward(owner: Node, inner: Node): MethodDeclaration | undefined;
+    /** ral-90rg R4: every `return` of `impl` (closures skipped) is an array literal or another built list (rustBuiltContainerKind). */
+    rust90rgImplReturnsList(impl: MethodDeclaration, depth: number): boolean;
     rustCallBuildsContainer(call: any, kind: 'map' | 'list', depth?: number): boolean;
     /** A store write's value that can never be a container: a scalar literal, or a checker-primitive
      *  (`string`/`number`/`boolean`) expression. Writing it into a `this.` store tags no returned container.

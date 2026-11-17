@@ -76339,6 +76339,43 @@ ${iden}}`;
   /** `this.<m>(…)` whose every return is a fresh untagged
    *  container of `kind` — the method's own body, no venue override (the
    *  checker resolves the most derived declaration for `this`). */
+  /** ral-90rg R4: `inner` is a `this.m (..)` call returned whole from `owner` (a base-tier method), `m` a base method no venue
+   *  declares (rustVenueReturnTypesHas), not dispatched virtually, not typed, not async, not `owner`: the implementation (the
+   *  same-named member with a body when the checker resolves a bodiless overload, as ral-55i reads it), else undefined. */
+  rust90rgBaseTailForward(owner, inner) {
+    if (owner === void 0 || inner === void 0 || !isCallExpression6(inner) || !isPropertyAccessExpression3(inner.expression) || inner.expression.expression.kind !== SyntaxKind7.ThisKeyword || !isIdentifier3(inner.expression.name))
+      return void 0;
+    if (!_RustTranspiler.RUST_BASE_TIER_FILE.test(String(owner.getSourceFile().fileName)))
+      return void 0;
+    const name = String(inner.expression.name.text);
+    const target = this.rustScalarCallee(inner);
+    if (target === void 0 || !isMethodDeclaration5(target) || !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(target.getSourceFile().fileName)))
+      return void 0;
+    const impl = target.body !== void 0 ? target : Array.from(target.parent?.members ?? []).find((m) => isMethodDeclaration5(m) && m.body !== void 0 && isIdentifier3(m.name) && String(m.name.text) === name);
+    if (impl === void 0 || impl === owner || this.isAsyncFunction(impl) || this.rustVenueReturnTypesHas(inner, name) || this.rustVirtualDispatch?.[this.toSnakeCaseName(name)] !== void 0 || this.rustTypedUnified.has(name) || this.rustTypedSignature(impl) !== void 0)
+      return void 0;
+    return impl;
+  }
+  /** ral-90rg R4: every `return` of `impl` (closures skipped) is an array literal or another built list (rustBuiltContainerKind). */
+  rust90rgImplReturnsList(impl, depth) {
+    let returns = 0;
+    let ok = true;
+    const visit = (node) => {
+      if (!ok)
+        return;
+      if (node !== impl.body && isFunctionLike(node))
+        return;
+      if (isReturnStatement4(node)) {
+        returns++;
+        if (this.rustBuiltContainerKind(node.expression, depth + 1) !== "list")
+          ok = false;
+        return;
+      }
+      node.forEachChild(visit);
+    };
+    impl.body.forEachChild(visit);
+    return ok && returns > 0;
+  }
   rustCallBuildsContainer(call, kind, depth = 0) {
     if (depth > 2)
       return false;
@@ -76383,7 +76420,10 @@ ${iden}}`;
             return;
         }
         returns++;
-        if (this.rustBuiltContainerKind(node.expression, depth + 1) !== kind)
+        if (this.rustBuiltContainerKind(node.expression, depth + 1) === kind)
+          return;
+        const forward = kind === "list" ? this.rust90rgBaseTailForward(declaration, inner) : void 0;
+        if (forward === void 0 || !this.rust90rgImplReturnsList(forward, depth))
           ok = false;
         return;
       }
