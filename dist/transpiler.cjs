@@ -88192,10 +88192,11 @@ ${iden}}`;
       init = this.rustSkipWrappers(init.expression);
     const nil = this.rustOptListNilInit(declaration);
     const strVecAlias = !nil && this.rust80cStrVecParamAlias(init);
+    const listTernary = !nil && !strVecAlias && this.rustStrListTernary(init);
     const split0 = !nil && !strVecAlias && !this.rustOptListSource(init) && (list.flags & _ast.NodeFlags.Const) !== 0 && init !== void 0 && (this.rustSafeValueKeyReadSource(init) || this.rust87rfEndpointSplitSource(declaration, init)) && String(init.getText()).split("\n")[0].length <= 240;
     const declaredList = !nil && !strVecAlias && (list.flags & _ast.NodeFlags.Const) !== 0 && init !== void 0 && _is.isCallExpression.call(void 0, init) && !this.rust90rfArrayTested(declaration) && _optionalChain([this, 'access', _12673 => _12673.rustSkipWrappers, 'call', _12674 => _12674(declaration.initializer), 'optionalAccess', _12675 => _12675.kind]) === _ast.SyntaxKind.AwaitExpression && !this.rustTestTierSource(init) && this.rustDeclaredEndpointKind(init) === "list" && String(init.getText()).split("\n")[0].length <= 240;
     const split = split0 && !declaredList;
-    if (!nil && !strVecAlias && !split && !declaredList && !this.rustOptListSource(init))
+    if (!nil && !strVecAlias && !split && !declaredList && !listTernary && !this.rustOptListSource(init))
       return false;
     const name = String(declaration.name.text);
     const fn = this.rustEnclosingFunction(declaration);
@@ -88320,7 +88321,9 @@ ${iden}}`;
         boxes.push([n, extra]);
       return extra !== void 0;
     });
-    if (!safe || nil && (writes === 0 || natives === 0) || split && isArrayTests === 0 || declaredList && natives === 0)
+    if (!safe || nil && (writes === 0 || natives === 0) || split && isArrayTests === 0 || (declaredList || listTernary) && natives === 0)
+      return false;
+    if (listTernary && boxes.some(([, form]) => form !== "lend"))
       return false;
     if (split && (mapBoxes.length > 0 || rejoins.length > 0) && mapBoxes.length + rejoins.length + boxes.filter(([, form]) => form !== "lend").length > 1)
       return false;
@@ -88502,6 +88505,21 @@ ${iden}}`;
         return false;
     }
     return true;
+  }
+  /** `c ? a : b` where each arm is an unwritten string-list parameter, a base `string[]` field or a string-literal list. */
+  rustStrListTernary(init) {
+    const node = init === void 0 ? void 0 : this.rustSkipWrappers(init);
+    if (node === void 0 || !_is.isConditionalExpression.call(void 0, node) || String(node.getText()).split("\n")[0].length > 240)
+      return false;
+    const arm = (e) => {
+      const a = this.rustSkipWrappers(e);
+      if (a === void 0)
+        return false;
+      if (_is.isArrayLiteralExpression.call(void 0, a))
+        return a.elements.every((x) => _is.isStringLiteral.call(void 0, x));
+      return this.rust80cStrVecParamAlias(a) || this.rust80cBaseStrListField(a);
+    };
+    return arm(node.whenTrue) && arm(node.whenFalse);
   }
   /** ral-80c R1: `this.symbols` / `this.ids`, base fields declared `string[]` (always a list). */
   rust80cBaseStrListField(node) {

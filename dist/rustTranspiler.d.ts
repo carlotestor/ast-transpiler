@@ -4685,6 +4685,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rust90rfArmOf(n: Node, declaration: VariableDeclaration, fn: Node): 'list' | 'map' | undefined;
     /** ral-80c R1: an unwritten method parameter whose typed signature slot is a string list (decided from the signature table). */
     rust80cStrVecParamAlias(init: Expression | undefined): boolean;
+    /** `c ? a : b` where each arm is an unwritten string-list parameter, a base `string[]` field or a string-literal list. */
+    rustStrListTernary(init: Node | undefined): boolean;
     /** ral-80c R1: `this.symbols` / `this.ids`, base fields declared `string[]` (always a list). */
     rust80cBaseStrListField(node: Expression): boolean;
     /** ral-80c R1: `x.push(v)` statement on an optional list alias. */
