@@ -43501,12 +43501,6 @@ function ccxtGo90g2GuardedNonNil(goTranspiler, use, name) {
     if (cur.kind === SyntaxKind5.IfStatement && cur.elseStatement === child && ccxtGo90g2TestsNil(goTranspiler, cur.expression, name)) {
       return true;
     }
-    if (cur.kind === SyntaxKind5.BinaryExpression && cur.right === child && (cur.operatorToken?.kind === SyntaxKind5.AmpersandAmpersandToken && goTranspiler.goGuardsNonNil(cur.left, name) || cur.operatorToken?.kind === SyntaxKind5.BarBarToken && ccxtGo90g2TestsNil(goTranspiler, cur.left, name))) {
-      return true;
-    }
-    if (cur.kind === SyntaxKind5.ConditionalExpression && cur.whenFalse === child && ccxtGo90g2TestsNil(goTranspiler, cur.condition, name)) {
-      return true;
-    }
     if (cur.kind === SyntaxKind5.Block || cur.kind === SyntaxKind5.CaseClause || cur.kind === SyntaxKind5.DefaultClause) {
       const statements = cur.statements;
       const index = statements.indexOf(child);
@@ -43623,8 +43617,6 @@ function ccxtGo90g2MapVerdictOk(goTranspiler, declaration) {
       } else if (!goTranspiler.isGoElementAccessAssignmentTarget(parent)) {
         natives++;
       }
-    } else if (parent?.kind === SyntaxKind5.BinaryExpression && parent.right === outer && parent.operatorToken?.kind === SyntaxKind5.InKeyword) {
-      natives++;
     }
     return false;
   });
