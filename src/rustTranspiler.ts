@@ -3558,7 +3558,26 @@ export class RustTranspiler extends BaseTranspiler {
         if (!isIdentifier(n) || !isReturnStatement(n.parent) || findAncestor(n.parent.parent, isFunctionLike) !== fn) return false;
         const declaration: any = this.rustDeclaredNode(n);
         if (declaration === undefined || !isVariableDeclaration(declaration) || declaration.initializer === undefined) return false;
+        // ral-90rb R4: a `+` concatenation of string literals / `String` locals is a string on every path, like a literal seed
+        const init: Node = this.unwrapParens(declaration.initializer);
+        if (isBinaryExpression(init) && init.operatorToken.kind === SyntaxKind.PlusToken && this.rust90bStrConcatInit(init) && this.rustEnclosingFunction(declaration) === fn) return true;
         return this.literalKindOfNode(this.unwrapParens(declaration.initializer)) === 'string' && this.rustEnclosingFunction(declaration) === fn;
+    }
+
+    /** ral-90rb R4: every leaf of a `+` chain is a string literal or an identifier whose declaration is a `const` initialised from a
+     *  base `safeString*` read with a string-literal default (checker `string`, never `undefined`). Decided from the AST. */
+    rust90bStrConcatInit(node: Node): boolean {
+        const inner: Node = this.unwrapParens(node);
+        if (isBinaryExpression(inner)) return inner.operatorToken.kind === SyntaxKind.PlusToken && this.rust90bStrConcatInit(inner.left) && this.rust90bStrConcatInit(inner.right);
+        if (isStringLiteral(inner)) return true;
+        if (!isIdentifier(inner)) return false;
+        const declaration: Node | undefined = this.rustDeclaredNode(inner);
+        if (declaration === undefined || !isVariableDeclaration(declaration) || (declaration.parent.flags & NodeFlags.Const) === 0) return false;
+        const read: Node = this.unwrapParens(declaration.initializer);
+        if (read === undefined || !isCallExpression(read) || !isPropertyAccessExpression(read.expression) || read.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
+        const name = String(read.expression.name.text);
+        const last: Node = read.arguments[read.arguments.length - 1];
+        return (name === 'safeString' && read.arguments.length === 3 && isStringLiteral(last)) && this.primitiveKindOfType(this.getCheckedTypeOf(inner)) === 'string';
     }
 
     /** ral-61x: `return x` of the method's own nil-declared `let x: Str = undefined` local (an accumulator the body writes):

@@ -25243,3 +25243,12 @@ describe('ral-90rb R3: a long literal list of string literals is a native List',
         expect(out).not.toContain('let mut unsupported: Value');
     });
 });
+
+describe('ral-90rb R4: a returned concatenation of defaulted string reads in a -> Option<String> method', () => {
+    test('the concat local is a String with native string ops', () => {
+        const ts = "class venue {\n    safeString (o: any, k: any, d: any = undefined): string { return o[k]; }\n    formatNumber (data: string): string {\n        const parts = data.split ('.');\n        const integer = this.safeString (parts, 0, '');\n        const decimals = this.safeString (parts, 1, '');\n        let joinedResult = integer + decimals;\n        while (joinedResult.startsWith ('0')) {\n            joinedResult = joinedResult.slice (1);\n        }\n        return joinedResult;\n    }\n}\n";
+        const out = transpiler.transpileRust(ts).content;
+        expect(out).toMatch(/let mut joinedResult: String = format!\(/);
+        expect(out).not.toContain('let mut joinedResult: Value');
+    });
+});
