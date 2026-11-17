@@ -43530,8 +43530,9 @@ GoTranspiler.prototype.go90g3ComputedSideLocal = function(declaration) {
       const sides = this.go90g3SideKeys(init.argumentExpression);
       const scope = this.goEnclosingFunction(declaration);
       const name = declaration.name.text;
-      const bindings = scope === void 0 ? [] : this.goDescendantsOf(scope).filter((n) => (n.kind === SyntaxKind5.VariableDeclaration || n.kind === SyntaxKind5.Parameter) && n.name?.kind === SyntaxKind5.Identifier && n.name.text === name);
-      if (sides !== void 0 && scope !== void 0 && bindings.length === 1 && !this.goTypeNameIsShadowed(scope, cfg.sideType)) {
+      const checker = this.checkerOrUndefined();
+      const own = checker?.getSymbolAtLocation(declaration.name);
+      if (sides !== void 0 && scope !== void 0 && own !== void 0 && !this.goTypeNameIsShadowed(scope, cfg.sideType)) {
         let uses = 0;
         const foreign = this.hasNodeWhere(scope, (n) => {
           if (n.kind !== SyntaxKind5.Identifier || n.text !== name || n === declaration.name) {
@@ -43539,6 +43540,9 @@ GoTranspiler.prototype.go90g3ComputedSideLocal = function(declaration) {
           }
           const parent = n.parent;
           if ((parent?.kind === SyntaxKind5.PropertyAccessExpression || parent?.kind === SyntaxKind5.PropertyAssignment) && parent.name === n) {
+            return false;
+          }
+          if (checker.getSymbolAtLocation(n) !== own) {
             return false;
           }
           const store = go90g3StoreCall(parent?.parent);
