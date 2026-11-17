@@ -969,6 +969,11 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  `.push (v)` of one string-typed value: never rebound, element-written, spliced or handed on whole. Every element
      *  the list can hold is a `Str`, so the read is the string or (out of range) undefined. */
     rustAnyStrPushElem(node: any): boolean;
+    /** ral-87ra R2: the integer twin of `rustExactBoolTupleRead`: `t[i]` (a literal index) of a never-written `const t = this.m (..)`
+     *  (or `await this.m (..)`) whose every return puts an exact Int-or-Null at slot i (rustExactSlotCallee `int`, as the
+     *  destructured slot rule; lighter `handleAccountIndex` / `handleApiKeyIndex`), the read typed `number`: `Option<i64>`. */
+    rust87raExactIntTupleRead(node: Node, owner: Node): string | undefined;
+    private static readonly RUST_87RA_COMPARE_OPS;
     /** ral-ug: `t[i]` (a literal index) of a never-written `const t = this.m (..)` whose every return puts an exact
      *  Bool-or-Null at slot i (`handleOptionBoolAndParams[2]`: `checkOptionBool`): `Option<bool>`, as the slot rule. */
     rustExactBoolTupleRead(node: any, owner: any): string | undefined;
@@ -3840,6 +3845,11 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  slot `k` of its tuple return a bare `Dict` (rustCallDeclaresDictSlot: bitget `handleProductTypeAndParams`, binance pro
      *  `resolveAuthType`, dydx `createOrderRequest`) and whose every use is a literal-index read: the slot holds that map. */
     rust87raVenueTupleMapSlotRead(rhs: Node): boolean;
+    /** ral-87ra R3: base `handleTriggerPricesAndParams (symbol, params)` answers its params map (omitted or as passed) at slot 3
+     *  (declared `[Str, Str, Str, Dict]`): a map when the params argument is a proven map local / parameter (ral-51a's head proof). */
+    rust87raBaseParamsSlot(call: CallExpression, at: number): boolean;
+    /** ral-87ra R3: base tuple producer name -> [Dict slot, params argument index]. */
+    private static readonly RUST_87RA_BASE_PARAMS_SLOT;
     /** ral-51a: `this.handleRouteAndParams (m, params)` typed by name: a venue member of the enclosing class declared
      *  `handleRouteAndParams (methodName: string, params: Dict = {}): Dict` answers the (route-omitted) params map. */
     rustRouteParamsDictCall(init: any): boolean;

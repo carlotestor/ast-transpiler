@@ -59539,6 +59539,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const tupleBool = this.rustExactBoolTupleRead(node, owner);
     if (tupleBool !== void 0)
       return tupleBool;
+    const tupleInt = this.rust87raExactIntTupleRead(node, owner);
+    if (tupleInt !== void 0)
+      return tupleInt;
     const listType = this.typeOfNodeIfAny(node.expression);
     if (listType !== void 0 && this.rustConstTupleStrSlotRead(node, owner, listType))
       return "ostr";
@@ -59663,6 +59666,38 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     });
     return ok && pushes > 0;
+  }
+  /** ral-87ra R2: the integer twin of `rustExactBoolTupleRead`: `t[i]` (a literal index) of a never-written `const t = this.m (..)`
+   *  (or `await this.m (..)`) whose every return puts an exact Int-or-Null at slot i (rustExactSlotCallee `int`, as the
+   *  destructured slot rule; lighter `handleAccountIndex` / `handleApiKeyIndex`), the read typed `number`: `Option<i64>`. */
+  rust87raExactIntTupleRead(node, owner) {
+    if (!isElementAccessExpression4(node) || !isNumericLiteral4(node.argumentExpression) || owner === void 0 || !isVariableDeclaration3(owner) || owner.initializer === void 0 || !isIdentifier3(owner.name) || (owner.parent.flags & NodeFlags4.Const) === 0 || this.primitiveKindOfType(this.typeOfNodeIfAny(node)) !== "number")
+      return void 0;
+    const at = Number(node.argumentExpression.text);
+    if (!Number.isInteger(at) || this.rustTestTierSource(node) || !this.rustExactSlotCallee(owner.initializer, at, "int"))
+      return void 0;
+    const intact = this.rustLocalUsesAll(owner, String(owner.name.text), true, (n) => {
+      const up = n.parent;
+      return up !== void 0 && isElementAccessExpression4(up) && up.expression === n && isNumericLiteral4(up.argumentExpression) && !(isBinaryExpression5(up.parent) && up.parent.left === up);
+    });
+    if (!intact)
+      return void 0;
+    let top = node;
+    while (top.parent !== void 0 && (isParenthesizedExpression3(top.parent) || isAsExpression3(top.parent)))
+      top = top.parent;
+    const local = top.parent;
+    if (local === void 0 || !isVariableDeclaration3(local) || local.initializer !== top || !isIdentifier3(local.name))
+      return void 0;
+    let compares = 0;
+    this.rustLocalUsesAll(local, String(local.name.text), true, (n) => {
+      let up = n.parent;
+      while (up !== void 0 && isParenthesizedExpression3(up))
+        up = up.parent;
+      if (isBinaryExpression5(up) && _RustTranspiler.RUST_87RA_COMPARE_OPS.has(up.operatorToken.kind))
+        compares++;
+      return true;
+    });
+    return compares > 0 ? "oint" : void 0;
   }
   /** ral-ug: `t[i]` (a literal index) of a never-written `const t = this.m (..)` whose every return puts an exact
    *  Bool-or-Null at slot i (`handleOptionBoolAndParams[2]`: `checkOptionBool`): `Option<bool>`, as the slot rule. */
@@ -79185,7 +79220,7 @@ ${iden}}`;
     const call = this.rustSkipWrappers(t.initializer);
     if (call === void 0 || !isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword)
       return false;
-    if (!this.rustCallDeclaresDictSlot(call, Number(idx.text)))
+    if (!this.rustCallDeclaresDictSlot(call, Number(idx.text)) && !this.rust87raBaseParamsSlot(call, Number(idx.text)))
       return false;
     return this.rustLocalUsesAll(t, String(t.name.text), true, (n) => {
       const up = n.parent;
@@ -79194,6 +79229,23 @@ ${iden}}`;
       const use = up.parent;
       return !(isBinaryExpression5(use) && use.left === up) && use.kind !== SyntaxKind7.DeleteExpression;
     });
+  }
+  /** ral-87ra R3: base `handleTriggerPricesAndParams (symbol, params)` answers its params map (omitted or as passed) at slot 3
+   *  (declared `[Str, Str, Str, Dict]`): a map when the params argument is a proven map local / parameter (ral-51a's head proof). */
+  rust87raBaseParamsSlot(call, at) {
+    if (!isPropertyAccessExpression3(call.expression))
+      return false;
+    const name = String(call.expression.name.text);
+    const slot = _RustTranspiler.RUST_87RA_BASE_PARAMS_SLOT[name];
+    if (slot === void 0 || slot[0] !== at || !this.rustCalleeIsBase(call))
+      return false;
+    const head = this.rustSkipWrappers(call.arguments[slot[1]]);
+    if (head === void 0 || !isIdentifier3(head))
+      return false;
+    const d = this.rustDeclarationOfIdentifier(head);
+    if (d === void 0 || d === head || d.name === head)
+      return this.rustProvenMapParam(d);
+    return this.rustProvenMapParam(d) || this.rustHandedDictLocal(d) || this.rustBorrowedLocalKind(d) === "dict" && !this.rustOptContainerLocals.has(d);
   }
   /** ral-51a: `this.handleRouteAndParams (m, params)` typed by name: a venue member of the enclosing class declared
    *  `handleRouteAndParams (methodName: string, params: Dict = {}): Dict` answers the (route-omitted) params map. */
@@ -91644,6 +91696,14 @@ _RustTranspiler.RUST_BYTES_SLOTS = {
   urlencodeBase64: [0]
 };
 _RustTranspiler.RUST_BYTES_FREE_SLOTS = { eddsa: [0, 1], jwt: [1] };
+_RustTranspiler.RUST_87RA_COMPARE_OPS = /* @__PURE__ */ new Set([
+  SyntaxKind7.EqualsEqualsEqualsToken,
+  SyntaxKind7.ExclamationEqualsEqualsToken,
+  SyntaxKind7.LessThanToken,
+  SyntaxKind7.LessThanEqualsToken,
+  SyntaxKind7.GreaterThanToken,
+  SyntaxKind7.GreaterThanEqualsToken
+]);
 // ral-xa: unified string keys of a market / currency record (an exchange id key may hold a number, which `as_str` drops)
 _RustTranspiler.RUST_NIL_ELEM_STR_KEYS = /* @__PURE__ */ new Set(["symbol", "base", "quote", "settle", "code"]);
 /** ral-xa: `x = y;` into a nil-declared local, `y` a `Value` local of the same function the checker types string
@@ -92515,6 +92575,8 @@ _RustTranspiler.RUST_BASE_FILTER_LISTS = /* @__PURE__ */ new Set([
   "filterByCurrencySinceLimit",
   "filterBySymbolsSinceLimit"
 ]);
+/** ral-87ra R3: base tuple producer name -> [Dict slot, params argument index]. */
+_RustTranspiler.RUST_87RA_BASE_PARAMS_SLOT = { handleTriggerPricesAndParams: [3, 1] };
 _RustTranspiler.RUST_ROUTE_PARAMS_DICT = /* @__PURE__ */ new Set(["handleRouteAndParams"]);
 _RustTranspiler.RUST_SIGN_MAP_PROOF = /* @__PURE__ */ new Map();
 /** A venue `sign (path, api, method, params)` whose `params` is a map on every path. `params` reaches `sign` only
