@@ -62884,7 +62884,18 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     return this.rustBytesLocalOf(source) === void 0 ? void 0 : source;
   }
+  /** `this.packb (..)` / `this.ethAbiEncode (..)` resolved to the base tier: the runtime answers the byte list boxed
+   *  (`packb` always a list, `ethAbiEncode` a list or `Null` on an unsupported type). Only a local initializer takes
+   *  it, unboxed once into the `Bytes` handle (`Null` reads as no bytes, as every byte slot reads it). */
+  rustBoxedBytesProducer(node) {
+    if (node === void 0 || !isCallExpression6(node) || !isPropertyAccessExpression3(node.expression) || node.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    const name = String(node.expression.name.text);
+    return (name === "packb" || name === "ethAbiEncode") && !this.rustTestTierSource(node) && this.rustCalleeIsRuntimeBase(node);
+  }
   rustBytesBareText(node, identation = 0) {
+    if (this.rustBoxedBytesProducer(node))
+      return `crate::value::Bytes(${this.printNode(node, identation).trim()}.into_list())`;
     const sliced = this.rustBytesSliceSource(node);
     if (sliced !== void 0) {
       const [start, end] = [Number(node.arguments[1].getText()), Number(node.arguments[2].getText())];
@@ -62927,7 +62938,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (!isIdentifier3(declaration.name) || list?.declarations?.length !== 1 || list.parent?.kind !== SyntaxKind7.VariableStatement)
       return false;
     const init = this.unwrapParens(declaration.initializer);
-    if (!this.rustBytesProducer(init) || this.rustTestTierSource(declaration) && !this.rustScalarReceiver(init.expression.expression))
+    const boxed = this.rustBoxedBytesProducer(init);
+    if (!boxed && (!this.rustBytesProducer(init) || this.rustTestTierSource(declaration) && !this.rustScalarReceiver(init.expression.expression)))
       return false;
     const fn = this.rustEnclosingFunction(declaration);
     if (fn === void 0 || isSourceFile5(fn))
@@ -62951,6 +62963,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     });
     if (!ok)
+      return false;
+    if (boxed && String(init.expression.name.text) === "ethAbiEncode" && [...forms.values()].some((f) => f !== "lend"))
       return false;
     for (const [n, form] of forms)
       this.rustBytesUseForms.set(n, form);
