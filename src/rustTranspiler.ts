@@ -9248,8 +9248,38 @@ export class RustTranspiler extends BaseTranspiler {
         if (plan === undefined || node.pos < plan.bindPos || (!plan.typed && !plan.declOk && !this.rust80bClientDeclPending(plan))) return undefined;
         const write = this.isNativeWriteTargetBase(node);
         const first = plan.firstWrite.get(key);
-        if (!write && first !== undefined && this.rustClientHandleLine(node) >= first) return undefined;
+        if (!write && first !== undefined && this.rustClientHandleLine(node) >= first && !this.rust90bHandleSyncedInTest(node, plan)) return undefined;
         return { plan, key, write };
+    }
+
+    /** ral-90b: `k in client.subscriptions` after a write of that field reads the handle's snapshot when every write of
+     *  `client.subscriptions` in the method is a whole statement `client.subscriptions[k] = v` / `delete client.subscriptions[k]`:
+     *  both print through the handle (`add_subscription` / `remove_subscription`), which update the snapshot's key set with the
+     *  live client's, so the key test sees what the live read did. Decided from the AST. */
+    rust90bHandleSyncedInTest(node: Node, plan: { bindPos: number }): boolean {
+        if (!isPropertyAccessExpression(node) || String(node.name.text) !== 'subscriptions') return false;
+        const test: Node = this.rustSkipWrappersUp(node.parent);
+        if (!isBinaryExpression(test) || test.operatorToken.kind !== SyntaxKind.InKeyword || this.unwrapParens(test.right) !== node) return false;
+        const method: Node | undefined = findAncestor(node, (n) => isMethodDeclaration(n));
+        if (method === undefined) return false;
+        // an awaited call (`this.watch (url, ..)`) can subscribe on the live client behind the snapshot
+        let awaits = false;
+        const visit = (m: Node) => { if (awaits) return; if (m.kind === SyntaxKind.AwaitExpression) { awaits = true; return; } m.forEachChild?.(visit); };
+        visit(method);
+        if (awaits) return false;
+        const refs: Node[] = this.rustScopeNameNodes(method, 'client');
+        return refs.every((r) => {
+            const p: Node = r.parent;
+            // the client handed whole to a call may have its live subscriptions changed behind the snapshot
+            if (r.kind === SyntaxKind.Identifier && (isCallExpression(p) || isNewExpression(p)) && (p.arguments ?? []).some((a) => a === r)) return false;
+            if (r.kind !== SyntaxKind.Identifier || r.pos < plan.bindPos || !isPropertyAccessExpression(p) || p.expression !== r
+                || String(p.name.text) !== 'subscriptions' || !this.isNativeWriteTargetBase(p)) return true;
+            const access: Node = p.parent;
+            if (!isElementAccessExpression(access) || access.expression !== p) return false;
+            const up: Node = access.parent;
+            const statement = up?.parent?.kind === SyntaxKind.ExpressionStatement;
+            return statement && (isDeleteExpression(up) || (isBinaryExpression(up) && up.left === access && up.operatorToken.kind === SyntaxKind.EqualsToken));
+        });
     }
 
     /** ral-80b: a `const client = this.client (url)` local whose declaration has not printed yet. A scalar decision made

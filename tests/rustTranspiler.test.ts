@@ -25197,3 +25197,28 @@ describe('ral-87rh R4: a bool local strictly compared with an Option<bool> reade
         expect(out).toContain('== Some(wantActive))');
     });
 });
+
+describe('ral-90rb R1: a key tested in client.subscriptions after a handle-synced write', () => {
+    const files: Record<string, string> = {
+        'ts/src/base/ws/Client.ts': "export default class Client {\n    url: string;\n    subscriptions: any;\n    futures: any;\n    resolve (result: any, messageHash: string): any { return result; }\n    reject (result: any, messageHash: string = undefined): any { return result; }\n}\n",
+        'ts/src/base/Exchange.ts': "import Client from './ws/Client.js';\nexport default class Exchange {\n}\n",
+        'ts/src/pro/venue.ts': "import Exchange from '../base/Exchange.js';\nimport Client from '../base/ws/Client.js';\nexport default class venue extends Exchange {\n    handleErr (client: Client, message: any, id: string) {\n        if (id in client.subscriptions) {\n            delete client.subscriptions[id];\n        }\n        const authHash = 'authenticated';\n        client.reject (message, authHash);\n        if (authHash in client.subscriptions) {\n            delete client.subscriptions[authHash];\n        }\n    }\n    handleMixed (client: Client, message: any, id: string) {\n        client.subscriptions = {};\n        const otherHash = 'other';\n        client.reject (message, otherHash);\n        if (otherHash in client.subscriptions) {\n            delete client.subscriptions[otherHash];\n        }\n    }\n}\n",
+    };
+    let out: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-90rb1-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = transpiler.transpileRustByPath(path.join (root, 'ts/src/pro/venue.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test('the later key test reads the handle and the key is a String', () => {
+        expect(out).toContain('let mut authHash: String = "authenticated".to_string();');
+        expect(out).toContain('__ch.has_subscription(authHash.as_str())');
+    });
+    test('a whole-field write keeps the boxed key', () => {
+        expect(out).toContain('let mut otherHash: Value = ');
+    });
+});
