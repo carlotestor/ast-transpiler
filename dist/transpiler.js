@@ -45824,9 +45824,77 @@ GoTranspiler.prototype.goTernaryJoinHasForeignComparison = function(declaration,
       return false;
     }
     const otherType = this.goOperandStaticType(other, this.printNode(other, 0));
-    const widened = ordered && (goType === "int64" && otherType === "int" || goType === "int" && otherType === "int64");
+    const widened = ordered && (goType === "int64" || goType === "int") && (otherType === "int" || otherType === "int64" || otherType === "any");
     return otherType !== void 0 && otherType !== goType && !widened;
   });
+};
+var goTernaryJoin93PartsUncached = GoTranspiler.prototype.goTernaryJoinPartsUncached;
+GoTranspiler.prototype.goTernaryJoinPartsUncached = function(declaration) {
+  const known = goTernaryJoin93PartsUncached.call(this, declaration);
+  if (known !== void 0 || this.goTernaryJoinProvisional()) {
+    return known;
+  }
+  const ternary = this.goUnwrapParenthesizedNode(declaration?.initializer);
+  if (ternary?.kind !== SyntaxKind5.ConditionalExpression) {
+    return void 0;
+  }
+  const whenTrue = this.goTernaryJoinArmType(ternary.whenTrue);
+  const whenFalse = this.goTernaryJoinArmType(ternary.whenFalse);
+  const mixed = whenTrue === "int" && whenFalse === "int64" || whenTrue === "int64" && whenFalse === "int";
+  if (!mixed || this.goWithExprDepth(1, () => this.printCondition(ternary.condition, 0)).includes("\n") || this.goTernaryJoinFeedsParameterCopy(declaration) || !this.goTernaryJoin90HasArithmeticUse(declaration)) {
+    return void 0;
+  }
+  return { goType: "int64", derefTrue: false, derefFalse: false, widenTrue: whenTrue === "int", widenFalse: whenFalse === "int" };
+};
+GoTranspiler.prototype.goTernaryJoinFeedsAnotherTernary = function(declaration) {
+  const scope = this.goEnclosingFunction(declaration);
+  const name = declaration.name;
+  const checker = this.checkerOrUndefined();
+  return scope === void 0 || checker === void 0 || this.hasNodeWhere(scope, (n) => {
+    if (n.kind !== SyntaxKind5.Identifier || n.text !== name.text || n === name) {
+      return false;
+    }
+    let current = n;
+    while (current.parent?.kind === SyntaxKind5.ParenthesizedExpression) {
+      current = current.parent;
+    }
+    const consumer = current.parent;
+    if (consumer?.kind !== SyntaxKind5.ConditionalExpression || consumer.condition === current) {
+      return false;
+    }
+    if (checker.getSymbolAtLocation(n)?.valueDeclaration?.resolve() !== declaration) {
+      return true;
+    }
+    const other = this.goUnwrapParenthesizedNode(consumer.whenTrue === current ? consumer.whenFalse : consumer.whenTrue);
+    if (other?.kind === SyntaxKind5.NumericLiteral && /^[0-9]+$/.test(other.text)) {
+      return false;
+    }
+    if (other?.kind !== SyntaxKind5.Identifier) {
+      return true;
+    }
+    const resolved = checker.getSymbolAtLocation(other)?.valueDeclaration?.resolve();
+    const otherDeclaration = resolved?.kind === SyntaxKind5.VariableDeclaration ? resolved : void 0;
+    const literalSeed = otherDeclaration?.kind === SyntaxKind5.VariableDeclaration && otherDeclaration.parent?.flags & NodeFlags2.Const && this.goUnwrapParenthesizedNode(otherDeclaration.initializer)?.kind === SyntaxKind5.NumericLiteral && /^[0-9]+$/.test(this.goUnwrapParenthesizedNode(otherDeclaration.initializer).text);
+    if (literalSeed) {
+      return false;
+    }
+    const sibling = otherDeclaration?.kind === SyntaxKind5.VariableDeclaration && this.goUnwrapParenthesizedNode(otherDeclaration.initializer)?.kind === SyntaxKind5.ConditionalExpression && goTernaryJoinOwner(otherDeclaration.initializer) === otherDeclaration ? otherDeclaration : void 0;
+    return sibling === void 0 || (this.goTernaryJoinParts(sibling)?.goType?.startsWith("*") ?? false);
+  });
+};
+var goTernaryJoin93LocalStaticType = GoTranspiler.prototype.goLocalStaticType;
+GoTranspiler.prototype.goLocalStaticType = function(node) {
+  if (!this.goTernaryJoinProvisional() || this.goLocalTypeResolution.size !== 0) {
+    return goTernaryJoin93LocalStaticType.call(this, node);
+  }
+  const declaration = this.checkerOrUndefined()?.getSymbolAtLocation(node)?.valueDeclaration?.resolve();
+  const owner = declaration?.kind === SyntaxKind5.VariableDeclaration && this.goUnwrapParenthesizedNode(declaration.initializer)?.kind === SyntaxKind5.ConditionalExpression ? goTernaryJoinOwner(declaration.initializer) : void 0;
+  if (owner === void 0 || owner !== declaration || this.goLocalStaticTypeCache.has(owner)) {
+    return goTernaryJoin93LocalStaticType.call(this, node);
+  }
+  const answer = goTernaryJoin93LocalStaticType.call(this, node);
+  this.goLocalStaticTypeCache.delete(owner);
+  return answer;
 };
 
 // src/javaTranspiler.ts
