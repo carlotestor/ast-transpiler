@@ -15056,4 +15056,12 @@ describe ('ral-87g2 reader-result locals', () => {
         // the base class keeps its box
         expect (run (body, 'ts/src/base')).not.toContain ('var xs []any');
     });
+    test ('H: handleOption locals read only against true, `as Bool` wrapped or declared in sibling blocks, are bool', () => {
+        const pre = '    handleOption (m: string, o: string, d: any = undefined) { return d; }\n';
+        const body = pre + '    f (a: boolean): any {\n        if (a) {\n            const ck = this.handleOption ("watchX", "ck", true);\n            if (ck === true) {\n                return 1;\n            }\n        } else {\n            const ck = this.handleOption ("watchX", "ck", true) as boolean;\n            if (ck === true) {\n                return 2;\n            }\n        }\n        return 0;\n    }\n';
+        const out = run (body, 'ts/src/pro');
+        expect (out.split ('var ck bool = this.HandleOption("watchX", "ck", true) == true').length).toBe (3);
+        // another read keeps the box
+        expect (run (body.replace ('ck === true) {\n                return 2', 'ck === 3) {\n                return 2'), 'ts/src/pro').split ('var ck bool = ').length).toBe (2);
+    });
 });

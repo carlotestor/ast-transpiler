@@ -35121,3 +35121,84 @@ function ccxtGo87g2ListLocal (goTranspiler, declaration, mode: 'F' | 'G'): strin
         return verdict;
     };
 }
+// H. R4 (`handleOption` local read only against `true`, declared `bool` as `HandleOption(..) == true`) for two
+// shapes R4 refused: the initializer wrapped in a type-only `as Bool` / `as boolean` (prints as the bare call),
+// and a name declared again in a sibling block (`const checksum = ..` in each `else` arm). Each reference is
+// resolved through the checker: a reference of a sibling declaration belongs to that declaration's own verdict,
+// and another declaration of the name may not enclose or sit inside this one's block (no Go shadowing).
+{
+    const trueLocal = GoTranspiler.prototype.goHandleOptionTrueLocal;
+    const memo = new WeakMap<object, boolean>();
+    const isBoolType = (t): boolean => (t?.kind === SyntaxKind.BooleanKeyword)
+        || ((t?.kind === SyntaxKind.TypeReference) && (t.typeName?.kind === SyntaxKind.Identifier) && (t.typeName.text === 'Bool'));
+    GoTranspiler.prototype.goHandleOptionTrueLocal = function (declaration) {
+        if (trueLocal.call(this, declaration)) {
+            return true;
+        }
+        if ((declaration?.kind !== SyntaxKind.VariableDeclaration) || (declaration.name?.kind !== SyntaxKind.Identifier)
+            || (declaration.parent?.parent?.kind !== SyntaxKind.FirstStatement) || ((declaration.type !== undefined) && !isBoolType(declaration.type))) {
+            return false;
+        }
+        if (memo.has(declaration)) {
+            return memo.get(declaration);
+        }
+        memo.set(declaration, false);
+        let call = declaration.initializer;
+        while ((call?.kind === SyntaxKind.ParenthesizedExpression) || ((call?.kind === SyntaxKind.AsExpression) && isBoolType(call.type))) {
+            call = call.expression;
+        }
+        if ((call?.kind !== SyntaxKind.CallExpression) || (call.expression?.kind !== SyntaxKind.PropertyAccessExpression)
+            || (call.expression.expression?.kind !== SyntaxKind.ThisKeyword) || (call.expression.name?.text !== 'handleOption')
+            || (call.arguments.length < 2) || (call.arguments.length > 3)) {
+            return false;
+        }
+        const scope: Node | undefined = this.goEnclosingFunction(declaration);
+        const checker: Checker | undefined = this.checkerOrUndefined();
+        const own: TsSymbol | undefined = checker?.getSymbolAtLocation(declaration.name);
+        if ((scope === undefined) || (own === undefined) || this.goTypeNameIsShadowed(scope, 'bool')) {
+            return false;
+        }
+        const name = declaration.name.text;
+        const block = declaration.parent.parent.parent;
+        const contains = (outer, inner): boolean => {
+            for (let cur = inner; cur !== undefined; cur = cur.parent) {
+                if (cur === outer) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        let reads = 0;
+        const unsafe = this.hasNodeWhere(scope, (n) => {
+            if (((n.kind === SyntaxKind.VariableDeclaration) || (n.kind === SyntaxKind.Parameter) || (n.kind === SyntaxKind.BindingElement))
+                && (n !== declaration) && (n.name?.kind === SyntaxKind.Identifier) && (n.name.text === name)) {
+                const otherBlock = n.parent?.parent?.parent;
+                return (n.kind !== SyntaxKind.VariableDeclaration) || contains(otherBlock, declaration) || contains(block, n);
+            }
+            if ((n.kind !== SyntaxKind.Identifier) || (n.text !== name) || (n === declaration.name)) {
+                return false;
+            }
+            const parent = n.parent;
+            if (((parent?.kind === SyntaxKind.PropertyAccessExpression) || (parent?.kind === SyntaxKind.PropertyAssignment)) && (parent.name === n)) {
+                return false;
+            }
+            if ((n.parent?.kind === SyntaxKind.VariableDeclaration) && (n.parent.name === n)) {
+                return false;
+            }
+            if (checker.getSymbolAtLocation(n) !== own) {
+                return false; // a sibling declaration's reference
+            }
+            const op = parent?.operatorToken?.kind;
+            if ((parent?.kind !== SyntaxKind.BinaryExpression) || ((op !== SyntaxKind.EqualsEqualsEqualsToken) && (op !== SyntaxKind.EqualsEqualsToken)
+                && (op !== SyntaxKind.ExclamationEqualsEqualsToken) && (op !== SyntaxKind.ExclamationEqualsToken))
+                || (((parent.left === n) ? parent.right : parent.left)?.kind !== SyntaxKind.TrueKeyword)) {
+                return true;
+            }
+            reads++;
+            return false;
+        });
+        const verdict = !unsafe && (reads > 0);
+        memo.set(declaration, verdict);
+        return verdict;
+    };
+}
