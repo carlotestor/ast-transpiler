@@ -15110,3 +15110,34 @@ describe('ral-87g8 R2 int literal counters', () => {
         expect(out).toContain('var count any = 0');
     });
 });
+
+describe('ral-87g8 R3 inherited venue-method results only with a native use', () => {
+    const parent = 'export class base {\n'
+        + '    safeString (o: any, k: string): string | undefined { return undefined; }\n'
+        + '    parseTimeInForce (t: string | undefined): string | undefined {\n'
+        + '        return this.safeString ({ \'GTC\': \'GTC\' }, t);\n'
+        + '    }\n'
+        + '}\n';
+    test('a *string result compared with a literal takes the pointer and the compare goes native', () => {
+        const out = goTranspile87g8(parent
+            + 'export class ex extends base {\n'
+            + '    f (o: any) {\n'
+            + '        const timeInForce = this.parseTimeInForce (this.safeString (o, \'tif\'));\n'
+            + '        const postOnly = (timeInForce === \'PO\');\n'
+            + '        return { \'postOnly\': postOnly, \'timeInForce\': timeInForce };\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('var timeInForce *string = this.ParseTimeInForce(');
+        expect(out).toContain('*timeInForce == "PO"');
+    });
+    test('a result that only feeds a map literal keeps the box', () => {
+        const out = goTranspile87g8(parent
+            + 'export class ex extends base {\n'
+            + '    f (o: any) {\n'
+            + '        const timeInForce = this.parseTimeInForce (this.safeString (o, \'tif\'));\n'
+            + '        return { \'timeInForce\': timeInForce };\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('var timeInForce any = this.ParseTimeInForce(');
+    });
+});
