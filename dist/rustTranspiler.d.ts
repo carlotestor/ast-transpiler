@@ -1297,6 +1297,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  the first character of the `Str` (`Null` for `None`, empty or out of range), so the test is
      *  `x.as_deref().unwrap_or("").starts_with("c")` (ccxt's narrowStrNullLocals pass printed this). */
     rust70fFirstCharTest(node: BinaryExpression): string | undefined;
+    /** `s[i] === 'c'` / `!==` (one-character literal, either side) on a `String` scalar local, `i` an integer literal or an
+     *  `i64` / `Option<i64>` local: the boxed `get_value` read was the i-th char (`Null` when out of range, negative or `None`),
+     *  so the test is `s.chars().nth(i) == Some('c')`. */
+    rust93reStrCharTest(node: Node): string | undefined;
     /** ral-70f: `n` sits inside the left side (target chain) of an assignment. */
     rust70fInWriteTarget(n: Node): boolean;
     rust70fOperandBox(n: Node): boolean;

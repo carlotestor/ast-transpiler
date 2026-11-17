@@ -64869,6 +64869,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "native";
     if (form === void 0 && kind === "ostr" && isElementAccessExpression4(n.parent) && n.parent.expression === n && this.rust70fFirstCharTest(this.rustSkipWrappersUp(n.parent.parent) ?? {}) !== void 0)
       return "native";
+    if (form === void 0 && kind === "str" && isElementAccessExpression4(n.parent) && n.parent.expression === n && this.rust93reStrCharTest(this.rustSkipWrappersUp(n.parent.parent) ?? {}) !== void 0)
+      return "native";
     if (form === void 0 && kind === "ostr" && this.rust70fWriteKey(n))
       return "key";
     return form === void 0 && this.rustSbCopyBoxUse(n, kind) ? "xbox" : form;
@@ -64918,6 +64920,39 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     const probe = `${super.printIdentifier(recv)}.as_deref().unwrap_or("").starts_with("${String(lit.text)}")`;
     return op === SyntaxKind7.EqualsEqualsEqualsToken ? probe : `!${probe}`;
+  }
+  /** `s[i] === 'c'` / `!==` (one-character literal, either side) on a `String` scalar local, `i` an integer literal or an
+   *  `i64` / `Option<i64>` local: the boxed `get_value` read was the i-th char (`Null` when out of range, negative or `None`),
+   *  so the test is `s.chars().nth(i) == Some('c')`. */
+  rust93reStrCharTest(node) {
+    if (!isBinaryExpression5(node))
+      return void 0;
+    const op = node.operatorToken.kind;
+    if (op !== SyntaxKind7.EqualsEqualsEqualsToken && op !== SyntaxKind7.ExclamationEqualsEqualsToken)
+      return void 0;
+    const l = this.unwrapParens(node.left);
+    const r = this.unwrapParens(node.right);
+    const [access, lit] = isElementAccessExpression4(l) ? [l, r] : [r, l];
+    if (!isElementAccessExpression4(access) || !isStringLiteral3(lit) || String(lit.text).length !== 1 || /['\\]/.test(String(lit.text)) || String(lit.text) in this.StringLiteralReplacements)
+      return void 0;
+    const recv = this.unwrapParens(access.expression);
+    if (!isIdentifier3(recv) || this.rustScalarLocalOf(recv)?.kind !== "str")
+      return void 0;
+    const s = super.printIdentifier(recv);
+    const c = String(lit.text);
+    const index = this.unwrapParens(access.argumentExpression);
+    const literal2 = this.rustScalarIntLiteral(index);
+    const indexKind = literal2 === void 0 && isIdentifier3(index) ? this.rustScalarLocalOf(index)?.kind : void 0;
+    let test;
+    if (literal2 !== void 0 && !literal2.startsWith("-"))
+      test = `(${s}.chars().nth(${literal2}) == Some('${c}'))`;
+    else if (indexKind === "int")
+      test = `(${super.printIdentifier(index)} >= 0 && ${s}.chars().nth(${super.printIdentifier(index)} as usize) == Some('${c}'))`;
+    else if (indexKind === "oint")
+      test = `matches!(${super.printIdentifier(index)}, Some(__i) if __i >= 0 && ${s}.chars().nth(__i as usize) == Some('${c}'))`;
+    else
+      return void 0;
+    return op === SyntaxKind7.EqualsEqualsEqualsToken ? test : `!${test}`;
   }
   /** ral-70f: `n` sits inside the left side (target chain) of an assignment. */
   rust70fInWriteTarget(n) {
@@ -77378,6 +77413,9 @@ ${idn}}`;
     const first = this.rust70fFirstCharTest(inner);
     if (first !== void 0)
       return first;
+    const charTest = this.rust93reStrCharTest(inner);
+    if (charTest !== void 0)
+      return charTest;
     return this.printNativeEqualityComparison(inner.left, inner.right, inner.operatorToken.kind);
   }
   unwrapParens(node) {
