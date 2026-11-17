@@ -35756,7 +35756,7 @@ export class RustTranspiler extends BaseTranspiler {
         // an `i64` / `Option<i64>` local displays as the `Int` / `Null` box it replaces (`n` / `null`)
         const intLocal = receiver !== undefined && isIdentifier(receiver) && this.rust93reIntToStringRecv(receiver) && this.rustScalarUseForms.get(receiver) === 'native' ? this.rustScalarLocalOf(receiver) : undefined;
         if (intLocal?.kind === 'int') return this.rustRecordFormatToString(node, super.printIdentifier(receiver));
-        if (intLocal?.kind === 'oint') return `Value::Str(${super.printIdentifier(receiver)}.map_or_else(|| "null".to_string(), |__n| __n.to_string()).into())`;
+        if (intLocal?.kind === 'oint') return `Value::Str((match ${super.printIdentifier(receiver)} { Some(__n) => __n.to_string(), None => "null".to_string() }).into())`;
         // sb: a Copy number local boxed at its `.toString()` read displays the box (`format!("{}", Value::from(x))`)
         const sbLocal = receiver !== undefined && isIdentifier(receiver) ? this.rustScalarLocalOf(receiver) : undefined;
         if (sbLocal !== undefined && this.rustScalarUseForms.get(receiver) === 'xbox' && this.rustSbCopyBoxUse(receiver, sbLocal.kind)) return this.rustRecordFormatToString(node, name);

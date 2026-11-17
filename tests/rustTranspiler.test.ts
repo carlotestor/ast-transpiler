@@ -26175,6 +26175,6 @@ describe('rust toString of an integer reader local', () => {
         let out = '';
         try { out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
         expect(out).toContain('let mut limit: Option<i64> = ');
-        expect(out).toContain('limit.map_or_else(|| "null".to_string(), |__n| __n.to_string())');
+        expect(out).toContain('(match limit { Some(__n) => __n.to_string(), None => "null".to_string() })');
     });
 });
