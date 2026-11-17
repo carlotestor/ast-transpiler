@@ -32265,6 +32265,9 @@ export class RustTranspiler extends BaseTranspiler {
                 const endpointSplit = this.rust87rfEndpointSplitSource(declaration, init);
                 // ral-90rf R1: where `Array.isArray (x)` failed (an else arm, or after an exiting `if (isArray) { .. }`), an endpoint
                 // declared to answer only a map or a list holds its map there: a whole hand-off boxes that map back (`Value::Dict`)
+                // the map arm lends the held map to an any-key reader before any whole box is considered (see R2 below)
+                if (endpointSplit && this.rust90rfMapOrListEndpoint(init) && this.rust90rfArmOf(n, declaration, fn) === 'map' && isCallExpression(use) && use.arguments[0] === n
+                    && this.rustBorrowedAnyKeyReader(use)) { mapReads++; this.rustOptListBoxes.set(n, 'map'); return true; }
                 if (endpointSplit && this.rust90rfArmOf(n, declaration, fn) === 'map' && this.rust90rfMapOrListEndpoint(init) && this.rust90rfWholeBoxUse(n)) {
                     mapBoxes.push(n);
                     return true;
@@ -32331,6 +32334,13 @@ export class RustTranspiler extends BaseTranspiler {
                     && !(isBinaryExpression(use) && use.left === up && rustIsAssignmentOperator(use.operatorToken.kind));
             }
             if (at === n && isCallExpression(up) && ((up.arguments[0] === n && this.rustBorrowedAnyKeyReader(up)) || this.rustTypedFilterLentSlot(up, n))) {
+                natives++;
+                boxes.push([n, 'lend']);
+                return true;
+            }
+            // a lent list slot (a plural `parse*` response, `impl Into<crate::Value>`) takes the optional list lent: `&x` gives
+            // the shared list for `Some` and Null for `None`, exactly the boxed answer, with no box
+            if (at === n && isCallExpression(up) && up.expression !== n && this.rustLentListSlot(up, n) && !this.rustTypedFilterLentSlot(up, n)) {
                 natives++;
                 boxes.push([n, 'lend']);
                 return true;

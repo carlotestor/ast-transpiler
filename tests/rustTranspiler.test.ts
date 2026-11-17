@@ -25737,3 +25737,38 @@ describe('stack-90r: a list bearer admitted by a compare-left read moves its fre
         expect(out).not.toContain('.as_array().cloned()');
     });
 });
+
+describe('ral-92rf R1: a split endpoint answer lends its held list to a lent parse* slot and its held map to an any-key reader', () => {
+    const mk = (name: string, ret: string, venueBody: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync (path.join (dir, 'ts/src/abstract'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type List = any[];\nexport default class Exchange {\n    keep (o: any): any { return o; }\n    hold (o: any): any { return o; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    safeList (o: any, k: any, d: any = undefined): any[] | undefined { return o[k]; }\n    parseRows (rows: List, market: any = undefined): Dict[] {\n        const out = [];\n        for (let i = 0; i < rows.length; i++) {\n            out.push (rows[i]);\n        }\n        return out;\n    }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/abstract/venue.ts'), "import _Exchange from '../base/Exchange.js';\nimport type { Dict, List } from '../base/Exchange.js';\nexport default abstract class Exchange extends _Exchange {\n    publicGetRows (params = {}): Promise<" + ret + "> { return this.hold (params); }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './abstract/venue.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + venueBody + "}\n");
+        transpiler.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts'));
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    // alpaca cancelAllOrders: the list arm lends, the else arm boxes the held map once
+    const elseArm = "    async m (params = {}) {\n        const response = await this.publicGetRows (params);\n        if (Array.isArray (response)) {\n            return this.parseRows (response);\n        } else {\n            return this.keep ({ 'info': response });\n        }\n    }\n";
+    test('alpaca cancelAllOrders shape: `&response` into the lent parse slot, one map box', () => {
+        const out = mk ('ral-92rf-r1a', 'Dict | List', elseArm);
+        expect(out).toContain('let (mut response, response__map): (Option<crate::value::List>, Option<crate::value::Dict>) = ');
+        expect(out).toContain('.parseRows(&response, ');
+        expect(out).toMatch(/response__map(\.clone\(\))?\.map_or\(Value::Null, Value::Dict\)/);
+        expect(out).not.toMatch(/let mut response: Value = /);
+    });
+    // whitebit fetchMyTrades: list arm lends, map arm keys are one box and the any-key reader lends the held map
+    const keys = "    async m (params = {}) {\n        const response = await this.publicGetRows (params);\n        if (Array.isArray (response)) {\n            return this.parseRows (response);\n        } else {\n            const ks = Object.keys (response);\n            const rows = this.safeList (response, 'a', []);\n            return [ ks, rows ];\n        }\n    }\n";
+    test('whitebit fetchMyTrades shape: list lent, Object.keys one box, safeList lends `&response__map`', () => {
+        const out = mk ('ral-92rf-r1b', 'Dict | List', keys);
+        expect(out).toContain('.parseRows(&response, ');
+        expect(out).toContain('(&response__map, ');
+        expect(out).not.toMatch(/let mut response: Value = /);
+    });
+    test('negative: a two-box map arm still keeps the boxed local', () => {
+        const two = "    async m (params = {}) {\n        const response = await this.publicGetRows (params);\n        if (Array.isArray (response)) {\n            return this.parseRows (response);\n        }\n        this.keep (response);\n        return this.keep ([ response ]);\n    }\n";
+        const out = mk ('ral-92rf-r1n', 'Dict | List', two);
+        expect(out).toMatch(/let mut response: Value = /);
+    });
+});
