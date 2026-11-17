@@ -42525,6 +42525,24 @@ function ccxtGo87g2ListLocal(goTranspiler, declaration, mode) {
     return verdict;
   };
 }
+{
+  const inlineEquality = GoTranspiler.prototype.printInlineEquality;
+  const boolLocal = (printer, node) => {
+    const operand = ccxtGoUnwrapTypeOnly(node);
+    if (operand?.kind !== SyntaxKind5.Identifier) {
+      return false;
+    }
+    const declaration = printer.goDeclarationOfIdentifier(operand);
+    return declaration?.kind === SyntaxKind5.VariableDeclaration && printer.goHandleOptionTrueLocal(declaration);
+  };
+  const boolLiteral = (node) => node?.kind === SyntaxKind5.TrueKeyword || node?.kind === SyntaxKind5.FalseKeyword;
+  GoTranspiler.prototype.printInlineEquality = function(left, right, leftText, rightText, isEq) {
+    if (boolLiteral(right) && boolLocal(this, left) || boolLiteral(left) && boolLocal(this, right)) {
+      return isEq ? `(${leftText} == ${rightText})` : `(${leftText} != ${rightText})`;
+    }
+    return inlineEquality.call(this, left, right, leftText, rightText, isEq);
+  };
+}
 
 // src/javaTranspiler.ts
 init_esm_shims();
