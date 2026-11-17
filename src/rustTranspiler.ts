@@ -12139,6 +12139,12 @@ export class RustTranspiler extends BaseTranspiler {
             const [ o, s ] = lk === 'ostr' ? [ left, right ] : [ right, left ];
             return `${text('ostr', o)}.as_deref() ${sign} Some(${text('str', s)}.as_str())`;
         }
+        // ral-87rh R4: an `Option<bool>` against a `bool` local (strict equality): `Some(b)` is the only `Option` a JS boolean
+        // equals (`undefined` never does), the very answer the boxed `Bool` / `Null` comparison gave
+        if (equality && (lk === 'bool' || rk === 'bool') && (lk === 'obool' || rk === 'obool') && (op === SyntaxKind.EqualsEqualsEqualsToken || op === SyntaxKind.ExclamationEqualsEqualsToken)) {
+            const [ o, b ] = lk === 'obool' ? [ left, right ] : [ right, left ];
+            if (isIdentifier(b) && this.rustScalarLocalOf(b)?.kind === 'bool') return `(${text('obool', o)} ${sign} Some(${text('bool', b)}))`;
+        }
         if (lk === 'bool' || rk === 'bool' || base(lk) === 'str' || base(rk) === 'str') return undefined;
         const lo = lk.startsWith('o');
         const ro = rk.startsWith('o');

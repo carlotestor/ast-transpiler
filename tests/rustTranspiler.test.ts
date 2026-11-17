@@ -24743,3 +24743,14 @@ describe('ral-87rh R3: a literal-seeded string let rewritten from a boxed toStri
         expect(out).not.toContain('let mut s: Value');
     });
 });
+
+describe('ral-87rh R4: a bool local strictly compared with an Option<bool> reader local', () => {
+    test('isActive === wantActive compares Some(wantActive), the bool local is native', () => {
+        const dir = path.join (rustFixtureRoot, 'r87rh-bool-eq');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export type Str = string | undefined;\nexport default class Exchange {\n    safeBool (o: any, k: any, d: boolean = undefined): boolean { return o; }\n    safeDict (o: any, k: any): any { return o; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    keep (events: any[], status: Str = undefined): any[] {\n        if (status === undefined) {\n            return events;\n        }\n        const wantActive = (status === 'active');\n        const result = [];\n        for (let i = 0; i < events.length; i++) {\n            const event = this.safeDict (events, i);\n            const isActive = this.safeBool (event, 'active');\n            if ((isActive === undefined) || (isActive === wantActive)) {\n                result.push (event);\n            }\n        }\n        return result;\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts')).content;
+        expect(out).toContain('let mut wantActive: bool = ');
+        expect(out).toContain('== Some(wantActive))');
+    });
+});
