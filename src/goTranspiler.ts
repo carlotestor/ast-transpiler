@@ -35202,3 +35202,23 @@ function ccxtGo87g2ListLocal (goTranspiler, declaration, mode: 'F' | 'G'): strin
         return verdict;
     };
 }
+// H (uses). A local H declares `bool` compares with a bool literal as the native `==` / `!=`: the declaration is the
+// typed answer of `HandleOption(..) == true`, so `x == true` holds exactly where the boxed IsEqual did.
+{
+    const inlineEquality = GoTranspiler.prototype.printInlineEquality;
+    const boolLocal = (printer, node): boolean => {
+        const operand = ccxtGoUnwrapTypeOnly(node);
+        if (operand?.kind !== SyntaxKind.Identifier) {
+            return false;
+        }
+        const declaration = printer.goDeclarationOfIdentifier(operand);
+        return (declaration?.kind === SyntaxKind.VariableDeclaration) && printer.goHandleOptionTrueLocal(declaration);
+    };
+    const boolLiteral = (node): boolean => (node?.kind === SyntaxKind.TrueKeyword) || (node?.kind === SyntaxKind.FalseKeyword);
+    GoTranspiler.prototype.printInlineEquality = function (left, right, leftText: string, rightText: string, isEq: boolean) {
+        if ((boolLiteral(right) && boolLocal(this, left)) || (boolLiteral(left) && boolLocal(this, right))) {
+            return isEq ? `(${leftText} == ${rightText})` : `(${leftText} != ${rightText})`;
+        }
+        return inlineEquality.call(this, left, right, leftText, rightText, isEq);
+    };
+}
