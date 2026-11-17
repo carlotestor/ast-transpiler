@@ -82957,12 +82957,13 @@ ${iden}}`;
       call = this.rustSkipWrappers(call.expression);
     return call !== void 0 && isCallExpression6(call) && this.rustBorrowedSourceKind(call) === "api" && this.rustDeclaredEndpointKind(call) !== void 0;
   }
-  /** `this.safeDict (x, k, x)` whose default is its own receiver, a `let` filled only by endpoints declared `Promise<Dict>`
-   *  (ral-61i, a syntactic proof): the answer is the map read at k or x itself, so a map or Null on every path. */
+  /** `this.safeDict (x, k, x)` / `this.safeList (x, k, x)` whose default is its own receiver, x a `let` filled only by endpoints
+   *  declared `Promise<Dict>` (ral-61i, a syntactic proof) or a never-rewritten const answer of an endpoint declared of the
+   *  read's kind: the answer is the container read at k or x itself, so that kind or Null on every path. */
   rustSelfDefaultedRead(call, kind) {
-    if (kind !== "dict" || !isCallExpression6(call) || call.arguments.length !== 3 || this.rustTestTierSource(call))
+    if (kind === "api" || !isCallExpression6(call) || call.arguments.length !== 3 || this.rustTestTierSource(call))
       return false;
-    if (String(call.expression?.name?.text ?? "") !== "safeDict")
+    if (String(call.expression?.name?.text ?? "") !== (kind === "dict" ? "safeDict" : "safeList"))
       return false;
     const recv = this.rustSkipWrappers(call.arguments[0]);
     const dflt = this.rustSkipWrappers(call.arguments[2]);
@@ -82971,7 +82972,14 @@ ${iden}}`;
     const declaration = this.rustDeclarationOfIdentifier(recv);
     if (declaration === void 0 || declaration !== this.rustDeclarationOfIdentifier(dflt))
       return false;
-    return isVariableDeclaration3(declaration) && this.rustDeclaredDictEndpointLet(declaration, true);
+    if (!isVariableDeclaration3(declaration))
+      return false;
+    if (kind === "dict" && this.rustDeclaredDictEndpointLet(declaration, true))
+      return true;
+    const init = this.rustSkipWrappers(declaration.initializer);
+    if ((declaration.parent.flags & NodeFlags4.Const) === 0 || init?.kind !== SyntaxKind7.AwaitExpression || !this.rustDeclaredEndpointWrite(init))
+      return false;
+    return this.rustDeclaredEndpointKind(this.rustSkipWrappers(init.expression)) === kind;
   }
   /** A base `safeDict*` / `safeList*` call (default absent, nullish or an empty literal of its kind), or a base `extend`/`omit`. */
   rustOptContainerSourceOk(call, kind) {
