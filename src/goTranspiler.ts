@@ -38214,8 +38214,14 @@ GoTranspiler.prototype.go92g7HasNumericUse = function (declaration): boolean {
         if ((call?.kind !== SyntaxKind.CallExpression) || (call.arguments.indexOf(n) < 0)) {
             return false;
         }
-        return ((this.goInt64SumOperands(call) !== undefined) || (this.go92g7MinMaxName(call) !== undefined))
-            && (this.go92g7Int64Operands(call) !== undefined);
+        if ((this.goInt64SumOperands(call) === undefined) && (this.go92g7MinMaxName(call) === undefined)) {
+            return false;
+        }
+        // the local itself is the int64 being decided; the other operand must already be one
+        const other = call.arguments[1 - call.arguments.indexOf(n)];
+        const kind = ((other === undefined) || (other.kind === SyntaxKind.SpreadElement)) ? undefined
+            : this.goOperandStaticType(other, this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(other, 0)));
+        return (call.arguments.length === 2) && ((kind === 'int64') || ((kind === 'const-int') && this.goLiteralFitsKind(other, 'int')));
     });
 };
 
@@ -38230,8 +38236,13 @@ GoTranspiler.prototype.printCallExpression = function (node, identation) {
         const [ a, b ] = operands.map((operand) => this.printNode(operand, 0).trim());
         return `${minMax}(${a}, ${b})`;
     }
-    const text = operands.map((operand, index) => this.go92g7OperandText(operand, index)).join(' + ');
     const up = node.parent;
+    // a write into a local not declared int keeps the box: the nil-compare passes key on its writes
+    if ((up?.kind === SyntaxKind.BinaryExpression) && (up.operatorToken.kind === SyntaxKind.EqualsToken) && (up.right === node)
+        && (up.left?.kind === SyntaxKind.Identifier) && !['int64', 'int'].includes(this.goDeclaredTypeOfIdentifier(up.left))) {
+        return printCallExpressionBase92g7.call(this, node, identation);
+    }
+    const text = operands.map((operand, index) => this.go92g7OperandText(operand, index)).join(' + ');
     // only a bare operand position drops the grouping parens
     const bare = (up?.kind === SyntaxKind.VariableDeclaration) || (up?.kind === SyntaxKind.ReturnStatement) || (up?.kind === SyntaxKind.ParenthesizedExpression)
         || (up?.kind === SyntaxKind.PropertyAssignment) || (up?.kind === SyntaxKind.ElementAccessExpression)
@@ -38253,7 +38264,11 @@ GoTranspiler.prototype.goTypeOfInitializer = function (initializer, printedValue
         }
         if ((minMax === undefined) && !printed.startsWith('this.Sum(') && (this.goInt64SumOperands(initializer) !== undefined)
             && (this.go92g7Int64Operands(initializer) !== undefined)) {
-            return 'int64';
+            // typed already by the boxed Sum rule, or a new local with a numeric use
+            const boxed = printCallExpressionBase92g7.call(this, initializer, 0);
+            if ((this.goTypeOfInitializer(initializer, boxed) === 'int64') || this.go92g7HasNumericUse(declaration)) {
+                return 'int64';
+            }
         }
     }
     return goTypeOfInitializerBase92g7.call(this, initializer, printedValue);
