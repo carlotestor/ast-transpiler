@@ -6254,11 +6254,7 @@ export class RustTranspiler extends BaseTranspiler {
         const init: any = this.unwrapParens(declaration.initializer);
         if (!this.rustStrRuntimeCall(init)) return false;
         // a local returned from a declared string method leaves that method's own `Option<String>` decision to its box
-        // (a method of the typed-return table prints its own `String` / `Option<String>` return, so the local is that return)
-        if (!RustTranspiler.RUST_STR_RUNTIME_APPEND_VETO.has(String((init.expression.name ?? init.expression).text))) {
-            const scope: Node = this.rustEnclosingFunction(declaration);
-            return this.rustStrReturnedLocal(declaration, scope) && ![ 'str', 'ostr' ].includes(this.rustMethodTypedReturnKind(scope) ?? '');
-        }
+        if (!RustTranspiler.RUST_STR_RUNTIME_APPEND_VETO.has(String((init.expression.name ?? init.expression).text))) return this.rustStrReturnedLocal(declaration, this.rustEnclosingFunction(declaration));
         let appended = false;
         this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
             let top: any = n;
@@ -6305,7 +6301,7 @@ export class RustTranspiler extends BaseTranspiler {
         isPostOnly: [ 'boolean', 'bool' ],
         usesPrivateKey: [ 'boolean', 'bool' ],
         paramsToString: [ 'string', 'str' ],
-        customUrlencode: [ 'Str', 'ostr' ], generateBatchPayload: [ 'string', 'str' ],
+        generateBatchPayload: [ 'string', 'str' ],
         // pg: the precision formatters answer `Str` (overrides may spell `string`); every return is a string or undefined
         amountToPrecision: [ 'Str|string', 'ostr' ], priceToPrecision: [ 'Str|string', 'ostr' ], costToPrecision: [ 'Str|string', 'ostr' ],
         feeToPrecision: [ 'Str|string', 'ostr' ], currencyToPrecision: [ 'Str|string', 'ostr' ],

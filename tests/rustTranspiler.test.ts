@@ -26185,14 +26185,13 @@ describe('rust venue paramsToString prints -> String', () => {
     });
 });
 
-describe('rust venue customUrlencode / generateBatchPayload typed string returns', () => {
-    const base = "export type Str = string | undefined;\nexport default class Exchange {\n    urlencode (p: any): string { return ''; }\n    hold (x: any): any { return x; }\n}\n";
-    const venue = "import Exchange from './base/Exchange.js';\nimport type { Str } from './base/Exchange.js';\n"
+describe('rust venue generateBatchPayload prints -> String', () => {
+    const base = "export default class Exchange {\n    hold (x: any): any { return x; }\n}\n";
+    const venue = "import Exchange from './base/Exchange.js';\n"
         + "export default class venue extends Exchange {\n"
-        + "    customUrlencode (params: any = {}): Str {\n        let result = this.urlencode (params);\n        result = result.replace ('%2C', ',');\n        return result;\n    }\n"
         + "    generateBatchPayload (params: any, ts: string): string {\n        let payload = '';\n        for (let i = 0; i < params.length; i++) {\n            payload += 'a=' + ts + '&';\n        }\n        return payload;\n    }\n"
         + "    signIt (params: any, ts: string) {\n        let payload = '';\n        if (ts === 'x') {\n            payload = this.generateBatchPayload (params, ts);\n        } else {\n            payload = 'b=' + ts;\n        }\n        return this.hold (payload);\n    }\n}\n";
-    test('the returned urlencode local is a String and the payload local follows the typed call', () => {
+    test('the payload local written from the typed call is a String', () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-93rb3-'));
         fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
         fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
@@ -26200,8 +26199,6 @@ describe('rust venue customUrlencode / generateBatchPayload typed string returns
         const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
         let out = '';
         try { out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
-        expect(out).toMatch(/pub fn customUrlencode\(&self, [^)]*\) -> Option<String> \{/);
-        expect(out).toMatch(/let mut result: String = /);
         expect(out).toMatch(/pub fn generateBatchPayload\(&self, [^)]*\) -> String \{/);
         expect(out).toContain('let mut payload: String = ');
     });
