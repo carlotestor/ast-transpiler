@@ -15141,3 +15141,40 @@ describe('ral-87g8 R3 inherited venue-method results only with a native use', ()
         expect(out).toContain('var timeInForce any = this.ParseTimeInForce(');
     });
 });
+
+describe('ral-87g8 R4 int counters compared against an Int bound', () => {
+    test('a retry counter ordered-compared with an Int option types int', () => {
+        const out = goTranspile87g8('type Int = number | undefined;\n'
+            + 'export class ex {\n'
+            + '    f (list: string[], maxRetries: Int) {\n'
+            + '        let errors = 0;\n'
+            + '        for (let i = 0; i < list.length; i++) {\n'
+            + '            errors += 1;\n'
+            + '            if (errors > maxRetries) {\n'
+            + '                throw new Error (\'x\');\n'
+            + '            }\n'
+            + '            if (list[i] === \'ok\') {\n'
+            + '                errors = 0;\n'
+            + '            }\n'
+            + '        }\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('var errors int = 0');
+        expect(out).toContain('errors += 1');
+    });
+    test('an equality against an Int operand keeps the box', () => {
+        const out = goTranspile87g8('type Int = number | undefined;\n'
+            + 'export class ex {\n'
+            + '    f (list: string[], maxRetries: Int) {\n'
+            + '        let errors = 0;\n'
+            + '        for (let i = 0; i < list.length; i++) {\n'
+            + '            errors += 1;\n'
+            + '            if (errors === maxRetries) {\n'
+            + '                throw new Error (\'x\');\n'
+            + '            }\n'
+            + '        }\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('var errors any = 0');
+    });
+});

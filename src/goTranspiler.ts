@@ -35132,6 +35132,21 @@ function go87g8CounterWriteOk(goTranspiler, assignment, declaration): boolean {
         && ((right.operatorToken.kind === SyntaxKind.PlusToken) || (right.operatorToken.kind === SyntaxKind.MinusToken))
         && go87g8IsOwnRef(goTranspiler, right.left, declaration) && go87g8IntLiteral(right.right);
 }
+// ral-87g8 R4: the checker types the operand as a number (optionally `| undefined`, i.e. `Int`)
+function go87g8NumberOperand(goTranspiler, node): boolean {
+    let type = undefined;
+    try {
+        type = goTranspiler.getChecker().getTypeAtLocation(node);
+    } catch (e) {
+        return false;
+    }
+    if (type === undefined) {
+        return false;
+    }
+    const parts = ((typeof type.isUnionType === 'function') && type.isUnionType()) ? type.getTypes() : [ type ];
+    return parts.some((t) => (t.flags & TypeFlags.NumberLike) !== 0)
+        && parts.every((t) => (t.flags & (TypeFlags.NumberLike | TypeFlags.Undefined)) !== 0);
+}
 const go87g8CounterCache = new WeakMap<object, boolean>();
 function go87g8IsIntCounter(goTranspiler, declaration): boolean {
     if ((declaration?.kind !== SyntaxKind.VariableDeclaration) || (declaration.name?.kind !== SyntaxKind.Identifier)
@@ -35186,6 +35201,14 @@ function go87g8IsIntCounter(goTranspiler, declaration): boolean {
                 || (op === SyntaxKind.LessThanToken) || (op === SyntaxKind.LessThanEqualsToken)
                 || (op === SyntaxKind.EqualsEqualsEqualsToken) || (op === SyntaxKind.ExclamationEqualsEqualsToken)) {
                 if (go87g8IntLiteral(other)) {
+                    comparisons += 1;
+                    return false;
+                }
+                // ral-87g8 R4: an ORDERED comparison against another number operand always compiles on an
+                // `int` local (printWideningComparison prints `int64(x) > y` / `float64(x) ..`, else the
+                // any-taking helper); equality would print `x == y` across Go types, so it still refuses
+                if ((op !== SyntaxKind.EqualsEqualsEqualsToken) && (op !== SyntaxKind.ExclamationEqualsEqualsToken)
+                    && go87g8NumberOperand(goTranspiler, other)) {
                     comparisons += 1;
                     return false;
                 }
