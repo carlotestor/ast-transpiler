@@ -38145,8 +38145,8 @@ GoTranspiler.prototype.printCallExpression = function (node, identation) {
 
 // ===== ral-92g2 R1: string-list reader locals (safeList2 / safeListN joined as strings) =====
 // `const xs = this.safeList2|safeListN (..)` (no default) read only by nil tests and `.join ('lit')`, and written only
-// with string-literal arrays, is the []string the typed readers SafeList2Strings / SafeListNStrings return: nil exactly
-// where the box was nil, otherwise the elements as Join prints them, so `.join` prints strings.Join.
+// with string-literal arrays, is the []string the base readers SafeList2Strings / SafeListNStrings return (nil exactly
+// where the box was nil, else what Join joins), so `.join` prints strings.Join.
 const GO92G2_STRING_LIST_READERS: { [name: string]: [ string, number ] } = { 'safeList2': [ 'SafeList2Strings', 3 ], 'safeListN': [ 'SafeListNStrings', 2 ] };
 function go92g2ReaderCall (initializer): { call: CallExpression, reader: string } | undefined {
     let node = initializer;
@@ -38182,10 +38182,6 @@ function go92g2StringListScan (goTranspiler: GoTranspiler, declaration): Node[] 
     if ((declaration?.kind !== SyntaxKind.VariableDeclaration) || (declaration.name?.kind !== SyntaxKind.Identifier)
         || (declaration.parent?.parent?.kind !== SyntaxKind.FirstStatement) || (declaration.parent.declarations.length !== 1)
         || (go92g2ReaderCall(declaration.initializer) === undefined)) {
-        return undefined;
-    }
-    // REST venue files only: the pro / prediction packages reach the readers through another qualifier
-    if (!/(^|[\\/])ts[\\/]src[\\/][^\\/]+\.ts$/.test(String(declaration.getSourceFile()?.fileName ?? ''))) {
         return undefined;
     }
     const scope: any = goTranspiler.goEnclosingFunction(declaration);
@@ -38247,7 +38243,7 @@ function go92g2StringListScan (goTranspiler: GoTranspiler, declaration): Node[] 
             && (this.getGoLocalType(declaration, '') === GO_STRING_LIST_LOCAL_TYPE)) {
             const found = go92g2ReaderCall(declaration.initializer);
             const args = found.call.arguments.map((a) => this.printNode(a, 0).trim()).join(', ');
-            return `${this.getIden(identation)}var ${this.printNode(declaration.name, 0)} ${GO_STRING_LIST_LOCAL_TYPE} = ${found.reader}(${args})`;
+            return `${this.getIden(identation)}var ${this.printNode(declaration.name, 0)} ${GO_STRING_LIST_LOCAL_TYPE} = this.${found.reader}(${args})`;
         }
         return printVariableDeclarationList.call(this, node, identation);
     };

@@ -16560,10 +16560,10 @@ describe ('ral-92g2 R1 string-list reader locals', () => {
         '    }\n';
     test ('a safeList2 / safeListN local only nil-tested and joined is a []string read by strings.Join', () => {
         const out = run (body);
-        expect (out).toContain ('var types []string = SafeList2Strings(params, "types", "order_types")');
+        expect (out).toContain ('var types []string = this.SafeList2Strings(params, "types", "order_types")');
         expect (out).toContain ('types = []string{"a", "b"}');
         expect (out).toContain ('strings.Join(types, ",")');
-        expect (out).toContain ('var ids []string = SafeListNStrings(params, []any{"ids", "client_ids"})');
+        expect (out).toContain ('var ids []string = this.SafeListNStrings(params, []any{"ids", "client_ids"})');
         expect (out).toContain ('strings.Join(ids, ",")');
     });
     test ('a local also handed on whole keeps the box', () => {
