@@ -64871,6 +64871,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "native";
     if (form === void 0 && kind === "str" && isElementAccessExpression4(n.parent) && n.parent.expression === n && this.rust93reStrCharTest(this.rustSkipWrappersUp(n.parent.parent) ?? {}) !== void 0)
       return "native";
+    if (form === void 0 && (kind === "int" || kind === "oint") && this.rust93reIntToStringRecv(n))
+      return "native";
     if (form === void 0 && kind === "ostr" && this.rust70fWriteKey(n))
       return "key";
     return form === void 0 && this.rustSbCopyBoxUse(n, kind) ? "xbox" : form;
@@ -64953,6 +64955,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     else
       return void 0;
     return op === SyntaxKind7.EqualsEqualsEqualsToken ? test : `!${test}`;
+  }
+  /** `x.toString ()` (no argument) whose receiver `x` is the bare identifier. */
+  rust93reIntToStringRecv(n) {
+    const access = n.parent;
+    return isIdentifier3(n) && access !== void 0 && isPropertyAccessExpression3(access) && access.expression === n && access.name.text === "toString" && isCallExpression6(access.parent) && access.parent.expression === access && access.parent.arguments.length === 0;
   }
   /** ral-70f: `n` sits inside the left side (target chain) of an assignment. */
   rust70fInWriteTarget(n) {
@@ -92544,6 +92551,11 @@ ${this.getIden(identation)}}`;
   // Typed `Option<String>` receivers have no `Display`, so they keep the helper.
   printRustNativeToString(node, name) {
     const receiver = node?.expression?.expression;
+    const intLocal = receiver !== void 0 && isIdentifier3(receiver) && this.rust93reIntToStringRecv(receiver) && this.rustScalarUseForms.get(receiver) === "native" ? this.rustScalarLocalOf(receiver) : void 0;
+    if (intLocal?.kind === "int")
+      return this.rustRecordFormatToString(node, super.printIdentifier(receiver));
+    if (intLocal?.kind === "oint")
+      return `Value::Str(${super.printIdentifier(receiver)}.map_or_else(|| "null".to_string(), |__n| __n.to_string()).into())`;
     const sbLocal = receiver !== void 0 && isIdentifier3(receiver) ? this.rustScalarLocalOf(receiver) : void 0;
     if (sbLocal !== void 0 && this.rustScalarUseForms.get(receiver) === "xbox" && this.rustSbCopyBoxUse(receiver, sbLocal.kind))
       return this.rustRecordFormatToString(node, name);

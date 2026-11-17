@@ -1301,6 +1301,8 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  `i64` / `Option<i64>` local: the boxed `get_value` read was the i-th char (`Null` when out of range, negative or `None`),
      *  so the test is `s.chars().nth(i) == Some('c')`. */
     rust93reStrCharTest(node: Node): string | undefined;
+    /** `x.toString ()` (no argument) whose receiver `x` is the bare identifier. */
+    rust93reIntToStringRecv(n: Node): boolean;
     /** ral-70f: `n` sits inside the left side (target chain) of an assignment. */
     rust70fInWriteTarget(n: Node): boolean;
     rust70fOperandBox(n: Node): boolean;
