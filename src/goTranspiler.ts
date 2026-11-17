@@ -35027,7 +35027,7 @@ GoTranspiler.prototype.goTernaryJoinDeclaration = function (statement, declarati
 // assigned as is and the string arm is copied into a branch-local and its address taken, so the local is
 // never nil on that branch, exactly like the boxed string was never nil. Only a local read by a nil test
 // or a string comparison is admitted.
-interface GoTernaryJoinR87Parts { goType: string, derefTrue: boolean, derefFalse: boolean, emptyTrue?: boolean, emptyFalse?: boolean, addressTrue?: boolean, addressFalse?: boolean }
+interface GoTernaryJoinR87Parts { goType: string, derefTrue: boolean, derefFalse: boolean, emptyTrue?: boolean, emptyFalse?: boolean, addressTrue?: boolean, addressFalse?: boolean, nilTrue?: boolean, nilFalse?: boolean }
 
 export interface GoTranspiler {
     goTernaryJoinR87HasNativeRead(declaration, kind: string): boolean;
@@ -35112,18 +35112,24 @@ GoTranspiler.prototype.goTernaryJoinPartsUncached = function (declaration) {
     }
     const whenTrue = this.goTernaryJoinArmType(ternary.whenTrue);
     const whenFalse = this.goTernaryJoinArmType(ternary.whenFalse);
-    const pairs = ((whenTrue === 'string') && (whenFalse === '*string')) || ((whenTrue === '*string') && (whenFalse === 'string'));
+    // 87g7 R3: an absent arm next to a string / *string arm is a nil *string on that branch; the use scan
+    // below admits only nil tests, string-literal comparisons and concatenation, all of which read a nil
+    // pointer exactly as they read the nil box
+    const nilWithString = ((whenTrue === 'nil') && ((whenFalse === 'string') || (whenFalse === '*string')))
+        || ((whenFalse === 'nil') && ((whenTrue === 'string') || (whenTrue === '*string')));
+    const pairs = nilWithString || ((whenTrue === 'string') && (whenFalse === '*string')) || ((whenTrue === '*string') && (whenFalse === 'string'));
     if (!pairs || this.goWithExprDepth(1, () => this.printCondition(ternary.condition, 0)).includes('\n')
         || !this.goTernaryJoinR87HasNativeRead(declaration, 'string')) {
         return undefined;
     }
-    return { goType: '*string', derefTrue: false, derefFalse: false, addressTrue: whenTrue === 'string', addressFalse: whenFalse === 'string' } as GoTernaryJoinR87Parts;
+    return { goType: '*string', derefTrue: false, derefFalse: false, addressTrue: whenTrue === 'string', addressFalse: whenFalse === 'string',
+        nilTrue: whenTrue === 'nil', nilFalse: whenFalse === 'nil' } as GoTernaryJoinR87Parts;
 };
 
 const goTernaryJoinR87Declaration = GoTranspiler.prototype.goTernaryJoinDeclaration;
 GoTranspiler.prototype.goTernaryJoinDeclaration = function (statement, declaration, identation: number) {
     const parts = (goTernaryJoinOwner(declaration?.initializer) === declaration) ? (this.goTernaryJoinParts(declaration) as GoTernaryJoinR87Parts) : undefined;
-    if ((parts === undefined) || !(parts.emptyTrue || parts.emptyFalse || parts.addressTrue || parts.addressFalse)) {
+    if ((parts === undefined) || !(parts.emptyTrue || parts.emptyFalse || parts.addressTrue || parts.addressFalse || parts.nilTrue || parts.nilFalse)) {
         return goTernaryJoinR87Declaration.call(this, statement, declaration, identation);
     }
     if ((statement?.parent?.kind !== SyntaxKind.FirstStatement) || (statement.declarations?.length !== 1)
@@ -35135,14 +35141,17 @@ GoTranspiler.prototype.goTernaryJoinDeclaration = function (statement, declarati
     const name = this.printNode(declaration.name, 0);
     const iden = this.getIden(identation);
     const temp = name + 'Value';
-    const branch = (node, empty: boolean, address: boolean) => {
+    const branch = (node, empty: boolean, address: boolean, absent: boolean) => {
         if (empty) {
             return `${iden}\t${name} = []string{}`;
+        }
+        if (absent) {
+            return `${iden}\t${name} = nil`;
         }
         const printed = this.goPrintTernaryBranch(node, 1).trim();
         return address ? `${iden}\t${temp} := ${printed}\n${iden}\t${name} = &${temp}` : `${iden}\t${name} = ${printed}`;
     };
-    const whenTrue = branch(ternary.whenTrue, parts.emptyTrue === true, parts.addressTrue === true);
-    const whenFalse = branch(ternary.whenFalse, parts.emptyFalse === true, parts.addressFalse === true);
+    const whenTrue = branch(ternary.whenTrue, parts.emptyTrue === true, parts.addressTrue === true, parts.nilTrue === true);
+    const whenFalse = branch(ternary.whenFalse, parts.emptyFalse === true, parts.addressFalse === true, parts.nilFalse === true);
     return `${iden}var ${name} ${parts.goType}\n${iden}if ${this.goStripControlClauseParens(condition)} {\n${whenTrue}\n${iden}} else {\n${whenFalse}\n${iden}}`;
 };

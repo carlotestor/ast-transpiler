@@ -15081,3 +15081,23 @@ describe('87g7 R2 string arm next to a *string arm', () => {
         expect(out).not.toContain('var apiKey *string');
     });
 });
+
+describe('87g7 R3 absent arm next to a string arm', () => {
+    test('a string arm or undefined compared with string literals declares *string', () => {
+        const x = new Transpiler({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        installCcxtGoLocalTypes(x.goTranspiler);
+        const src = 'type Dict = { [key: string]: any };\n'
+            + 'class X {\n'
+            + '    safeString (a: any, k: any): string | undefined { return undefined; }\n'
+            + '    f (params: Dict = {}) {\n'
+            + '        const typeVar = this.safeString (params, \'type\');\n'
+            + '        const lowercaseRawType = (typeVar !== undefined) ? typeVar.toLowerCase () : undefined;\n'
+            + '        const isFunding = (lowercaseRawType === \'fund\') || (lowercaseRawType === \'funding\');\n'
+            + '        return isFunding;\n'
+            + '    }\n'
+            + '}\n';
+        const out = x.transpileGo(src).content;
+        expect(out).toContain('\tvar lowercaseRawType *string\n\tif typeVar != nil {\n\t\tlowercaseRawTypeValue := strings.ToLower(*typeVar)\n\t\tlowercaseRawType = &lowercaseRawTypeValue\n\t} else {\n\t\tlowercaseRawType = nil\n\t}');
+        expect(out).toContain('(lowercaseRawType != nil && *lowercaseRawType == "fund")');
+    });
+});
