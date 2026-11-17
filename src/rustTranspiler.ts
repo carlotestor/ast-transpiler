@@ -3665,8 +3665,20 @@ export class RustTranspiler extends BaseTranspiler {
         // (destructured handle*AndParams slots outside the test tier only: a test-tier reader there reads a `Value` callee)
         const declaration: any = isIdentifier(n) ? this.rustDeclaredNode(n) : undefined;
         const slot = declaration?.kind === SyntaxKind.BindingElement && !this.rustTestTierSource(declaration);
+        // ral-90rc R2: the same for a nil-declared string local's operand (`let x: Str = undefined`, one plain `let`, outside
+        // the test tier): a line the `Value` operand already took over the budget is split by the same build/ pass
+        const nilStr = declaration !== undefined && isVariableDeclaration(declaration) && !this.rustTestTierSource(declaration) && this.rust90rcNilStrDecl(declaration);
         const lines = this.printNode(statement, 0).split('\n');
-        return lines.every((l: string) => column + width(l) <= 400 || (slot && column + l.trim().length > 400));
+        return lines.every((l: string) => column + width(l) <= 400 || ((slot || nilStr) && column + l.trim().length > 400));
+    }
+
+    /** ral-90rc R2: `let x: Str = undefined` (or `: string`), a plain one-declarator `let` statement inside a function. */
+    rust90rcNilStrDecl(declaration: VariableDeclaration): boolean {
+        const list: Node = declaration.parent;
+        if (!isIdentifier(declaration.name) || declaration.type === undefined || !isVariableDeclarationList(list) || list.declarations.length !== 1
+            || (list.flags & NodeFlags.Const) !== 0 || list.parent?.kind !== SyntaxKind.VariableStatement) return false;
+        if (declaration.initializer !== undefined && this.literalKindOfNode(declaration.initializer) !== 'null') return false;
+        return this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name)) === 'string';
     }
 
     /** A write that decodes a `Value` result (a call, or a ternary over one). */
@@ -16453,10 +16465,10 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** ral-90rc R1: `node` (through parens / `as`) is an arm, not the condition, of a ternary that is the whole right side of a
      *  statement write into a nil-declared local (rustNilVenueWrite). */
-    rust90rcNilWriteArm(node: any): boolean {
-        let top: any = node;
+    rust90rcNilWriteArm(node: Node | undefined): boolean {
+        let top: Node | undefined = node;
         while (top?.parent !== undefined && (isParenthesizedExpression(top.parent) || top.parent.kind === SyntaxKind.AsExpression)) top = top.parent;
-        const cond: any = top?.parent;
+        const cond: Node | undefined = top?.parent;
         return cond !== undefined && isConditionalExpression(cond) && cond.condition !== top && this.rustNilVenueWrite(cond);
     }
 
