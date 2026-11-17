@@ -30548,6 +30548,17 @@ export class RustTranspiler extends BaseTranspiler {
                     handOffs++;
                     return true;
                 }
+                // ral-87rd R4: the same literal-key store before later reads of a list nothing mutates afterwards (no loop around the
+                // store, only `.length` / element reads / lends follow): shared there once (`Value::Arr(x.clone())`, the Arc bump the
+                // boxed `x.clone()` paid), later reads native
+                if (isBinaryExpression(up) && up.right === n && up.operatorToken.kind === SyntaxKind.EqualsToken && up.parent?.kind === SyntaxKind.ExpressionStatement
+                    && isElementAccessExpression(up.left) && isIdentifier(up.left.expression) && up.left.expression.text !== name
+                    && isStringLiteralLikeNode(this.rustSkipWrappers(up.left.argumentExpression)) && short(n) && !this.rustLocalLastUse(n, declaration)
+                    && !this.rust73aStoreLastUse(up.left, n, declaration) && this.rustBuiltListFrozenAfter(n, declaration, name)) {
+                    boxes.push([n, 'clone']);
+                    handOffs++;
+                    return true;
+                }
                 // ral-73a: stored whole into a `this.f[..]` slot (statement) at the list's last use, or at its last use on its path
                 // (a then-branch store whose later uses all sit in that if's else branch, e.g. the else-branch store under
                 // another key): JS stores the reference and nothing reads or pushes `x` afterwards, so `Value::Arr(x)` moves it

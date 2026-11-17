@@ -24791,3 +24791,24 @@ describe('ral-87rd R3: an Array.isArray-guarded ternary of a list read is a type
         expect(out).not.toContain('let mut rows: crate::value::List');
     });
 });
+describe('ral-87rd R4: a pushed list stored at a literal key before later reads shares its handle there once', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    safeList (o: any, k: any, d: any = undefined): any[] { return o; }\n    safeDict (o: any, k: any, d: any = undefined): Dict { return o; }\n    safeString (o: any, k: any, d: any = undefined): string { return o; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        transpiler.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts'));
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('coinbaseexchange handleOrder: push, store, then read in a loop', () => {
+        const out = write ('ral-87rd-r4a', "    m (order: Dict, trade: Dict) {\n        const previousTrades = this.safeList (order, 'trades', []);\n        previousTrades.push (trade);\n        order['trades'] = previousTrades;\n        let total = '0';\n        for (let i = 0; i < previousTrades.length; i++) {\n            const tradeEntry = this.safeDict (previousTrades, i);\n            total = this.safeString (tradeEntry, 'cost', '0');\n        }\n        return total;\n    }\n");
+        expect(out).toContain('let mut previousTrades: crate::value::List = ');
+        expect(out).toContain('Value::Arr(previousTrades.clone())');
+        expect(out).toContain('previousTrades.len()');
+    });
+    test('negative: a push after the store keeps the list boxed', () => {
+        const out = write ('ral-87rd-r4n', "    m (order: Dict, trade: Dict) {\n        const previousTrades = this.safeList (order, 'trades', []);\n        previousTrades.push (trade);\n        order['trades'] = previousTrades;\n        previousTrades.push (trade);\n        return previousTrades.length;\n    }\n");
+        expect(out).not.toContain('let mut previousTrades: crate::value::List');
+    });
+});
