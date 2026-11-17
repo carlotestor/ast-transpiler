@@ -45800,6 +45800,7 @@ GoTranspiler.prototype.printReturnStatement = function(node, identation) {
   }
   return printReturnStatementBaseTypedVenue.call(this, node, identation);
 };
+GO92G2_STRING_LIST_READERS["marketIds"] = ["MarketIdsStrings", 1];
 
 // src/javaTranspiler.ts
 init_esm_shims();
