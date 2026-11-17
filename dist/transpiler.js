@@ -45867,11 +45867,14 @@ GoTranspiler.prototype.printCallExpression = function(node, identation) {
   if (texts === void 0) {
     return printCallExpressionBase93g4.call(this, node, identation);
   }
+  const up = node.parent;
+  if (up?.kind === SyntaxKind5.BinaryExpression && up.operatorToken.kind === SyntaxKind5.EqualsToken && up.right === node && up.left?.kind === SyntaxKind5.Identifier && String(this.goDeclaredTypeOfIdentifier(up.left) ?? "").startsWith("*")) {
+    return printCallExpressionBase93g4.call(this, node, identation);
+  }
   const minMax = this.go92g7MinMaxName(node);
   if (minMax !== void 0) {
     return `${minMax}(${texts[0]}, ${texts[1]})`;
   }
-  const up = node.parent;
   if (up?.kind === SyntaxKind5.BinaryExpression && up.operatorToken.kind === SyntaxKind5.EqualsToken && up.right === node && up.left?.kind === SyntaxKind5.Identifier && !["int64", "int"].includes(this.goDeclaredTypeOfIdentifier(up.left))) {
     return printCallExpressionBase93g4.call(this, node, identation);
   }
@@ -45888,7 +45891,7 @@ GoTranspiler.prototype.goTypeOfInitializer = function(initializer, printedValue)
   const write = initializer?.parent;
   if (initializer?.kind === SyntaxKind5.CallExpression && write?.kind === SyntaxKind5.BinaryExpression && write.right === initializer && write.operatorToken.kind === SyntaxKind5.EqualsToken && write.left?.kind === SyntaxKind5.Identifier) {
     const self = this.checkerOrUndefined()?.getSymbolAtLocation(write.left)?.valueDeclaration?.resolve();
-    if (self !== void 0 && this.go93g4PointerOperands(initializer, self) !== void 0) {
+    if (self !== void 0 && (this.go92g7IsBaseSum(initializer) || this.go92g7MinMaxName(initializer) !== void 0) && !String(this.goDeclaredTypeOfIdentifier(write.left) ?? "").startsWith("*") && this.go93g4PointerOperands(initializer, self) !== void 0) {
       return "int64";
     }
   }
