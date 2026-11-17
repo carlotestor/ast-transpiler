@@ -18887,7 +18887,7 @@ describe('ral-54e: a parseToInt local stepped through parseToInt (x = parseToInt
         expect(a).toContain('let mut leadingZeros: Option<i64> = ');
         expect(a).toContain('Some(__l + 1)');
         const b = out.slice(out.indexOf('fn zerosB'));
-        expect(b).toContain('let mut leadingZeros: Value = ');
+        expect(b).toContain('leadingZeros = self.parseToInt(add(&other, &Value::Int(1)));');
     });
 });
 
@@ -26140,5 +26140,23 @@ describe('rust typed filterByCurrencySinceLimit', () => {
     test('a ternary code local handed to the typed slot is Option<String>, passed as_deref', () => {
         expect(base).toMatch(/let mut code: Option<String> = /);
         expect(base).toMatch(/self\.filterByCurrencySinceLimit\([^;]*code\.as_deref\(\)/);
+    });
+});
+
+describe('rust char test on a String reader local', () => {
+    const base = "export type Int = number | undefined;\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return d; }\n    parseToInt (x: any): Int { return x; }\n}\n";
+    const venue = "import Exchange from './base/Exchange.js';\n"
+        + "export default class venue extends Exchange {\n"
+        + "    zeros (parts: string[]): number {\n        const decimalPart = this.safeString (parts, 1, '');\n        let n = this.parseToInt (0);\n        while ((n <= decimalPart.length) && (decimalPart[n] === '0')) {\n            n = this.parseToInt (n + 1);\n        }\n        return n;\n    }\n}\n";
+    test('the String local reads its char natively', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-93re1-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), venue);
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        let out = '';
+        try { out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+        expect(out).toContain('let mut decimalPart: String = ');
+        expect(out).toContain("decimalPart.chars().nth(__i as usize) == Some('0')");
     });
 });

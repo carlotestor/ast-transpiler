@@ -8499,6 +8499,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (form === undefined && kind === 'ostr' && this.rust70fOperandBox(n)) return 'box';
         if (form === undefined && kind === 'ostr' && this.rust70fPushKey(n)) return 'native';
         if (form === undefined && kind === 'ostr' && isElementAccessExpression(n.parent) && n.parent.expression === n && this.rust70fFirstCharTest(this.rustSkipWrappersUp(n.parent.parent) ?? {}) !== undefined) return 'native';
+        if (form === undefined && kind === 'str' && isElementAccessExpression(n.parent) && n.parent.expression === n && this.rust93reStrCharTest(this.rustSkipWrappersUp(n.parent.parent) ?? {}) !== undefined) return 'native';
         // ral-70f: the key of a write `m[x] = v` / `delete m[x]` keeps the key form (the insert prints its key text, the helper its box)
         if (form === undefined && kind === 'ostr' && this.rust70fWriteKey(n)) return 'key';
         return form === undefined && this.rustSbCopyBoxUse(n, kind) ? 'xbox' : form;
@@ -8548,6 +8549,32 @@ export class RustTranspiler extends BaseTranspiler {
             || !this.rust70fReaderLocal(this.rustDeclaredNode(recv), true)) return undefined;
         const probe = `${super.printIdentifier(recv)}.as_deref().unwrap_or("").starts_with("${String(lit.text)}")`;
         return op === SyntaxKind.EqualsEqualsEqualsToken ? probe : `!${probe}`;
+    }
+
+    /** `s[i] === 'c'` / `!==` (one-character literal, either side) on a `String` scalar local, `i` an integer literal or an
+     *  `i64` / `Option<i64>` local: the boxed `get_value` read was the i-th char (`Null` when out of range, negative or `None`),
+     *  so the test is `s.chars().nth(i) == Some('c')`. */
+    rust93reStrCharTest(node: Node): string | undefined {
+        if (!isBinaryExpression(node)) return undefined;
+        const op = node.operatorToken.kind;
+        if (op !== SyntaxKind.EqualsEqualsEqualsToken && op !== SyntaxKind.ExclamationEqualsEqualsToken) return undefined;
+        const l: Node = this.unwrapParens(node.left);
+        const r: Node = this.unwrapParens(node.right);
+        const [ access, lit ] = isElementAccessExpression(l) ? [ l, r ] : [ r, l ];
+        if (!isElementAccessExpression(access) || !isStringLiteral(lit) || String(lit.text).length !== 1 || /['\\]/.test(String(lit.text)) || String(lit.text) in this.StringLiteralReplacements) return undefined;
+        const recv: Node = this.unwrapParens(access.expression);
+        if (!isIdentifier(recv) || this.rustScalarLocalOf(recv)?.kind !== 'str') return undefined;
+        const s = super.printIdentifier(recv);
+        const c = String(lit.text);
+        const index: Node = this.unwrapParens(access.argumentExpression);
+        const literal = this.rustScalarIntLiteral(index);
+        const indexKind = literal === undefined && isIdentifier(index) ? this.rustScalarLocalOf(index)?.kind : undefined;
+        let test: string;
+        if (literal !== undefined && !literal.startsWith('-')) test = `(${s}.chars().nth(${literal}) == Some('${c}'))`;
+        else if (indexKind === 'int') test = `(${super.printIdentifier(index)} >= 0 && ${s}.chars().nth(${super.printIdentifier(index)} as usize) == Some('${c}'))`;
+        else if (indexKind === 'oint') test = `matches!(${super.printIdentifier(index)}, Some(__i) if __i >= 0 && ${s}.chars().nth(__i as usize) == Some('${c}'))`;
+        else return undefined;
+        return op === SyntaxKind.EqualsEqualsEqualsToken ? test : `!${test}`;
     }
 
     /** ral-70f: `n` sits inside the left side (target chain) of an assignment. */
@@ -20993,6 +21020,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (inner === undefined || inner.kind !== SyntaxKind.BinaryExpression || !this.isEqualityOp(inner.operatorToken.kind)) return undefined;
         const first = this.rust70fFirstCharTest(inner);
         if (first !== undefined) return first;
+        const charTest = this.rust93reStrCharTest(inner);
+        if (charTest !== undefined) return charTest;
         return this.printNativeEqualityComparison(inner.left, inner.right, inner.operatorToken.kind);
     }
 
