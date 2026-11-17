@@ -25197,3 +25197,21 @@ describe('ral-87rh R4: a bool local strictly compared with an Option<bool> reade
         expect(out).toContain('== Some(wantActive))');
     });
 });
+
+describe('ral-90re R1: a string reader local handed to a base parseNumber inside a pushed pair', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Num = number | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeDict (o: any, k: any, d: any = undefined): Dict | undefined { return o; }\n    parseNumber (v: any, d: Num = undefined): Num { return v; }\n    hold (m: any): any { return m; }\n}\n";
+    const precise = "export class Precise {\n    static stringSub (a: Str, b: Str): Str { return a; }\n    static stringDiv (a: Str, b: Str): Str { return a; }\n}\ntype Str = string | undefined;\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Precise.ts'), precise);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport { Precise } from './base/Precise.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('limitless fetchOrderBook priceStr / sizeStr: tested, Precise-rewritten, then parsed in a pushed pair', () => {
+        const out = write ('ral-90re-r1', "    o (rows: any[], yes: boolean, scaleStr: string) {\n        const bids = [];\n        for (let bi = 0; bi < rows.length; bi++) {\n            let priceStr = this.safeString (this.safeDict (rows, bi), 'price');\n            if (!yes && (priceStr !== undefined)) {\n                priceStr = Precise.stringSub ('1', priceStr);\n            }\n            let sizeStr = this.safeString (this.safeDict (rows, bi), 'size');\n            if (sizeStr !== undefined) {\n                sizeStr = Precise.stringDiv (sizeStr, scaleStr);\n            }\n            bids.push ([ this.parseNumber (priceStr), this.parseNumber (sizeStr) ]);\n        }\n        const asks = [];\n        for (let ai = 0; ai < rows.length; ai++) {\n            let priceStr = this.safeString (this.safeDict (rows, ai), 'price');\n            if (!yes && (priceStr !== undefined)) {\n                priceStr = Precise.stringSub ('1', priceStr);\n            }\n            let sizeStr = this.safeString (this.safeDict (rows, ai), 'size');\n            if (sizeStr !== undefined) {\n                sizeStr = Precise.stringDiv (sizeStr, scaleStr);\n            }\n            asks.push ([ this.parseNumber (priceStr), this.parseNumber (sizeStr) ]);\n        }\n        return [ bids, asks ];\n    }\n");
+        expect(out).toContain('let mut priceStr: Option<String> = ');
+        expect(out).toContain('let mut sizeStr: Option<String> = ');
+    });
+});
