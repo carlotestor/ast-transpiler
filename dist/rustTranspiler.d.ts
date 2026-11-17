@@ -2962,6 +2962,9 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  holds before the slot is read back, lent (`Value::from(&x)`, `From<&Option<String>>`: `None` is the Null, `Some` the Str). */
     rustStrSlotSelfDefault(n: any): boolean;
     rustBoolSlotUsesOk(declaration: any): boolean;
+    /** ral-87rb R3: `x === true` / `x !== true` reads a slot-written bool exactly: the slot prints `.as_bool() == Some(true)`,
+     *  which is `true` for the very values the boxed `is_equal(x, true)` matched (a `false` / `null` compare would not agree on a Null slot). */
+    rust87rbTrueTest(n: Node): boolean;
     /** The destructuring statement keeps the 400-char line budget with the slot's bool read.
      *  ral-46f: measured on the open print of the write with the bool slot read swapped in (was a length estimate that
      *  refused every write over 380 chars although the printed block line is split after `; ` by build/ `splitLongRustLines`). */

@@ -73031,7 +73031,7 @@ ${idn}}`;
           others = false;
       } else if (form === "box")
         boxes.push(n);
-      else if (form !== "cond" && form !== "write")
+      else if (form !== "cond" && form !== "write" && !(form === "test" && this.rust87rbTrueTest(n)))
         others = false;
       return true;
     });
@@ -73043,6 +73043,15 @@ ${idn}}`;
         others = false;
     }
     return slots === 0 || others;
+  }
+  /** ral-87rb R3: `x === true` / `x !== true` reads a slot-written bool exactly: the slot prints `.as_bool() == Some(true)`,
+   *  which is `true` for the very values the boxed `is_equal(x, true)` matched (a `false` / `null` compare would not agree on a Null slot). */
+  rust87rbTrueTest(n) {
+    const parent = n.parent;
+    if (!isBinaryExpression5(parent) || !this.isEqualityOp(parent.operatorToken.kind))
+      return false;
+    const other = this.unwrapParens(parent.left === n ? parent.right : parent.left);
+    return other?.kind === SyntaxKind7.TrueKeyword;
   }
   rustBoolSlotLineLong(n) {
     const write = n.parent.parent;
