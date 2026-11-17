@@ -5274,8 +5274,8 @@ export class RustTranspiler extends BaseTranspiler {
         const clientOnce = nativeUses === 0 && boxed === 1 && this.rustWsClientOnlyUse(declaration);
         // ral-51n: an any-list length typed only for its native uses (a box-only length stays the `Value` it is handed as)
         if (anyLength && typedUses === 0) return undefined;
-        // ral-87re: a comparison seed reading a record local (cex `deposit`, only boxed into a literal) is typed for a native use only
-        if (kind === 'bool' && typedUses === 0 && this.rust87reRecordSeeds.has(declaration)) return undefined;
+        // ral-87re: a comparison seed reading another local (cex `deposit`, only boxed into a literal) is typed for a native use only
+        if (kind === 'bool' && typedUses === 0 && this.rust87reLocalSeeds.has(declaration)) return undefined;
         // ral-61p: a handleOption local typed from its default literal only for its native uses (boxed-straight-back stays `Value`)
         if (optionDefault && typedUses === 0) return undefined;
         // ral-62p: likewise a bool-default handleOption local, annotated or cast (boxed-straight-back stays `Value`)
@@ -16221,18 +16221,7 @@ export class RustTranspiler extends BaseTranspiler {
         return this.nativeEqualityText(node) !== undefined ? 'bool' : undefined;
     }
 
-    /** ral-87re: a `const` local whose checker type is an object record (`Dict` / `Market` / a list): no scalar solve decides it,
-     *  so reading it while a comparison seed is open prints the same text it prints later. */
-    private rust87reRecordSeeds = new WeakSet<Node>();
-
-    rust87reRecordLocal(d: Node): boolean {
-        if (!isVariableDeclaration(d) || !isIdentifier(d.name) || (d.parent?.flags & NodeFlags.Const) === 0) return false;
-        const type: Type | undefined = this.typeOfNodeIfAny(d.name);
-        if (type === undefined || this.primitiveKindOfType(type) !== undefined) return false;
-        const parts: readonly Type[] = (type.flags & TypeFlags.Union) ? (typeParts(type) ?? []) : [ type ];
-        const real = parts.filter((m: Type) => (m.flags & (TypeFlags.Undefined | TypeFlags.Null)) === 0);
-        return real.length > 0 && real.every((m: Type) => (m.flags & TypeFlags.Object) !== 0);
-    }
+    private rust87reLocalSeeds = new WeakSet<Node>();
 
     /** A `const x = <comparison>` initializer whose native text exists and whose local's checker type is `boolean`. */
     rustBoolCompareSeed(node: any): boolean {
@@ -16240,16 +16229,16 @@ export class RustTranspiler extends BaseTranspiler {
         while (top.parent !== undefined && isParenthesizedExpression(top.parent)) top = top.parent;
         if (!isVariableDeclaration(top.parent) || top.parent.initializer !== top || !isIdentifier(top.parent.name)) return false;
         if (this.primitiveKindOfType(this.typeOfNodeIfAny(top.parent.name)) !== 'boolean') return false;
-        // printing an operand that reads another local would decide that local while this one is open: params and members only
+        // printing an operand that reads another local would decide that local while this one is open: params and members only;
+        // ral-87re: a seed reading a local of the same function is kept, but only for a native use (rustScalarLocalKindCore)
         let readsLocal = false;
-        let recordRead = false;
+        let localRead = false;
         const visit = (n: any) => {
             if (readsLocal) return;
             if (isIdentifier(n) && !this.rustIdentifierIsPropertyName(n)) {
                 const d: any = this.rustDeclaredNode(n);
-                // ral-87re: a local no scalar solve decides (a typed container / market local) prints the same text whatever is open
                 if (d !== undefined && !isParameterDeclaration(d)) {
-                    if (this.rust87reRecordLocal(d)) recordRead = true; else readsLocal = true;
+                    if (isVariableDeclaration(d) && d !== top.parent && this.rustEnclosingFunction(d) === this.rustEnclosingFunction(node)) localRead = true; else readsLocal = true;
                 }
                 return;
             }
@@ -16257,8 +16246,8 @@ export class RustTranspiler extends BaseTranspiler {
         };
         visit(node);
         if (readsLocal || this.rustBoolNativeText(node) === undefined) return false;
-        // ral-87re: a seed over a record local is kept only for a native use (rustScalarLocalKindCore)
-        if (recordRead) this.rust87reRecordSeeds.add(top.parent); else this.rust87reRecordSeeds.delete(top.parent);
+        // ral-87re: a seed over another local is kept only for a native use (rustScalarLocalKindCore)
+        if (localRead) this.rust87reLocalSeeds.add(top.parent); else this.rust87reLocalSeeds.delete(top.parent);
         return true;
     }
 

@@ -24727,6 +24727,11 @@ describe('ral-87re: Precise self-writes and comparison seeds over record locals'
         expect(out).toContain('let mut future: bool = ');
         expect(out).not.toContain('let mut future: Value');
     });
+    test('hitbtc fetchMarkets future / swap: a comparison over another local read as a condition', () => {
+        const out = write ('ral-87re-c3', "    m (rows: Dict) {\n        const row = this.hold (rows);\n        const expiry = this.safeString (row, 'expiry');\n        const future = (expiry !== undefined);\n        if (future) {\n            return { 'future': future };\n        }\n        return 1;\n    }\n");
+        expect(out).toContain('let mut future: bool = (expiry.is_some());');
+        expect(out).toContain('if future {');
+    });
     test('negative: a comparison over a Dict local only boxed into a literal stays Value', () => {
         const out = write ('ral-87re-c2', "    d (rows: Dict) {\n        const net = this.safeDict (rows, 'n');\n        const deposit = this.safeString (net, 'deposit') === 'enabled';\n        return { 'deposit': deposit };\n    }\n");
         expect(out).toContain('let mut deposit: Value');
