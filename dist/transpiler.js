@@ -45084,6 +45084,11 @@ function go92g2StringListScan(goTranspiler, declaration) {
     return printVariableDeclarationList.call(this, node, identation);
   };
 }
+function go92g2BaseExchangeMember(goTranspiler, member) {
+  const symbol = goTranspiler.checkerOrUndefined()?.getSymbolAtLocation(member.name);
+  const declarations = (symbol?.declarations ?? []).map((d) => d.resolve?.());
+  return declarations.length > 0 && declarations.every((d) => GO_BASE_EXCHANGE_FILE.test(String(d?.getSourceFile?.()?.fileName ?? "")));
+}
 function go92g2LengthOf(goTranspiler, node, declaration) {
   if (node?.kind === SyntaxKind5.PropertyAccessExpression && node.name?.text === "length" && node.expression?.kind === SyntaxKind5.Identifier && goTranspiler.goIdentifierRefersToDeclaration(node.expression, declaration)) {
     return true;
@@ -45130,7 +45135,8 @@ function go92g2LoopListLocal(goTranspiler, declaration) {
   const callee = call?.expression;
   const method = String(callee?.name?.text ?? "");
   const nilExact = method === "safeListN" && call?.arguments?.length === 2;
-  if (call?.kind !== SyntaxKind5.CallExpression || callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword || call.arguments.some((a) => a.kind === SyntaxKind5.SpreadElement) || !(nilExact || method === "safeList" && call.arguments.length === 3 && ![SyntaxKind5.ArrayLiteralExpression, SyntaxKind5.ObjectLiteralExpression].includes(call.arguments[2].kind))) {
+  const plainList = method === "safeList" && call?.arguments?.length === 3 && call.arguments[2].kind === SyntaxKind5.ArrayLiteralExpression && call.arguments[2].elements.length === 0;
+  if (call?.kind !== SyntaxKind5.CallExpression || callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword || call.arguments.some((a) => a.kind === SyntaxKind5.SpreadElement) || !(nilExact || plainList || method === "safeList" && call.arguments.length === 3 && ![SyntaxKind5.ArrayLiteralExpression, SyntaxKind5.ObjectLiteralExpression].includes(call.arguments[2].kind))) {
     return false;
   }
   const scope = goTranspiler.goEnclosingFunction(declaration);
@@ -45160,6 +45166,9 @@ function go92g2LoopListLocal(goTranspiler, declaration) {
     if (nilExact && goTranspiler.goIsNilComparisonOperand(n, parent)) {
       return false;
     }
+    if (plainList && parent?.kind === SyntaxKind5.CallExpression && parent.arguments[0] === n && parent.expression?.kind === SyntaxKind5.PropertyAccessExpression && parent.expression.expression?.kind === SyntaxKind5.ThisKeyword && /^parse[A-Z]\w*s$/.test(String(parent.expression.name?.text ?? "")) && go92g2BaseExchangeMember(goTranspiler, parent.expression)) {
+      return false;
+    }
     const reader = parent?.expression;
     if (parent?.kind === SyntaxKind5.CallExpression && parent.arguments[0] === n && parent.arguments.length >= 2 && reader?.kind === SyntaxKind5.PropertyAccessExpression && reader.expression?.kind === SyntaxKind5.ThisKeyword && /^safe(Dict|String|Integer|Number|Value|Bool|Float|Timestamp)$/.test(String(reader.name?.text ?? "")) && go92g2LoopIndexOver(goTranspiler, parent.arguments[1], declaration, parent)) {
       return false;
@@ -45179,8 +45188,11 @@ function go92g2LoopListLocal(goTranspiler, declaration) {
   GoTranspiler.prototype.goSafeListUnboxValue = function(declaration, identation) {
     if (listType.call(this, declaration) === void 0 && go92g2LoopListLocal(this, declaration)) {
       const args = declaration.initializer.arguments.map((a, i) => this.printNode(a, i === 0 ? identation : 0).trim());
-      const reader = declaration.initializer.expression.name.text === "safeListN" ? "SafeListNSlice" : "SafeListSlice";
-      return `this.${reader}(${args.join(", ")})`;
+      if (declaration.initializer.expression.name.text === "safeListN") {
+        return `this.SafeListNSlice(${args.join(", ")})`;
+      }
+      const literal2 = declaration.initializer.arguments[2];
+      return literal2.kind === SyntaxKind5.ArrayLiteralExpression ? `SafeListTypedDefault(${args.join(", ")})` : `this.SafeListSlice(${args.join(", ")})`;
     }
     return listValue.call(this, declaration, identation);
   };
