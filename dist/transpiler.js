@@ -43475,6 +43475,260 @@ GoTranspiler.prototype.goNativeCompoundAssignment = function(op, leftNode, leftT
   }
   return `${leftText.trim()} ${op === SyntaxKind5.PlusEqualsToken ? "+=" : "-="} ${rightText.trim()}`;
 };
+GoTranspiler.prototype.goTernaryJoin90DictArm = function(node) {
+  const arm = this.goUnwrapParenthesizedNode(node);
+  if (arm?.kind !== SyntaxKind5.CallExpression || arm.arguments?.length !== 2) {
+    return void 0;
+  }
+  return this.goSafeDictLocalArgs(arm);
+};
+GoTranspiler.prototype.goTernaryJoin90DictUsesAreNative = function(declaration) {
+  const scope = this.goEnclosingFunction(declaration);
+  const checker = this.checkerOrUndefined();
+  if (scope === void 0 || checker === void 0) {
+    return false;
+  }
+  const ours = (n) => checker.getSymbolAtLocation(n)?.valueDeclaration?.resolve() === declaration;
+  let nilTests = 0;
+  const typed = this.goDeclaredLocalTypeIfSafe(declaration, GO_SAFE_DICT_LOCAL_TYPE, (n) => {
+    if (!ours(n)) {
+      return false;
+    }
+    let current = n;
+    while (current.parent?.kind === SyntaxKind5.ParenthesizedExpression) {
+      current = current.parent;
+    }
+    if (this.goIsNilComparisonOperand(current, current.parent)) {
+      nilTests += 1;
+      return true;
+    }
+    return current === n && this.goSafeDictUseReadsTheMap(n) && !(n.parent?.kind === SyntaxKind5.BinaryExpression && n.parent.operatorToken?.kind === SyntaxKind5.InKeyword);
+  });
+  return typed === GO_SAFE_DICT_LOCAL_TYPE && nilTests > 0;
+};
+var goTernaryJoin90PartsUncached = GoTranspiler.prototype.goTernaryJoinPartsUncached;
+GoTranspiler.prototype.goTernaryJoinPartsUncached = function(declaration) {
+  const known = goTernaryJoin90PartsUncached.call(this, declaration);
+  if (known !== void 0 || this.goTernaryJoinProvisional()) {
+    return known;
+  }
+  const ternary = this.goUnwrapParenthesizedNode(declaration?.initializer);
+  if (ternary?.kind !== SyntaxKind5.ConditionalExpression || declaration.type !== void 0) {
+    return void 0;
+  }
+  const isNil = (n) => {
+    const u = this.goUnwrapParenthesizedNode(n);
+    return u?.kind === SyntaxKind5.NullKeyword || u?.kind === SyntaxKind5.Identifier && u.text === "undefined";
+  };
+  const nilTrue = isNil(ternary.whenTrue);
+  const nilFalse = isNil(ternary.whenFalse);
+  if (nilTrue === nilFalse) {
+    return void 0;
+  }
+  if (this.goTernaryJoin90DictArm(nilTrue ? ternary.whenFalse : ternary.whenTrue) === void 0 || this.goWithExprDepth(1, () => this.printCondition(ternary.condition, 0)).includes("\n") || !this.goTernaryJoin90DictUsesAreNative(declaration)) {
+    return void 0;
+  }
+  return {
+    goType: GO_SAFE_DICT_LOCAL_TYPE,
+    derefTrue: false,
+    derefFalse: false,
+    nilTrue,
+    nilFalse,
+    dictTrue: !nilTrue,
+    dictFalse: !nilFalse
+  };
+};
+var goTernaryJoin90Declaration = GoTranspiler.prototype.goTernaryJoinDeclaration;
+GoTranspiler.prototype.goTernaryJoinDeclaration = function(statement, declaration, identation) {
+  const parts = goTernaryJoinOwner(declaration?.initializer) === declaration ? this.goTernaryJoinParts(declaration) : void 0;
+  if (parts === void 0 || !(parts.dictTrue || parts.dictFalse)) {
+    return goTernaryJoin90Declaration.call(this, statement, declaration, identation);
+  }
+  if (statement?.parent?.kind !== SyntaxKind5.FirstStatement || statement.declarations?.length !== 1 || this.getGoLocalType(declaration, this.printNode(declaration.initializer, identation)) !== parts.goType) {
+    return void 0;
+  }
+  const ternary = this.goUnwrapParenthesizedNode(declaration.initializer);
+  const condition = this.goWithExprDepth(1, () => this.printCondition(ternary.condition, 0));
+  const name = this.printNode(declaration.name, 0);
+  const iden = this.getIden(identation);
+  const branch = (node, dict) => {
+    if (!dict) {
+      return `${iden}	${name} = nil`;
+    }
+    const args = this.goTernaryJoin90DictArm(node);
+    return `${iden}	${name} = this.SafeDictMap(${this.printNode(args.container, 0)}, ${this.printNode(args.key, 0)})`;
+  };
+  return `${iden}var ${name} ${parts.goType}
+${iden}if ${this.goStripControlClauseParens(condition)} {
+${branch(ternary.whenTrue, parts.dictTrue === true)}
+${iden}} else {
+${branch(ternary.whenFalse, parts.dictFalse === true)}
+${iden}}`;
+};
+GoTranspiler.prototype.goTernaryJoin90IntOperand = function(node, ternary, outcome) {
+  const operand = this.goUnwrapParenthesizedNode(node);
+  if (operand?.kind === SyntaxKind5.NumericLiteral && /^[0-9]+$/.test(operand.text) && this.goLiteralFitsKind(operand, "int")) {
+    return operand.text;
+  }
+  if (operand?.kind !== SyntaxKind5.Identifier) {
+    return void 0;
+  }
+  const goType = this.goTernaryJoinArmType(operand);
+  if (goType === "int64") {
+    return operand.text;
+  }
+  if (goType === "int") {
+    return `int64(${operand.text})`;
+  }
+  if (goType === "*int64" && this.goTernaryJoinConditionDefines(ternary.condition, operand.text, outcome)) {
+    return `*${operand.text}`;
+  }
+  return void 0;
+};
+GoTranspiler.prototype.goTernaryJoin90IntArm = function(node, ternary, outcome) {
+  const arm = this.goUnwrapParenthesizedNode(node);
+  if (arm?.kind !== SyntaxKind5.CallExpression) {
+    return this.goTernaryJoin90IntOperand(arm, ternary, outcome);
+  }
+  const callee = arm.expression;
+  if (callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.Identifier || callee.expression.text !== "Math" || !["min", "max"].includes(callee.name?.text) || arm.arguments.length !== 2) {
+    return void 0;
+  }
+  const operands = arm.arguments.map((a) => this.goTernaryJoin90IntOperand(a, ternary, outcome));
+  if (operands.some((o) => o === void 0) || operands.every((o) => /^[0-9]+$/.test(o))) {
+    return void 0;
+  }
+  return `${callee.name.text}(${operands.join(", ")})`;
+};
+var GO_90_ARITHMETIC_TOKENS = [
+  SyntaxKind5.AsteriskToken,
+  SyntaxKind5.MinusToken,
+  SyntaxKind5.SlashToken,
+  SyntaxKind5.LessThanToken,
+  SyntaxKind5.GreaterThanToken,
+  SyntaxKind5.LessThanEqualsToken,
+  SyntaxKind5.GreaterThanEqualsToken
+];
+GoTranspiler.prototype.goTernaryJoin90HasArithmeticUse = function(declaration) {
+  const scope = this.goEnclosingFunction(declaration);
+  const checker = this.checkerOrUndefined();
+  if (scope === void 0 || checker === void 0) {
+    return false;
+  }
+  const shadowsBuiltin = (n) => n.kind === SyntaxKind5.Identifier && (n.text === "min" || n.text === "max") && !(n.parent?.kind === SyntaxKind5.PropertyAccessExpression && n.parent.name === n);
+  const used = this.hasNodeWhere(scope, (n) => {
+    if (n.kind !== SyntaxKind5.Identifier || n.text !== declaration.name.text || n === declaration.name || checker.getSymbolAtLocation(n)?.valueDeclaration?.resolve() !== declaration) {
+      return false;
+    }
+    let current = n;
+    while (current.parent?.kind === SyntaxKind5.ParenthesizedExpression) {
+      current = current.parent;
+    }
+    const parent = current.parent;
+    return parent?.kind === SyntaxKind5.BinaryExpression && GO_90_ARITHMETIC_TOKENS.indexOf(parent.operatorToken.kind) >= 0;
+  });
+  return used && !this.hasNodeWhere(scope, shadowsBuiltin);
+};
+var goTernaryJoin90IntPartsUncached = GoTranspiler.prototype.goTernaryJoinPartsUncached;
+GoTranspiler.prototype.goTernaryJoinPartsUncached = function(declaration) {
+  const known = goTernaryJoin90IntPartsUncached.call(this, declaration);
+  if (known !== void 0 || this.goTernaryJoinProvisional()) {
+    return known;
+  }
+  const ternary = this.goUnwrapParenthesizedNode(declaration?.initializer);
+  const annotation = declaration?.type;
+  const numericAnnotation = annotation === void 0 || annotation.kind === SyntaxKind5.NumberKeyword || annotation.kind === SyntaxKind5.TypeReference && annotation.typeName?.kind === SyntaxKind5.Identifier && annotation.typeName.text === "Int";
+  if (ternary?.kind !== SyntaxKind5.ConditionalExpression || !numericAnnotation) {
+    return void 0;
+  }
+  const isMinMax = (n) => {
+    const u = this.goUnwrapParenthesizedNode(n);
+    return u?.kind === SyntaxKind5.CallExpression && u.expression?.expression?.text === "Math";
+  };
+  if (!isMinMax(ternary.whenTrue) && !isMinMax(ternary.whenFalse)) {
+    return void 0;
+  }
+  const intTrue = this.goTernaryJoin90IntArm(ternary.whenTrue, ternary, true);
+  const intFalse = this.goTernaryJoin90IntArm(ternary.whenFalse, ternary, false);
+  if (intTrue === void 0 || intFalse === void 0 || this.goWithExprDepth(1, () => this.printCondition(ternary.condition, 0)).includes("\n") || this.goTernaryJoinFeedsParameterCopy(declaration) || !this.goTernaryJoin90HasArithmeticUse(declaration)) {
+    return void 0;
+  }
+  return { goType: "int64", derefTrue: false, derefFalse: false, intTrue, intFalse };
+};
+var goTernaryJoin90IntDeclaration = GoTranspiler.prototype.goTernaryJoinDeclaration;
+GoTranspiler.prototype.goTernaryJoinDeclaration = function(statement, declaration, identation) {
+  const parts = goTernaryJoinOwner(declaration?.initializer) === declaration ? this.goTernaryJoinParts(declaration) : void 0;
+  if (parts === void 0 || parts.intTrue === void 0) {
+    return goTernaryJoin90IntDeclaration.call(this, statement, declaration, identation);
+  }
+  if (statement?.parent?.kind !== SyntaxKind5.FirstStatement || statement.declarations?.length !== 1 || this.getGoLocalType(declaration, this.printNode(declaration.initializer, identation)) !== parts.goType) {
+    return void 0;
+  }
+  const ternary = this.goUnwrapParenthesizedNode(declaration.initializer);
+  const condition = this.goWithExprDepth(1, () => this.printCondition(ternary.condition, 0));
+  const name = this.printNode(declaration.name, 0);
+  const iden = this.getIden(identation);
+  return `${iden}var ${name} int64
+${iden}if ${this.goStripControlClauseParens(condition)} {
+${iden}	${name} = ${parts.intTrue}
+${iden}} else {
+${iden}	${name} = ${parts.intFalse}
+${iden}}`;
+};
+GoTranspiler.prototype.goTernaryJoin90SafeReaderArgument = function(node) {
+  const call = node.parent;
+  if (call?.kind !== SyntaxKind5.CallExpression || call.expression === node || call.arguments.indexOf(node) < 1) {
+    return false;
+  }
+  const callee = call.expression;
+  if (callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword || !/^safe(String|Integer|Number|Bool|Value|Dict|List)(Lower|Upper)?$/.test(callee.name?.text ?? "")) {
+    return false;
+  }
+  let fileName = "";
+  try {
+    fileName = this.getChecker().getResolvedSignature(call)?.declaration?.resolve()?.getSourceFile?.()?.fileName ?? "";
+  } catch (e) {
+    return false;
+  }
+  return CCXT_GO_ELEMENT_1_BASE_FILE.test(fileName) || /[\\/]base[\\/]functions[\\/]type\.ts$/.test(fileName);
+};
+var goTernaryJoin90StringNativeRead = GoTranspiler.prototype.goTernaryJoinR87HasNativeRead;
+GoTranspiler.prototype.goTernaryJoinR87HasNativeRead = function(declaration, kind) {
+  if (kind !== "string" || goTernaryJoin90StringNativeRead.call(this, declaration, kind)) {
+    return goTernaryJoin90StringNativeRead.call(this, declaration, kind);
+  }
+  const scope = this.goEnclosingFunction(declaration);
+  const checker = this.checkerOrUndefined();
+  if (scope === void 0 || checker === void 0) {
+    return false;
+  }
+  const isNil = (e) => e?.kind === SyntaxKind5.NullKeyword || e?.kind === SyntaxKind5.Identifier && e.text === "undefined";
+  let nativeTests = 0;
+  let readerArgs = 0;
+  const foreign = this.hasNodeWhere(scope, (n) => {
+    if (n.kind !== SyntaxKind5.Identifier || n.text !== declaration.name.text || n === declaration.name || checker.getSymbolAtLocation(n)?.valueDeclaration?.resolve() !== declaration) {
+      return false;
+    }
+    let current = n;
+    while (current.parent?.kind === SyntaxKind5.ParenthesizedExpression) {
+      current = current.parent;
+    }
+    const parent = current.parent;
+    if (current === n && this.goTernaryJoin90SafeReaderArgument(n)) {
+      readerArgs += 1;
+      return false;
+    }
+    if (parent?.kind === SyntaxKind5.BinaryExpression && COMPARISON_TOKENS.indexOf(parent.operatorToken.kind) >= 0) {
+      const other = this.goUnwrapParenthesizedNode(parent.left === current ? parent.right : parent.left);
+      if (isNil(other) || other?.kind === SyntaxKind5.StringLiteral) {
+        nativeTests += 1;
+        return false;
+      }
+    }
+    return true;
+  });
+  return !foreign && nativeTests > 0 && readerArgs > 0;
+};
 
 // src/javaTranspiler.ts
 init_esm_shims();

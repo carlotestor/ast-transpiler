@@ -2020,3 +2020,18 @@ export interface GoTranspiler {
 export interface GoTranspiler {
     goTernaryJoinR87HasNativeRead(declaration: any, kind: string): boolean;
 }
+export interface GoTranspiler {
+    goTernaryJoin90DictArm(node: any): {
+        container: any;
+        key: any;
+    } | undefined;
+    goTernaryJoin90DictUsesAreNative(declaration: any): boolean;
+}
+export interface GoTranspiler {
+    goTernaryJoin90IntOperand(node: any, ternary: any, outcome: boolean): string | undefined;
+    goTernaryJoin90IntArm(node: any, ternary: any, outcome: boolean): string | undefined;
+    goTernaryJoin90HasArithmeticUse(declaration: any): boolean;
+}
+export interface GoTranspiler {
+    goTernaryJoin90SafeReaderArgument(node: any): boolean;
+}
