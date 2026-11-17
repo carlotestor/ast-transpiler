@@ -42421,6 +42421,108 @@ GoTranspiler.prototype.printCustomBinaryExpressionIfAny = function(node, identat
     return m !== null && m[2] === name ? m[1] + name + " = GetValueBool(" + m[3] + ", 0, false)" : line;
   }).join("\n");
 };
+var CCXT_GO_87_SLOT_OWNED = /* @__PURE__ */ new Set([...CCXT_GO_TUPLE_RESULT_METHODS, ...Object.keys(CCXT_GO_TUPLE_BOOL_PRODUCERS), ...Object.keys(CCXT_GO_PAIR_SLOT_0), "handlePostOnly"]);
+function ccxtGo87TrueSlotCall(node) {
+  const pattern = node?.parent;
+  const assignment = pattern?.parent;
+  if (pattern?.kind !== SyntaxKind5.ArrayLiteralExpression || pattern.elements[0] !== node || pattern.elements.length !== 2 || !pattern.elements.every((e) => e.kind === SyntaxKind5.Identifier) || assignment?.kind !== SyntaxKind5.BinaryExpression || assignment.left !== pattern || assignment.operatorToken.kind !== SyntaxKind5.EqualsToken || assignment.parent?.kind !== SyntaxKind5.ExpressionStatement) {
+    return void 0;
+  }
+  let call = assignment.right;
+  if (call?.kind === SyntaxKind5.AwaitExpression) {
+    call = call.expression;
+  }
+  const callee = call?.expression;
+  if (call?.kind !== SyntaxKind5.CallExpression || callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword || CCXT_GO_87_SLOT_OWNED.has(String(callee.name?.text ?? ""))) {
+    return void 0;
+  }
+  return call;
+}
+function ccxtGo87OnlyTrueCompares(scope, declaration, name) {
+  let ok = true;
+  let slots = 0;
+  const visit = (n) => {
+    if (!ok) {
+      return;
+    }
+    if (n !== declaration && (n.kind === SyntaxKind5.VariableDeclaration || n.kind === SyntaxKind5.Parameter || n.kind === SyntaxKind5.BindingElement) && bindingMentionsName(n.name, name)) {
+      ok = false;
+      return;
+    }
+    if (n.kind === SyntaxKind5.Identifier && n.text === name && n !== declaration.name) {
+      const parent = n.parent;
+      if (ccxtGo87TrueSlotCall(n) !== void 0) {
+        slots += 1;
+      } else if (parent?.kind === SyntaxKind5.BinaryExpression && COMPARISON_TOKENS.includes(parent.operatorToken.kind) && (parent.left === n ? parent.right : parent.left)?.kind === SyntaxKind5.TrueKeyword) {
+      } else if (parent?.kind === SyntaxKind5.BinaryExpression && parent.left === n && parent.operatorToken.kind === SyntaxKind5.EqualsToken && (parent.right?.kind === SyntaxKind5.TrueKeyword || parent.right?.kind === SyntaxKind5.FalseKeyword)) {
+      } else {
+        ok = false;
+      }
+      return;
+    }
+    n.forEachChild(visit);
+  };
+  scope?.forEachChild(visit);
+  return ok && slots > 0;
+}
+function ccxtGo87TrueSlotDeclaration(goTranspiler, target) {
+  let declaration;
+  try {
+    declaration = goTranspiler.getChecker().getSymbolAtLocation(target)?.valueDeclaration?.resolve();
+  } catch (e) {
+    return void 0;
+  }
+  if (declaration?.kind !== SyntaxKind5.VariableDeclaration || !ts.isIdentifier(declaration.name) || !isNilDeclaredInitializer(declaration.initializer) || declaration.parent?.parent?.kind !== SyntaxKind5.VariableStatement || declaration.parent.declarations.length !== 1) {
+    return void 0;
+  }
+  goTranspiler.ccxtGo87TrueSlots ??= /* @__PURE__ */ new WeakMap();
+  const cache = goTranspiler.ccxtGo87TrueSlots;
+  if (!cache.has(declaration)) {
+    const scope = goTranspiler.goEnclosingFunction?.(declaration);
+    cache.set(declaration, scope !== void 0 && ccxtGo87OnlyTrueCompares(scope, declaration, declaration.name.text));
+  }
+  return cache.get(declaration) ? declaration : void 0;
+}
+var goNilValueBoolSlotWrite87b = GoNilDeclaredValueAssignmentScan.prototype.boolSlotWrite;
+GoNilDeclaredValueAssignmentScan.prototype.boolSlotWrite = function(node) {
+  const shipped = goNilValueBoolSlotWrite87b.call(this, node);
+  if (shipped !== void 0 || this.inNestedFunction(node) || ccxtGo87TrueSlotCall(node) === void 0 || ccxtGo87TrueSlotDeclaration(this.goTranspiler, node) !== this.declaration) {
+    return shipped;
+  }
+  this.sawWrite = true;
+  if (this.joinType !== void 0 && this.joinType !== "bool") {
+    this.rejected = true;
+    return false;
+  }
+  this.joinType = "bool";
+  return true;
+};
+var goPrintCustomBinary87b = GoTranspiler.prototype.printCustomBinaryExpressionIfAny;
+GoTranspiler.prototype.printCustomBinaryExpressionIfAny = function(node, identation) {
+  const op = node?.operatorToken?.kind;
+  if (COMPARISON_TOKENS.includes(op) && ts.isIdentifier(node.left) && node.right?.kind === SyntaxKind5.TrueKeyword && ccxtGo87TrueSlotDeclaration(this, node.left) !== void 0 && ccxtGo87BoolJoinDeclaration(this, node.left) !== void 0) {
+    const negated = op === SyntaxKind5.ExclamationEqualsToken || op === SyntaxKind5.ExclamationEqualsEqualsToken;
+    return (negated ? "!" : "") + this.printNode(node.left, 0);
+  }
+  const printed = goPrintCustomBinary87b.call(this, node, identation);
+  const target = node?.left?.elements?.[0];
+  if (typeof printed !== "string" || target === void 0 || ccxtGo87TrueSlotCall(target) === void 0 || ccxtGo87TrueSlotDeclaration(this, target) === void 0 || ccxtGo87BoolJoinDeclaration(this, target) === void 0) {
+    return printed;
+  }
+  const name = this.printNode(target, 0);
+  let read = printed;
+  if (node.right?.kind === SyntaxKind5.CallExpression) {
+    const holder = node.left.elements.map((e) => this.printNode(e, 0)).join("") + "Variable";
+    const slots = new TupleSlots(this);
+    if (slots.holderIsUnique(node, holder)) {
+      read = slots.rewrite(printed, holder, node.right, node);
+    }
+  }
+  return read.split("\n").map((line) => {
+    const m = /^(\s*)(\w+) = (?:GetValue\((\w+), 0\)|(\w+)\[0\])$/.exec(line);
+    return m !== null && m[2] === name ? m[1] + name + " = " + (m[4] !== void 0 ? m[4] + "[0]" : "GetValue(" + m[3] + ", 0)") + " == true" : line;
+  }).join("\n");
+};
 
 // src/javaTranspiler.ts
 init_esm_shims();
