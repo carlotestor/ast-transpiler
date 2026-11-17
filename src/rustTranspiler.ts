@@ -10942,7 +10942,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (expressionText !== undefined) return expressionText;
         const marketFieldInit = this.rustMarketFieldScalar(node);
         // ral-73b R1: a never-null `String` field written into an optional string local is that string's `Some`
-        if (marketFieldInit !== undefined) return marketFieldInit.kind === kind ? marketFieldInit.text : (kind === `o${marketFieldInit.kind}` && marketFieldInit.kind === 'str' && this.rustNilVenueWrite(node) ? `Some(${marketFieldInit.text})` : undefined);
+        if (marketFieldInit !== undefined) return marketFieldInit.kind === kind ? marketFieldInit.text : (kind === `o${marketFieldInit.kind}` && marketFieldInit.kind === 'str' && (this.rustNilVenueWrite(node) || this.rust90rcNilWriteArm(node)) ? `Some(${marketFieldInit.text})` : undefined);
         const boolText = kind === 'bool' && this.literalKindOfNode(node) !== 'boolean' ? this.rustBoolNativeText(node) : undefined; if (boolText !== undefined) return boolText;
         if (kind === 'obool' && this.rust67bBoolLogicalWrite(node)) return wrap(this.printCondition(node, 0).trim());
         if (base === 'str' && this.literalKindOfNode(node) === 'string') return wrap(`${this.quotedStringLiteral(node.text)}.to_string()`);
@@ -16402,7 +16402,10 @@ export class RustTranspiler extends BaseTranspiler {
         // ral-73b R1: or the whole right side of `x = m['k'];` into a nil-declared local (rustNilVenueWrite): the write takes
         // the very field read an initializer would (its `Option` when the local is optional)
         const declInit = isVariableDeclaration(top.parent) && top.parent.initializer === top;
-        const nilWrite = placed && !declInit && !this.rust57kMarketTernaryArm(top) && this.rustNilVenueWrite(top);
+        // ral-90rc R1: or an arm of a ternary that is itself the whole right side of such a nil write (`x = c ? 'lit' : m['type']`):
+        // the arm takes the same field read the direct write takes; the ternary joins it with the other arm's kind
+        const nilArm = placed && !declInit && this.rust90rcNilWriteArm(top);
+        const nilWrite = placed && !declInit && !this.rust57kMarketTernaryArm(top) && (nilArm || this.rustNilVenueWrite(top));
         if (placed && !declInit && !this.rust57kMarketTernaryArm(top) && !nilWrite) return undefined;
         // a `key_read` temporary is owned: the nil write moves its string out (`into_opt_string`, ral-xa's form), no copy
         const keyReadTail = nilWrite ? '.into_opt_string()' : '.as_str().map(str::to_owned)';
@@ -16446,6 +16449,15 @@ export class RustTranspiler extends BaseTranspiler {
         if (field !== undefined) return { kind: 'str', text: `${recv}.${field}.clone()` };
         const optField = RustTranspiler.RUST_MARKET_OPT_STR_FIELDS[key];
         return optField !== undefined ? { kind: 'ostr', text: `${recv}.${optField}.as_deref().map(str::to_owned)` } : undefined;
+    }
+
+    /** ral-90rc R1: `node` (through parens / `as`) is an arm, not the condition, of a ternary that is the whole right side of a
+     *  statement write into a nil-declared local (rustNilVenueWrite). */
+    rust90rcNilWriteArm(node: any): boolean {
+        let top: any = node;
+        while (top?.parent !== undefined && (isParenthesizedExpression(top.parent) || top.parent.kind === SyntaxKind.AsExpression)) top = top.parent;
+        const cond: any = top?.parent;
+        return cond !== undefined && isConditionalExpression(cond) && cond.condition !== top && this.rustNilVenueWrite(cond);
     }
 
     /** ral-57k: an arm of `x = c ? m['quote'] : m['base']` (a statement write into an initialised local, kucoin parseTrade

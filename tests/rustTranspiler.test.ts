@@ -25197,3 +25197,18 @@ describe('ral-87rh R4: a bool local strictly compared with an Option<bool> reade
         expect(out).toContain('== Some(wantActive))');
     });
 });
+
+describe('ral-90rc R1: a nil-declared string local written from a ternary whose arm is a typed market field', () => {
+    test('`type = flag ? \'perpetual\' : market[\'type\']` (pro phemex handleOrders) types the local Option<String>', () => {
+        const dir = path.join (rustFixtureRoot, 'r90rc-r1-market-arm');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface Market { id: Str; symbol: string; type: string; settle: Str; spot: boolean; info: any }\nexport default class Exchange {\n    markets: Dict = {};\n    market (symbol: Str): Market {\n        return this.markets[symbol];\n    }\n    hold (m: any, n: any = undefined): any {\n        return m;\n    }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    one (symbols: string[]) {\n        let type: Str = undefined;\n        for (let i = 0; i < symbols.length; i++) {\n            const market = this.market (symbols[i]);\n            if (type === undefined) {\n                const isUsdt = market['settle'] === 'USDT';\n                type = isUsdt ? 'perpetual' : market['type'];\n            }\n        }\n        const messageHash = 'orders:' + type;\n        return this.hold (messageHash);\n    }\n}\n");
+        const typed = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['market'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const out = typed.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut type_var: Option<String> = None;');
+        expect(out).toContain('type_var.is_none()');
+        expect(out).toContain('{ Some("perpetual".to_string()) } else { Some((market).market_type.clone()) }');
+        expect(out).not.toContain('let mut type_var: Value');
+    });
+});
