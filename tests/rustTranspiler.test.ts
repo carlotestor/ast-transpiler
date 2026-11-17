@@ -25258,3 +25258,26 @@ describe('ral-90rf R2: a Dict / List endpoint split also rejoins outside both ar
         expect(out).toMatch(/let mut response: Value = /);
     });
 });
+
+describe('ral-90rf R3: a const answer of a declared Promise<Dict> endpoint tested for null holds Option<Dict>', () => {
+    const mk = (name: string, ret: string, venueBody: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync (path.join (dir, 'ts/src/abstract'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type List = any[];\nexport default class Exchange {\n    safeDict (o: any, k: any, d: any = undefined): Dict { return o; }\n    hold (o: any): any { return o; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/abstract/venue.ts'), "import _Exchange from '../base/Exchange.js';\nimport type { Dict, List } from '../base/Exchange.js';\nexport default abstract class Exchange extends _Exchange {\n    privateGetOrder (params = {}): Promise<" + ret + "> { return this.hold (params); }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './abstract/venue.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + venueBody + "}\n");
+        transpiler.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts'));
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    const body = "    async m (params = {}) {\n        const response = await this.privateGetOrder (params);\n        if (response === undefined) {\n            return this.hold (params);\n        }\n        return this.safeDict (response, 'order', {});\n    }\n";
+    test('hollaex fetchOrder: the null test reads the optional map', () => {
+        const out = mk ('ral-90rf-r3a', 'Dict', body);
+        expect(out).toMatch(/let mut response: Option<crate::value::Dict> = self\.private_get_order\([\s\S]*?\)\.await\.into_opt_dict\(\);/);
+        expect(out).toContain('if (response.is_none())');
+    });
+    test('negative: a Promise<List> endpoint keeps the boxed local', () => {
+        const out = mk ('ral-90rf-r3n', 'List', body);
+        expect(out).toMatch(/let mut response: Value = /);
+    });
+});

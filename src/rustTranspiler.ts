@@ -23930,7 +23930,11 @@ export class RustTranspiler extends BaseTranspiler {
         for (const n of indexReadUses) this.rustBorrowedIndexReads.add(n.parent);
         if (optional) {
             // Null stays distinct from an empty container: the local holds `Option<Dict>` / `Option<List>`.
-            if (from === 'api' || (nilDeclared && writes === 0) || (!nilDeclared && !((zgRow || elementKeyWrites > 0) && this.rustDictElementSource(init)) && !optMapInit && !this.rustOptContainerSourceOk(init, from))) return undefined;
+            // ral-90rf R3: a never-rewritten const answer of an endpoint declared `Promise<Dict>` (ts/src/abstract) holds that map or
+            // Null: `into_opt_dict` keeps both apart, as the declared-endpoint nil locals do (ral-ua)
+            const declaredDictConst = !nilDeclared && writes === 0 && from === 'dict' && endpoint && (declaration.parent.flags & NodeFlags.Const) !== 0
+                && init !== undefined && isCallExpression(init) && this.rustDeclaredEndpointKind(init) === 'dict';
+            if (from === 'api' || (nilDeclared && writes === 0) || (!nilDeclared && !((zgRow || elementKeyWrites > 0) && this.rustDictElementSource(init)) && !optMapInit && !this.rustOptContainerSourceOk(init, from) && !declaredDictConst)) return undefined;
             this.rustOptContainerLocals.add(declaration);
         }
         for (const t of constTests) this.rustNeverNullTests.set(t, declaration);
