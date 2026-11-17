@@ -16646,3 +16646,40 @@ describe('ral-92g8 R3 list seeds rebound through a defaulted safeList', () => {
         expect(out).toContain('var types any = []any{"spot"}');
     });
 });
+
+describe('ral-92g8 R4 venue string[] producers over a literal-defaulted safeList', () => {
+    const head = 'type Dict = { [key: string]: unknown };\n'
+        + 'type Str = string | undefined;\n'
+        + 'class base {\n'
+        + '    safeList (o: unknown, k: unknown, d: unknown = undefined): unknown[] { return d as unknown[]; }\n'
+        + '    safeString (o: unknown, k: unknown): string { return undefined; }\n'
+        + '}\n'
+        + 'export class ex extends base {\n';
+    test('the producer prints []any with the typed reader and an indexed local takes it', () => {
+        const out = goTranspile92g8(head
+            + '    orderFlags (flags: Str): string[] {\n'
+            + '        const table: Dict = { \'1\': [ \'a\' ] };\n'
+            + '        return this.safeList (table, flags, []) as string[];\n'
+            + '    }\n'
+            + '    f (raw: Str) {\n'
+            + '        const flags = this.orderFlags (raw);\n'
+            + '        let n = 0;\n'
+            + '        for (let i = 0; i < flags.length; i++) {\n'
+            + '            n = i;\n'
+            + '        }\n'
+            + '        return n;\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain(') OrderFlags(flags any) []any {');
+        expect(out).toContain('return SafeListTypedDefault(table, flags, []any{})');
+        expect(out).toContain('var flags []any = this.OrderFlags(raw)');
+    });
+    test('a producer without the literal default keeps any', () => {
+        const out = goTranspile92g8(head
+            + '    orderFlags (flags: Str): string[] {\n'
+            + '        return this.safeList ({}, flags) as string[];\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('OrderFlags(flags any) any {');
+    });
+});

@@ -38157,7 +38157,7 @@ function goR92g8ProducerType (goTranspiler, node): string | undefined {
         return GO_R92G8_PRODUCER_CACHE.get (node);
     }
     GO_R92G8_PRODUCER_CACHE.set (node, undefined);
-    const result = goR92g8ProducerTypeUncached (goTranspiler, node);
+    const result = goR92g8ProducerTypeUncached (goTranspiler, node) ?? (goR92g8StringListProducer (goTranspiler, node) ? '[]any' : undefined);
     GO_R92G8_PRODUCER_CACHE.set (node, result);
     return result;
 }
@@ -38403,3 +38403,42 @@ GoTranspiler.prototype.printBinaryExpression = function (node, identation) {
     return printBinaryExpressionBase92g8.call (this, node, identation);
 };
 // ===== ral-92g8 R3 (end) =====
+
+// ===== ral-92g8 R4 (begin): venue string[] producers over a literal-defaulted safeList =====
+// `parseOrderFlags (flags: Str): string[] { return this.safeList (table, flags, []); }`: SafeListTypedDefault
+// answers the stored list or the literal default, never nil, so the signature prints `[]any` and the
+// return prints the typed reader. Caller locals follow through the R1/R2 initializer hook (index / length).
+function goR92g8DefaultedSafeListReturn (node): boolean {
+    const e = goR92g8Unparen (node);
+    return (e?.kind === SyntaxKind.CallExpression) && (e.arguments.length === 3) && (e.expression?.kind === SyntaxKind.PropertyAccessExpression)
+        && (e.expression.expression?.kind === SyntaxKind.ThisKeyword) && (e.expression.name?.text === 'safeList')
+        && (goR92g8Unparen (e.arguments[2])?.kind === SyntaxKind.ArrayLiteralExpression);
+}
+function goR92g8StringListProducer (goTranspiler, node): boolean {
+    const annotation = node?.type?.getText ()?.replace (/\s+/g, '');
+    if ((node?.kind !== SyntaxKind.MethodDeclaration) || (node.body === undefined) || ((annotation !== 'string[]') && (annotation !== 'Strings'))) {
+        return false;
+    }
+    const name = node.name?.text;
+    const fileName = String (node.getSourceFile?.()?.fileName ?? '');
+    if ((typeof name !== 'string') || /(^|[\\/])base[\\/]/.test (fileName) || goTranspiler.isAsyncFunction (node)
+        || !ccxtGoGeneralAnnotatedMethodIsClosed (node, name) || goTranspiler.goMethodKeepsBaseSignature?.(node)) {
+        return false;
+    }
+    const reserved = ccxtGoReservedMethodNames (node);
+    if ((reserved !== undefined) && (reserved.has (name) || reserved.has (name.charAt (0).toUpperCase () + name.slice (1)))) {
+        return false;
+    }
+    const returns = collectReturnStatements (node.body);
+    return (returns.length > 0) && returns.every ((r) => goR92g8DefaultedSafeListReturn (r.expression));
+}
+const printReturnStatementBase92g8 = GoTranspiler.prototype.printReturnStatement;
+GoTranspiler.prototype.printReturnStatement = function (node, identation) {
+    const fn = this.goEnclosingFunction (node);
+    if ((fn !== undefined) && goR92g8DefaultedSafeListReturn (node.expression) && goR92g8StringListProducer (this, fn)) {
+        const args = goR92g8Unparen (node.expression).arguments.map ((a) => this.printNode (a, 0).trim ());
+        return this.printNodeCommentsIfAny (node, identation, this.getIden (identation) + 'return SafeListTypedDefault(' + args.join (', ') + ')');
+    }
+    return printReturnStatementBase92g8.call (this, node, identation);
+};
+// ===== ral-92g8 R4 (end) =====
