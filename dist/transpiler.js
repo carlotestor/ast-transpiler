@@ -43475,6 +43475,53 @@ GoTranspiler.prototype.goNativeCompoundAssignment = function(op, leftNode, leftT
   }
   return `${leftText.trim()} ${op === SyntaxKind5.PlusEqualsToken ? "+=" : "-="} ${rightText.trim()}`;
 };
+function ccxtGo90g2TestsNil(goTranspiler, condition, name) {
+  const inner = goTranspiler.goUnwrapParenthesizedNode(condition);
+  if (inner?.kind !== SyntaxKind5.BinaryExpression) {
+    return false;
+  }
+  const op = inner.operatorToken?.kind;
+  if (op === SyntaxKind5.BarBarToken) {
+    return ccxtGo90g2TestsNil(goTranspiler, inner.left, name) || ccxtGo90g2TestsNil(goTranspiler, inner.right, name);
+  }
+  if (op !== SyntaxKind5.EqualsEqualsEqualsToken && op !== SyntaxKind5.EqualsEqualsToken) {
+    return false;
+  }
+  const isNil = (n) => n?.kind === SyntaxKind5.NullKeyword || n?.kind === SyntaxKind5.Identifier && n.text === "undefined";
+  const isName = (n) => ccxtGoUnwrapTypeOnly(n)?.kind === SyntaxKind5.Identifier && ccxtGoUnwrapTypeOnly(n).text === name;
+  return isName(inner.left) && isNil(inner.right) || isNil(inner.left) && isName(inner.right);
+}
+function ccxtGo90g2ExitsBlock(statement) {
+  const last = statement?.kind === SyntaxKind5.Block ? statement.statements[statement.statements.length - 1] : statement;
+  return last !== void 0 && (last.kind === SyntaxKind5.ReturnStatement || last.kind === SyntaxKind5.ThrowStatement || last.kind === SyntaxKind5.ContinueStatement || last.kind === SyntaxKind5.BreakStatement);
+}
+function ccxtGo90g2GuardedNonNil(goTranspiler, use, name) {
+  for (let child = use, cur = use.parent; cur !== void 0; child = cur, cur = cur.parent) {
+    if (cur.kind === SyntaxKind5.IfStatement && cur.elseStatement === child && ccxtGo90g2TestsNil(goTranspiler, cur.expression, name)) {
+      return true;
+    }
+    if (cur.kind === SyntaxKind5.Block || cur.kind === SyntaxKind5.CaseClause || cur.kind === SyntaxKind5.DefaultClause) {
+      const statements = cur.statements;
+      const index = statements.indexOf(child);
+      for (let i = 0; i < index; i++) {
+        const s = statements[i];
+        if (s.kind === SyntaxKind5.IfStatement && s.elseStatement === void 0 && ccxtGo90g2TestsNil(goTranspiler, s.expression, name) && ccxtGo90g2ExitsBlock(s.thenStatement)) {
+          return true;
+        }
+      }
+    }
+    if (isFunctionLike(cur)) {
+      return false;
+    }
+  }
+  return false;
+}
+{
+  const nonNilBlock = GoTranspiler.prototype.goInsideNonNilBlock;
+  GoTranspiler.prototype.goInsideNonNilBlock = function(use, name) {
+    return nonNilBlock.call(this, use, name) || ccxtGo90g2GuardedNonNil(this, use, name);
+  };
+}
 
 // src/javaTranspiler.ts
 init_esm_shims();
