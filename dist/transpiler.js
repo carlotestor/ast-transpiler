@@ -44992,6 +44992,101 @@ GoTranspiler.prototype.printCallExpression = function(node, identation) {
   }
   return printCallExpressionBase90g8.call(this, node, identation);
 };
+var GO92G2_STRING_LIST_READERS = { "safeList2": ["SafeList2Strings", 3], "safeListN": ["SafeListNStrings", 2] };
+function go92g2ReaderCall(initializer) {
+  let node = initializer;
+  while (node?.kind === SyntaxKind5.ParenthesizedExpression || node?.kind === SyntaxKind5.AsExpression || node?.kind === SyntaxKind5.NonNullExpression) {
+    node = node.expression;
+  }
+  const callee = node?.expression;
+  if (node?.kind !== SyntaxKind5.CallExpression || callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword) {
+    return void 0;
+  }
+  const entry = GO92G2_STRING_LIST_READERS[String(callee.name?.text ?? "")];
+  if (entry === void 0 || node.arguments.length !== entry[1] || node.arguments.some((a) => a.kind === SyntaxKind5.SpreadElement)) {
+    return void 0;
+  }
+  return { call: node, reader: entry[0] };
+}
+function go92g2StringLiteralArray(node) {
+  return node?.kind === SyntaxKind5.ArrayLiteralExpression && node.elements.length > 0 && node.elements.every((e) => e.kind === SyntaxKind5.StringLiteral || e.kind === SyntaxKind5.NoSubstitutionTemplateLiteral);
+}
+var go92g2StringListVerdicts = /* @__PURE__ */ new WeakMap();
+function go92g2StringListLocal(goTranspiler, declaration) {
+  if (go92g2StringListVerdicts.has(declaration)) {
+    return go92g2StringListVerdicts.get(declaration) ?? void 0;
+  }
+  go92g2StringListVerdicts.set(declaration, null);
+  const verdict = go92g2StringListScan(goTranspiler, declaration);
+  go92g2StringListVerdicts.set(declaration, verdict ?? null);
+  return verdict;
+}
+function go92g2StringListScan(goTranspiler, declaration) {
+  if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier || declaration.parent?.parent?.kind !== SyntaxKind5.FirstStatement || declaration.parent.declarations.length !== 1 || go92g2ReaderCall(declaration.initializer) === void 0) {
+    return void 0;
+  }
+  if (!/(^|[\\/])ts[\\/]src[\\/][^\\/]+\.ts$/.test(String(declaration.getSourceFile()?.fileName ?? ""))) {
+    return void 0;
+  }
+  const scope = goTranspiler.goEnclosingFunction(declaration);
+  if (scope === void 0 || goTranspiler.goTypeNameIsShadowed(scope, GO_STRING_LIST_LOCAL_TYPE)) {
+    return void 0;
+  }
+  const name = declaration.name.text;
+  const writes = [];
+  let joins = 0;
+  const unsafe = goTranspiler.hasNodeWhere(scope, (n) => {
+    if ((n.kind === SyntaxKind5.VariableDeclaration || n.kind === SyntaxKind5.Parameter || n.kind === SyntaxKind5.BindingElement) && n !== declaration && n.name?.kind === SyntaxKind5.Identifier && n.name.text === name) {
+      return true;
+    }
+    if (n.kind !== SyntaxKind5.Identifier || n.text !== name || n === declaration.name) {
+      return false;
+    }
+    const parent = n.parent;
+    if (parent?.kind === SyntaxKind5.PropertyAccessExpression && parent.name === n) {
+      return false;
+    }
+    if (!goTranspiler.goIdentifierRefersToDeclaration(n, declaration)) {
+      return true;
+    }
+    if (goTranspiler.goIsNilComparisonOperand(n, parent)) {
+      return false;
+    }
+    if (parent?.kind === SyntaxKind5.PropertyAccessExpression && parent.expression === n && parent.name?.text === "join" && parent.parent?.kind === SyntaxKind5.CallExpression && parent.parent.expression === parent && parent.parent.arguments.length === 1 && parent.parent.arguments[0].kind === SyntaxKind5.StringLiteral) {
+      joins++;
+      return false;
+    }
+    if (parent?.kind === SyntaxKind5.BinaryExpression && parent.left === n && parent.operatorToken?.kind === SyntaxKind5.EqualsToken && parent.parent?.kind === SyntaxKind5.ExpressionStatement && go92g2StringLiteralArray(parent.right)) {
+      writes.push(parent.right);
+      return false;
+    }
+    return true;
+  });
+  return unsafe || joins === 0 ? void 0 : writes;
+}
+{
+  const getGoLocalType = GoTranspiler.prototype.getGoLocalType;
+  GoTranspiler.prototype.getGoLocalType = function(declaration, parsedValue) {
+    const writes = go92g2StringListLocal(this, declaration);
+    if (writes !== void 0) {
+      for (const literal2 of writes) {
+        this.goSliceLiteralTypes.set(literal2, GO_STRING_LIST_LOCAL_TYPE);
+      }
+      return GO_STRING_LIST_LOCAL_TYPE;
+    }
+    return getGoLocalType.call(this, declaration, parsedValue);
+  };
+  const printVariableDeclarationList = GoTranspiler.prototype.printVariableDeclarationList;
+  GoTranspiler.prototype.printVariableDeclarationList = function(node, identation) {
+    const declaration = node?.declarations?.[0];
+    if (node?.declarations?.length === 1 && go92g2StringListLocal(this, declaration) !== void 0 && this.getGoLocalType(declaration, "") === GO_STRING_LIST_LOCAL_TYPE) {
+      const found = go92g2ReaderCall(declaration.initializer);
+      const args = found.call.arguments.map((a) => this.printNode(a, 0).trim()).join(", ");
+      return `${this.getIden(identation)}var ${this.printNode(declaration.name, 0)} ${GO_STRING_LIST_LOCAL_TYPE} = ${found.reader}(${args})`;
+    }
+    return printVariableDeclarationList.call(this, node, identation);
+  };
+}
 
 // src/javaTranspiler.ts
 init_esm_shims();
