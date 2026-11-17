@@ -43545,7 +43545,54 @@ GoTranspiler.prototype.goMarketUseReadsTheValue = function(node, throwingAccesso
   if (!keepsMap) {
     return false;
   }
-  return go90g8CastElementRead(node) || this.goMarketUseHandsTheMapOn(node, node.parent) && go90g8PastNilThrow(this, node);
+  const handOn = this.goMarketUseHandsTheMapOn(node, node.parent) || node.parent?.kind === SyntaxKind5.ReturnStatement && node.parent.expression === node;
+  return go90g8CastElementRead(node) || handOn && go90g8PastNilThrow(this, node);
+};
+function go90g8PredictionMarketProducer(goTranspiler, node) {
+  if (node?.kind !== SyntaxKind5.MethodDeclaration || node.body === void 0) {
+    return false;
+  }
+  const name = node.name?.text;
+  if (typeof name !== "string" || !/^parse[A-Za-z0-9]*Market$/.test(name) || GO_MARKET_PRODUCER_METHODS.indexOf(name) >= 0) {
+    return false;
+  }
+  if (!goTranspiler.goNodeIsInPredictionTree(node) || goTranspiler.isAsyncFunction(node)) {
+    return false;
+  }
+  if (!ccxtGoGeneralAnnotatedMethodIsClosed(node, name)) {
+    return false;
+  }
+  const reserved = ccxtGoReservedMethodNames(node);
+  if (reserved !== void 0 && (reserved.has(name) || reserved.has(name.charAt(0).toUpperCase() + name.slice(1)))) {
+    return false;
+  }
+  let alias;
+  try {
+    const checker = goTranspiler.getChecker();
+    alias = checker.getReturnTypeOfSignature(checker.getSignatureFromDeclaration(node))?.getAliasSymbol()?.escapedName;
+  } catch (e) {
+    return false;
+  }
+  return alias === "Market" && goTranspiler.goMethodBodyReturnsMap(node);
+}
+var goMarketProducerReturnTypeBase90g8 = GoTranspiler.prototype.goMarketProducerReturnType;
+GoTranspiler.prototype.goMarketProducerReturnType = function(node) {
+  const shipped = goMarketProducerReturnTypeBase90g8.call(this, node);
+  if (shipped !== void 0) {
+    return shipped;
+  }
+  return go90g8PredictionMarketProducer(this, node) ? GO_MARKET_LOCAL_TYPE : void 0;
+};
+var goMarketCalleePrintsMapBase90g8 = GoTranspiler.prototype.goMarketCalleePrintsMap;
+GoTranspiler.prototype.goMarketCalleePrintsMap = function(call) {
+  if (goMarketCalleePrintsMapBase90g8.call(this, call)) {
+    return true;
+  }
+  const callee = call?.expression;
+  if (callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword) {
+    return false;
+  }
+  return go90g8PredictionMarketProducer(this, this.goMethodDeclarationOfCallee(callee));
 };
 
 // src/javaTranspiler.ts
