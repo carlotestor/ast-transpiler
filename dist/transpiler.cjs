@@ -59235,6 +59235,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const storeOnly = guarded && nativeUses === 0 && boxed === 1 && !handOff;
     if (ok && nativeUses === 0 && this.rust90rePairAdmitted.has(declaration))
       return void 0;
+    if (ok && nativeUses === 0 && kind === "str" && this.rust90reSmktArmTernary(declaration.initializer))
+      return void 0;
     if (ok && nativeUses === 0 && kind === "ostr" && this.rust84eRecordArmTernary(declaration.initializer))
       return void 0;
     const unused = typedUses === 0 && !handOff && this.rustScalarNeedsNativeUse(declaration.initializer) && !this.rustVenueIntReboxed(declaration, kind, boxed);
@@ -62838,6 +62840,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustUrlsKeyReadUse(n))
       return "okey";
     if (kind === "str" && this.rustStrLiteralTernaryLocal(n) && this.rustOkeyReadUse(n))
+      return "okey";
+    if (kind === "str" && this.rust90reMarketFieldTernaryLocal(n) && this.rustOkeyReadUse(n))
       return "okey";
     if (kind === "str" && this.rustInitKeyLocal(n) && !this.rustTestTierSource(n) && !this.rust40bProTier(n) && this.rust40bFieldKeyRead(n))
       return "okey";
@@ -67863,6 +67867,25 @@ ${ind}];`;
     return this.isNativeAccessPositionSafe(read) && !this.isNativeWriteTargetBase(read);
   }
   /** uh: the use's local is initialised by `c ? 'a' : 'b'` (both arms string literals). */
+  /** ral-90re R3: a ternary initializer one of whose arms is a field read of an owned `safeMarket` (`smkt`) local. */
+  rust90reSmktArmTernary(init) {
+    const node = this.unwrapParens(init);
+    if (node === void 0 || !_is.isConditionalExpression.call(void 0, node))
+      return false;
+    return [node.whenTrue, node.whenFalse].some((arm) => {
+      const a = this.unwrapParens(arm);
+      const local = _is.isElementAccessExpression.call(void 0, a) || _is.isPropertyAccessExpression.call(void 0, a) ? this.rustTypedMarketLocalOf(a.expression) : void 0;
+      return local !== void 0 && this.rustMarketLocalKind(local) === "smkt";
+    });
+  }
+  /** ral-90re R3: `n` reads a local initialised from a ternary whose two arms are `String` fields of a typed market local. */
+  rust90reMarketFieldTernaryLocal(n) {
+    const declaration = this.rustDeclaredNode(n);
+    if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || declaration.initializer === void 0)
+      return false;
+    const init = this.unwrapParens(declaration.initializer);
+    return _is.isConditionalExpression.call(void 0, init) && this.rustMarketArmStrKind(this.unwrapParens(init.whenTrue)) === "str" && this.rustMarketArmStrKind(this.unwrapParens(init.whenFalse)) === "str";
+  }
   rustStrLiteralTernaryLocal(n) {
     const declaration = this.rustDeclaredNode(n);
     const init = declaration !== void 0 && _is.isVariableDeclaration.call(void 0, declaration) ? this.unwrapParens(declaration.initializer) : void 0;
@@ -70452,7 +70475,7 @@ ${i1}}`;
     if (!this.rustTernaryArm(node) || !(_is.isElementAccessExpression.call(void 0, node) || _is.isPropertyAccessExpression.call(void 0, node)))
       return void 0;
     const declaration = this.rustTypedMarketLocalOf(node.expression);
-    if (declaration === void 0 || this.rustMarketLocalKind(declaration) !== "struct")
+    if (declaration === void 0 || this.rustMarketLocalKind(declaration) !== "struct" && this.rustMarketLocalKind(declaration) !== "smkt")
       return void 0;
     const key = this.rustMarketReadKey(node.expression);
     if (key === void 0)

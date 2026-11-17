@@ -2037,6 +2037,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  read reached (a non-map entry or a `None` key reads Null, as `get_value` did on a non-map or a `Null` key). */
     rustUrlsKeyReadUse(n: any): boolean;
     /** uh: the use's local is initialised by `c ? 'a' : 'b'` (both arms string literals). */
+    /** ral-90re R3: a ternary initializer one of whose arms is a field read of an owned `safeMarket` (`smkt`) local. */
+    rust90reSmktArmTernary(init: Node): boolean;
+    /** ral-90re R3: `n` reads a local initialised from a ternary whose two arms are `String` fields of a typed market local. */
+    rust90reMarketFieldTernaryLocal(n: Node): boolean;
     rustStrLiteralTernaryLocal(n: any): boolean;
     /** ral-64k: `n` is the whole key of an element read `book[n]` (through `( .. as T)` wrappers) that initialises a local,
      *  on a typed ws order-book local whose use there is its `Value` box: `get_value` takes the key as `impl ValueKey`
