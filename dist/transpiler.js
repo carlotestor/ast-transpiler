@@ -53815,7 +53815,7 @@ ${this.getIden(identation)}}}`;
 // src/rustTranspiler.ts
 init_esm_shims();
 import { NodeFlags as NodeFlags4, SyntaxKind as SyntaxKind7 } from "typescript/unstable/ast";
-import { isArrayBindingPattern, isArrayLiteralExpression as isArrayLiteralExpression4, isArrayTypeNode as isArrayTypeNode2, isArrowFunction as isArrowFunction5, isAsExpression as isAsExpression3, isBinaryExpression as isBinaryExpression5, isBindingElement, isBlock as isBlock4, isCallExpression as isCallExpression6, isClassDeclaration as isClassDeclaration4, isClassExpression as isClassExpression2, isConditionalExpression as isConditionalExpression4, isDeleteExpression as isDeleteExpression2, isElementAccessExpression as isElementAccessExpression4, isForInStatement as isForInStatement2, isForOfStatement as isForOfStatement2, isIdentifier as isIdentifier3, isIfStatement as isIfStatement4, isMethodDeclaration as isMethodDeclaration5, isNewExpression, isNoSubstitutionTemplateLiteral, isNonNullExpression as isNonNullExpression2, isNumericLiteral as isNumericLiteral4, isObjectLiteralExpression as isObjectLiteralExpression4, isParameterDeclaration as isParameterDeclaration3, isParenthesizedExpression as isParenthesizedExpression3, isPostfixUnaryExpression as isPostfixUnaryExpression3, isPrefixUnaryExpression as isPrefixUnaryExpression3, isPropertyAccessExpression as isPropertyAccessExpression3, isPropertyDeclaration as isPropertyDeclaration2, isPropertyAssignment as isPropertyAssignment2, isReturnStatement as isReturnStatement4, isShorthandPropertyAssignment as isShorthandPropertyAssignment2, isSourceFile as isSourceFile5, isStatement, isStringLiteral as isStringLiteral3, isStringLiteralLikeNode as isStringLiteralLikeNode4, isTypeAssertion as isTypeAssertion3, isTypeReferenceNode as isTypeReferenceNode2, isVariableDeclaration as isVariableDeclaration3, isVariableDeclarationList as isVariableDeclarationList2 } from "typescript/unstable/ast/is";
+import { isArrayBindingPattern, isArrayLiteralExpression as isArrayLiteralExpression4, isArrayTypeNode as isArrayTypeNode2, isArrowFunction as isArrowFunction5, isAsExpression as isAsExpression3, isBinaryExpression as isBinaryExpression5, isBindingElement, isBlock as isBlock4, isCallExpression as isCallExpression6, isClassDeclaration as isClassDeclaration4, isClassExpression as isClassExpression2, isConditionalExpression as isConditionalExpression4, isDeleteExpression as isDeleteExpression2, isElementAccessExpression as isElementAccessExpression4, isForInStatement as isForInStatement2, isForOfStatement as isForOfStatement2, isIdentifier as isIdentifier3, isIfStatement as isIfStatement4, isMethodDeclaration as isMethodDeclaration5, isNewExpression, isNoSubstitutionTemplateLiteral, isNonNullExpression as isNonNullExpression2, isNumericLiteral as isNumericLiteral4, isObjectLiteralExpression as isObjectLiteralExpression4, isParameterDeclaration as isParameterDeclaration3, isParenthesizedExpression as isParenthesizedExpression3, isPostfixUnaryExpression as isPostfixUnaryExpression3, isPrefixUnaryExpression as isPrefixUnaryExpression3, isPropertyAccessExpression as isPropertyAccessExpression3, isPropertyDeclaration as isPropertyDeclaration2, isPropertyAssignment as isPropertyAssignment2, isReturnStatement as isReturnStatement4, isShorthandPropertyAssignment as isShorthandPropertyAssignment2, isSourceFile as isSourceFile5, isStatement, isStringLiteral as isStringLiteral3, isStringLiteralLikeNode as isStringLiteralLikeNode4, isTypeAssertion as isTypeAssertion3, isThrowStatement as isThrowStatement4, isTypeReferenceNode as isTypeReferenceNode2, isUnionTypeNode, isVariableDeclaration as isVariableDeclaration3, isVariableDeclarationList as isVariableDeclarationList2 } from "typescript/unstable/ast/is";
 import { IndexKind as IndexKind4, ObjectFlags, SignatureKind as SignatureKind2, SymbolFlags as SymbolFlags3, TypeFlags as TypeFlags6 } from "typescript/unstable/sync";
 import * as fs3 from "fs";
 import * as tsSync2 from "typescript/unstable/sync";
@@ -86197,6 +86197,7 @@ ${iden}}`;
     let writes = 0;
     let mapReads = 0;
     let isArrayTests = 0;
+    const mapBoxes = [];
     const safe = this.rustLocalUsesAll(declaration, name, false, (n) => {
       if (split && !this.rustIdentifierIsPropertyName(n) && this.rustIdentifierRefersToDeclaration(n, declaration) && this.rustEnclosingFunction(n) === fn) {
         const use = n.parent;
@@ -86211,7 +86212,11 @@ ${iden}}`;
           return true;
         }
         const endpointSplit = this.rust87rfEndpointSplitSource(declaration, init);
-        if (!this.rust80dInListArm(n, declaration, fn, endpointSplit))
+        if (endpointSplit && this.rust90rfArmOf(n, declaration, fn) === "map" && this.rust90rfMapOrListEndpoint(init) && this.rust90rfWholeBoxUse(n)) {
+          mapBoxes.push(n);
+          return true;
+        }
+        if (!this.rust80dInListArm(n, declaration, fn, endpointSplit) && !(endpointSplit && this.rust90rfArmOf(n, declaration, fn) === "list"))
           return false;
         if (endpointSplit && (isConditionalExpression4(use) && use.whenTrue === n && use.condition !== n || isBinaryExpression5(use) && use.right === n && use.operatorToken.kind === SyntaxKind7.EqualsToken && use.parent?.kind === SyntaxKind7.ExpressionStatement && isIdentifier3(use.left) && use.left.text !== n.text && this.rustOptListAliasTarget(use.left) && this.rustBuiltListOf(use.left) === void 0)) {
           boxes.push([n, "clone"]);
@@ -86288,8 +86293,10 @@ ${iden}}`;
     });
     if (!safe || nil && (writes === 0 || natives === 0) || split && isArrayTests === 0)
       return false;
-    if (split && mapReads > 0)
+    if (split && (mapReads > 0 || mapBoxes.length > 0))
       this.rust80dSplitLocals.add(declaration);
+    for (const n of mapBoxes)
+      this.rustOptListBoxes.set(n, this.rustLocalLastUse(n, declaration) ? "mapBoxMove" : "mapBox");
     const finals = /* @__PURE__ */ new Map();
     for (const [n] of boxes) {
       const ret = findAncestor(n, (a) => isReturnStatement4(a) || isFunctionLike(a));
@@ -86312,6 +86319,87 @@ ${iden}}`;
     if (awaited === void 0 || awaited.kind !== SyntaxKind7.AwaitExpression || !isCallExpression6(init) || this.rustTestTierSource(init))
       return false;
     return this.rustBorrowedSourceKind(init) === "api";
+  }
+  /** ral-90rf R1: the implicit endpoint is declared (ts/src/abstract) to answer `Promise<Dict>`, `Promise<List>` or
+   *  `Promise<Dict | List>`: outside its list arm the answer is the map the split holds (`__map`). */
+  rust90rfMapOrListEndpoint(init) {
+    if (!isCallExpression6(init))
+      return false;
+    const declaration = this.rustScalarCallee(init);
+    if (declaration === void 0 || !isMethodDeclaration5(declaration) || !/ts[\\/]src[\\/]abstract[\\/]/.test(String(declaration.getSourceFile().fileName)))
+      return false;
+    const ret = declaration.type;
+    if (ret === void 0 || !isTypeReferenceNode2(ret) || !isIdentifier3(ret.typeName) || ret.typeName.text !== "Promise" || ret.typeArguments?.length !== 1)
+      return false;
+    const arg = ret.typeArguments[0];
+    const parts = isUnionTypeNode(arg) ? arg.types : [arg];
+    return parts.every((t) => isTypeReferenceNode2(t) && isIdentifier3(t.typeName) && t.typeArguments === void 0 && (t.typeName.text === "Dict" || t.typeName.text === "List"));
+  }
+  /** ral-90rf R1: a whole read of the local: a `this.m (..)` argument at a `Value` slot, `return x`, an object-literal value
+   *  or a list-literal element. */
+  rust90rfWholeBoxUse(n) {
+    const up = n.parent;
+    if (isCallExpression6(up) && up.expression !== n && up.arguments.some((a) => a === n)) {
+      const callee = up.expression;
+      return isPropertyAccessExpression3(callee) && callee.expression.kind === SyntaxKind7.ThisKeyword && this.rustNilBoxSlotOk(up, Array.from(up.arguments).indexOf(n)) && this.rustBoxLineOk(n);
+    }
+    if (isReturnStatement4(up) && up.expression === n)
+      return true;
+    if (isPropertyAssignment2(up) && up.initializer === n && isObjectLiteralExpression4(up.parent))
+      return this.rustBoxLineOk(n);
+    return isArrayLiteralExpression4(up) && this.rustBoxLineOk(n);
+  }
+  /** ral-90rf R1: which arm of an `Array.isArray (x)` test (or its negation) a use of `x` sits in: inside the if / ternary
+   *  branch, or after an `if` with no else whose branch always exits (the rest of the block is the other arm). */
+  rust90rfArmOf(n, declaration, fn) {
+    const test = (e) => {
+      e = this.rustSkipWrappers(e);
+      if (e !== void 0 && isPrefixUnaryExpression3(e) && e.operator === SyntaxKind7.ExclamationToken) {
+        const inner = test(e.operand);
+        return inner === void 0 ? void 0 : !inner;
+      }
+      if (e === void 0 || !isCallExpression6(e) || !this.rustIsArrayIsArrayCallee(e) || e.arguments.length !== 1)
+        return void 0;
+      const arg = this.rustSkipWrappers(e.arguments[0]);
+      return isIdentifier3(arg) && this.rustIdentifierRefersToDeclaration(arg, declaration) ? true : void 0;
+    };
+    const exits = (st) => {
+      if (st === void 0)
+        return false;
+      if (isReturnStatement4(st) || isThrowStatement4(st))
+        return true;
+      if (isBlock4(st))
+        return st.statements.length > 0 && exits(st.statements[st.statements.length - 1]);
+      if (isIfStatement4(st))
+        return st.elseStatement !== void 0 && exits(st.thenStatement) && exits(st.elseStatement);
+      return false;
+    };
+    for (let child = n, at = n.parent; at !== void 0 && at !== fn; child = at, at = at.parent) {
+      if (isFunctionLike(at))
+        return void 0;
+      if (isIfStatement4(at) && child !== at.expression) {
+        const held = test(at.expression);
+        if (held !== void 0)
+          return at.thenStatement === child === held ? "list" : "map";
+      }
+      if (isConditionalExpression4(at) && child !== at.condition) {
+        const held = test(at.condition);
+        if (held !== void 0)
+          return at.whenTrue === child === held ? "list" : "map";
+      }
+      if (isBlock4(at)) {
+        const statements = Array.from(at.statements);
+        for (let i = statements.indexOf(child) - 1; i >= 0; i--) {
+          const prev = statements[i];
+          if (!isIfStatement4(prev) || prev.elseStatement !== void 0 || !exits(prev.thenStatement))
+            continue;
+          const held = test(prev.expression);
+          if (held !== void 0)
+            return held ? "map" : "list";
+        }
+      }
+    }
+    return void 0;
   }
   /** ral-80c R1: an unwritten method parameter whose typed signature slot is a string list (decided from the signature table). */
   rust80cStrVecParamAlias(init) {
@@ -86493,6 +86581,8 @@ ${iden}}`;
       return `&${text}`;
     if (form === "map")
       return `&${text}__map`;
+    if (form === "mapBox" || form === "mapBoxMove")
+      return `${text}__map${form === "mapBox" ? ".clone()" : ""}.map_or(Value::Null, Value::Dict)`;
     return form === "move" ? `${text}.map_or(Value::Null, Value::Arr)` : `${text}.clone().map_or(Value::Null, Value::Arr)`;
   }
   // ── optional list locals: joins, map-literal values, literal writes ─────

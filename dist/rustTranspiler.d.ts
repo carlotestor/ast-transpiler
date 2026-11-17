@@ -4574,6 +4574,15 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  the test tier. Whatever the endpoint answers, the split form keeps the list it held (`Some`) and the map it held, so an
      *  `Array.isArray (x)` test reads `is_some()` and every list-arm use reads the held list. */
     rust87rfEndpointSplitSource(declaration: Node, init: Node): boolean;
+    /** ral-90rf R1: the implicit endpoint is declared (ts/src/abstract) to answer `Promise<Dict>`, `Promise<List>` or
+     *  `Promise<Dict | List>`: outside its list arm the answer is the map the split holds (`__map`). */
+    rust90rfMapOrListEndpoint(init: Node): boolean;
+    /** ral-90rf R1: a whole read of the local: a `this.m (..)` argument at a `Value` slot, `return x`, an object-literal value
+     *  or a list-literal element. */
+    rust90rfWholeBoxUse(n: Node): boolean;
+    /** ral-90rf R1: which arm of an `Array.isArray (x)` test (or its negation) a use of `x` sits in: inside the if / ternary
+     *  branch, or after an `if` with no else whose branch always exits (the rest of the block is the other arm). */
+    rust90rfArmOf(n: Node, declaration: VariableDeclaration, fn: Node): 'list' | 'map' | undefined;
     /** ral-80c R1: an unwritten method parameter whose typed signature slot is a string list (decided from the signature table). */
     rust80cStrVecParamAlias(init: Expression | undefined): boolean;
     /** ral-80c R1: `this.symbols` / `this.ids`, base fields declared `string[]` (always a list). */
