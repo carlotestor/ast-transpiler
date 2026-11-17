@@ -6499,7 +6499,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (local === kind) return super.printIdentifier(inner);
         if (local !== undefined && `o${local}` === kind) return `Some(${super.printIdentifier(inner)})`;
         if (kind === 'bool' && local === undefined && this.rustBoolTypedReturnUse(inner)) {
-            const declaration: any = this.rustDeclaredNode(inner);
+            const declaration: Node | undefined = this.rustDeclaredNode(inner);
             if (declaration !== undefined && isVariableDeclaration(declaration) && this.rustDeclarationPrintsNativeBool(declaration)) return super.printIdentifier(inner);
         }
         const callKind = this.rustBaseTypedReturnKind(inner);
