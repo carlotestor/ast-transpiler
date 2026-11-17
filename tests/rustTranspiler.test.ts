@@ -26194,3 +26194,29 @@ describe('rust boxed byte producers', () => {
         expect(out).toMatch(/let mut data: Value = self\.ethAbiEncode\([^;]*\);\n[^\n]*self\.hold\(data\)/);
     });
 });
+
+describe('rust venue Option<Market> producers returning a typed market lookup', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface MarketInterface { symbol: string; [key: string]: any }\nexport type Market = MarketInterface | undefined;\nexport default class Exchange {\n    markets: Dict = undefined;\n    market (symbol: string): MarketInterface { return undefined; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeBool (o: any, k: any, d: any = undefined): any { return o; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    safeMarket (marketId: Str = undefined, market: Market = undefined, delimiter: Str = undefined): MarketInterface {\n        if (market !== undefined) {\n            return market;\n        }\n        return this.market (marketId);\n    }\n}\n";
+    const venue = "import Exchange from './base/Exchange.js';\nimport type { Dict, Market, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n"
+        + "    findSwap (wsId: Str) {\n        if (this.markets === undefined) {\n            return undefined;\n        }\n        const symbols = Object.keys (this.markets);\n        for (let i = 0; i < symbols.length; i++) {\n            const symbolId: string = symbols[i];\n            if (symbolId === wsId) {\n                return this.market (symbolId);\n            }\n        }\n        return undefined;\n    }\n"
+        + "    findLoose (wsId: Str) {\n        if (wsId === undefined) {\n            return undefined;\n        }\n        return this.markets[wsId];\n    }\n"
+        + "    handleIt (wsId: Str): Str {\n        const market = this.findSwap (wsId);\n        return this.safeString (market, 'symbol');\n    }\n}\n";
+    let out = '';
+    beforeAll(() => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-93rg3-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), venue);
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['market'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        try { out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+    });
+    test('an unannotated producer of undefined or this.market (x) prints Option<Market> and its caller local follows', () => {
+        expect(out).toMatch(/fn findSwap\(&self, [^)]*\) -> Option<crate::types::Market>/);
+        expect(out).toContain('return Some((match self.market(');
+        expect(out).toContain('let mut market: Option<crate::types::Market> = self.findSwap(');
+        expect(out).toContain('self.safe_string_k_opt(&market, \"symbol\"');
+    });
+    test('a producer returning a raw store read stays Value', () => {
+        expect(out).toMatch(/fn findLoose\(&self, [^)]*\) -> Value/);
+    });
+});

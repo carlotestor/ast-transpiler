@@ -16383,7 +16383,8 @@ export class RustTranspiler extends BaseTranspiler {
         const file = String(node.getSourceFile?.()?.fileName ?? '').replace(/\\/g, '/');
         if (RustTranspiler.RUST_BASE_TIER_FILE.test(file) || !/ts[/]src[/]/.test(file) || /ts[/]src[/](?:pro[/])?test[/]/.test(file)) return false;
         const ret: any = node.type;
-        if (ret?.kind !== SyntaxKind.TypeReference || !isIdentifier(ret.typeName) || String(ret.typeName.text) !== 'Market') return false;
+        // an unannotated method qualifies too: its return set is read from the body below (a market record or `undefined`)
+        if (ret !== undefined && (ret.kind !== SyntaxKind.TypeReference || !isIdentifier(ret.typeName) || String(ret.typeName.text) !== 'Market')) return false;
         if ((node.modifiers ?? []).some((m: any) => m.kind === SyntaxKind.AsyncKeyword || m.kind === SyntaxKind.OverrideKeyword || m.kind === SyntaxKind.StaticKeyword)) return false;
         let decision = this.rustVenueOptMarketDecisions.get(node);
         if (decision !== undefined) return decision;
@@ -16399,6 +16400,8 @@ export class RustTranspiler extends BaseTranspiler {
                 if (inner !== undefined && this.literalKindOfNode(inner) === 'null') { nones++; return; }
                 if (inner !== undefined && isCallExpression(inner) && isPropertyAccessExpression(inner.expression)
                     && String(inner.expression.name.text) === 'safeMarket' && this.rustIsSafeMarketCall(inner)) { records++; return; }
+                // a typed `this.market (x)` lookup answers the loaded record (or panics as the boxed call did): never Null
+                if (inner !== undefined && this.rustIsTypedMarketCall(inner) && this.printTypedMarketValue(inner) !== undefined) { records++; return; }
                 ok = false;
                 return;
             }
