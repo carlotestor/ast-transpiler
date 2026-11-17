@@ -36428,3 +36428,72 @@ function ccxtGo90g2GuardedNonNil (goTranspiler, use, name: string): boolean {
     };
 }
 // ===== ral-90g2 (end) =====
+// K. the same no-default safeDict local may be filled where it was nil: `x = {}` (no spread), `x = this.account ()`,
+// `x = this.extend (..)` / `this.deepExtend (..)` (base-class methods; each Go body returns a fresh non-nil
+// map[string]any). Such a write keeps the map type, and every statement after the fill in its block, and after an
+// `if (x === undefined || ..) { ..; x = <fill>; .. }` whose then-block fills it unconditionally, sees a non-nil map.
+const CCXT_GO_90G2_FILL_CALLS = [ 'account', 'extend', 'deepExtend' ];
+function ccxtGo90g2NeverNilMap (goTranspiler, value): boolean {
+    const node = ccxtGoUnwrapTypeOnly(value);
+    if (node?.kind === SyntaxKind.ObjectLiteralExpression) {
+        return !node.properties.some((p) => p.kind === SyntaxKind.SpreadAssignment);
+    }
+    if ((node?.kind !== SyntaxKind.CallExpression) || (node.expression?.kind !== SyntaxKind.PropertyAccessExpression)
+        || (node.expression.expression?.kind !== SyntaxKind.ThisKeyword) || (CCXT_GO_90G2_FILL_CALLS.indexOf(node.expression.name?.text) < 0)) {
+        return false;
+    }
+    try {
+        const symbol: TsSymbol | undefined = goTranspiler.checkerOrUndefined()?.getSymbolAtLocation(node.expression.name);
+        const decls = symbol?.declarations ?? [];
+        return (decls.length > 0) && decls.every((d) => /(^|[\\/])ts[\\/]src[\\/]base[\\/]Exchange(\.nooverloads\.\d+)?\.ts$/.test(String(d?.resolve?.()?.getSourceFile?.()?.fileName ?? '')));
+    } catch (e) {
+        return false;
+    }
+}
+function ccxtGo90g2FillStatement (goTranspiler, statement, name: string): boolean {
+    if (statement?.kind !== SyntaxKind.ExpressionStatement) {
+        return false;
+    }
+    const write = goTranspiler.goUnwrapParenthesizedNode(statement.expression);
+    return (write?.kind === SyntaxKind.BinaryExpression) && (write.operatorToken?.kind === SyntaxKind.EqualsToken)
+        && (ccxtGoUnwrapTypeOnly(write.left)?.kind === SyntaxKind.Identifier) && (ccxtGoUnwrapTypeOnly(write.left).text === name)
+        && ccxtGo90g2NeverNilMap(goTranspiler, write.right);
+}
+function ccxtGo90g2FilledBefore (goTranspiler, use, name: string): boolean {
+    for (let child = use, cur = use.parent; cur !== undefined; child = cur, cur = cur.parent) {
+        if ((cur.kind === SyntaxKind.Block) || (cur.kind === SyntaxKind.CaseClause) || (cur.kind === SyntaxKind.DefaultClause)) {
+            const statements = cur.statements;
+            const index = statements.indexOf(child);
+            for (let i = 0; i < index; i++) {
+                const s = statements[i];
+                if (ccxtGo90g2FillStatement(goTranspiler, s, name)) {
+                    return true;
+                }
+                if ((s.kind === SyntaxKind.IfStatement) && ccxtGo90g2TestsNil(goTranspiler, s.expression, name)
+                    && (s.thenStatement?.kind === SyntaxKind.Block) && s.thenStatement.statements.some((t) => ccxtGo90g2FillStatement(goTranspiler, t, name))) {
+                    return true;
+                }
+            }
+        }
+        if (isFunctionLike(cur)) {
+            return false;
+        }
+    }
+    return false;
+}
+{
+    const nonNilBlock = GoTranspiler.prototype.goInsideNonNilBlock;
+    GoTranspiler.prototype.goInsideNonNilBlock = function (use, name: string) {
+        return nonNilBlock.call(this, use, name) || ccxtGo90g2FilledBefore(this, use, name);
+    };
+    const keepsMap = GoTranspiler.prototype.goMapLocalUseKeepsMap;
+    GoTranspiler.prototype.goMapLocalUseKeepsMap = function (ref, rebinds: Set<any>, noDefault: boolean, ws: boolean, name: string) {
+        if (keepsMap.call(this, ref, rebinds, noDefault, ws, name)) {
+            return true;
+        }
+        const write = ref.parent;
+        return noDefault && (write?.kind === SyntaxKind.BinaryExpression) && (write.left === ref) && (write.operatorToken?.kind === SyntaxKind.EqualsToken)
+            && (write.parent?.kind === SyntaxKind.ExpressionStatement) && ccxtGo90g2NeverNilMap(this, write.right);
+    };
+}
+// ===== ral-90g2 K (end) =====

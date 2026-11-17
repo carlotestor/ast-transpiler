@@ -15769,4 +15769,14 @@ describe ('ral-90g2 reader-result locals', () => {
         // a guard that does not leave the block proves nothing
         expect (run (body.replace ('return undefined;', 'id = "y";'), 'ts/src/pro')).not.toContain ('var prev map[string]any = ');
     });
+    test ('K: a no-default safeDict local filled with a fresh map where it was nil is a map', () => {
+        const body = '    account (): Dict { return {}; }\n    f (result: Dict, code: string, reload: boolean): any {\n        let acc = this.safeDict (result, code);\n        if ((acc === undefined) || reload) {\n            acc = {};\n            acc["total"] = 1;\n        }\n        acc["free"] = 2;\n        result[code] = acc;\n        return acc;\n    }\n';
+        const out = run (body, 'ts/src/pro');
+        expect (out).toContain ('var acc map[string]any = ');
+        expect (out).toContain ('acc = map[string]any{}');
+        // a fill that depends on another condition proves nothing after the if
+        expect (run (body.replace ('acc = {};', 'if (reload) {\n                acc = {};\n            }'), 'ts/src/pro')).not.toContain ('var acc map[string]any = ');
+        // a write of a value that may be nil keeps the box
+        expect (run (body.replace ('acc = {};', 'acc = this.safeDict (result, "x");'), 'ts/src/pro')).not.toContain ('var acc map[string]any = ');
+    });
 });
