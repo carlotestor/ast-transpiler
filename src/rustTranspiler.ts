@@ -5703,6 +5703,9 @@ export class RustTranspiler extends BaseTranspiler {
         const cast = this.rustStrCastCall(node); if (cast !== undefined) return this.rustScalarValueKind(cast, fresh) === 'ostr' ? 'ostr' : undefined;
         if (fresh && this.rustClockString(node)) return 'str';
         if (fresh && this.rustNumParamToString(node)) return 'str';
+        // ral-87rh R3: `x = v.toString ()` as a statement write into a `let` seeded with a string literal, where the printer
+        // boxes the call whole as `Value::Str(format!("{}", v))` (rustFormatPrints): the `String` that `format!` makes
+        if (fresh && this.rust87rhToStringWrite(node)) return 'str';
         // ral-46c: `this.requestId().toString()` of an all-`int` venue method is the `i64`'s decimal text
         if (fresh && this.rustIdString(node) && !this.rustIntToStringShape(node)) return 'str';
         if (fresh && this.rustSbJoinShape(node)) return 'str';
@@ -6624,6 +6627,23 @@ export class RustTranspiler extends BaseTranspiler {
         const node: any = this.unwrapParens(init);
         if (this.rustStrCastCall(node) === undefined && !this.rustClockString(node) && !this.rustSumShape(node) && !this.rustIntToStringShape(node)) return false;
         return typedUses === 0 || copied > 0;
+    }
+
+    /** ral-87rh R3: `x = v.toString ()` (no radix) as a whole statement write whose target is a single-binding `let` local
+     *  seeded with a string literal, in a non-test source, and whose call the printer boxes whole as
+     *  `Value::Str(format!("{}", ..))` (decided from that very node's print, rustUnboxedFormatOf). */
+    rust87rhToStringWrite(node: Node): boolean {
+        if (node === undefined || !isCallExpression(node) || node.arguments.length !== 0 || !isPropertyAccessExpression(node.expression) || String(node.expression.name.text) !== 'toString') return false;
+        if (this.rustTestTierSource(node)) return false;
+        const up: Node = this.rustSkipWrappersUp(node.parent);
+        if (up === undefined || !isBinaryExpression(up) || up.operatorToken.kind !== SyntaxKind.EqualsToken || up.parent?.kind !== SyntaxKind.ExpressionStatement || !isIdentifier(up.left)) return false;
+        if (this.unwrapParens(up.right) !== node) return false;
+        const target: Node = this.rustDeclaredNode(up.left);
+        if (target === undefined || !isVariableDeclaration(target) || target.initializer === undefined || this.literalKindOfNode(this.unwrapParens(target.initializer)) !== 'string') return false;
+        const list: Node = target.parent;
+        if (list?.kind !== SyntaxKind.VariableDeclarationList || (list.flags & NodeFlags.Let) === 0 || (list as { declarations?: readonly Node[] }).declarations?.length !== 1) return false;
+        // the arm the printer took for this very call (rustRecordFormatToString records it), not its text
+        return this.rustUnboxedFormatOf(node) !== undefined;
     }
 
     /** ral-45g: `p.toString()` (no radix) of a parameter the checker types `number`: the printer already boxes
@@ -10940,6 +10960,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (clock !== undefined && this.rustNonceCall(this.unwrapParens(clock))) return wrap(`format!("{}", ${this.printNode(this.unwrapParens(clock), 0).trim()})`);
         if (clock !== undefined) return wrap(`format!("{}", ${this.rustScalarNativeText('int', clock)})`);
         // ral-45g: `p.toString()` of a `number` parameter: the String the `format!` box held
+        if (base === 'str' && this.rust87rhToStringWrite(node)) return wrap(this.rustUnboxedFormatOf(node));
         if (base === 'str' && this.rustNumParamToString(node)) {
             const boxed = text.match(/^Value::Str\((format!\(.*\))\.into\(\)\)$/s);
             return boxed !== null ? wrap(boxed[1]) : wrap(`${text}.as_str().unwrap_or_default().to_string()`);

@@ -24734,3 +24734,12 @@ describe('ral-87rh R2: symbol of an untyped base market parameter', () => {
         expect(out).not.toContain('let mut symbol: Value');
     });
 });
+
+describe('ral-87rh R3: a literal-seeded string let rewritten from a boxed toString', () => {
+    test('x = v.toString () into a \'\'-seeded let is a String written from the format!', () => {
+        const out = transpiler.transpileRust("class T {\n    log (x: any) { return x; }\n    f (w: number) {\n        let v: number = undefined;\n        if (w > 1) {\n            v = w;\n        }\n        let s = '';\n        if (v !== undefined) {\n            s = v.toString ();\n        }\n        this.log ('cursor ' + s);\n    }\n}\n").content;
+        expect(out).toContain('let mut s: String = ');
+        expect(out).toContain('s = format!("{}", v);');
+        expect(out).not.toContain('let mut s: Value');
+    });
+});
