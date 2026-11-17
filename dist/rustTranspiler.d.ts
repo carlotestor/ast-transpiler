@@ -506,6 +506,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustNilOptStrConcatUse(n: any): boolean;
     /** ral-56x K1: `return x` of a literal-seeded string local (never a parameter alias) in a `-> Option<String>` method. */
     rust56xStrReturnLocal(n: any, fn: any): boolean;
+    /** ral-90rb R4: every leaf of a `+` chain is a string literal or an identifier whose declaration is a `const` initialised from a
+     *  base `safeString*` read with a string-literal default (checker `string`, never `undefined`). Decided from the AST. */
+    rust90bStrConcatInit(node: Node): boolean;
     /** ral-61x: `return x` of the method's own nil-declared `let x: Str = undefined` local (an accumulator the body writes):
      *  as an `Option<String>` it is the payload itself, as a `Value` a checker-string `Value` (converts either way). */
     rust61xNilStrReturnLocal(n: any, fn: any): boolean;

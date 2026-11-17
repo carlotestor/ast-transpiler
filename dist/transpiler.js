@@ -57647,7 +57647,30 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const declaration = this.rustDeclaredNode(n);
     if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.initializer === void 0)
       return false;
+    const init = this.unwrapParens(declaration.initializer);
+    if (isBinaryExpression5(init) && init.operatorToken.kind === SyntaxKind7.PlusToken && this.rust90bStrConcatInit(init) && this.rustEnclosingFunction(declaration) === fn)
+      return true;
     return this.literalKindOfNode(this.unwrapParens(declaration.initializer)) === "string" && this.rustEnclosingFunction(declaration) === fn;
+  }
+  /** ral-90rb R4: every leaf of a `+` chain is a string literal or an identifier whose declaration is a `const` initialised from a
+   *  base `safeString*` read with a string-literal default (checker `string`, never `undefined`). Decided from the AST. */
+  rust90bStrConcatInit(node) {
+    const inner = this.unwrapParens(node);
+    if (isBinaryExpression5(inner))
+      return inner.operatorToken.kind === SyntaxKind7.PlusToken && this.rust90bStrConcatInit(inner.left) && this.rust90bStrConcatInit(inner.right);
+    if (isStringLiteral3(inner))
+      return true;
+    if (!isIdentifier3(inner))
+      return false;
+    const declaration = this.rustDeclaredNode(inner);
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || (declaration.parent.flags & NodeFlags4.Const) === 0)
+      return false;
+    const read = this.unwrapParens(declaration.initializer);
+    if (read === void 0 || !isCallExpression6(read) || !isPropertyAccessExpression3(read.expression) || read.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    const name = String(read.expression.name.text);
+    const last = read.arguments[read.arguments.length - 1];
+    return name === "safeString" && read.arguments.length === 3 && isStringLiteral3(last) && this.primitiveKindOfType(this.getCheckedTypeOf(inner)) === "string";
   }
   /** ral-61x: `return x` of the method's own nil-declared `let x: Str = undefined` local (an accumulator the body writes):
    *  as an `Option<String>` it is the payload itself, as a `Value` a checker-string `Value` (converts either way). */
