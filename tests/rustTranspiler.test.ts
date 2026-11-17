@@ -25221,3 +25221,27 @@ describe('ral-90ra R1: an element of a proven string-list parameter is an Option
         expect(out).not.toContain('let mut subscription: Option<String>');
     });
 });
+
+describe('ral-90ra R2: the one argument of JSON.parse parses an Option<String> line in place', () => {
+    const emit = (rel: string, body: string): string => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-90ra2-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync(path.join(root, 'ts/src/pro'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    handleFrame (client: any, message: any): any { return message; }\n}\n");
+        const imp = rel.includes('/pro/') ? '../base/Exchange.js' : './base/Exchange.js';
+        fs.writeFileSync(path.join(root, rel), "import Exchange from '" + imp + "';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        try { return t.transpileRustByPath(path.join(root, rel)).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+    };
+    const body = "    handleTextMessage (client: any, message: string) {\n        const lines = message.split ('\\n');\n        const linesLength = lines.length;\n        for (let i = 0; i < linesLength; i++) {\n            const line = lines[i];\n            if (line.length > 0) {\n                const parsed = JSON.parse (line);\n                this.handleFrame (client, parsed);\n            }\n        }\n    }\n";
+    test('sxbet / myriad handleTextMessage: the line is an Option<String> parsed by serde_json', () => {
+        const out = emit('ts/src/venue.ts', body);
+        expect(out).toContain('let mut line: Option<String> = ');
+        expect(out).toContain('serde_json::from_str::<serde_json::Value>(__s).ok()).map(|__j| Value::from_json(&__j)).unwrap_or(Value::Null)');
+        expect(out).not.toContain('json_parse(&line)');
+    });
+    test('negative: the ws tier keeps the helper (no serde_json in that crate)', () => {
+        const out = emit('ts/src/pro/venue.ts', body);
+        expect(out).not.toContain('serde_json::from_str');
+    });
+});

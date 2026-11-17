@@ -5243,7 +5243,7 @@ export class RustTranspiler extends BaseTranspiler {
                 boxed++;
                 if (form === 'err' ? !this.rustErrMsgMoves(n, declaration) : !(isReturnStatement(n.parent) || this.rustLocalLastUse(n, declaration))) copied++;
             } else if (form !== undefined && !this.rustIdentifierIsPropertyName(n)) nativeUses++;
-            if (form === 'test' || form === 'cond' || form === 'concat' || form === 'native' || form === 'targ' || form === 'lwrite' || form === 'okey' || form === 'fin' || form === 'frd' || form === 'fok' || form === 'kin' || form === 'nkey' || form === 'ukey' || form === 'parg' || form === 'dkey' || form === 'bkey' || (form === 'key' && this.rustOkeyLocal(n) && this.rustElemInsertKey(n))
+            if (form === 'test' || form === 'cond' || form === 'concat' || form === 'native' || form === 'targ' || form === 'lwrite' || form === 'okey' || form === 'fin' || form === 'frd' || form === 'fok' || form === 'kin' || form === 'nkey' || form === 'ukey' || form === 'parg' || form === 'dkey' || form === 'bkey' || form === 'jparse' || (form === 'key' && this.rustOkeyLocal(n) && this.rustElemInsertKey(n))
                 // ral-63k: the last key of a nested write on a plain-Dict parameter is the native insert's typed key text
                 || (form === 'mkey' && this.rust63kDictParamNestedKey(n))) typedUses++;
             if (form === 'xbox' || form === 'native' || form === 'targ' || form === 'err') expressionUses = true;
@@ -7077,6 +7077,23 @@ export class RustTranspiler extends BaseTranspiler {
         return foreign;
     }
 
+    /** ral-90ra R2: `n` is the whole single argument of `JSON.parse (n)` in a non-test source outside the ws tier (only the
+     *  ccxt-base crate declares serde_json). */
+    rust90raJsonParseArg(n: any): boolean {
+        const call: any = n?.parent;
+        if (!isIdentifier(n) || call === undefined || !isCallExpression(call) || call.arguments.length !== 1 || call.arguments[0] !== n) return false;
+        const callee: any = call.expression;
+        if (!isPropertyAccessExpression(callee) || !isIdentifier(callee.expression) || String(callee.expression.text) !== 'JSON' || String(callee.name.text) !== 'parse') return false;
+        const file = String(n.getSourceFile().fileName);
+        return !this.rustTestTierSource(n) && !/[\\/]pro[\\/]/.test(file);
+    }
+
+    /** ral-90ra R2: `json_parse(&Value)` for an `Option<String>` operand without the box: a `Str` parses with serde_json and
+     *  converts through `Value::from_json` (Null on a parse error), `None` (the boxed `Null`) answers `Null`, as the helper did. */
+    rust90raJsonParseText(name: string): string {
+        return `${name}.as_deref().and_then(|__s| serde_json::from_str::<serde_json::Value>(__s).ok()).map(|__j| Value::from_json(&__j)).unwrap_or(Value::Null)`;
+    }
+
     /** Some statement of the parameter's function assigns the parameter itself. */
     rustParamWritten(param: any): boolean {
         if (!isIdentifier(param.name)) return true;
@@ -8697,6 +8714,8 @@ export class RustTranspiler extends BaseTranspiler {
         // ral-53e: an int / Option<i64> local keying a plain element read `xs[k]` boxes there (`Value::from(k)`: the Int / Null the `Value` held)
         if ((kind === 'int' || kind === 'oint') && this.rust53eElemReadKey(n)) return 'box';
         if ((kind === 'str' || kind === 'ostr') && this.rustWsCacheMapKeyUse(n)) return 'fin';
+        // ral-90ra R2: the one argument of `JSON.parse (x)` parses the string in place (rust90raJsonParseText)
+        if (kind === 'ostr' && this.rust90raJsonParseArg(n)) return 'jparse';
         // ral-68h: the receiver of `x.padStart|padEnd (w, c)` at its last use boxes there (`&Value::from(x)`: the Str / Null
         // the `Value` local held, moved); the runtime pad helper it is handed to is unchanged
         if ((kind === 'str' || kind === 'ostr') && this.rust68hPadReceiver(n) && this.rustLocalLastUse(n, this.rustDeclaredNode(n))) return 'box';
@@ -20852,6 +20871,8 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     printJsonParseCall(node, identation, parsedArg = undefined) {
+        const arg: any = node.arguments?.[0];
+        if (arg !== undefined && isIdentifier(arg) && this.rustScalarUseForms.get(arg) === 'jparse' && this.rustScalarLocalOf(arg)?.kind === 'ostr') return this.rust90raJsonParseText(super.printIdentifier(arg));
         return `json_parse(&${parsedArg})`;
     }
 
