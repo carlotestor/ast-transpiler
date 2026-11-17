@@ -37150,7 +37150,7 @@ export class RustTranspiler extends BaseTranspiler {
             if (optional && args[at] === undefined) continue;
             const argType: any = args[at] === undefined ? undefined : this.typeOfNodeIfAny(args[at]);
             if ((argType === undefined || (argType.flags & (TypeFlags.Any | TypeFlags.Unknown)) !== 0) && !this.rustWsUrlReadIdent(args[at])) return undefined;
-            if (!this.rustVenueStrSimpleArg(args[at]) && !(rustType === 'bool' && this.rustVenueNegatedArg(args[at]))) return undefined;
+            if (!this.rustVenueStrSimpleArg(args[at]) && !(rustType === 'bool' && this.rustVenueNegatedArg(args[at])) && !(rustType.includes('str') && this.rustVenueStrCastOperand(args[at]) !== undefined)) return undefined;
             if (!this.rustVenueScalarArgExact(args[at], rustType)) return undefined;
             // an arithmetic operand in the same call prints a long numeric match: keep its line short
             if (!rustType.includes('str') && args.some((a: any) => this.rustVenueArithmeticArg(a))) return undefined;
@@ -37493,6 +37493,18 @@ export class RustTranspiler extends BaseTranspiler {
                 || (isPropertyAccessExpression(this.unwrapParens(a)) && this.unwrapParens(a).expression.kind === SyntaxKind.ThisKeyword));
     }
 
+    /** `(x as string)` over a simple operand the checker already types `string` / `Str`: a string slot takes the
+     *  operand as it is (the cast changes no value), so the caller converts it once like a bare `x`. */
+    rustVenueStrCastOperand(arg: any): any {
+        const inner: any = arg === undefined ? undefined : this.unwrapParens(arg);
+        if (inner === undefined || !isAsExpression(inner) || inner.type?.kind !== SyntaxKind.StringKeyword) return undefined;
+        const operand: any = this.unwrapParens(inner.expression);
+        if (!this.rustVenueStrSimpleArg(operand)) return undefined;
+        const type: any = this.typeOfNodeIfAny(operand);
+        const kind = type === undefined ? undefined : this.rustVenueScalarTypeOf(type, undefined);
+        return kind === '&str' || kind === 'Option<&str>' ? operand : undefined;
+    }
+
     /** The argument node lands in a per-venue string slot of its call. */
     rustVenueStrArgSlot(arg: any): boolean {
         const call: any = arg?.parent;
@@ -37503,6 +37515,8 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** Argument text for a per-venue string slot: a typed local or literal natively, any other value read once. */
     rustVenueStrArgText(arg: any, type: string, identation: number): string {
+        const castOperand: any = this.rustVenueStrCastOperand(arg);
+        if (castOperand !== undefined && (type === '&str' || type === 'Option<&str>')) return this.rustVenueStrArgText(castOperand, type, identation);
         const local = this.rustScalarTypedArgText(arg, type);
         // the same call also takes the local by value: borrow from a copy so the move stays legal
         // wg: a borrowed element (`Option<&str>`) is Copy: no clone
