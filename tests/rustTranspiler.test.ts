@@ -25243,3 +25243,25 @@ describe('ral-90rg R2b: an Int-defaulted safeNumber read only as an f64', () => 
         expect(out).toMatch(/let mut kept: Value = /);
     });
 });
+
+describe('ral-90rg R2: a safeCurrencyCode local strictly compared with a string Value partner', () => {
+    test('parsedCurrency compared with a market field is an Option<String> compared through as_deref', () => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-90rg-r2-'));
+        const files: Record<string, string> = {
+            'ts/src/base/Exchange.ts': "export type Str = string | undefined;\nexport interface Info { base: string; [key: string]: any }\nexport default class Exchange {\n    info (o: any): Info { return o; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeCurrencyCode (currencyId: Str, currency: any = undefined): Str { return currencyId; }\n}\n",
+            'ts/src/venue.ts': "import Exchange from './base/Exchange.js';\nimport type { Info } from './base/Exchange.js';\nexport default class venue extends Exchange {\n"
+                + "    side (position: any, base: string) {\n        let side = 'net';\n        const posCcy = this.safeString (position, 'posCcy');\n        const parsedCurrency = this.safeCurrencyCode (posCcy);\n        if (parsedCurrency !== undefined) {\n            const info: Info = this.info (position);\n            side = (info['base'] === parsedCurrency) ? 'long' : 'short';\n        }\n        return side;\n    }\n"
+                + "    kept (position: any) {\n        const code = this.safeCurrencyCode (this.safeString (position, 'c'));\n        return { 'code': code };\n    }\n}\n",
+        };
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        t.transpileRustByPath(path.join (root, 'ts/src/base/Exchange.ts'));
+        const out = t.transpileRustByPath(path.join (root, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut parsedCurrency: Option<String> = ');
+        expect(out).toContain('parsedCurrency.as_deref()');
+        expect(out).not.toContain('let mut parsedCurrency: Value');
+    });
+});

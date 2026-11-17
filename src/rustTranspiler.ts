@@ -8691,6 +8691,10 @@ export class RustTranspiler extends BaseTranspiler {
         if (isBinaryExpression(parent) && this.isEqualityOp(parent.operatorToken.kind)) {
             const other = parent.left === n ? parent.right : parent.left;
             if (this.rustScalarLiteralTest(kind, other) !== undefined) return 'test';
+            // ral-90rg R2: a never-written safeCurrencyCode local strictly compared with a checker-string `Value` partner: the
+            // ral-70f compare arm prints `x.as_deref() == p.as_str()` (a non-`Str` partner and `None` never meet, as is_equal)
+            if (kind === 'ostr' && this.rust90rgCurrencyCodeLocal(this.rustDeclaredNode(n)) && (parent.operatorToken.kind === SyntaxKind.EqualsEqualsEqualsToken || parent.operatorToken.kind === SyntaxKind.ExclamationEqualsEqualsToken)
+                && this.primitiveKindOfType(this.typeOfNodeIfAny(this.unwrapParens(other))) === 'string' && this.printsValueExpression(this.unwrapParens(other)) && this.rustScalarLocalOf(this.unwrapParens(other)) === undefined) return 'native';
         }
         if ((kind === 'bool' || kind === 'obool') && this.rustIdentifierUseIsCondition(n)) return 'cond';
         // ral-46d: an `Option<bool>` leaf of a logical the printer emits as a native `bool` (a narrowed bool local's initializer,
@@ -9819,6 +9823,16 @@ export class RustTranspiler extends BaseTranspiler {
         if (init.arguments.length !== 2 || (name !== 'safeString' && name !== 'safeStringLower' && name !== 'safeStringUpper')) return false;
         if (name !== 'safeString' && this.rustOptReaderName(init)?.key === undefined) return false;
         // never written after its declaration (an assigned local was never narrowed by the pass)
+        return !this.rust70fWritten(declaration);
+    }
+
+    /** ral-90rg R2: a `const x = this.safeCurrencyCode (id)` (one argument, the base method: printed `-> Option<String>`) that is
+     *  never written after its declaration. */
+    rust90rgCurrencyCodeLocal(declaration: Node): boolean {
+        if (declaration === undefined || !isVariableDeclaration(declaration) || this.rustTestTierSource(declaration)) return false;
+        const init: Node = this.unwrapParens(declaration.initializer);
+        if (!this.rustUdReaderStr(init) || !isCallExpression(init) || !isPropertyAccessExpression(init.expression)
+            || String(init.expression.name.text) !== 'safeCurrencyCode' || init.arguments.length !== 1) return false;
         return !this.rust70fWritten(declaration);
     }
 
@@ -12171,7 +12185,7 @@ export class RustTranspiler extends BaseTranspiler {
         // the comparison ccxt's string-equality pass printed from the boxed pair (a non-`Str` partner and `None` never meet)
         if ((lk === undefined) !== (rk === undefined) && equality && partnerTest === undefined && (op === SyntaxKind.EqualsEqualsEqualsToken || op === SyntaxKind.ExclamationEqualsEqualsToken)) {
             const [ typed, other, k ] = lk === undefined ? [ right, left, rk ] : [ left, right, lk ];
-            if (k === 'ostr' && isIdentifier(typed) && this.rust70fReaderLocal(this.rustDeclaredNode(typed), true) && this.primitiveKindOfType(this.typeOfNodeIfAny(other)) === 'string' && this.printsValueExpression(other)) {
+            if (k === 'ostr' && isIdentifier(typed) && (this.rust70fReaderLocal(this.rustDeclaredNode(typed), true) || this.rust90rgCurrencyCodeLocal(this.rustDeclaredNode(typed))) && this.primitiveKindOfType(this.typeOfNodeIfAny(other)) === 'string' && this.printsValueExpression(other)) {
                 if (dry) return '_';
                 const mine = `${super.printIdentifier(typed)}.as_deref()`;
                 const theirs = `${this.printNode(other, 0).trim()}.as_str()`;
