@@ -24770,3 +24770,22 @@ describe('ral-87rg R4: sortBy of a base aggregate result is a list', () => {
         expect(out).toMatch(/let mut other: Value = /);
     });
 });
+
+describe('ral-87rg R5: keysort of a typed IndexMap local answers a map', () => {
+    test('`const s = this.keysort (m)` over a dict-bearer local is a Dict; keysort of an any stays boxed', () => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-87rg5-'));
+        const files: Record<string, string> = {
+            'ts/src/base/Exchange.ts': "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    keysort (x: Dict, out = {}): Dict { return x; }\n    omit (x: any, ...args: any[]): any { return x; }\n    urlencode (x: any): string { return ''; }\n    safeString (o: any, k: any): string { return o; }\n    hold (x: any): any { return x; }\n}\n",
+            'ts/src/venue.ts': "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    m (path: string, raw: any, params: Dict = {}) {\n        const base: Dict = this.keysort (params);\n        if (Object.keys (base).length > 0) {\n            this.hold (this.urlencode (base));\n        }\n        base['c'] = this.safeString (raw, 'c');\n        const signed: Dict = this.keysort (base);\n        const q = this.urlencode (signed);\n        const other = this.keysort (raw);\n        const r = this.urlencode (other);\n        return this.hold ([ q, r, Object.keys (signed).length ]);\n    }\n}\n",
+        };
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        t.transpileRustByPath(path.join (root, 'ts/src/base/Exchange.ts'));
+        const out = t.transpileRustByPath(path.join (root, 'ts/src/venue.ts')).content;
+        expect(out).toMatch(/let mut signed: crate::value::Dict = /);
+        expect(out).toMatch(/let mut other: Value = /);
+    });
+});

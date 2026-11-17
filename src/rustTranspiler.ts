@@ -26274,7 +26274,9 @@ export class RustTranspiler extends BaseTranspiler {
         if (!isIdentifier(head)) return false;
         const d: any = this.rustDeclarationOfIdentifier(head);
         if (d === undefined || d === head || d.name === head) return this.rustProvenMapParam(d);
-        return this.rustProvenMapParam(d) || this.rustHandedDictLocal(d) || (this.rustBorrowedLocalKind(d) === 'dict' && !this.rustOptContainerLocals.has(d));
+        // ral-87rg R5: or a never-reassigned local the dict-bearer rule prints `indexmap::IndexMap` (handed back as `Value::Map(x)`)
+        const typedMap = isVariableDeclaration(d) && !this.rustLocalIsReassigned(d, String(head.text)) && this.rustDictLocalIsTyped(d);
+        return this.rustProvenMapParam(d) || this.rustHandedDictLocal(d) || (this.rustBorrowedLocalKind(d) === 'dict' && !this.rustOptContainerLocals.has(d)) || typedMap;
     }
 
     /** ral-50a: `t[1]` read off a `const t = this.handle*AndParams (m, ..)` tuple (base helper, PARAMS_SLOT_ARG) whose params
