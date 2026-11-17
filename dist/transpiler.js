@@ -15550,6 +15550,7 @@ function nilDeclaredReadIsSafe(goTranspiler, node) {
   }
   return false;
 }
+var CCXT_GO_90_POINTER_JOINS = /* @__PURE__ */ new WeakMap();
 function ccxtGoNilDeclaredJoinType(goTranspiler, declaration) {
   if (declaration === void 0) {
     return void 0;
@@ -15575,6 +15576,10 @@ function ccxtGoNilDeclaredJoinType(goTranspiler, declaration) {
   let parsedNumberWrite = false;
   let elementWriteRead = false;
   let stringOnlyRead = false;
+  let dateArgumentRead = false;
+  let literalCompareRead = false;
+  let stringPtrArgumentRead = false;
+  let nilTestRead = false;
   const visit = (n) => {
     if (readUnproven) {
       return;
@@ -15594,10 +15599,18 @@ function ccxtGoNilDeclaredJoinType(goTranspiler, declaration) {
       } else if (!nilDeclaredReadIsSafe(goTranspiler, n)) {
         if (ccxtGoNilDeclaredStringArgumentRead(goTranspiler, n)) {
           stringOnlyRead = true;
+        } else if (ccxtGo90DateFormatterArgument(goTranspiler, n)) {
+          dateArgumentRead = true;
+        } else if (ccxtGo90StringLiteralCompare(n)) {
+          literalCompareRead = true;
+        } else if (ccxtGo90StringPtrArgument(goTranspiler, n)) {
+          stringPtrArgumentRead = true;
         } else {
           readUnproven = true;
           return;
         }
+      } else if (ccxtGo90IsNilTest(n)) {
+        nilTestRead = true;
       } else if (parent?.kind === ts.SyntaxKind.BinaryExpression && parent.right === n && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
         elementWriteRead = true;
       }
@@ -15617,8 +15630,20 @@ function ccxtGoNilDeclaredJoinType(goTranspiler, declaration) {
   if (stringOnlyRead && joinType !== "*string") {
     return void 0;
   }
+  if (dateArgumentRead && (joinType !== "*int64" || !nilTestRead)) {
+    return void 0;
+  }
+  if (literalCompareRead && joinType !== "*string") {
+    return void 0;
+  }
+  if (stringPtrArgumentRead && (joinType !== "*string" || !(nilTestRead || literalCompareRead))) {
+    return void 0;
+  }
   if (goTranspiler.goTypeNameIsShadowed(scope, joinType) || !goTranspiler.goLocalIsSafeToType(scope, declaration, varName, joinType)) {
     return void 0;
+  }
+  if (dateArgumentRead || literalCompareRead || stringPtrArgumentRead) {
+    CCXT_GO_90_POINTER_JOINS.set(declaration, joinType);
   }
   return joinType;
 }
@@ -43474,6 +43499,98 @@ GoTranspiler.prototype.goNativeCompoundAssignment = function(op, leftNode, leftT
     return void 0;
   }
   return `${leftText.trim()} ${op === SyntaxKind5.PlusEqualsToken ? "+=" : "-="} ${rightText.trim()}`;
+};
+var CCXT_GO_90_DATE_FORMATTERS = ["yymmdd", "ymd", "yyyymmdd", "ymdhms"];
+var CCXT_GO_90_DATE_FORMATTER_FILE = /[\\/]base[\\/]functions[\\/]time\.ts$/;
+function ccxtGo90DateFormatterArgument(goTranspiler, node) {
+  const call = node?.parent;
+  if (call?.kind !== ts.SyntaxKind.CallExpression || call.arguments?.[0] !== node) {
+    return false;
+  }
+  const callee = call.expression;
+  if (callee?.kind !== ts.SyntaxKind.PropertyAccessExpression || callee.expression?.kind !== ts.SyntaxKind.ThisKeyword || !CCXT_GO_90_DATE_FORMATTERS.includes(String(callee.name?.text ?? ""))) {
+    return false;
+  }
+  let fileName = "";
+  try {
+    fileName = goTranspiler.getChecker().getResolvedSignature(call)?.declaration?.resolve()?.getSourceFile?.()?.fileName ?? "";
+  } catch (e) {
+    return false;
+  }
+  return CCXT_GO_90_DATE_FORMATTER_FILE.test(fileName);
+}
+function ccxtGo90IsNilTest(node) {
+  const parent = node?.parent;
+  if (parent?.kind !== ts.SyntaxKind.BinaryExpression || !COMPARISON_TOKENS.includes(parent.operatorToken.kind)) {
+    return false;
+  }
+  return isUndefinedLiteral(parent.left === node ? parent.right : parent.left);
+}
+function ccxtGo90StringLiteralCompare(node) {
+  let child = node;
+  while (child.parent?.kind === ts.SyntaxKind.ParenthesizedExpression) {
+    child = child.parent;
+  }
+  const parent = child.parent;
+  if (parent?.kind !== ts.SyntaxKind.BinaryExpression || !COMPARISON_TOKENS.includes(parent.operatorToken.kind)) {
+    return false;
+  }
+  const op = parent.operatorToken.kind;
+  if (![ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsEqualsToken, ts.SyntaxKind.EqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsToken].includes(op)) {
+    return false;
+  }
+  const other = parent.left === child ? parent.right : parent.left;
+  return other?.kind === ts.SyntaxKind.StringLiteral || other?.kind === ts.SyntaxKind.NoSubstitutionTemplateLiteral;
+}
+var CCXT_GO_90_STRING_PTR_SLOTS = {
+  "networkIdToCode": [0, 1],
+  "throwExactlyMatchedException": [1],
+  "throwBroadlyMatchedException": [1]
+};
+function ccxtGo90StringPtrArgument(goTranspiler, node) {
+  const call = node?.parent;
+  if (call?.kind !== ts.SyntaxKind.CallExpression || call.expression === node) {
+    return false;
+  }
+  const callee = call.expression;
+  const name = String(callee?.name?.text ?? "");
+  const slots = CCXT_GO_90_STRING_PTR_SLOTS[name];
+  if (callee?.kind !== ts.SyntaxKind.PropertyAccessExpression || callee.expression?.kind !== ts.SyntaxKind.ThisKeyword || !Array.isArray(slots) || !slots.includes(call.arguments.indexOf(node))) {
+    return false;
+  }
+  let declaration;
+  try {
+    declaration = goTranspiler.getChecker().getResolvedSignature(call)?.declaration?.resolve();
+  } catch (e) {
+    return false;
+  }
+  const fileName = declaration?.getSourceFile?.()?.fileName ?? "";
+  if (CCXT_GO_ELEMENT_1_BASE_FILE.test(fileName)) {
+    return true;
+  }
+  return name === "networkIdToCode" && /[\\/]htx\.ts$/.test(fileName);
+}
+var CCXT_GO_90_JOIN_PROBED = /* @__PURE__ */ new WeakSet();
+var goDeclaredTypeOfIdentifier90 = GoTranspiler.prototype.goDeclaredTypeOfIdentifier;
+GoTranspiler.prototype.goDeclaredTypeOfIdentifier = function(node) {
+  const known = goDeclaredTypeOfIdentifier90.call(this, node);
+  if (known !== void 0 || node?.kind !== ts.SyntaxKind.Identifier) {
+    return known;
+  }
+  let declaration;
+  try {
+    declaration = this.checkerOrUndefined?.()?.getSymbolAtLocation(node)?.valueDeclaration?.resolve();
+  } catch (e) {
+    return known;
+  }
+  if (declaration?.kind !== ts.SyntaxKind.VariableDeclaration || !ts.isIdentifier(declaration.name) || !isNilDeclaredInitializer(declaration.initializer) || declaration.parent?.parent?.kind !== ts.SyntaxKind.VariableStatement || declaration.parent.declarations.length !== 1) {
+    return known;
+  }
+  if (!CCXT_GO_90_JOIN_PROBED.has(declaration)) {
+    CCXT_GO_90_JOIN_PROBED.add(declaration);
+    ccxtGoNilDeclaredJoinType(this, declaration);
+  }
+  return CCXT_GO_90_POINTER_JOINS.get(declaration);
 };
 
 // src/javaTranspiler.ts
