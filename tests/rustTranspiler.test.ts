@@ -24752,3 +24752,18 @@ describe('ral-87rd R2: a literal-key delete on a defaulted safeDict copy of a lo
         expect(out).not.toContain('let mut orderParams: crate::value::Dict');
     });
 });
+describe('ral-87rd R1 fix: a pushed safeList local with a same-named sibling binding stays Value', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    safeList (o: any, k: any, d: any = undefined): any[] { return o; }\n    keep (o: any): any { return o; }\n}\n";
+    test('limitless fetchTickers: the read-only `grouped` keeps its own form', () => {
+        const dir = path.join (rustFixtureRoot, 'ral-87rd-r1s');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        const body = "    m (by: Dict, keys: string[], o: Dict) {\n        for (let i = 0; i < keys.length; i++) {\n            const k = keys[i];\n            const grouped = this.safeList (by, k, []);\n            grouped.push (o);\n            by[k] = grouped;\n        }\n        for (let i = 0; i < keys.length; i++) {\n            const grouped = this.safeList (by, keys[i], []);\n            for (let j = 0; j < grouped.length; j++) {\n                this.keep (grouped[j]);\n            }\n        }\n    }\n";
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        transpiler.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts'));
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        // two bindings named `grouped` in one function: the pushed one stays boxed (ccxt build/ proves lengths by name)
+        expect(out).not.toContain('let mut grouped: crate::value::List = self.safeList(by.clone(), k.clone()');
+        expect(out).toContain('if let Value::Arr(__a) = &mut grouped');
+    });
+});

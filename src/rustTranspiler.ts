@@ -27307,17 +27307,22 @@ export class RustTranspiler extends BaseTranspiler {
         return declaration !== undefined && RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile().fileName));
     }
 
-    /** ral-87rd R1: some statement `name.push (v)` on this very binding inside its own function. */
+    /** ral-87rd R1: some statement `name.push (v)` on this very binding inside its own function, and no other binding of the same
+     *  name in that function (ccxt build/'s container-op prover reads the function text by name: a typed sibling `let` would make it
+     *  drop a native `len()` it proves for the other, still boxed, binding). */
     rust87rdPushedLocal(declaration: VariableDeclaration, name: string): boolean {
         const fn: Node | undefined = this.rustEnclosingFunction(declaration);
         if (fn === undefined || isSourceFile(fn)) return false;
+        let pushed = false;
         for (const n of this.rustScopeNameNodes(fn, name)) {
+            if (!isIdentifier(n)) continue;
             const up: Node | undefined = n.parent;
-            if (up !== undefined && isIdentifier(n) && isPropertyAccessExpression(up) && up.expression === n && String(up.name.text) === 'push'
+            if (up !== undefined && n !== declaration.name && (isVariableDeclaration(up) || isParameterDeclaration(up) || isBindingElement(up)) && up.name === n) return false;
+            if (up !== undefined && isPropertyAccessExpression(up) && up.expression === n && String(up.name.text) === 'push'
                 && isCallExpression(up.parent) && up.parent.expression === up && up.parent.parent?.kind === SyntaxKind.ExpressionStatement
-                && this.rustIdentifierRefersToDeclaration(n, declaration)) return true;
+                && this.rustDeclarationOfIdentifier(n) === declaration) pushed = true;
         }
-        return false;
+        return pushed;
     }
 
     rustLentListLocalUncached(declaration: any): boolean {
