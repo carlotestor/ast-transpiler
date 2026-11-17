@@ -45800,6 +45800,78 @@ GoTranspiler.prototype.printReturnStatement = function(node, identation) {
   }
   return printReturnStatementBaseTypedVenue.call(this, node, identation);
 };
+GoTranspiler.prototype.goOrderBookCacheLocal = function(declaration) {
+  if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier || this.goOrderBookCacheAccessor(declaration.initializer) === void 0) {
+    return false;
+  }
+  if (this.goOrderBookCacheLocalCache === void 0) {
+    this.goOrderBookCacheLocalCache = /* @__PURE__ */ new WeakMap();
+  }
+  if (this.goOrderBookCacheLocalCache.has(declaration)) {
+    return this.goOrderBookCacheLocalCache.get(declaration);
+  }
+  this.goOrderBookCacheLocalCache.set(declaration, false);
+  const checker = this.checkerOrUndefined();
+  const own = checker?.getSymbolAtLocation(declaration.name);
+  const scope = this.goEnclosingFunction(declaration);
+  const name = declaration.name.text;
+  const verdict = own !== void 0 && scope !== void 0 && !this.hasNodeWhere(scope, (n) => {
+    if (n.kind !== SyntaxKind5.Identifier || n.text !== name || n === declaration.name) {
+      return false;
+    }
+    const parent = n.parent;
+    if ((parent?.kind === SyntaxKind5.PropertyAccessExpression || parent?.kind === SyntaxKind5.PropertyAssignment) && parent.name === n) {
+      return false;
+    }
+    if (checker.getSymbolAtLocation(n) !== own) {
+      return true;
+    }
+    if (parent?.kind === SyntaxKind5.PropertyAccessExpression && parent.expression === n && parent.name?.text === "length" && !this.isGoElementAccessAssignmentTarget(parent)) {
+      const up = parent.parent;
+      return up?.kind === SyntaxKind5.BinaryExpression && up.left === parent && up.operatorToken.kind >= SyntaxKind5.FirstAssignment && up.operatorToken.kind <= SyntaxKind5.LastAssignment;
+    }
+    if (parent?.kind === SyntaxKind5.ElementAccessExpression && parent.expression === n) {
+      return this.isGoElementAccessAssignmentTarget(parent);
+    }
+    if (parent?.kind === SyntaxKind5.CallExpression) {
+      const call = parent;
+      const callee = call.expression;
+      return !(call.arguments[0] === n && callee?.kind === SyntaxKind5.PropertyAccessExpression && callee.expression?.kind === SyntaxKind5.ThisKeyword && /^safe(Value|Dict|Integer|String|Number)$/.test(callee.name?.text ?? ""));
+    }
+    return true;
+  });
+  this.goOrderBookCacheLocalCache.set(declaration, verdict);
+  return verdict;
+};
+{
+  const goTypeOfInitializerOrderBookCache = GoTranspiler.prototype.goTypeOfInitializer;
+  GoTranspiler.prototype.goTypeOfInitializer = function(initializer, printedValue) {
+    const declaration = initializer?.parent;
+    if (declaration?.kind === SyntaxKind5.VariableDeclaration && declaration.initializer === initializer && this.goOrderBookCacheLocal(declaration)) {
+      return "[]any";
+    }
+    return goTypeOfInitializerOrderBookCache.call(this, initializer, printedValue);
+  };
+  const goListElementsArePointerFreeOrderBookCache = GoTranspiler.prototype.goListElementsArePointerFree;
+  GoTranspiler.prototype.goListElementsArePointerFree = function(list, depth = 0) {
+    if (list?.kind === SyntaxKind5.Identifier) {
+      const declaration = this.checkerOrUndefined()?.getSymbolAtLocation(list)?.valueDeclaration?.resolve?.();
+      if (this.goOrderBookCacheLocal(declaration)) {
+        return true;
+      }
+    }
+    return goListElementsArePointerFreeOrderBookCache.call(this, list, depth);
+  };
+  const printArrayPushCallOrderBookCache = GoTranspiler.prototype.printArrayPushCall;
+  GoTranspiler.prototype.printArrayPushCall = function(node, identation, name = void 0, parsedArg = void 0) {
+    const target = node.expression?.expression;
+    const bookCache = this.goOrderBookCacheAccessor(target);
+    if (bookCache !== void 0 && bookCache.endsWith(".GetCache()")) {
+      return `${bookCache.slice(0, -".GetCache()".length)}.AppendCache(${this.goPrintCallArgument(node.arguments?.[0], parsedArg)})`;
+    }
+    return printArrayPushCallOrderBookCache.call(this, node, identation, name, parsedArg);
+  };
+}
 
 // src/javaTranspiler.ts
 init_esm_shims();

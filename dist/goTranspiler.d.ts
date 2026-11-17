@@ -2059,3 +2059,7 @@ export interface GoTranspiler {
     go92g7HasNumericUse(declaration: any): boolean;
     go92g7IsBaseSum(call: any): boolean;
 }
+export interface GoTranspiler {
+    goOrderBookCacheLocal(declaration: any): boolean;
+    goOrderBookCacheLocalCache: WeakMap<object, boolean>;
+}
