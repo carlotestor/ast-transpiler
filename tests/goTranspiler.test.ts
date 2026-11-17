@@ -15738,3 +15738,65 @@ describe('ral-87g8 R4 int counters compared against an Int bound', () => {
         expect(out).toContain('var errors any = 0');
     });
 });
+
+function goTranspile90g8(source: string): string {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ral-90g8-'));
+    fs.mkdirSync(path.join(dir, 'ts', 'src', 'prediction'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'ts', 'src', 'prediction', 'ex.ts'), source);
+    const cwd = process.cwd();
+    try {
+        process.chdir(dir);
+        const x = new Transpiler({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        installCcxtGoLocalTypes(x.goTranspiler);
+        return x.transpileGoByPath('ts/src/prediction/ex.ts').content;
+    } finally {
+        process.chdir(cwd);
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+}
+
+describe('ral-90g8 R1 map-producer locals read through a cast and handed on past a nil throw', () => {
+    const head = 'interface MarketInterface { id: string; symbol: string; }\n'
+        + 'type Market = MarketInterface | undefined;\n'
+        + 'type Dict = { [key: string]: unknown };\n'
+        + 'export class ex {\n'
+        + '    markets: Dict = {};\n'
+        + '    keep (m: Dict) { return m; }\n'
+        + '    parseMarket (m: string): Market { return { id: m, symbol: m }; }\n';
+    test('a guarded parseMarket local is typed, its nil test and cast element read go native', () => {
+        const out = goTranspile90g8(head
+            + '    f (raw: string) {\n'
+            + '        const parsed = this.parseMarket (raw);\n'
+            + '        if (parsed === undefined) {\n'
+            + '            throw new Error (\'none\');\n'
+            + '        }\n'
+            + '        this.markets[(parsed as Dict)[\'id\']] = parsed;\n'
+            + '        this.keep (parsed);\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('var parsed map[string]any = this.ParseMarket(raw)');
+        expect(out).toContain('if parsed == nil {');
+        expect(out).toContain('parsed["id"]');
+    });
+    test('without the nil throw a hand-off keeps the box', () => {
+        const out = goTranspile90g8(head
+            + '    f (raw: string) {\n'
+            + '        const parsed = this.parseMarket (raw);\n'
+            + '        this.markets[(parsed as Dict)[\'id\']] = parsed;\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('var parsed any = this.ParseMarket(raw)');
+    });
+    test('a let local with the same guard keeps the box', () => {
+        const out = goTranspile90g8(head
+            + '    f (raw: string) {\n'
+            + '        let parsed = this.parseMarket (raw);\n'
+            + '        if (parsed === undefined) {\n'
+            + '            throw new Error (\'none\');\n'
+            + '        }\n'
+            + '        this.markets[(parsed as Dict)[\'id\']] = parsed;\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('var parsed any = this.ParseMarket(raw)');
+    });
+});

@@ -36372,3 +36372,90 @@ GoTranspiler.prototype.goNativeCompoundAssignment = function (op, leftNode, left
 };
 // ===== ral-87g8 R2 (end) =====
 
+
+// ===== ral-90g8 R1 (begin): `(x as Dict)[k]` reads of a map-producer local =====
+// A parseMarket-style local whose callee already prints `map[string]any` (keepsMap) was refused at
+// `(parsed as Dict)['market']`: the cast is TypeScript-only and prints nothing in Go, so the element
+// read under it is the same native map read as `parsed['market']`. Admitted only as a READ: the
+// element access is not an assignment target, a delete or an increment operand.
+function go90g8CastElementRead(node): boolean {
+    let current = node;
+    let parent = current.parent;
+    while ((parent?.kind === SyntaxKind.AsExpression) || (parent?.kind === SyntaxKind.ParenthesizedExpression)
+        || (parent?.kind === SyntaxKind.NonNullExpression)) {
+        if ((parent.kind === SyntaxKind.AsExpression) && (parent.expression !== current)) {
+            return false;
+        }
+        current = parent;
+        parent = current.parent;
+    }
+    if ((current === node) || (parent?.kind !== SyntaxKind.ElementAccessExpression) || (parent.expression !== current)) {
+        return false;
+    }
+    const above = parent.parent;
+    if ((above?.kind === SyntaxKind.BinaryExpression) && (above.left === parent)
+        && (above.operatorToken.kind >= SyntaxKind.FirstAssignment) && (above.operatorToken.kind <= SyntaxKind.LastAssignment)) {
+        return false;
+    }
+    return (above?.kind !== SyntaxKind.DeleteExpression) && (above?.kind !== SyntaxKind.PostfixUnaryExpression)
+        && (above?.kind !== SyntaxKind.PrefixUnaryExpression);
+}
+// `if (x === undefined) { throw .. }` (no else) earlier in an enclosing block of the use, with x a
+// `const`: past that statement the map is never nil, so handing it on (a store, a push, a call
+// argument) carries the same non-nil map the box carried and a nil-typed map can never leak.
+function go90g8IsThrowBlock(statement): boolean {
+    if (statement?.kind === SyntaxKind.ThrowStatement) {
+        return true;
+    }
+    const last = (statement?.kind === SyntaxKind.Block) ? statement.statements[statement.statements.length - 1] : undefined;
+    return last?.kind === SyntaxKind.ThrowStatement;
+}
+function go90g8IsNilGuardOf(goTranspiler, statement, declaration): boolean {
+    if ((statement?.kind !== SyntaxKind.IfStatement) || (statement.elseStatement !== undefined) || !go90g8IsThrowBlock(statement.thenStatement)) {
+        return false;
+    }
+    let test = statement.expression;
+    while (test?.kind === SyntaxKind.ParenthesizedExpression) {
+        test = test.expression;
+    }
+    if ((test?.kind !== SyntaxKind.BinaryExpression)
+        || ((test.operatorToken.kind !== SyntaxKind.EqualsEqualsEqualsToken) && (test.operatorToken.kind !== SyntaxKind.EqualsEqualsToken))) {
+        return false;
+    }
+    const pairs = [ [ test.left, test.right ], [ test.right, test.left ] ];
+    return pairs.some(([ a, b ]) => (a?.kind === SyntaxKind.Identifier) && goTranspiler.goIsNilLiteral(b)
+        && goTranspiler.goIdentifierRefersToDeclaration(a, declaration));
+}
+function go90g8PastNilThrow(goTranspiler, node): boolean {
+    const declaration = goTranspiler.goDeclarationOfIdentifier(node);
+    const list = declaration?.parent;
+    if ((declaration === undefined) || (list?.kind !== SyntaxKind.VariableDeclarationList) || ((list.flags & 2) === 0)) {
+        return false; // NodeFlags.Const: a `let` could be re-written to undefined after the guard
+    }
+    let child = node;
+    for (let up = node.parent; up !== undefined; child = up, up = up.parent) {
+        if ((up.kind === SyntaxKind.FunctionExpression) || (up.kind === SyntaxKind.ArrowFunction) || (up.kind === SyntaxKind.MethodDeclaration)) {
+            return false;
+        }
+        if ((up.kind === SyntaxKind.Block) || (up.kind === SyntaxKind.SourceFile)) {
+            const index = up.statements.indexOf(child);
+            for (let i = 0; i < index; i++) {
+                if (go90g8IsNilGuardOf(goTranspiler, up.statements[i], declaration)) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+const goMarketUseReadsTheValueBase90g8 = GoTranspiler.prototype.goMarketUseReadsTheValue;
+GoTranspiler.prototype.goMarketUseReadsTheValue = function (node, throwingAccessor: boolean, keepsMap = false, handsOn = false): boolean {
+    if (goMarketUseReadsTheValueBase90g8.call(this, node, throwingAccessor, keepsMap, handsOn)) {
+        return true;
+    }
+    if (!keepsMap) {
+        return false;
+    }
+    return go90g8CastElementRead(node) || (this.goMarketUseHandsTheMapOn(node, node.parent) && go90g8PastNilThrow(this, node));
+};
+// ===== ral-90g8 R1 (end) =====
