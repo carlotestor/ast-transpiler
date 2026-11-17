@@ -17144,4 +17144,16 @@ describe('int literal seeds joined with int64 writes', () => {
             + '}\n');
         expect(out).toContain('var n any = 100');
     });
+    test('a nil-tested local keeps the box', () => {
+        const out = goTranspile87g8(head
+            + '    f (limit: any) {\n'
+            + '        let n = this.parseToInt (limit);\n'
+            + '        if (n === undefined) {\n'
+            + '            n = 100;\n'
+            + '        }\n'
+            + '        return n;\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('var n any = this.ParseToInt(limit)');
+    });
 });

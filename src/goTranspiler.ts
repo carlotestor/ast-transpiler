@@ -39190,7 +39190,15 @@ function pti93Int64Local (goTranspiler, declaration): boolean {
                     writes.push (parent.right);
                     return false;
                 }
-                return (op >= SyntaxKind.FirstAssignment) && (op <= SyntaxKind.LastAssignment);
+                if ((op >= SyntaxKind.FirstAssignment) && (op <= SyntaxKind.LastAssignment)) {
+                    return true;
+                }
+            }
+            // an int64 is never nil: a nil test on it would print the IsEqual helper
+            if (parent?.kind === SyntaxKind.BinaryExpression) {
+                const other = pti93Unwrap ((parent.left === n) ? parent.right : parent.left);
+                return (other?.kind === SyntaxKind.NullKeyword) || (other?.kind === SyntaxKind.UndefinedKeyword)
+                    || ((other?.kind === SyntaxKind.Identifier) && (other.getText () === 'undefined'));
             }
             return false;
         });
