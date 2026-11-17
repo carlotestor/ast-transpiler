@@ -4340,6 +4340,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     static rustWsPatternsMeet(a0: Array<string | null>, b0: Array<string | null>): boolean;
     /** The typed kind a resolved value passes as, or undefined. */
     rustWsResolvedKind(x: any): 'book' | 'cache' | 'dict' | 'list' | undefined;
+    /** ral-92rf R2: a resolved `d[k]` (or an unreassigned local bound to it) where `d` is a handler's own `{}` map local whose
+     *  every write is `d[x] = v` with v one resolved kind (cache or dict), read only by `d[..]` and one `Object.keys (d)`,
+     *  and `k` an element of that keys list: the element is present and holds that kind. Decided from the AST. */
+    rust92rfKeyedLocalElementKind(x: Node, depth?: number): 'cache' | 'dict' | undefined;
     /** ral-ye: a read of a plain base cache field the class keeps as a map, typed by the field's declaration:
      *  `this.F` whose declared type is a map (`balance: Dict`, `tickers: Dictionary<Ticker>`), or `this.F[k]` right
      *  after a statement of the same block (or an enclosing one) wrote `this.F[k] = v` with v a map (a declared record /
