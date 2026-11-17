@@ -45890,7 +45890,7 @@ GoTranspiler.prototype.goTypeOfInitializer = function(initializer, printedValue)
   const write = _optionalChain([initializer, 'optionalAccess', _9159 => _9159.parent]);
   if (_optionalChain([initializer, 'optionalAccess', _9160 => _9160.kind]) === _ast.SyntaxKind.CallExpression && _optionalChain([write, 'optionalAccess', _9161 => _9161.kind]) === _ast.SyntaxKind.BinaryExpression && write.right === initializer && write.operatorToken.kind === _ast.SyntaxKind.EqualsToken && _optionalChain([write, 'access', _9162 => _9162.left, 'optionalAccess', _9163 => _9163.kind]) === _ast.SyntaxKind.Identifier) {
     const self = _optionalChain([this, 'access', _9164 => _9164.checkerOrUndefined, 'call', _9165 => _9165(), 'optionalAccess', _9166 => _9166.getSymbolAtLocation, 'call', _9167 => _9167(write.left), 'optionalAccess', _9168 => _9168.valueDeclaration, 'optionalAccess', _9169 => _9169.resolve, 'call', _9170 => _9170()]);
-    if (self !== void 0 && (this.go92g7IsBaseSum(initializer) || this.go92g7MinMaxName(initializer) !== void 0) && !String(_nullishCoalesce(this.goDeclaredTypeOfIdentifier(write.left), () => ( ""))).startsWith("*") && this.go93g4PointerOperands(initializer, self) !== void 0) {
+    if (self !== void 0 && (this.go92g7IsBaseSum(initializer) || this.go92g7MinMaxName(initializer) !== void 0) && self.kind === _ast.SyntaxKind.VariableDeclaration && self.initializer !== void 0 && this.goTypeOfInitializer(self.initializer, this.printNode(self.initializer, 0)) === "int64" && this.go93g4PointerOperands(initializer, self) !== void 0) {
       return "int64";
     }
   }
