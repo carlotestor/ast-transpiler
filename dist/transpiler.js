@@ -45800,6 +45800,42 @@ GoTranspiler.prototype.printReturnStatement = function(node, identation) {
   }
   return printReturnStatementBaseTypedVenue.call(this, node, identation);
 };
+var goRequiredParameterNativeTypeAsyncStrPtr = GoTranspiler.prototype.goRequiredParameterNativeType;
+GoTranspiler.prototype.goRequiredParameterNativeType = function(fn, param, index) {
+  const answer = goRequiredParameterNativeTypeAsyncStrPtr.call(this, fn, param, index);
+  if (answer !== void 0 || !this.isAsyncFunction(fn) || param.type?.getText() !== "Str" || param.name?.kind !== SyntaxKind5.Identifier || this.goHasDynamicCallee(fn, fn.name.text)) {
+    return answer;
+  }
+  const sites = this.goSameFileCallsOf(fn, fn.name.text);
+  if (sites.length === 0) {
+    return answer;
+  }
+  let pointers = 0;
+  for (const site of sites) {
+    const arg = site.arguments?.[index];
+    if (arg === void 0 || arg.kind === SyntaxKind5.SpreadElement || site.runner !== void 0) {
+      return answer;
+    }
+    const printed = this.goPrintedArgType(arg);
+    if (printed === "*string") {
+      pointers++;
+    } else if (printed !== "string" || ccxtGoStringParamAddress(this, arg) === void 0) {
+      return answer;
+    }
+  }
+  const tree = this.goTsSrcTree(fn.getSourceFile());
+  if (tree !== void 0) {
+    const myClass = this.goEnclosingClassName(fn);
+    const myFile = tree.relativeOf.get(path2.resolve(fn.getSourceFile().fileName));
+    if ((tree.callIndex.get(fn.name.text) ?? []).some((site) => site.file !== myFile && this.goTsSrcFileDerivesFrom(tree, site.file, myClass))) {
+      return answer;
+    }
+  }
+  if (pointers === 0 || !this.goLocalIsSafeToType(fn.body, param, param.name.text, "*string")) {
+    return answer;
+  }
+  return "*string";
+};
 
 // src/javaTranspiler.ts
 init_esm_shims();
