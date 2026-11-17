@@ -59209,7 +59209,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
           copied++;
       } else if (form !== void 0 && !this.rustIdentifierIsPropertyName(n))
         nativeUses++;
-      if (form === "test" || form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "lwrite" || form === "okey" || form === "fin" || form === "frd" || form === "fok" || form === "kin" || form === "nkey" || form === "ukey" || form === "parg" || form === "dkey" || form === "bkey" || form === "key" && this.rustOkeyLocal(n) && (this.rustElemInsertKey(n) || this.rust90raLitMapReadKey(n)) || form === "mkey" && this.rust63kDictParamNestedKey(n))
+      if (form === "test" || form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "lwrite" || form === "okey" || form === "fin" || form === "frd" || form === "fok" || form === "kin" || form === "nkey" || form === "ukey" || form === "parg" || form === "dkey" || form === "bkey" || form === "key" && this.rustOkeyLocal(n) && this.rustElemInsertKey(n) || form === "mkey" && this.rust63kDictParamNestedKey(n))
         typedUses++;
       if (form === "xbox" || form === "native" || form === "targ" || form === "err")
         expressionUses = true;
@@ -61083,19 +61083,6 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return true;
     });
     return foreign;
-  }
-  /** ral-90ra R3: `n` (an element-read key local) is the whole key of a plain READ `m[n]` (never a write target, update or
-   *  delete) on a local map declared from an object literal: the bearer read prints `m.get(n.as_deref()..)`, a native use. */
-  rust90raLitMapReadKey(n) {
-    if (!isIdentifier3(n))
-      return false;
-    const keyNode = this.rustKeyWrapped(n);
-    const access = keyNode?.parent;
-    if (!isElementAccessExpression4(access) || access.argumentExpression !== keyNode || !isIdentifier3(access.expression) || this.rust70fWriteTargetKey(access))
-      return false;
-    const declaration = this.rustDeclarationOfIdentifier(access.expression);
-    const init = declaration !== void 0 && isVariableDeclaration3(declaration) && declaration.initializer !== void 0 ? this.rustSkipWrappers(declaration.initializer) : void 0;
-    return init !== void 0 && isObjectLiteralExpression4(init) && keyNode === n && access.argumentExpression === n && !this.isWriteBackBindRead(access) && !this.rustNodeIsKeyUnsafePlace(String(n.text));
   }
   /** Some statement of the parameter's function assigns the parameter itself. */
   rustParamWritten(param) {
