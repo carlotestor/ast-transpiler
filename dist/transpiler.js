@@ -45871,7 +45871,13 @@ function pti93Int64Local(goTranspiler, declaration) {
           writes.push(parent.right);
           return false;
         }
-        return op >= SyntaxKind5.FirstAssignment && op <= SyntaxKind5.LastAssignment;
+        if (op >= SyntaxKind5.FirstAssignment && op <= SyntaxKind5.LastAssignment) {
+          return true;
+        }
+      }
+      if (parent?.kind === SyntaxKind5.BinaryExpression) {
+        const other = pti93Unwrap(parent.left === n ? parent.right : parent.left);
+        return other?.kind === SyntaxKind5.NullKeyword || other?.kind === SyntaxKind5.UndefinedKeyword || other?.kind === SyntaxKind5.Identifier && other.getText() === "undefined";
       }
       return false;
     });
