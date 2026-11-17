@@ -38214,4 +38214,63 @@ GoTranspiler.prototype.goNilInitLocalTypeScan = function (declaration): string |
     const result = ral92g1UpstreamNilInitScan.call (this, declaration);
     return (((result === '*float64') || (result === '*int64')) && ccxtGo92NumParseWrittenWithoutNilTest (this, declaration)) ? undefined : result;
 };
+// R3: slot 0 of the base `*string` pair twins (`(*string, map[string]any)` in go/v4) written into a nil-seeded
+// local: the local takes the pointer (`x, params = this.HandleNetworkCodeAndParams(..)`) instead of the
+// `xPtr` deref box, only when the existing slot-read proof holds and one read is a native nil test / literal compare
+const RAL92G1_STRING_PAIR_PRODUCERS = {
+    'handleNetworkCodeAndParams': { 'goType': '*string', 'safe': 'SafeStringPtr' },
+    'handleMarginModeAndParams': { 'goType': '*string', 'safe': 'SafeStringPtr' },
+    'handleOptionStringAndParams': { 'goType': '*string', 'safe': 'SafeStringPtr' },
+    'handleOptionStringAndParams2': { 'goType': '*string', 'safe': 'SafeStringPtr' },
+};
+let ral92g1PairProbing = false;
+const ral92g1PairVerdicts = new WeakMap<object, boolean>();
+function ral92g1PairEntry (call) {
+    const callee = (call?.kind === SyntaxKind.CallExpression) ? call.expression : undefined;
+    if ((callee?.kind !== SyntaxKind.PropertyAccessExpression) || (callee.expression?.kind !== SyntaxKind.ThisKeyword)) {
+        return undefined;
+    }
+    const name = String (callee.name?.text);
+    return Object.prototype.hasOwnProperty.call (RAL92G1_STRING_PAIR_PRODUCERS, name) ? RAL92G1_STRING_PAIR_PRODUCERS[name] : undefined;
+}
+function ral92g1PairHasNativeRead (goTranspiler: GoTranspiler, declaration): boolean {
+    const scope = goTranspiler.goEnclosingFunction (declaration);
+    return (scope !== undefined) && goTranspiler.hasNodeWhere (scope, (n) => (n.kind === SyntaxKind.Identifier) && (n !== declaration.name)
+        && (ccxtGoParamDeclarationOf (goTranspiler, n) === declaration) && (ccxtGo90IsNilTest (n) || ccxtGo90StringLiteralCompare (n)));
+}
+const ral92g1UpstreamSlotEntry = GoTranspiler.prototype.goTuplePointerSlotCallEntry;
+GoTranspiler.prototype.goTuplePointerSlotCallEntry = function (call) {
+    const known = ral92g1UpstreamSlotEntry.call (this, call);
+    const entry = (known === undefined) ? ral92g1PairEntry (call) : undefined;
+    if (entry === undefined) {
+        return known;
+    }
+    if (ral92g1PairProbing) {
+        return entry;
+    }
+    const assign = call.parent;
+    const target = ((assign?.kind === SyntaxKind.BinaryExpression) && (assign.right === call)
+        && (assign.left?.kind === SyntaxKind.ArrayLiteralExpression)) ? assign.left.elements[0] : undefined;
+    const declaration = (target?.kind === SyntaxKind.Identifier) ? ccxtGoParamDeclarationOf (this, target) : undefined;
+    return ((declaration !== undefined) && (ral92g1PairVerdicts.get (declaration) === true)) ? entry : undefined;
+};
+const ral92g1UpstreamSlotNilInit = GoTranspiler.prototype.goTuplePointerSlotNilInitType;
+GoTranspiler.prototype.goTuplePointerSlotNilInitType = function (declaration): string | undefined {
+    const known = ral92g1UpstreamSlotNilInit.call (this, declaration);
+    if ((known !== undefined) || ral92g1PairProbing || (declaration?.kind !== SyntaxKind.VariableDeclaration)) {
+        return known;
+    }
+    if (!ral92g1PairVerdicts.has (declaration)) {
+        ral92g1PairVerdicts.set (declaration, false);
+        ral92g1PairProbing = true;
+        let probed;
+        try {
+            probed = ral92g1UpstreamSlotNilInit.call (this, declaration);
+        } finally {
+            ral92g1PairProbing = false;
+        }
+        ral92g1PairVerdicts.set (declaration, (probed === '*string') && ral92g1PairHasNativeRead (this, declaration));
+    }
+    return ral92g1PairVerdicts.get (declaration) ? '*string' : undefined;
+};
 // ===== ral-92g1 R1 (end) =====

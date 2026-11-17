@@ -16601,3 +16601,39 @@ describe('92g1 parse* Num consumers', () => {
         expect(out).toContain('if expiry == nil {');
     });
 });
+
+describe('92g1 string pair slot consumers', () => {
+    const BASE = 'export type Dict = { [key: string]: unknown };\n'
+        + 'export type Str = string | undefined;\n'
+        + 'export default class Exchange {\n'
+        + '    handleNetworkCodeAndParams (params: Dict): [Str, Dict] { return [ undefined, params ]; }\n'
+        + '}\n';
+    const run = (members: string): string => {
+        const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'g92p-'));
+        try {
+            fs.mkdirSync(path.join(tmp, 'ts/src/base'), { recursive: true });
+            fs.writeFileSync(path.join(tmp, 'ts/src/base/Exchange.ts'), BASE);
+            const file = path.join(tmp, 'ts/src/x.ts');
+            fs.writeFileSync(file, "import Exchange, { Dict, Str } from './base/Exchange.js';\nclass X extends Exchange {\n" + members + '}\n');
+            const t = new Transpiler({ verbose: false, go: { parser: { NUM_LINES_END_FILE: 0 } } });
+            installCcxtGoHooks(t.goTranspiler);
+            return t.transpileGoByPath(file).content;
+        } finally {
+            fs.rmSync(tmp, { recursive: true, force: true });
+        }
+    };
+    test('R3: a nil-seeded local written from slot 0 of a *string pair twin and nil-tested takes the pointer', () => {
+        const out = run('    f (params: Dict): Dict {\n'
+            + '        let query = params;\n'
+            + '        let networkCode = undefined;\n'
+            + '        [ networkCode, query ] = this.handleNetworkCodeAndParams (query);\n'
+            + '        if (networkCode !== undefined) {\n'
+            + '            return query;\n'
+            + '        }\n'
+            + '        return params;\n'
+            + '    }\n');
+        expect(out).toContain('var networkCode *string = nil');
+        expect(out).not.toContain('networkCodePtr');
+        expect(out).toContain('networkCode = SafeStringPtr(networkCodequeryVariable[0])');
+    });
+});
