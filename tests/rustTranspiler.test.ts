@@ -25229,3 +25229,23 @@ describe('ral-90rc R2: a nil-declared Str local in a format! concat whose printe
         expect(out).not.toContain('let mut settle: Value');
     });
 });
+
+describe('ral-90rc R3: a nil-declared Str local written from a base credential field', () => {
+    const run = (name: string, use: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    secret: string = undefined;\n    options: Dict = {};\n    safeString (o: any, k: any, d: any = undefined): Str { return o; }\n    hold (m: any, n: any = undefined): any {\n        return m;\n    }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    check (): any {\n        let secret: Str = undefined;\n        if (this.secret !== undefined) {\n            secret = this.secret;\n        } else {\n            secret = this.safeString (this.options, 'l2Secret');\n        }\n" + use + "    }\n}\n");
+        return new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } }).transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('a null-tested local (polymarket ensureL2Credentials) is Option<String>', () => {
+        const out = run ('r90rc-r3-tested', "        const hasL2 = (secret !== undefined);\n        return this.hold (hasL2);\n");
+        expect(out).toContain('let mut secret: Option<String> = None;');
+        expect(out).toContain('secret = self.secret.as_str().map(str::to_owned);');
+        expect(out).toContain('secret.is_some()');
+    });
+    test('negative: a local only boxed into a literal stays Value', () => {
+        const out = run ('r90rc-r3-boxonly', "        return this.hold ({ 'secret': secret });\n");
+        expect(out).toContain('let mut secret: Value = Value::Null;');
+    });
+});

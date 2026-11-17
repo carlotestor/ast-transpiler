@@ -3139,6 +3139,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (this.rustNativeStrReturnKind(scope) === 'str' && !this.rustScopeNameNodes(scope, name).some((n: any) => this.rust61xNilStrReturnLocal(n, scope) && this.rustDeclaredNode(n) === declaration)) return undefined;
         let joined: string | undefined = 'null';
         let writes = 0;
+        let baseFieldWrite = false;
         for (const n of this.rustScopeNameNodes(scope, name) as any[]) {
             if (isIdentifier(n) && this.rustNilSlotWrite(n) && this.rustDeclaredNode(n) === declaration) {
                 if (this.primitiveKindOfType(this.typeOfNodeIfAny(n)) !== 'string') return undefined;
@@ -3152,6 +3153,8 @@ export class RustTranspiler extends BaseTranspiler {
             if (this.rustDeclaredNode(n) !== declaration) continue;
             const rhs: any = this.unwrapParens(parent.right);
             if (!this.rustNilDecodedWrite(rhs)) writes++;
+            // ral-90rc R3: a write from a base credential field (`x = this.secret`) is admitted only for a native read (below)
+            if (this.rustBaseStrFieldRead(rhs)) baseFieldWrite = true;
             let write = isIdentifier(rhs) && this.literalKindOfNode(rhs) !== 'null' ? (this.rustScalarIdentifierKind(rhs) ?? (this.rustNilValueStrAlias(rhs) ? 'ostr' : undefined)) : this.rustScalarValueKind(rhs, true);
             // ral-68a R1: `x = p` from an unwritten typed string parameter (`&str` / `Option<&str>` signature slot): the
             // parameter's rebinding holds that string (or Null), read back once as `Option<String>` (rustOptParamText)
@@ -3209,7 +3212,7 @@ export class RustTranspiler extends BaseTranspiler {
             return form !== undefined;
         });
         // without a native read, only repeated native writes (no `Value` decode) or a moving hand-off earn the type
-        if (!ok || (native === 0 && writes <= 1 && !this.rustNilScalarHandOff(declaration, scope, kind, boxed))
+        if (!ok || (native === 0 && (baseFieldWrite || (writes <= 1 && !this.rustNilScalarHandOff(declaration, scope, kind, boxed))))
             || (boxed.length > 0 && scope.kind !== SyntaxKind.MethodDeclaration)) return undefined;
         // boxed uses are checked against the printed method lines
         if (boxed.length > 0) this.rustScalarGuarded.add(declaration);
@@ -5742,6 +5745,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (fresh && isBinaryExpression(node) && this.rustDeclInitPosition(node) && this.rust76eCounterStep(node)) return 'int';
         // ral-52k: a base credential field declared `string` (`this.apiKey`) as an arm of a ternary initializer: a `Str` or `Null`
         if (fresh && this.rustTernaryArm(node) && this.rustBaseStrFieldRead(node)) return 'ostr';
+        // ral-90rc R3: the same field as the whole right side of `x = this.secret;` into a nil-declared local (rustNilVenueWrite)
+        if (fresh && this.rustNilVenueWrite(node) && this.rustBaseStrFieldRead(node)) return 'ostr';
         // ral-65n: a never-written base-tier parameter declared `Str` / `string` as an arm of a ternary initializer: a `Str` or `Null`
         if (fresh && this.rustTernaryArm(node) && this.rust65nBaseStrParamArm(node)) return 'ostr';
         // ral-53k: `c['code']` of an `Option<Dict>` local (a unified string key) as an arm of a ternary initializer
@@ -10971,7 +10976,7 @@ export class RustTranspiler extends BaseTranspiler {
         // ral-67b: a cast-receiver length written into a declared-empty `Int` local (`Option<i64>`)
         if (kind === 'oint' && this.rustListLengthInit(node) && this.rust67bCastListLengthRecv(node.expression)) return wrap(this.rustListLengthText(node));
         // ral-52k: a base credential field (`Value` in the struct, `Str` or `Null`) read once as its text
-        if (kind === 'ostr' && this.rustTernaryArm(node) && this.rustBaseStrFieldRead(node)) return `${this.printNode(node, 0).trim()}.as_str().map(str::to_owned)`;
+        if (kind === 'ostr' && (this.rustTernaryArm(node) || this.rustNilVenueWrite(node)) && this.rustBaseStrFieldRead(node)) return `${this.printNode(node, 0).trim()}.as_str().map(str::to_owned)`;
         if (kind === 'ostr' && this.rustTernaryArm(node) && this.rust65nBaseStrParamArm(node)) return `${super.printIdentifier(node)}.as_str().map(str::to_owned)`;
         if (kind === 'ostr' && this.rustTernaryArm(node)) { const read = this.rustOptDictStrKeyText(node); if (read !== undefined) return read; }
         if (kind === 'ostr') { const row = this.rustRowFieldStrText(node); if (row !== undefined) return row; }
