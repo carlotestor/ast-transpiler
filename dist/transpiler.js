@@ -59209,7 +59209,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
           copied++;
       } else if (form !== void 0 && !this.rustIdentifierIsPropertyName(n))
         nativeUses++;
-      if (form === "test" || form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "lwrite" || form === "okey" || form === "fin" || form === "frd" || form === "fok" || form === "kin" || form === "nkey" || form === "ukey" || form === "parg" || form === "dkey" || form === "bkey" || form === "key" && this.rustOkeyLocal(n) && this.rustElemInsertKey(n) || form === "mkey" && this.rust63kDictParamNestedKey(n))
+      if (form === "test" || form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "lwrite" || form === "okey" || form === "fin" || form === "frd" || form === "fok" || form === "kin" || form === "nkey" || form === "ukey" || form === "parg" || form === "dkey" || form === "bkey" || form === "jparse" || form === "key" && this.rustOkeyLocal(n) && this.rustElemInsertKey(n) || form === "mkey" && this.rust63kDictParamNestedKey(n))
         typedUses++;
       if (form === "xbox" || form === "native" || form === "targ" || form === "err")
         expressionUses = true;
@@ -61085,6 +61085,23 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     });
     return foreign;
   }
+  /** ral-90ra R2: `n` is the whole single argument of `JSON.parse (n)` in a non-test source outside the ws tier (only the
+   *  ccxt-base crate declares serde_json). */
+  rust90raJsonParseArg(n) {
+    const call = n?.parent;
+    if (!isIdentifier3(n) || call === void 0 || !isCallExpression6(call) || call.arguments.length !== 1 || call.arguments[0] !== n)
+      return false;
+    const callee = call.expression;
+    if (!isPropertyAccessExpression3(callee) || !isIdentifier3(callee.expression) || String(callee.expression.text) !== "JSON" || String(callee.name.text) !== "parse")
+      return false;
+    const file = String(n.getSourceFile().fileName);
+    return !this.rustTestTierSource(n) && !/[\\/]pro[\\/]/.test(file);
+  }
+  /** ral-90ra R2: `json_parse(&Value)` for an `Option<String>` operand without the box: a `Str` parses with serde_json and
+   *  converts through `Value::from_json` (Null on a parse error), `None` (the boxed `Null`) answers `Null`, as the helper did. */
+  rust90raJsonParseText(name) {
+    return `${name}.as_deref().and_then(|__s| serde_json::from_str::<serde_json::Value>(__s).ok()).map(|__j| Value::from_json(&__j)).unwrap_or(Value::Null)`;
+  }
   /** Some statement of the parameter's function assigns the parameter itself. */
   rustParamWritten(param) {
     if (!isIdentifier3(param.name))
@@ -62761,6 +62778,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "box";
     if ((kind === "str" || kind === "ostr") && this.rustWsCacheMapKeyUse(n))
       return "fin";
+    if (kind === "ostr" && this.rust90raJsonParseArg(n))
+      return "jparse";
     if ((kind === "str" || kind === "ostr") && this.rust68hPadReceiver(n) && this.rustLocalLastUse(n, this.rustDeclaredNode(n)))
       return "box";
     if (kind === "bool" && this.rustScalarBoolLogicalText(this.rustClimbLogicalWrappers(n)) !== void 0)
@@ -68513,7 +68532,7 @@ ${ind}];`;
         return;
       if (isReturnStatement4(n)) {
         const inner = this.unwrapParensNode(n.expression);
-        const own = inner !== void 0 && isIdentifier3(inner) && this.rust56xStrReturnLocal(inner, fn) && this.rustStrReturnSignature(fn, inner) && this.primitiveKindOfType(this.getCheckedTypeOf(inner)) === "string" || this.rust61xNilStrReturnLocal(inner, fn) || this.rust76aOptStrReturnLocal(inner, fn);
+        const own = inner !== void 0 && isIdentifier3(inner) && this.rust56xStrReturnLocal(inner, fn) && this.rustStrReturnSignature(fn, inner) && this.primitiveKindOfType(this.getCheckedTypeOf(inner)) === "string" || this.rust61xNilStrReturnLocal(inner, fn) || this.rust76aOptStrReturnLocal(inner, fn) || inner !== void 0 && isIdentifier3(inner) && this.rust56xStrReturnLocal(inner, fn) && this.rustScalarLocalOf(inner)?.kind === "ostr";
         if (!own && !this.rustStrReturnValueConverts(n.expression)) {
           ok = false;
           return;
@@ -74893,6 +74912,9 @@ ${this.getIden(identation)}}`;
     return arg !== void 0 && isIdentifier3(arg) ? arg : void 0;
   }
   printJsonParseCall(node, identation, parsedArg = void 0) {
+    const arg = node.arguments?.[0];
+    if (arg !== void 0 && isIdentifier3(arg) && this.rustScalarUseForms.get(arg) === "jparse" && this.rustScalarLocalOf(arg)?.kind === "ostr")
+      return this.rust90raJsonParseText(super.printIdentifier(arg));
     return `json_parse(&${parsedArg})`;
   }
   printJsonStringifyCall(node, identation, parsedArg = void 0) {

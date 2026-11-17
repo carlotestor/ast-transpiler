@@ -1005,6 +1005,12 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  target `y` is a local (one declarator, same function) the checker types `string` is allowed: that target is decided by
      *  the same scalar solve (a string local copied from an `Option<String>` reads the same Str / Null the `Value` held). */
     rust90raFeedsForeignWrite(declaration: any, scope: any): boolean;
+    /** ral-90ra R2: `n` is the whole single argument of `JSON.parse (n)` in a non-test source outside the ws tier (only the
+     *  ccxt-base crate declares serde_json). */
+    rust90raJsonParseArg(n: any): boolean;
+    /** ral-90ra R2: `json_parse(&Value)` for an `Option<String>` operand without the box: a `Str` parses with serde_json and
+     *  converts through `Value::from_json` (Null on a parse error), `None` (the boxed `Null`) answers `Null`, as the helper did. */
+    rust90raJsonParseText(name: string): string;
     /** Some statement of the parameter's function assigns the parameter itself. */
     rustParamWritten(param: any): boolean;
     rustReaderDefaultKind(name: string, args: any[], fresh: boolean): string | undefined;
