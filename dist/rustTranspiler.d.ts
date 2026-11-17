@@ -5354,6 +5354,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustScalarBoxCopies(u: any): boolean;
     /** A literal, an identifier, a field read, or a call: the converted argument stays short. */
     rustVenueStrSimpleArg(arg: any): boolean;
+    /** `(x as string)` over a simple operand the checker already types `string` / `Str`: a string slot takes the
+     *  operand as it is (the cast changes no value), so the caller converts it once like a bare `x`. */
+    rustVenueStrCastOperand(arg: any): any;
     /** The argument node lands in a per-venue string slot of its call. */
     rustVenueStrArgSlot(arg: any): boolean;
     /** Argument text for a per-venue string slot: a typed local or literal natively, any other value read once. */

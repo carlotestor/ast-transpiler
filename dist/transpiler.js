@@ -93144,7 +93144,7 @@ ${this.getIden(identation)}}`;
       const argType = args[at] === void 0 ? void 0 : this.typeOfNodeIfAny(args[at]);
       if ((argType === void 0 || (argType.flags & (TypeFlags6.Any | TypeFlags6.Unknown)) !== 0) && !this.rustWsUrlReadIdent(args[at]))
         return void 0;
-      if (!this.rustVenueStrSimpleArg(args[at]) && !(rustType === "bool" && this.rustVenueNegatedArg(args[at])))
+      if (!this.rustVenueStrSimpleArg(args[at]) && !(rustType === "bool" && this.rustVenueNegatedArg(args[at])) && !(rustType.includes("str") && this.rustVenueStrCastOperand(args[at]) !== void 0))
         return void 0;
       if (!this.rustVenueScalarArgExact(args[at], rustType))
         return void 0;
@@ -93496,6 +93496,19 @@ ${this.getIden(identation)}}`;
       return true;
     return isCallExpression6(inner) && isPropertyAccessExpression3(inner.expression) && inner.expression.expression.kind === SyntaxKind7.ThisKeyword && Array.from(inner.arguments).every((a) => this.literalKindOfNode(this.unwrapParens(a)) !== void 0 || isIdentifier3(this.unwrapParens(a)) || isPropertyAccessExpression3(this.unwrapParens(a)) && this.unwrapParens(a).expression.kind === SyntaxKind7.ThisKeyword);
   }
+  /** `(x as string)` over a simple operand the checker already types `string` / `Str`: a string slot takes the
+   *  operand as it is (the cast changes no value), so the caller converts it once like a bare `x`. */
+  rustVenueStrCastOperand(arg) {
+    const inner = arg === void 0 ? void 0 : this.unwrapParens(arg);
+    if (inner === void 0 || !isAsExpression3(inner) || inner.type?.kind !== SyntaxKind7.StringKeyword)
+      return void 0;
+    const operand = this.unwrapParens(inner.expression);
+    if (!this.rustVenueStrSimpleArg(operand))
+      return void 0;
+    const type = this.typeOfNodeIfAny(operand);
+    const kind = type === void 0 ? void 0 : this.rustVenueScalarTypeOf(type, void 0);
+    return kind === "&str" || kind === "Option<&str>" ? operand : void 0;
+  }
   /** The argument node lands in a per-venue string slot of its call. */
   rustVenueStrArgSlot(arg) {
     const call = arg?.parent;
@@ -93506,6 +93519,9 @@ ${this.getIden(identation)}}`;
   }
   /** Argument text for a per-venue string slot: a typed local or literal natively, any other value read once. */
   rustVenueStrArgText(arg, type, identation) {
+    const castOperand = this.rustVenueStrCastOperand(arg);
+    if (castOperand !== void 0 && (type === "&str" || type === "Option<&str>"))
+      return this.rustVenueStrArgText(castOperand, type, identation);
     const local = this.rustScalarTypedArgText(arg, type);
     const lent = isIdentifier3(this.unwrapParens(arg)) && this.rustBorrowedStrElems.has(this.rustDeclaredNode(this.unwrapParens(arg)));
     if (local !== void 0 && !lent && this.rustVenueStrMovedInCall(arg))
