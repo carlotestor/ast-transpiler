@@ -45800,6 +45800,110 @@ GoTranspiler.prototype.printReturnStatement = function(node, identation) {
   }
   return printReturnStatementBaseTypedVenue.call(this, node, identation);
 };
+var pti93AdmittedWrites = /* @__PURE__ */ new Set();
+var pti93Verdicts = /* @__PURE__ */ new WeakMap();
+function pti93Unwrap(node) {
+  while (node?.kind === SyntaxKind5.ParenthesizedExpression || node?.kind === SyntaxKind5.AsExpression) {
+    node = node.expression;
+  }
+  return node;
+}
+function pti93RefersTo(goTranspiler, node, declaration) {
+  return goTranspiler.hasNodeWhere(node, (n) => n.kind === SyntaxKind5.Identifier && n.text === declaration.name.text && goTranspiler.goDeclarationOfIdentifier(n) === declaration) || node?.kind === SyntaxKind5.Identifier && goTranspiler.goDeclarationOfIdentifier(node) === declaration;
+}
+function pti93IntValue(goTranspiler, node, declaration) {
+  node = pti93Unwrap(node);
+  if (goTranspiler.goIsNumericConstant(node)) {
+    return goTranspiler.goNumericLiteralKind(node) === "int" && Number.isSafeInteger(goTranspiler.goNumericConstantValue(node));
+  }
+  if (node?.kind === SyntaxKind5.Identifier) {
+    if (goTranspiler.goDeclarationOfIdentifier(node) === declaration) {
+      return true;
+    }
+    return goTranspiler.goDeclaredTypeOfIdentifier(node) === "int64" || goTranspiler.goDeclaredParamStaticType(node) === "int64";
+  }
+  if (node?.kind === SyntaxKind5.BinaryExpression) {
+    const op = node.operatorToken.kind;
+    if (op !== SyntaxKind5.PlusToken && op !== SyntaxKind5.MinusToken && op !== SyntaxKind5.AsteriskToken) {
+      return false;
+    }
+    if (pti93RefersTo(goTranspiler, node, declaration)) {
+      return pti93IntValue(goTranspiler, node.left, declaration) && pti93IntValue(goTranspiler, node.right, declaration);
+    }
+    return goTranspiler.goNativeArithmetic(node)?.goType === "int64";
+  }
+  if (node?.kind === SyntaxKind5.CallExpression) {
+    return goTranspiler.goTypeOfInitializer(node, goTranspiler.printNode(node, 0)) === "int64";
+  }
+  return false;
+}
+function pti93MeetsIntOperand(goTranspiler, scope, declaration) {
+  return goTranspiler.hasNodeWhere(scope, (n) => {
+    const parent = n.parent;
+    if (n.kind !== SyntaxKind5.Identifier || n.text !== declaration.name.text || parent?.kind !== SyntaxKind5.BinaryExpression || parent.left === n && parent.operatorToken.kind === SyntaxKind5.EqualsToken || goTranspiler.goDeclarationOfIdentifier(n) !== declaration) {
+      return false;
+    }
+    const other = pti93Unwrap(parent.left === n ? parent.right : parent.left);
+    return other?.kind === SyntaxKind5.PropertyAccessExpression && other.name?.text === "length" || other?.kind === SyntaxKind5.Identifier && goTranspiler.goDeclaredTypeOfIdentifier(other) === "int64";
+  });
+}
+function pti93Int64Local(goTranspiler, declaration) {
+  if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier || declaration.initializer === void 0 || declaration.parent?.kind !== SyntaxKind5.VariableDeclarationList || (declaration.parent.flags & NodeFlags2.Let) === 0 || declaration.type !== void 0 && !["Int", "number", "int"].includes(declaration.type.getText())) {
+    return false;
+  }
+  if (pti93Verdicts.has(declaration)) {
+    return pti93Verdicts.get(declaration);
+  }
+  pti93Verdicts.set(declaration, false);
+  const scope = goTranspiler.goEnclosingFunction(declaration);
+  const name = declaration.name.text;
+  const writes = [declaration.initializer];
+  let bad = scope === void 0 || goTranspiler.checkerOrUndefined() === void 0;
+  if (!bad) {
+    bad = goTranspiler.hasNodeWhere(scope, (n) => {
+      if (n.kind !== SyntaxKind5.Identifier || n.text !== name || n === declaration.name || goTranspiler.goDeclarationOfIdentifier(n) !== declaration) {
+        return false;
+      }
+      const parent = n.parent;
+      if (parent?.kind === SyntaxKind5.BinaryExpression && parent.left === n) {
+        const op = parent.operatorToken.kind;
+        if (op === SyntaxKind5.EqualsToken) {
+          writes.push(parent.right);
+          return false;
+        }
+        return op >= SyntaxKind5.FirstAssignment && op <= SyntaxKind5.LastAssignment;
+      }
+      return false;
+    });
+  }
+  const foreign = writes.some((w) => !goTranspiler.goIsNumericConstant(pti93Unwrap(w)) && !pti93RefersTo(goTranspiler, w, declaration));
+  let ok = !bad && (foreign || pti93MeetsIntOperand(goTranspiler, scope, declaration)) && writes.every((w) => pti93IntValue(goTranspiler, w, declaration));
+  if (ok) {
+    for (const w of writes) {
+      pti93AdmittedWrites.add(w);
+    }
+    try {
+      ok = !goTranspiler.goTypeNameIsShadowed(scope, "int64") && goTranspiler.goLocalIsSafeToType(scope, declaration, name, "int64");
+    } finally {
+      for (const w of writes) {
+        pti93AdmittedWrites.delete(w);
+      }
+    }
+  }
+  pti93Verdicts.set(declaration, ok);
+  return ok;
+}
+{
+  const goTypeOfInitializer = GoTranspiler.prototype.goTypeOfInitializer;
+  GoTranspiler.prototype.goTypeOfInitializer = function(initializer, printedValue) {
+    return pti93AdmittedWrites.has(initializer) ? "int64" : goTypeOfInitializer.call(this, initializer, printedValue);
+  };
+  const getGoLocalType = GoTranspiler.prototype.getGoLocalType;
+  GoTranspiler.prototype.getGoLocalType = function(declaration, parsedValue) {
+    const shipped = getGoLocalType.call(this, declaration, parsedValue);
+    return shipped === "any" && pti93Int64Local(this, declaration) ? "int64" : shipped;
+  };
+}
 
 // src/javaTranspiler.ts
 init_esm_shims();
