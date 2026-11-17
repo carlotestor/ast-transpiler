@@ -15170,7 +15170,10 @@ function ccxtGoAnnotatedReturnTypes(goTranspiler, node) {
   if (key === "Str" || key === "Dict" || key === "ExchangeOptions" || key === "Market" || key === "List" || key === "Bool") {
     return CCXT_GO_ANNOTATED_RETURN_NATIVE[key];
   }
-  if ((key === "Num" || key === "Int") && ccxtGo92NumParseMethod(node)) {
+  if (key === "Num" && ccxtGo92NumParseMethod(node)) {
+    return ccxtGoNumReturnsAreParseNumber(node) ? ["*float64"] : void 0;
+  }
+  if (key === "Int" && ccxtGo92NumParseMethod(node)) {
     return [CCXT_GO_92_PARSE_POINTER[key]];
   }
   const general = ccxtGoGeneralAnnotatedReturnTypes(node, type, key);
@@ -45587,22 +45590,28 @@ function goTypedVenueProducerTypeUncached(goTranspiler, node) {
   if (alias !== "Num" || annotation !== "Num") {
     return void 0;
   }
+  return ccxtGoNumReturnsAreParseNumber(node) ? "*float64" : void 0;
+}
+function ccxtGoNumReturnsAreParseNumber(node) {
+  if (node?.body === void 0) {
+    return false;
+  }
   let sawValue = false;
-  for (const r of returns) {
+  for (const r of collectReturnStatements(node.body)) {
     const e = r.expression;
     if (e === void 0) {
-      return void 0;
+      return false;
     }
     if (isAbsentExpression(e)) {
       continue;
     }
     const callee = e.kind === SyntaxKind5.CallExpression ? e.expression : void 0;
     if (callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword || callee.name?.text !== "parseNumber") {
-      return void 0;
+      return false;
     }
     sawValue = true;
   }
-  return sawValue ? "*float64" : void 0;
+  return sawValue;
 }
 function goTypedVenueCallType(goTranspiler, call) {
   while (call?.kind === SyntaxKind5.ParenthesizedExpression) {
