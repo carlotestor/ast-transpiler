@@ -38184,14 +38184,14 @@ function go92g2StringListScan (goTranspiler: GoTranspiler, declaration): Node[] 
         || (go92g2ReaderCall(declaration.initializer) === undefined)) {
         return undefined;
     }
-    const scope: any = goTranspiler.goEnclosingFunction(declaration);
+    const scope = goTranspiler.goEnclosingFunction(declaration);
     if ((scope === undefined) || goTranspiler.goTypeNameIsShadowed(scope, GO_STRING_LIST_LOCAL_TYPE)) {
         return undefined;
     }
     const name = declaration.name.text;
     const writes: Node[] = [];
     let joins = 0;
-    const unsafe = goTranspiler.hasNodeWhere(scope, (n: any) => {
+    const unsafe = goTranspiler.hasNodeWhere(scope, (n) => {
         if ((n.kind === SyntaxKind.VariableDeclaration || n.kind === SyntaxKind.Parameter || n.kind === SyntaxKind.BindingElement)
             && (n !== declaration) && (n.name?.kind === SyntaxKind.Identifier) && (n.name.text === name)) {
             return true;
@@ -38302,7 +38302,7 @@ function go92g2LoopListLocal (goTranspiler: GoTranspiler, declaration): boolean 
         return go92g2LoopListVerdicts.get(declaration);
     }
     go92g2LoopListVerdicts.set(declaration, false);
-    const call: any = declaration.initializer;
+    const call = declaration.initializer;
     const callee = call?.expression;
     // a 3-arg safeList with an expression default (no nil test: SafeListSlice is nil for a non-list default), or a
     // no-default safeListN (nil tests allowed: SafeListNSlice is nil exactly where SafeListN is)
@@ -38314,13 +38314,13 @@ function go92g2LoopListLocal (goTranspiler: GoTranspiler, declaration): boolean 
             && ![ SyntaxKind.ArrayLiteralExpression, SyntaxKind.ObjectLiteralExpression ].includes(call.arguments[2].kind)))) {
         return false;
     }
-    const scope: any = goTranspiler.goEnclosingFunction(declaration);
+    const scope = goTranspiler.goEnclosingFunction(declaration);
     if ((scope === undefined) || goTranspiler.goTypeNameIsShadowed(scope, GO_SAFE_LIST_LOCAL_TYPE)) {
         return false;
     }
     const name = declaration.name.text;
     let lengths = 0;
-    const unsafe = goTranspiler.hasNodeWhere(scope, (n: any) => {
+    const unsafe = goTranspiler.hasNodeWhere(scope, (n) => {
         if ((n.kind === SyntaxKind.VariableDeclaration || n.kind === SyntaxKind.Parameter || n.kind === SyntaxKind.BindingElement)
             && (n !== declaration) && (n.name?.kind === SyntaxKind.Identifier) && (n.name.text === name)) {
             return true;
