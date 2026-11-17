@@ -66282,6 +66282,8 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       return true;
     if (kind === "ostr" && isIdentifier3(node) && this.rustOptParamKind(node) === "str")
       return true;
+    if ((kind === "onum" || kind === "oint") && isIdentifier3(node) && this.rustOptParamKind(node) === kind.slice(1))
+      return true;
     return kind === "bool" && this.rustBoolNativeText(node) !== void 0;
   }
   /** yb: `!x` over a `bool` scalar local outside a condition and outside any logical: `Value::Bool(!x)`, the box the
