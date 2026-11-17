@@ -15075,3 +15075,38 @@ describe('ral-87g8 R1 map-producer locals redeclared in disjoint sibling blocks'
         expect(out).toContain('var parsed any');
     });
 });
+
+describe('ral-87g8 R2 int literal counters', () => {
+    test('a counter written only by literals and self increments types int with native writes and compare', () => {
+        const out = goTranspile87g8('export class ex {\n'
+            + '    f (list: string[]): boolean {\n'
+            + '        let remaining = 0;\n'
+            + '        for (let i = 0; i < list.length; i++) {\n'
+            + '            if (list[i] === \'a\') {\n'
+            + '                remaining = remaining + 1;\n'
+            + '            }\n'
+            + '            remaining += 2;\n'
+            + '        }\n'
+            + '        return (remaining === 0);\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('var remaining int = 0');
+        expect(out).toContain('remaining = remaining + 1');
+        expect(out).toContain('remaining += 2');
+        expect(out).toContain('(remaining == 0)');
+    });
+    test('a counter handed to a call or returned from a sync method keeps the box', () => {
+        const out = goTranspile87g8('export class ex {\n'
+            + '    g (n: number): number { return n; }\n'
+            + '    f (list: string[]): number {\n'
+            + '        let count = 0;\n'
+            + '        for (let i = 0; i < list.length; i++) {\n'
+            + '            count += 1;\n'
+            + '        }\n'
+            + '        this.g (count);\n'
+            + '        return count;\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('var count any = 0');
+    });
+});

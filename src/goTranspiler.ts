@@ -35094,3 +35094,144 @@ GoTranspiler.prototype.goDeclaredLocalTypeIfSafe = function (declaration, goType
     return goType;
 };
 // ===== ral-87g8 R1 (end) =====
+
+// ===== ral-87g8 R2 (begin): int literal counters =====
+// `let errors = 0; .. errors += 1; .. errors = 0; .. if (errors > max)` stays `any` because the
+// compound write (and `x = x + 1`) vetoes goLocalIsSafeToType. The box only ever held a Go `int`
+// (the literal, and Add of two ints answers an int), so an `int` local holds the same value. Admitted
+// only when every write is a non-negative integer literal, `x += <int literal>`, `x -= <int literal>`
+// or `x = x +/- <int literal>`, no ++/--, no destructuring, and at least one read is an ordered or
+// equality comparison against a number, or a self write (both print native on the typed local). Writes print natively:
+// `x += 1` / `x = x + 1`.
+function go87g8IntLiteral(node): boolean {
+    while (node?.kind === SyntaxKind.ParenthesizedExpression) {
+        node = node.expression;
+    }
+    return (node?.kind === SyntaxKind.NumericLiteral) && /^[0-9]+$/.test(node.text);
+}
+function go87g8IsOwnRef(goTranspiler, node, declaration): boolean {
+    return (node?.kind === SyntaxKind.Identifier) && (node.text === declaration.name.text)
+        && goTranspiler.goIdentifierRefersToDeclaration(node, declaration);
+}
+function go87g8CounterWriteOk(goTranspiler, assignment, declaration): boolean {
+    const op = assignment.operatorToken.kind;
+    if ((op === SyntaxKind.PlusEqualsToken) || (op === SyntaxKind.MinusEqualsToken)) {
+        return go87g8IntLiteral(assignment.right);
+    }
+    if (op !== SyntaxKind.EqualsToken) {
+        return false;
+    }
+    let right = assignment.right;
+    while (right?.kind === SyntaxKind.ParenthesizedExpression) {
+        right = right.expression;
+    }
+    if (go87g8IntLiteral(right)) {
+        return true;
+    }
+    return (right?.kind === SyntaxKind.BinaryExpression)
+        && ((right.operatorToken.kind === SyntaxKind.PlusToken) || (right.operatorToken.kind === SyntaxKind.MinusToken))
+        && go87g8IsOwnRef(goTranspiler, right.left, declaration) && go87g8IntLiteral(right.right);
+}
+const go87g8CounterCache = new WeakMap<object, boolean>();
+function go87g8IsIntCounter(goTranspiler, declaration): boolean {
+    if ((declaration?.kind !== SyntaxKind.VariableDeclaration) || (declaration.name?.kind !== SyntaxKind.Identifier)
+        || !go87g8IntLiteral(declaration.initializer) || (declaration.type !== undefined)
+        || ((declaration.parent?.flags & ts.NodeFlags.Let) === 0)) {
+        return false;
+    }
+    if (go87g8CounterCache.has(declaration)) {
+        return go87g8CounterCache.get(declaration);
+    }
+    go87g8CounterCache.set(declaration, false);
+    const scope = goTranspiler.goEnclosingFunction(declaration);
+    if (scope === undefined) {
+        return false;
+    }
+    const name = declaration.name.text;
+    let writes = 0;
+    let comparisons = 0;
+    let selfWrites = 0;
+    const unsafe = goTranspiler.hasNodeWhere(scope, (n) => {
+        if ((n.kind === SyntaxKind.Parameter || n.kind === SyntaxKind.VariableDeclaration) && (n !== declaration)
+            && (n.name?.kind === SyntaxKind.Identifier) && (n.name.text === name)) {
+            return true; // keep it simple: no other binding of the name
+        }
+        if ((n.kind !== SyntaxKind.Identifier) || (n.text !== name) || (n === declaration.name)) {
+            return false;
+        }
+        const parent = n.parent;
+        if (((parent?.kind === SyntaxKind.PropertyAccessExpression) && (parent.name === n))
+            || ((parent?.kind === SyntaxKind.PropertyAssignment) && (parent.name === n))) {
+            return false;
+        }
+        if ((parent?.kind === SyntaxKind.PostfixUnaryExpression) || (parent?.kind === SyntaxKind.PrefixUnaryExpression)
+            || (parent?.kind === SyntaxKind.SpreadElement) || (parent?.kind === SyntaxKind.ShorthandPropertyAssignment)
+            || (parent?.kind === SyntaxKind.ArrayLiteralExpression)) {
+            return true;
+        }
+        if ((parent?.kind === SyntaxKind.BinaryExpression) && (parent.left === n)) {
+            const op = parent.operatorToken.kind;
+            if ((op >= SyntaxKind.FirstAssignment) && (op <= SyntaxKind.LastAssignment)) {
+                writes += 1;
+                if (!go87g8IntLiteral(parent.right)) {
+                    selfWrites += 1; // `x += 1` / `x = x + 1`: native int arithmetic
+                }
+                return !go87g8CounterWriteOk(goTranspiler, parent, declaration);
+            }
+        }
+        if (parent?.kind === SyntaxKind.BinaryExpression) {
+            const op = parent.operatorToken.kind;
+            const other = (parent.left === n) ? parent.right : parent.left;
+            if ((op === SyntaxKind.GreaterThanToken) || (op === SyntaxKind.GreaterThanEqualsToken)
+                || (op === SyntaxKind.LessThanToken) || (op === SyntaxKind.LessThanEqualsToken)
+                || (op === SyntaxKind.EqualsEqualsEqualsToken) || (op === SyntaxKind.ExclamationEqualsEqualsToken)) {
+                if (go87g8IntLiteral(other)) {
+                    comparisons += 1;
+                    return false;
+                }
+                // another operand may print int64 / float64 / any: `int` against it would not compile
+                return true;
+            }
+            // `x = x + 1` reads the local on the right of its own write: admitted by the write check
+            if ((op === SyntaxKind.PlusToken || op === SyntaxKind.MinusToken) && (parent.left === n)
+                && (parent.parent?.kind === SyntaxKind.BinaryExpression) && (parent.parent.right === parent)
+                && go87g8IsOwnRef(goTranspiler, parent.parent.left, declaration)) {
+                return false;
+            }
+            return true;
+        }
+        // a hand-off into an `any` slot boxes the same int the box held: a map literal value, or the
+        // result of an async method (sent as AsyncResult[any]). Call arguments and sync returns may
+        // meet an int64 / float64 Go parameter or result: refuse.
+        return !(((parent?.kind === SyntaxKind.ReturnStatement) && goTranspiler.isAsyncFunction(scope))
+            || ((parent?.kind === SyntaxKind.PropertyAssignment) && (parent.initializer === n)
+                && (parent.parent?.kind === SyntaxKind.ObjectLiteralExpression)));
+    });
+    const ok = !unsafe && (writes > 0) && ((comparisons > 0) || (selfWrites > 0));
+    go87g8CounterCache.set(declaration, ok);
+    return ok;
+}
+const goLocalIsSafeToTypeBase87g8 = GoTranspiler.prototype.goLocalIsSafeToType;
+GoTranspiler.prototype.goLocalIsSafeToType = function (scope, declaration, varName: string, goType: string, stringWriteProven = false): boolean {
+    if (goLocalIsSafeToTypeBase87g8.call(this, scope, declaration, varName, goType, stringWriteProven)) {
+        return true;
+    }
+    return (goType === 'int') && go87g8IsIntCounter(this, declaration);
+};
+// the compound / self writes of a counter print natively on the int local
+const goNativeCompoundAssignmentBase87g8 = GoTranspiler.prototype.goNativeCompoundAssignment;
+GoTranspiler.prototype.goNativeCompoundAssignment = function (op, leftNode, leftText: string, rightNode, rightText: string): string | undefined {
+    const shipped = goNativeCompoundAssignmentBase87g8.call(this, op, leftNode, leftText, rightNode, rightText);
+    if (shipped !== undefined) {
+        return shipped;
+    }
+    const declaration = (leftNode?.kind === SyntaxKind.Identifier) ? this.goDeclarationOfIdentifier(leftNode) : undefined;
+    if ((declaration === undefined) || !go87g8IsIntCounter(this, declaration) || !go87g8IntLiteral(rightNode)) {
+        return undefined;
+    }
+    if ((op !== SyntaxKind.PlusEqualsToken) && (op !== SyntaxKind.MinusEqualsToken)) {
+        return undefined;
+    }
+    return `${leftText.trim()} ${(op === SyntaxKind.PlusEqualsToken) ? '+=' : '-='} ${rightText.trim()}`;
+};
+// ===== ral-87g8 R2 (end) =====
