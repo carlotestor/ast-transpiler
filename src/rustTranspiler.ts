@@ -24531,7 +24531,7 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** ral-61i: `let x = undefined` / `let x: T;` (a statement, one declarator) written only as statements `x = await this.<endpoint> (..)`
      *  of REST endpoints declared `Promise<Dict>` (or `x = undefined`): the optional map the declared-endpoint rule holds. */
-    rustDeclaredDictEndpointLet(d: any): boolean {
+    rustDeclaredDictEndpointLet(d: any, comparisonsRead = false): boolean {
         const init: any = this.rustSkipWrappers(d.initializer);
         if (init !== undefined && this.literalKindOfNode(init) !== 'null') return false;
         if (d.parent?.parent?.kind !== SyntaxKind.VariableStatement || this.rustTestTierSource(d)) return false;
@@ -24544,6 +24544,8 @@ export class RustTranspiler extends BaseTranspiler {
             if (!ok) return;
             if (isIdentifier(n) && String(n.text) === name && n !== d.name && !this.rustIdentifierIsPropertyName(n) && this.rustIdentifierRefersToDeclaration(n, d)) {
                 const up: any = n.parent;
+                // a comparison (`x !== undefined`) only reads x, it writes nothing
+                if (comparisonsRead && isBinaryExpression(up) && up.left === n && this.isEqualityOp(up.operatorToken.kind)) return;
                 if (isBinaryExpression(up) && up.left === n) {
                     if (up.operatorToken.kind !== SyntaxKind.EqualsToken || up.parent?.kind !== SyntaxKind.ExpressionStatement) { ok = false; return; }
                     const rhs: any = this.rustSkipWrappers(up.right);
@@ -26581,7 +26583,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (!isIdentifier(recv) || !isIdentifier(dflt) || String(recv.text) !== String(dflt.text)) return false;
         const declaration: any = this.rustDeclarationOfIdentifier(recv);
         if (declaration === undefined || declaration !== this.rustDeclarationOfIdentifier(dflt)) return false;
-        return isVariableDeclaration(declaration) && this.rustDeclaredDictEndpointLet(declaration);
+        return isVariableDeclaration(declaration) && this.rustDeclaredDictEndpointLet(declaration, true);
     }
 
     /** A base `safeDict*` / `safeList*` call (default absent, nullish or an empty literal of its kind), or a base `extend`/`omit`. */
