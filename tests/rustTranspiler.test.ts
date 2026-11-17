@@ -23058,7 +23058,7 @@ describe('ral-68b: declared-empty Int locals typed from TypeScript (typed-slot n
     test('gate parseLedgerEntry `timestamp`: parseInt of a string (times an int literal) into an Int local is Option<i64>', () => {
         const out = write ('ral-68b-parseint', parseBody ('parseInt (rawTimestamp as string) * 1000'));
         expect(out).toContain('let mut timestamp: Option<i64> = None;');
-        expect(out).toMatch(/timestamp = \(match &rawTimestamp \{ Value::Str\(__parse_s\).*\}\)\.as_i64\(\);/);
+        expect(out).toMatch(/timestamp = \(match rawTimestamp\.as_deref\(\) \{ Some\(__parse_s\).*\}\)\.as_i64\(\);/);
         expect(out).toContain('Value::from(timestamp)');
     });
     test('negative: parseInt times a float literal keeps Value (a Float product)', () => {
@@ -26176,5 +26176,23 @@ describe('rust toString of an integer reader local', () => {
         try { out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
         expect(out).toContain('let mut limit: Option<i64> = ');
         expect(out).toContain('(match limit { Some(__n) => __n.to_string(), None => "null".to_string() })');
+    });
+});
+
+describe('rust cast length of a string reader local', () => {
+    const base = "export type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return d; }\n}\n";
+    const venue = "import Exchange from './base/Exchange.js';\n"
+        + "export default class venue extends Exchange {\n"
+        + "    isLong (item: any): boolean {\n        const raw = this.safeString (item, 'time');\n        if ((raw as string).length > 10) {\n            return true;\n        }\n        return false;\n    }\n}\n";
+    test('`(x as string).length` reads the Option<String> local', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-93re3-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), venue);
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        let out = '';
+        try { out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+        expect(out).toContain('let mut raw: Option<String> = ');
+        expect(out).toContain('raw.as_deref().unwrap_or_default().chars().count() as i64');
     });
 });
