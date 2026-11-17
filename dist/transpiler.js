@@ -45800,6 +45800,34 @@ GoTranspiler.prototype.printReturnStatement = function(node, identation) {
   }
   return printReturnStatementBaseTypedVenue.call(this, node, identation);
 };
+GoTranspiler.prototype.goTernaryJoinHasForeignComparison = function(declaration, goType) {
+  const scope = this.goEnclosingFunction(declaration);
+  const name = declaration.name;
+  if (scope === void 0) {
+    return true;
+  }
+  return this.hasNodeWhere(scope, (n) => {
+    if (n.kind !== SyntaxKind5.Identifier || n.text !== name.text || n === name) {
+      return false;
+    }
+    let current = n;
+    while (current.parent?.kind === SyntaxKind5.ParenthesizedExpression) {
+      current = current.parent;
+    }
+    const parent = current.parent;
+    const ordered = parent?.kind === SyntaxKind5.BinaryExpression && ORDERED_COMPARISON_OPERATORS[parent.operatorToken.kind] !== void 0;
+    if (parent?.kind !== SyntaxKind5.BinaryExpression || COMPARISON_TOKENS.indexOf(parent.operatorToken.kind) < 0 && !ordered) {
+      return false;
+    }
+    const other = this.goUnwrapParenthesizedNode(parent.left === current ? parent.right : parent.left);
+    if (other?.kind === SyntaxKind5.NullKeyword || other?.kind === SyntaxKind5.Identifier && other.text === "undefined" || other?.kind === SyntaxKind5.NumericLiteral || other?.kind === SyntaxKind5.StringLiteral || this.goIsSignedNumericLiteral(other)) {
+      return false;
+    }
+    const otherType = this.goOperandStaticType(other, this.printNode(other, 0));
+    const widened = ordered && (goType === "int64" && otherType === "int" || goType === "int" && otherType === "int64");
+    return otherType !== void 0 && otherType !== goType && !widened;
+  });
+};
 
 // src/javaTranspiler.ts
 init_esm_shims();
