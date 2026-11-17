@@ -32264,6 +32264,9 @@ export class RustTranspiler extends BaseTranspiler {
         const nil = this.rustOptListNilInit(declaration);
         // ral-80c R1: or a copy of an unwritten parameter whose typed signature slot is `Option<Vec<String>>` / `Vec<String>`
         const strVecAlias = !nil && this.rust80cStrVecParamAlias(init);
+        // a ternary whose two arms are each a string-list source (an unwritten `Strings` parameter, `this.symbols` / `this.ids`,
+        // a string-literal list) holds that list or Null: the optional list, typed only for a native use
+        const listTernary = !nil && !strVecAlias && this.rustStrListTernary(init);
         // ral-80d: a `const x = this.safeValue* (..)` tested with `Array.isArray (x)`: x splits once into the list it holds
         // (`Option<List>`) and the map it holds (`x__map: Option<Dict>`); anything else (Null, scalars) is None in both
         // ral-87rf R1: or a `const x = await this.<implicit endpoint> (..)` (any declared answer: a map, a list, a string) tested
@@ -32278,7 +32281,7 @@ export class RustTranspiler extends BaseTranspiler {
             && this.rustSkipWrappers(declaration.initializer)?.kind === SyntaxKind.AwaitExpression && !this.rustTestTierSource(init)
             && this.rustDeclaredEndpointKind(init) === 'list' && String(init.getText()).split('\n')[0].length <= 240;
         const split = split0 && !declaredList;
-        if (!nil && !strVecAlias && !split && !declaredList && !this.rustOptListSource(init)) return false;
+        if (!nil && !strVecAlias && !split && !declaredList && !listTernary && !this.rustOptListSource(init)) return false;
         const name = String(declaration.name.text);
         const fn: any = this.rustEnclosingFunction(declaration);
         if (fn === undefined || isSourceFile(fn)) return false;
@@ -32397,7 +32400,9 @@ export class RustTranspiler extends BaseTranspiler {
             return extra !== undefined;
         });
         // D11: a list that is only handed on is held too (the handle box replaces the Value box).
-        if (!safe || (nil && (writes === 0 || natives === 0)) || (split && isArrayTests === 0) || (declaredList && natives === 0)) return false;
+        if (!safe || (nil && (writes === 0 || natives === 0)) || (split && isArrayTests === 0) || ((declaredList || listTernary) && natives === 0)) return false;
+        // a list ternary takes no box back (a `Value::Arr` hand-off would only move the conversion)
+        if (listTernary && boxes.some(([, form]) => form !== 'lend')) return false;
         // stack-90r: a split local that takes a ral-90rf R1 map box or R2 rejoin is typed only when it needs at most ONE box in
         // all (map boxes, rejoins and list-arm clone / move boxes; a `&x` lend is no box): one needing more stays the `Value` it was (alpaca cancelAllOrders,
         // tokocrypto fetchTickers, whitebit fetchMyTrades)
@@ -32561,6 +32566,19 @@ export class RustTranspiler extends BaseTranspiler {
             if (isPropertyAccessExpression(up) && up.expression === n && String(up.name.text) === 'push') return false;
         }
         return true;
+    }
+
+    /** `c ? a : b` where each arm is an unwritten string-list parameter, a base `string[]` field or a string-literal list. */
+    rustStrListTernary(init: Node | undefined): boolean {
+        const node: Node | undefined = init === undefined ? undefined : this.rustSkipWrappers(init);
+        if (node === undefined || !isConditionalExpression(node) || String(node.getText()).split('\n')[0].length > 240) return false;
+        const arm = (e: Expression): boolean => {
+            const a: Node | undefined = this.rustSkipWrappers(e);
+            if (a === undefined) return false;
+            if (isArrayLiteralExpression(a)) return a.elements.every((x: Node) => isStringLiteral(x));
+            return this.rust80cStrVecParamAlias(a as Expression) || this.rust80cBaseStrListField(a as Expression);
+        };
+        return arm(node.whenTrue) && arm(node.whenFalse);
     }
 
     /** ral-80c R1: `this.symbols` / `this.ids`, base fields declared `string[]` (always a list). */

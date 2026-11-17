@@ -25755,3 +25755,21 @@ describe('pass-through venue string helpers: `fromEp (ep: Str, market): Str` pri
         expect(t).toContain('let mut open: Value = ');
     });
 });
+
+describe('string-list ternaries: `c ? this.symbols : symbols` / `c ? [] : outcomes` are optional lists when every use is native', () => {
+    const mk = () => {
+        const dir = path.join (rustFixtureRoot, 'r92-str-list-ternary');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Strings = string[] | undefined;\nexport default class Exchange {\n    symbols: string[] = undefined;\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Strings } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    limits (symbols: Strings = undefined, params: Dict = {}): Dict {\n        const resolved = (symbols === undefined) ? this.symbols : symbols;\n        if (resolved === undefined) {\n            return {};\n        }\n        const result: Dict = {};\n        for (let i = 0; i < resolved.length; i++) {\n            result[resolved[i]] = 1;\n        }\n        return result;\n    }\n    handed (symbols: Strings = undefined): Dict {\n        const list = (symbols === undefined) ? [] : symbols;\n        return { 'n': list.length, 'list': list };\n    }\n}\n");
+        return new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } }).transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('native-only uses: Option<List> with is_none / slice reads; a boxed hand-off stays Value', () => {
+        const out = mk();
+        const a = out.slice(out.indexOf('fn limits'), out.indexOf('fn handed'));
+        expect(a).toContain('let mut resolved: Option<crate::value::List> = ');
+        expect(a).toContain('resolved.is_none()');
+        const b = out.slice(out.indexOf('fn handed'));
+        expect(b).toContain('let mut list: Value = ');
+    });
+});
