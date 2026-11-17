@@ -43522,6 +43522,65 @@ function ccxtGo90g2GuardedNonNil(goTranspiler, use, name) {
     return nonNilBlock.call(this, use, name) || ccxtGo90g2GuardedNonNil(this, use, name);
   };
 }
+var CCXT_GO_90G2_FILL_CALLS = ["account", "extend", "deepExtend"];
+function ccxtGo90g2NeverNilMap(goTranspiler, value) {
+  const node = ccxtGoUnwrapTypeOnly(value);
+  if (node?.kind === SyntaxKind5.ObjectLiteralExpression) {
+    return !node.properties.some((p) => p.kind === SyntaxKind5.SpreadAssignment);
+  }
+  if (node?.kind !== SyntaxKind5.CallExpression || node.expression?.kind !== SyntaxKind5.PropertyAccessExpression || node.expression.expression?.kind !== SyntaxKind5.ThisKeyword || CCXT_GO_90G2_FILL_CALLS.indexOf(node.expression.name?.text) < 0) {
+    return false;
+  }
+  try {
+    const symbol = goTranspiler.checkerOrUndefined()?.getSymbolAtLocation(node.expression.name);
+    const decls = symbol?.declarations ?? [];
+    return decls.length > 0 && decls.every((d) => /(^|[\\/])ts[\\/]src[\\/]base[\\/]Exchange(\.nooverloads\.\d+)?\.ts$/.test(String(d?.resolve?.()?.getSourceFile?.()?.fileName ?? "")));
+  } catch (e) {
+    return false;
+  }
+}
+function ccxtGo90g2FillStatement(goTranspiler, statement, name) {
+  if (statement?.kind !== SyntaxKind5.ExpressionStatement) {
+    return false;
+  }
+  const write = goTranspiler.goUnwrapParenthesizedNode(statement.expression);
+  return write?.kind === SyntaxKind5.BinaryExpression && write.operatorToken?.kind === SyntaxKind5.EqualsToken && ccxtGoUnwrapTypeOnly(write.left)?.kind === SyntaxKind5.Identifier && ccxtGoUnwrapTypeOnly(write.left).text === name && ccxtGo90g2NeverNilMap(goTranspiler, write.right);
+}
+function ccxtGo90g2FilledBefore(goTranspiler, use, name) {
+  for (let child = use, cur = use.parent; cur !== void 0; child = cur, cur = cur.parent) {
+    if (cur.kind === SyntaxKind5.Block || cur.kind === SyntaxKind5.CaseClause || cur.kind === SyntaxKind5.DefaultClause) {
+      const statements = cur.statements;
+      const index = statements.indexOf(child);
+      for (let i = 0; i < index; i++) {
+        const s = statements[i];
+        if (ccxtGo90g2FillStatement(goTranspiler, s, name)) {
+          return true;
+        }
+        if (s.kind === SyntaxKind5.IfStatement && ccxtGo90g2TestsNil(goTranspiler, s.expression, name) && s.thenStatement?.kind === SyntaxKind5.Block && s.thenStatement.statements.some((t) => ccxtGo90g2FillStatement(goTranspiler, t, name))) {
+          return true;
+        }
+      }
+    }
+    if (isFunctionLike(cur)) {
+      return false;
+    }
+  }
+  return false;
+}
+{
+  const nonNilBlock = GoTranspiler.prototype.goInsideNonNilBlock;
+  GoTranspiler.prototype.goInsideNonNilBlock = function(use, name) {
+    return nonNilBlock.call(this, use, name) || ccxtGo90g2FilledBefore(this, use, name);
+  };
+  const keepsMap = GoTranspiler.prototype.goMapLocalUseKeepsMap;
+  GoTranspiler.prototype.goMapLocalUseKeepsMap = function(ref, rebinds, noDefault, ws, name) {
+    if (keepsMap.call(this, ref, rebinds, noDefault, ws, name)) {
+      return true;
+    }
+    const write = ref.parent;
+    return noDefault && write?.kind === SyntaxKind5.BinaryExpression && write.left === ref && write.operatorToken?.kind === SyntaxKind5.EqualsToken && write.parent?.kind === SyntaxKind5.ExpressionStatement && ccxtGo90g2NeverNilMap(this, write.right);
+  };
+}
 
 // src/javaTranspiler.ts
 init_esm_shims();
