@@ -5441,6 +5441,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-43e: a venue (not base-tier) method declared `Market` / `MarketInterface`, not async, whose every return is a
      *  `safeMarket` record (the call itself or a `const` struct local bound to it): it hands the struct back as is. */
     rustVenueReturnsMarket(node: any, file: string): boolean;
+    /** ral-92rg R1: `return x` / `return x as MarketInterface` of a const `x = this.safeDict (this.markets, k)` the
+     *  method's own top-level `if (x === undefined || ..) { throw .. }` rules out before the return: a loaded market
+     *  record, decoded once at the return (`FromRaw`), so callers hold the struct. */
+    rust92rgLoadedMarketReturn(method: any, ret: any): boolean;
     /** The `market` parameter of a base market-slot reader, read only by key readers, null tests or `Value` hand-offs. */
     rustMarketSlotParam(param: any): boolean;
     private rustMarketDepth;
