@@ -3897,7 +3897,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `this.safeDict (x, k, x)` / `this.safeList (x, k, x)` whose default is its own receiver, x a `let` filled only by endpoints
      *  declared `Promise<Dict>` (ral-61i, a syntactic proof) or a never-rewritten const answer of an endpoint declared of the
      *  read's kind: the answer is the container read at k or x itself, so that kind or Null on every path. */
-    rustSelfDefaultedRead(call: any, kind: 'dict' | 'list' | 'api'): boolean;
+    rustSelfDefaultedRead(call: Node, kind: 'dict' | 'list' | 'api'): boolean;
     /** A base `safeDict*` / `safeList*` call (default absent, nullish or an empty literal of its kind), or a base `extend`/`omit`. */
     rustOptContainerSourceOk(call: any, kind: 'dict' | 'list' | 'api'): boolean;
     /** The optional form's local behind an identifier, else undefined. */

@@ -82963,21 +82963,25 @@ ${iden}}`;
   rustSelfDefaultedRead(call, kind) {
     if (kind === "api" || !isCallExpression6(call) || call.arguments.length !== 3 || this.rustTestTierSource(call))
       return false;
-    if (String(call.expression?.name?.text ?? "") !== (kind === "dict" ? "safeDict" : "safeList"))
+    if (!isPropertyAccessExpression3(call.expression) || String(call.expression.name.text) !== (kind === "dict" ? "safeDict" : "safeList"))
       return false;
     const recv = this.rustSkipWrappers(call.arguments[0]);
     const dflt = this.rustSkipWrappers(call.arguments[2]);
-    if (!isIdentifier3(recv) || !isIdentifier3(dflt) || String(recv.text) !== String(dflt.text))
+    if (recv === void 0 || dflt === void 0 || !isIdentifier3(recv) || !isIdentifier3(dflt) || String(recv.text) !== String(dflt.text))
       return false;
     const declaration = this.rustDeclarationOfIdentifier(recv);
     if (declaration === void 0 || declaration !== this.rustDeclarationOfIdentifier(dflt))
       return false;
+    if (kind === "dict" && isParameterDeclaration3(declaration)) {
+      const type = declaration.type;
+      return type !== void 0 && isTypeReferenceNode2(type) && isIdentifier3(type.typeName) && String(type.typeName.text) === "Dict" && type.typeArguments === void 0 && declaration.questionToken === void 0 && declaration.initializer === void 0 && !this.rustHasWrites(declaration);
+    }
     if (!isVariableDeclaration3(declaration))
       return false;
     if (kind === "dict" && this.rustDeclaredDictEndpointLet(declaration, true))
       return true;
     const init = this.rustSkipWrappers(declaration.initializer);
-    if ((declaration.parent.flags & NodeFlags4.Const) === 0 || init?.kind !== SyntaxKind7.AwaitExpression || !this.rustDeclaredEndpointWrite(init))
+    if ((declaration.parent.flags & NodeFlags4.Const) === 0 || init === void 0 || init.kind !== SyntaxKind7.AwaitExpression || !this.rustDeclaredEndpointWrite(init))
       return false;
     return this.rustDeclaredEndpointKind(this.rustSkipWrappers(init.expression)) === kind;
   }
