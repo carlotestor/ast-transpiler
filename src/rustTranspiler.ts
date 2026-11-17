@@ -26777,6 +26777,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (method === 'keysort') return !this.rustTestTierSource(call) && call.arguments.length === 1 && this.rustCalleeIsRuntimeBase(call) && this.rustKeysortOfDict(call) && this.rustOmitLineFits(call) ? 'dict' : undefined;
         // `sortBy*` hands a non-list input back as it came: a list only when its input is one (the Arr-only proof)
         if (method === 'sortBy' || method === 'sortBy2') return !this.rustTestTierSource(call) && (this.extraArrSource(call) || this.rustSortOfTypedList(call)) ? 'list' : undefined;
+        // base `sort` (exchange_stubs.rs) sorts a `Value::Arr` into a new `Value::Array` and hands anything else back: the same proof
+        if (method === 'sort') return !this.rustTestTierSource(call) && call.arguments.length === 1 && this.rustSortOfTypedList(call) ? 'list' : undefined;
         if (/^(?:safe|extend$|deepExtend$|omit$|keysort$|parseJson$|watch|subscribe|unsubscribe|market$|currency$)/.test(method)) return undefined;
         if (this.rustTestTierSource(call) || this.rustTypedUnified.has(method)) return undefined;
         // base `handle*` tuples have their own slot rules; a venue `handle*` whose body builds its tuple list is a fresh list

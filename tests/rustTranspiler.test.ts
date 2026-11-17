@@ -26220,3 +26220,25 @@ describe('rust venue Option<Market> producers returning a typed market lookup', 
         expect(out).toMatch(/fn findLoose\(&self, [^)]*\) -> Value/);
     });
 });
+
+describe('rust base sort of a proven list', () => {
+    const base = "export type Str = string | undefined;\nexport default class Exchange {\n    sort (array: any): any { return array; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    hold (x: any): any { return x; }\n}\n";
+    const venue = "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n"
+        + "    joinIds (ids: string[]): string {\n        const quoteIds: string[] = [];\n        for (let i = 0; i < ids.length; i++) {\n            quoteIds.push (ids[i]);\n        }\n        const sorted: string[] = this.sort (quoteIds);\n        let out = '';\n        for (let i = 0; i < sorted.length; i++) {\n            out = out + this.safeString (sorted, i, '');\n        }\n        return out;\n    }\n"
+        + "    sortAny (x: any): number {\n        const sorted = this.sort (this.hold (x));\n        return sorted.length;\n    }\n}\n";
+    let out = '';
+    beforeAll(() => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-93rg4-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), venue);
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        try { out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+    });
+    test('a sort of a typed list local is a list', () => {
+        expect(out).toMatch(/let mut sorted: crate::value::List = self\.sort\([^;]*\)\.into_list\(\);/);
+    });
+    test('a sort of an unproven value stays Value', () => {
+        expect(out).toMatch(/let mut sorted: Value = self\.sort\(self\.hold\(/);
+    });
+});
