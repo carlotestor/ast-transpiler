@@ -39108,3 +39108,38 @@ GoTranspiler.prototype.printReturnStatement = function (node, identation) {
     }
     return printReturnStatementBaseTypedVenue.call (this, node, identation);
 };
+
+// ===== ral-93g7 (begin): ternary joins over int / int64 operands =====
+// R1: an ordered comparison of a ternary int64 local with a Go `int` operand (or of an `int` local with an
+// int64 one) is not foreign: printWideningComparison prints it as `int64(x) > y`, the same answer the
+// boxed IsGreaterThan gave. Equality against another static type keeps the box (`dataLength == pageSize`).
+GoTranspiler.prototype.goTernaryJoinHasForeignComparison = function (declaration, goType: string): boolean {
+    const scope = this.goEnclosingFunction(declaration);
+    const name = declaration.name;
+    if (scope === undefined) {
+        return true;
+    }
+    return this.hasNodeWhere(scope, (n) => {
+        if ((n.kind !== SyntaxKind.Identifier) || (n.text !== name.text) || (n === name)) {
+            return false;
+        }
+        let current = n;
+        while (current.parent?.kind === SyntaxKind.ParenthesizedExpression) {
+            current = current.parent;
+        }
+        const parent = current.parent;
+        const ordered = (parent?.kind === SyntaxKind.BinaryExpression) && (ORDERED_COMPARISON_OPERATORS[parent.operatorToken.kind] !== undefined);
+        if ((parent?.kind !== SyntaxKind.BinaryExpression) || ((COMPARISON_TOKENS.indexOf(parent.operatorToken.kind) < 0) && !ordered)) {
+            return false;
+        }
+        const other = this.goUnwrapParenthesizedNode((parent.left === current) ? parent.right : parent.left);
+        if ((other?.kind === SyntaxKind.NullKeyword) || ((other?.kind === SyntaxKind.Identifier) && (other.text === 'undefined'))
+            || (other?.kind === SyntaxKind.NumericLiteral) || (other?.kind === SyntaxKind.StringLiteral) || this.goIsSignedNumericLiteral(other)) {
+            return false;
+        }
+        const otherType = this.goOperandStaticType(other, this.printNode(other, 0));
+        const widened = ordered && (((goType === 'int64') && (otherType === 'int')) || ((goType === 'int') && (otherType === 'int64')));
+        return (otherType !== undefined) && (otherType !== goType) && !widened;
+    });
+};
+// ===== ral-93g7 (end) =====

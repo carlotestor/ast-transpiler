@@ -17109,3 +17109,27 @@ describe('ral-92g8 R4 venue string[] producers over a literal-defaulted safeList
         expect(out).toContain('OrderFlags(flags any) any {');
     });
 });
+
+describe('ral-93g7 ternary joins over int / int64 operands', () => {
+    const head = 'type Int = number | undefined;\n'
+        + 'class BaseExchange {\n'
+        + '    parseToInt (x: number): number { return x; }\n'
+        + '}\n'
+        + 'export class ex extends BaseExchange {\n';
+    test('an int64 ternary local compared with an int local is typed and compares through int64(..)', () => {
+        const out = goTranspile87g8(head
+            + '    f (limit: Int = undefined) {\n'
+            + '        const defaultLimit = 100;\n'
+            + '        const maxLimit = 1000;\n'
+            + '        const requestedLimit: Int = (limit === undefined) ? defaultLimit : limit;\n'
+            + '        const request = {};\n'
+            + '        if (requestedLimit > maxLimit) {\n'
+            + '            request[\'limit\'] = maxLimit;\n'
+            + '        }\n'
+            + '        return request;\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('var requestedLimit int64');
+        expect(out).toContain('requestedLimit > int64(maxLimit)');
+    });
+});
