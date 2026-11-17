@@ -89528,7 +89528,8 @@ ${iden}}`;
     const type = param.type;
     const typeName = type?.kind === SyntaxKind7.TypeReference && isIdentifier3(type.typeName) && type.typeArguments === void 0 ? String(type.typeName.text) : "";
     const keysList = !_RustTranspiler.RUST_LENT_HASH_LIST_METHODS.has(name) && type?.kind === SyntaxKind7.ArrayType && type.elementType?.kind === SyntaxKind7.StringKeyword;
-    const kind = _RustTranspiler.RUST_LENT_LIST_TYPES.has(typeName) || this.rustRowListTypeNode(type) || _RustTranspiler.RUST_LENT_HASH_LIST_METHODS.has(name) && this.rustScalarListTypeNode(type) || keysList ? "list" : this.rustLentRecordTypeNode(type) ? "dict" : void 0;
+    const anyList = type?.kind === SyntaxKind7.ArrayType && type.elementType?.kind === SyntaxKind7.AnyKeyword;
+    const kind = _RustTranspiler.RUST_LENT_LIST_TYPES.has(typeName) || this.rustRowListTypeNode(type) || _RustTranspiler.RUST_LENT_HASH_LIST_METHODS.has(name) && this.rustScalarListTypeNode(type) || keysList || anyList ? "list" : this.rustLentRecordTypeNode(type) ? "dict" : void 0;
     if (kind === void 0)
       return void 0;
     const pname = String(param.name.text);
