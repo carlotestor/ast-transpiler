@@ -2682,6 +2682,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     isWriteBackBindRead(read: Node): boolean;
     /** ral-52e: `const e = xs[k]; e['f'] = v; ..; xs[k] = e;` -- the bind is followed only by top-level writes on `e` and then the
      *  source's own write-back at the same receiver and key text, so a cloned element read writes the same element back. */
+    /** ral-90rd R1: the bind `const v = m[k]` is itself a typed container local (its own decision, re-entrancy guarded), so it never
+     *  prints the `let mut v: Value = ..` line ccxt's write-back pass keys on: a mutation of `v` adds no write-back to `m`. */
+    rust90rdTypedRowBind(bind: any): boolean;
     rustExplicitWriteBackBind(read: any): boolean;
     /** yb: the ccxt write-back pass (`writeBackIndexedMutations`) only fires when the line right after the bind is a top-level
      *  element / property write or push on the bound local; any other next statement (an `if`, a plain reassignment) leaves

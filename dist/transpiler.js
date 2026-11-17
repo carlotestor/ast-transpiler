@@ -72556,6 +72556,11 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
   }
   /** ral-52e: `const e = xs[k]; e['f'] = v; ..; xs[k] = e;` -- the bind is followed only by top-level writes on `e` and then the
    *  source's own write-back at the same receiver and key text, so a cloned element read writes the same element back. */
+  /** ral-90rd R1: the bind `const v = m[k]` is itself a typed container local (its own decision, re-entrancy guarded), so it never
+   *  prints the `let mut v: Value = ..` line ccxt's write-back pass keys on: a mutation of `v` adds no write-back to `m`. */
+  rust90rdTypedRowBind(bind) {
+    return isVariableDeclaration3(bind) && !this.rustBorrowedPending.has(bind) && this.rustBorrowedLocalKind(bind) === "dict";
+  }
   rustExplicitWriteBackBind(read) {
     const declaration = read.parent;
     if (!isIdentifier3(declaration.name) || !isElementAccessExpression4(read) || !isIdentifier3(read.expression))
@@ -78097,7 +78102,8 @@ ${iden}}`;
       if (isBinaryExpression5(at) && at.operatorToken.kind === SyntaxKind7.EqualsToken && isElementAccessExpression4(at.left) && isIdentifier3(at.left.expression) && at.left.expression.text === n.text && this.isNodeInsideNode(up, at.right) && this.rustListIndexLiteralWrite(at.left.expression))
         ownWrite = at;
     }
-    if (this.isWriteBackBindRead(up) && !(top === up && this.rustExplicitWriteBackBind(up)) || !this.isNativeAccessPositionSafe(up, ownWrite) || top !== up && (this.isWriteBackBindRead(top) || !this.isNativeAccessPositionSafe(top, ownWrite)))
+    const ownKeysRowBind = top === up && isVariableDeclaration3(use) && use.initializer === top && isIdentifier3(use.name) && this.rustOwnKeysTypedRowRead(up) && (this.rustOwnKeysElementKey(n, this.rustSkipWrappers(up.argumentExpression)) || this.rust90rdTypedRowBind(use));
+    if (this.isWriteBackBindRead(up) && !(top === up && (this.rustExplicitWriteBackBind(up) || ownKeysRowBind)) || !this.isNativeAccessPositionSafe(up, ownWrite) || top !== up && (this.isWriteBackBindRead(top) || !this.isNativeAccessPositionSafe(top, ownWrite)))
       return false;
     const key = this.rustSkipWrappers(up.argumentExpression);
     if (key === void 0 || isStringLiteralLikeNode4(key))
