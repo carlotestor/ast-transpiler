@@ -43475,6 +43475,78 @@ GoTranspiler.prototype.goNativeCompoundAssignment = function(op, leftNode, leftT
   }
   return `${leftText.trim()} ${op === SyntaxKind5.PlusEqualsToken ? "+=" : "-="} ${rightText.trim()}`;
 };
+function go90g8CastElementRead(node) {
+  let current = node;
+  let parent = current.parent;
+  while (parent?.kind === SyntaxKind5.AsExpression || parent?.kind === SyntaxKind5.ParenthesizedExpression || parent?.kind === SyntaxKind5.NonNullExpression) {
+    if (parent.kind === SyntaxKind5.AsExpression && parent.expression !== current) {
+      return false;
+    }
+    current = parent;
+    parent = current.parent;
+  }
+  if (current === node || parent?.kind !== SyntaxKind5.ElementAccessExpression || parent.expression !== current) {
+    return false;
+  }
+  const above = parent.parent;
+  if (above?.kind === SyntaxKind5.BinaryExpression && above.left === parent && above.operatorToken.kind >= SyntaxKind5.FirstAssignment && above.operatorToken.kind <= SyntaxKind5.LastAssignment) {
+    return false;
+  }
+  return above?.kind !== SyntaxKind5.DeleteExpression && above?.kind !== SyntaxKind5.PostfixUnaryExpression && above?.kind !== SyntaxKind5.PrefixUnaryExpression;
+}
+function go90g8IsThrowBlock(statement) {
+  if (statement?.kind === SyntaxKind5.ThrowStatement) {
+    return true;
+  }
+  const last = statement?.kind === SyntaxKind5.Block ? statement.statements[statement.statements.length - 1] : void 0;
+  return last?.kind === SyntaxKind5.ThrowStatement;
+}
+function go90g8IsNilGuardOf(goTranspiler, statement, declaration) {
+  if (statement?.kind !== SyntaxKind5.IfStatement || statement.elseStatement !== void 0 || !go90g8IsThrowBlock(statement.thenStatement)) {
+    return false;
+  }
+  let test = statement.expression;
+  while (test?.kind === SyntaxKind5.ParenthesizedExpression) {
+    test = test.expression;
+  }
+  if (test?.kind !== SyntaxKind5.BinaryExpression || test.operatorToken.kind !== SyntaxKind5.EqualsEqualsEqualsToken && test.operatorToken.kind !== SyntaxKind5.EqualsEqualsToken) {
+    return false;
+  }
+  const pairs = [[test.left, test.right], [test.right, test.left]];
+  return pairs.some(([a, b]) => a?.kind === SyntaxKind5.Identifier && goTranspiler.goIsNilLiteral(b) && goTranspiler.goIdentifierRefersToDeclaration(a, declaration));
+}
+function go90g8PastNilThrow(goTranspiler, node) {
+  const declaration = goTranspiler.goDeclarationOfIdentifier(node);
+  const list = declaration?.parent;
+  if (declaration === void 0 || list?.kind !== SyntaxKind5.VariableDeclarationList || (list.flags & 2) === 0) {
+    return false;
+  }
+  let child = node;
+  for (let up = node.parent; up !== void 0; child = up, up = up.parent) {
+    if (up.kind === SyntaxKind5.FunctionExpression || up.kind === SyntaxKind5.ArrowFunction || up.kind === SyntaxKind5.MethodDeclaration) {
+      return false;
+    }
+    if (up.kind === SyntaxKind5.Block || up.kind === SyntaxKind5.SourceFile) {
+      const index = up.statements.indexOf(child);
+      for (let i = 0; i < index; i++) {
+        if (go90g8IsNilGuardOf(goTranspiler, up.statements[i], declaration)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+var goMarketUseReadsTheValueBase90g8 = GoTranspiler.prototype.goMarketUseReadsTheValue;
+GoTranspiler.prototype.goMarketUseReadsTheValue = function(node, throwingAccessor, keepsMap = false, handsOn = false) {
+  if (goMarketUseReadsTheValueBase90g8.call(this, node, throwingAccessor, keepsMap, handsOn)) {
+    return true;
+  }
+  if (!keepsMap) {
+    return false;
+  }
+  return go90g8CastElementRead(node) || this.goMarketUseHandsTheMapOn(node, node.parent) && go90g8PastNilThrow(this, node);
+};
 
 // src/javaTranspiler.ts
 init_esm_shims();
