@@ -45041,7 +45041,12 @@ GoTranspiler.prototype.go92g7HasNumericUse = function(declaration) {
     if (call?.kind !== SyntaxKind5.CallExpression || call.arguments.indexOf(n) < 0) {
       return false;
     }
-    return (this.goInt64SumOperands(call) !== void 0 || this.go92g7MinMaxName(call) !== void 0) && this.go92g7Int64Operands(call) !== void 0;
+    if (this.goInt64SumOperands(call) === void 0 && this.go92g7MinMaxName(call) === void 0) {
+      return false;
+    }
+    const other = call.arguments[1 - call.arguments.indexOf(n)];
+    const kind = other === void 0 || other.kind === SyntaxKind5.SpreadElement ? void 0 : this.goOperandStaticType(other, this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(other, 0)));
+    return call.arguments.length === 2 && (kind === "int64" || kind === "const-int" && this.goLiteralFitsKind(other, "int"));
   });
 };
 var printCallExpressionBase92g7 = GoTranspiler.prototype.printCallExpression;
@@ -45055,8 +45060,11 @@ GoTranspiler.prototype.printCallExpression = function(node, identation) {
     const [a, b] = operands.map((operand) => this.printNode(operand, 0).trim());
     return `${minMax}(${a}, ${b})`;
   }
-  const text = operands.map((operand, index) => this.go92g7OperandText(operand, index)).join(" + ");
   const up = node.parent;
+  if (up?.kind === SyntaxKind5.BinaryExpression && up.operatorToken.kind === SyntaxKind5.EqualsToken && up.right === node && up.left?.kind === SyntaxKind5.Identifier && !["int64", "int"].includes(this.goDeclaredTypeOfIdentifier(up.left))) {
+    return printCallExpressionBase92g7.call(this, node, identation);
+  }
+  const text = operands.map((operand, index) => this.go92g7OperandText(operand, index)).join(" + ");
   const bare2 = up?.kind === SyntaxKind5.VariableDeclaration || up?.kind === SyntaxKind5.ReturnStatement || up?.kind === SyntaxKind5.ParenthesizedExpression || up?.kind === SyntaxKind5.PropertyAssignment || up?.kind === SyntaxKind5.ElementAccessExpression || up?.kind === SyntaxKind5.CallExpression && up.expression !== node || up?.kind === SyntaxKind5.BinaryExpression && up.operatorToken.kind === SyntaxKind5.EqualsToken && up.right === node;
   return bare2 ? text : `(${text})`;
 };
@@ -45070,7 +45078,10 @@ GoTranspiler.prototype.goTypeOfInitializer = function(initializer, printedValue)
       return "int64";
     }
     if (minMax === void 0 && !printed.startsWith("this.Sum(") && this.goInt64SumOperands(initializer) !== void 0 && this.go92g7Int64Operands(initializer) !== void 0) {
-      return "int64";
+      const boxed = printCallExpressionBase92g7.call(this, initializer, 0);
+      if (this.goTypeOfInitializer(initializer, boxed) === "int64" || this.go92g7HasNumericUse(declaration)) {
+        return "int64";
+      }
     }
   }
   return goTypeOfInitializerBase92g7.call(this, initializer, printedValue);
