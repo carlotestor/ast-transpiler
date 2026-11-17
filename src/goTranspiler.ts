@@ -39236,6 +39236,9 @@ function goPagedListRowsLocal (goTranspiler, list): boolean {
             || this.goBoundedLoopListRead (node)) {
             return shipped;
         }
+        if (!goPagedListLocalOf (this, this.goDeclarationOfIdentifier (node.expression))) {
+            return `GetValue(${containerStr}, ${keyStr})`; // a caller's unbounded read keeps its helper (no closure)
+        }
         // the same guarded read without the DerefScalar a pointer element would need
         const level = this.goStatementLevel;
         const body = this.getIden (level + 1);
