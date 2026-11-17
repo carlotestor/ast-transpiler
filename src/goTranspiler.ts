@@ -36514,3 +36514,137 @@ GoTranspiler.prototype.goMarketCalleePrintsMap = function (call): boolean {
     return go90g8PredictionMarketProducer(this, this.goMethodDeclarationOfCallee(callee));
 };
 // ===== ral-90g8 R2 (end) =====
+
+// ===== ral-90g8 R3 (begin): pagination counters advanced by this.sum =====
+// `let page = 1; .. 'page': page .. page = this.sum (page, 1)` (and `offset = this.sum (offset, n)` with
+// n an int local) stays `any`: the Sum write is a call the int rule refuses. Sum of two non-nil ints is
+// that integer (Go `Add` answers the integral sum), so an `int` local holds the same number and the
+// write prints the native `page + 1`. The box held int64 after the first Sum and int before it; both
+// serialise the same in request params (the only hand-offs admitted: map literal values, element
+// stores, async returns). Every other write must be an int literal; reads otherwise as R2 (87g8).
+function go90g8Unparen(node) {
+    while (node?.kind === SyntaxKind.ParenthesizedExpression) {
+        node = node.expression;
+    }
+    return node;
+}
+function go90g8SumOfSelf(goTranspiler, right, declaration): boolean {
+    const call = go90g8Unparen(right);
+    if ((call?.kind !== SyntaxKind.CallExpression) || (call.arguments.length !== 2)
+        || (call.expression?.kind !== SyntaxKind.PropertyAccessExpression) || (call.expression.expression?.kind !== SyntaxKind.ThisKeyword)
+        || (call.expression.name?.text !== 'sum')) {
+        return false;
+    }
+    const [ a, b ] = call.arguments.map(go90g8Unparen);
+    if (!go87g8IsOwnRef(goTranspiler, a, declaration)) {
+        return false;
+    }
+    if (go87g8IntLiteral(b)) {
+        return true;
+    }
+    if ((b?.kind !== SyntaxKind.Identifier) || (b.text === declaration.name.text)) {
+        return false;
+    }
+    const other = goTranspiler.goDeclarationOfIdentifier(b);
+    if ((other === undefined) || (other === declaration)) {
+        return false;
+    }
+    return goTranspiler.goDeclaredTypeOfIdentifier(b) === 'int';
+}
+const go90g8SumCounterCache = new WeakMap<object, boolean>();
+function go90g8IsSumCounter(goTranspiler, declaration): boolean {
+    if ((declaration?.kind !== SyntaxKind.VariableDeclaration) || (declaration.name?.kind !== SyntaxKind.Identifier)
+        || !go87g8IntLiteral(declaration.initializer) || (declaration.type !== undefined)
+        || ((declaration.parent?.flags & ts.NodeFlags.Let) === 0)) {
+        return false;
+    }
+    if (go90g8SumCounterCache.has(declaration)) {
+        return go90g8SumCounterCache.get(declaration);
+    }
+    go90g8SumCounterCache.set(declaration, false);
+    const scope = goTranspiler.goEnclosingFunction(declaration);
+    if (scope === undefined) {
+        return false;
+    }
+    const name = declaration.name.text;
+    let sums = 0;
+    const unsafe = goTranspiler.hasNodeWhere(scope, (n) => {
+        if (((n.kind === SyntaxKind.Parameter) || (n.kind === SyntaxKind.VariableDeclaration)) && (n !== declaration)
+            && (n.name?.kind === SyntaxKind.Identifier) && (n.name.text === name)) {
+            return true;
+        }
+        if ((n.kind !== SyntaxKind.Identifier) || (n.text !== name) || (n === declaration.name)) {
+            return false;
+        }
+        const parent = n.parent;
+        if (((parent?.kind === SyntaxKind.PropertyAccessExpression) && (parent.name === n))
+            || ((parent?.kind === SyntaxKind.PropertyAssignment) && (parent.name === n))) {
+            return false;
+        }
+        if (!goTranspiler.goIdentifierRefersToDeclaration(n, declaration)) {
+            return true;
+        }
+        if ((parent?.kind === SyntaxKind.BinaryExpression) && (parent.left === n)) {
+            if (parent.operatorToken.kind !== SyntaxKind.EqualsToken) {
+                return true;
+            }
+            if (go87g8IntLiteral(parent.right)) {
+                return false;
+            }
+            if (go90g8SumOfSelf(goTranspiler, parent.right, declaration)) {
+                sums += 1;
+                return false;
+            }
+            return true;
+        }
+        // the first argument of the Sum write itself
+        if ((parent?.kind === SyntaxKind.CallExpression) && (parent.arguments[0] === n)
+            && (go90g8Unparen(parent.parent)?.kind === SyntaxKind.BinaryExpression || parent.parent?.kind === SyntaxKind.BinaryExpression)) {
+            let up = parent.parent;
+            while (up?.kind === SyntaxKind.ParenthesizedExpression) {
+                up = up.parent;
+            }
+            return !((up?.kind === SyntaxKind.BinaryExpression) && (up.operatorToken.kind === SyntaxKind.EqualsToken)
+                && go87g8IsOwnRef(goTranspiler, up.left, declaration) && go90g8SumOfSelf(goTranspiler, up.right, declaration));
+        }
+        // a map literal value, an element store `m[k] = x`, or an async return box the same integer
+        if ((parent?.kind === SyntaxKind.PropertyAssignment) && (parent.initializer === n)
+            && (parent.parent?.kind === SyntaxKind.ObjectLiteralExpression)) {
+            return false;
+        }
+        if ((parent?.kind === SyntaxKind.BinaryExpression) && (parent.right === n) && (parent.operatorToken.kind === SyntaxKind.EqualsToken)
+            && (parent.left?.kind === SyntaxKind.ElementAccessExpression)) {
+            return false;
+        }
+        return !((parent?.kind === SyntaxKind.ReturnStatement) && goTranspiler.isAsyncFunction(scope));
+    });
+    const ok = !unsafe && (sums > 0);
+    go90g8SumCounterCache.set(declaration, ok);
+    return ok;
+}
+const goLocalIsSafeToTypeBase90g8 = GoTranspiler.prototype.goLocalIsSafeToType;
+GoTranspiler.prototype.goLocalIsSafeToType = function (scope, declaration, varName: string, goType: string, stringWriteProven = false): boolean {
+    if (goLocalIsSafeToTypeBase90g8.call(this, scope, declaration, varName, goType, stringWriteProven)) {
+        return true;
+    }
+    return (goType === 'int') && go90g8IsSumCounter(this, declaration);
+};
+// the Sum write of a counter prints as the native int addition
+const printCallExpressionBase90g8 = GoTranspiler.prototype.printCallExpression;
+GoTranspiler.prototype.printCallExpression = function (node, identation) {
+    let up = node?.parent;
+    while (up?.kind === SyntaxKind.ParenthesizedExpression) {
+        up = up.parent;
+    }
+    if ((up?.kind === SyntaxKind.BinaryExpression) && (up.operatorToken.kind === SyntaxKind.EqualsToken)
+        && (go90g8Unparen(up.right) === node) && (up.left?.kind === SyntaxKind.Identifier)) {
+        const declaration = this.goDeclarationOfIdentifier(up.left);
+        if ((declaration !== undefined) && go90g8IsSumCounter(this, declaration) && go90g8SumOfSelf(this, node, declaration)
+            && (this.goDeclaredTypeOfIdentifier(up.left) === 'int')) {
+            const [ a, b ] = node.arguments.map((arg) => this.printNode(arg, 0).trim());
+            return `${a} + ${b}`;
+        }
+    }
+    return printCallExpressionBase90g8.call(this, node, identation);
+};
+// ===== ral-90g8 R3 (end) =====

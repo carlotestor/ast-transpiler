@@ -15836,3 +15836,38 @@ describe('ral-90g8 R2 prediction-venue parse*Market producers print the market m
         expect(out).toContain('ParseVenueMarket(raw any) any {');
     });
 });
+
+describe('ral-90g8 R3 pagination counters advanced by this.sum', () => {
+    const head = 'type Dict = { [key: string]: unknown };\n'
+        + 'export class ex {\n'
+        + '    sum (a: number, b: number): number { return a + b; }\n'
+        + '    async get (r: Dict): Promise<number[]> { return []; }\n';
+    test('a page counter written by this.sum (page, 1) types int and the write goes native', () => {
+        const out = goTranspile87g8(head
+            + '    async f () {\n'
+            + '        let page = 1;\n'
+            + '        while (true) {\n'
+            + '            const rows = await this.get ({ \'page\': page });\n'
+            + '            if (rows.length === 0) {\n'
+            + '                break;\n'
+            + '            }\n'
+            + '            page = this.sum (page, 1);\n'
+            + '        }\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('var page int = 1');
+        expect(out).toContain('page = page + 1');
+    });
+    test('a counter also compared with a non-literal keeps the box', () => {
+        const out = goTranspile87g8(head
+            + '    async f (max: number) {\n'
+            + '        let page = 1;\n'
+            + '        while (page < max) {\n'
+            + '            await this.get ({ \'page\': page });\n'
+            + '            page = this.sum (page, 1);\n'
+            + '        }\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('var page any = 1');
+    });
+});
