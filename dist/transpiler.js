@@ -45800,6 +45800,131 @@ GoTranspiler.prototype.printReturnStatement = function(node, identation) {
   }
   return printReturnStatementBaseTypedVenue.call(this, node, identation);
 };
+var GO_MAP_ROW_LIST_TYPE = "[]map[string]any";
+var goMapRowListVerdicts = /* @__PURE__ */ new WeakMap();
+function goMapRowSafeReaderUse(goTranspiler, n) {
+  const call = n.parent;
+  if (call?.kind !== SyntaxKind5.CallExpression || call.arguments[0] !== n || call.arguments.length < 2) {
+    return false;
+  }
+  const callee = call.expression;
+  const key = call.arguments[1];
+  return callee?.kind === SyntaxKind5.PropertyAccessExpression && callee.expression?.kind === SyntaxKind5.ThisKeyword && /^safe[A-Z]/.test(callee.name?.text ?? "") && GO_MAP_ROW_READERS.indexOf(callee.name.text) >= 0 && (key?.kind === SyntaxKind5.StringLiteral || key?.kind === SyntaxKind5.NoSubstitutionTemplateLiteral);
+}
+var GO_MAP_ROW_READERS = [
+  "safeString",
+  "safeString2",
+  "safeStringLower",
+  "safeStringUpper",
+  "safeInteger",
+  "safeInteger2",
+  "safeNumber",
+  "safeNumber2",
+  "safeBool",
+  "safeTimestamp",
+  "safeTimestamp2",
+  "safeValue",
+  "safeDict",
+  "safeList",
+  "safeFloat",
+  "safeIntegerProduct",
+  "safeStringLower2",
+  "safeStringUpper2",
+  "safeBool2",
+  "safeValue2",
+  "safeDict2",
+  "safeList2"
+];
+function goMapRowIdentifierUses(goTranspiler, declaration) {
+  const scope = goTranspiler.goEnclosingFunction(declaration);
+  const name = declaration.name?.text;
+  if (scope === void 0 || typeof name !== "string") {
+    return void 0;
+  }
+  const uses = goTranspiler.goDescendantsOf(scope).filter((n) => n.kind === SyntaxKind5.Identifier && n.text === name && n !== declaration.name && goTranspiler.goIdentifierRefersToDeclaration(n, declaration));
+  const sameName = goTranspiler.goDescendantsOf(scope).filter((n) => n.kind === SyntaxKind5.VariableDeclaration && n.name?.text === name);
+  return sameName.length === 1 ? uses : void 0;
+}
+function goMapRowElementLocal(goTranspiler, declaration, list) {
+  const init = declaration?.initializer;
+  if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier || init?.kind !== SyntaxKind5.ElementAccessExpression || init.expression?.kind !== SyntaxKind5.Identifier || init.argumentExpression?.kind !== SyntaxKind5.Identifier || declaration.type !== void 0 || declaration.parent?.declarations?.length !== 1) {
+    return false;
+  }
+  const decl = goTranspiler.checkerOrUndefined()?.getSymbolAtLocation(init.expression)?.valueDeclaration?.resolve();
+  if (decl !== list) {
+    return false;
+  }
+  if (goTranspiler.goLoopBoundedIndexRead(init, init.expression, init.argumentExpression, init.expression.text, init.argumentExpression.text) === void 0) {
+    return false;
+  }
+  const uses = goMapRowIdentifierUses(goTranspiler, declaration);
+  return uses !== void 0 && uses.length > 0 && uses.every((n) => goMapRowSafeReaderUse(goTranspiler, n));
+}
+function goMapRowList(goTranspiler, declaration) {
+  if (goMapRowListVerdicts.has(declaration)) {
+    return goMapRowListVerdicts.get(declaration);
+  }
+  goMapRowListVerdicts.set(declaration, false);
+  let verdict = false;
+  const file = String(declaration?.getSourceFile?.()?.fileName ?? "");
+  const args = declaration?.kind === SyntaxKind5.VariableDeclaration && declaration.name?.kind === SyntaxKind5.Identifier && declaration.type === void 0 && declaration.parent?.declarations?.length === 1 && !/(^|[\\/])base[\\/]/.test(file) ? goTranspiler.goSafeListLocalArgs(declaration.initializer) : void 0;
+  if (args !== void 0) {
+    const uses = goMapRowIdentifierUses(goTranspiler, declaration);
+    let elements = 0;
+    verdict = uses !== void 0 && uses.length > 0 && uses.every((n) => {
+      const parent = n.parent;
+      if (parent?.kind === SyntaxKind5.PropertyAccessExpression && parent.expression === n && parent.name?.text === "length") {
+        return true;
+      }
+      if (parent?.kind === SyntaxKind5.ElementAccessExpression && parent.expression === n && parent.parent?.kind === SyntaxKind5.VariableDeclaration && parent.parent.initializer === parent && goMapRowElementLocal(goTranspiler, parent.parent, declaration)) {
+        elements += 1;
+        return true;
+      }
+      return false;
+    }) && elements > 0;
+  }
+  goMapRowListVerdicts.set(declaration, verdict);
+  return verdict;
+}
+function goMapRowElementOf(goTranspiler, declaration) {
+  const init = declaration?.initializer;
+  if (declaration?.kind !== SyntaxKind5.VariableDeclaration || init?.kind !== SyntaxKind5.ElementAccessExpression || init.expression?.kind !== SyntaxKind5.Identifier) {
+    return false;
+  }
+  const list = goTranspiler.checkerOrUndefined()?.getSymbolAtLocation(init.expression)?.valueDeclaration?.resolve();
+  return list?.kind === SyntaxKind5.VariableDeclaration && goMapRowList(goTranspiler, list) && goMapRowElementLocal(goTranspiler, declaration, list);
+}
+var getGoLocalTypeMapRows = GoTranspiler.prototype.getGoLocalType;
+GoTranspiler.prototype.getGoLocalType = function(declaration, parsedValue) {
+  if (goMapRowList(this, declaration)) {
+    return GO_MAP_ROW_LIST_TYPE;
+  }
+  if (goMapRowElementOf(this, declaration)) {
+    return GO_SAFE_DICT_LOCAL_TYPE;
+  }
+  return getGoLocalTypeMapRows.call(this, declaration, parsedValue);
+};
+var goLoopBoundedSliceReadMapRows = GoTranspiler.prototype.goLoopBoundedSliceRead;
+GoTranspiler.prototype.goLoopBoundedSliceRead = function(node, baseExpr, keyNode, containerStr, keyStr) {
+  const list = baseExpr?.kind === SyntaxKind5.Identifier ? this.checkerOrUndefined()?.getSymbolAtLocation(baseExpr)?.valueDeclaration?.resolve() : void 0;
+  if (list?.kind === SyntaxKind5.VariableDeclaration && goMapRowList(this, list) && !containerStr.includes("\n") && !keyStr.includes("\n")) {
+    return this.goLoopBoundedIndexRead(node, baseExpr, keyNode, containerStr, keyStr);
+  }
+  return goLoopBoundedSliceReadMapRows.call(this, node, baseExpr, keyNode, containerStr, keyStr);
+};
+var printVariableDeclarationListMapRows = GoTranspiler.prototype.printVariableDeclarationList;
+GoTranspiler.prototype.printVariableDeclarationList = function(node, identation) {
+  const declaration = node?.declarations?.[0];
+  if (node?.declarations?.length === 1 && goMapRowList(this, declaration)) {
+    const args = this.goSafeListLocalArgs(declaration.initializer);
+    return this.getIden(identation) + "var " + this.printNode(declaration.name, 0) + " " + GO_MAP_ROW_LIST_TYPE + " = this.SafeListMapsTyped(" + this.printNode(args.container, 0).trim() + ", " + this.printNode(args.key, 0).trim() + ")";
+  }
+  if (node?.declarations?.length === 1 && goMapRowElementOf(this, declaration)) {
+    const init = declaration.initializer;
+    return this.getIden(identation) + "var " + this.printNode(declaration.name, 0) + " " + GO_SAFE_DICT_LOCAL_TYPE + " = " + this.printNode(init.expression, 0).trim() + "[" + this.printNode(init.argumentExpression, 0).trim() + "]";
+  }
+  return printVariableDeclarationListMapRows.call(this, node, identation);
+};
 
 // src/javaTranspiler.ts
 init_esm_shims();
