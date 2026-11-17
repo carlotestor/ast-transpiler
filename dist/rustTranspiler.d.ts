@@ -5330,6 +5330,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A sync ws request builder (declared `Dict` return, no override, no trait slot) whose required `string`
      *  parameter only seeds the request: its by-name / handler arm decodes the text once (rustDispatch.wsArg `str`). */
     rust93raWsDictBuilder(method: MethodDeclaration, param: ParameterDeclaration): boolean;
+    /** A required `string` slot of a sync ws method (no override, no trait slot) some caller fills with one of its own
+     *  locals: typed, so that local's hand-off reads natively (the arm decodes the text once, rustDispatch.wsArg `str`). */
+    rust93raWsLocalStrSlot(method: MethodDeclaration, param: ParameterDeclaration): boolean;
     /** Every same-file caller passes a string literal or a checker-`string` identifier / element read at the slot. */
     rust93raStrArgsTyped(method: MethodDeclaration, param: ParameterDeclaration): boolean;
     /** ral-63x: a sync ws method with a declared `string` return (`-> Option<String>`, no kept arm: no by-name or ws

@@ -94224,7 +94224,7 @@ ${this.getIden(identation)}}`;
       return void 0;
     const urlOnly = this.rustVenueUrlParam(method, param);
     const noArmStr = !group && /(?:^|\/)ts\/src\/pro\//.test(file) && !this.isAsyncFunction(method) && !urlOnly && this.rust63xNoArmStrMethod(method);
-    const dictBuilder = !group && /(?:^|\/)ts\/src\/pro\//.test(file) && !this.isAsyncFunction(method) && !urlOnly && !noArmStr && this.rust93raWsDictBuilder(method, param);
+    const dictBuilder = !group && /(?:^|\/)ts\/src\/pro\//.test(file) && !this.isAsyncFunction(method) && !urlOnly && !noArmStr && (this.rust93raWsDictBuilder(method, param) || this.rust93raWsLocalStrSlot(method, param));
     if (!group && /(?:^|\/)ts\/src\/pro\//.test(file) && !this.isAsyncFunction(method) && !urlOnly && !noArmStr && !dictBuilder)
       return void 0;
     const hidden = this.getMethodOverride(method);
@@ -94336,6 +94336,23 @@ ${this.getIden(identation)}}`;
     if (this.rustLocalIsReassigned(param, name))
       return false;
     return this.rustLocalUsesAll(param, name, true, (n) => this.rust92rgLiteralValueSlot(n));
+  }
+  /** A required `string` slot of a sync ws method (no override, no trait slot) some caller fills with one of its own
+   *  locals: typed, so that local's hand-off reads natively (the arm decodes the text once, rustDispatch.wsArg `str`). */
+  rust93raWsLocalStrSlot(method, param) {
+    if (param.initializer !== void 0 || param.questionToken !== void 0 || param.type?.kind !== SyntaxKind7.StringKeyword || !isIdentifier3(param.name))
+      return false;
+    if (!isIdentifier3(method.name) || this.toSnakeCaseName(String(method.name.text)) in (this.rustVirtualDispatch ?? {}))
+      return false;
+    const hidden = this.getMethodOverride(method);
+    if (hidden !== void 0 && hidden !== method)
+      return false;
+    const at = Array.from(method.parameters).indexOf(param);
+    return this.rustVenueStrCallSites(method).some((call) => {
+      const arg = call.arguments[at] === void 0 ? void 0 : this.unwrapParens(call.arguments[at]);
+      const local = arg !== void 0 && isIdentifier3(arg) ? this.rustDeclaredNode(arg) : void 0;
+      return local !== void 0 && (isVariableDeclaration3(local) || isBindingElement(local)) && local.name !== arg;
+    });
   }
   /** Every same-file caller passes a string literal or a checker-`string` identifier / element read at the slot. */
   rust93raStrArgsTyped(method, param) {
