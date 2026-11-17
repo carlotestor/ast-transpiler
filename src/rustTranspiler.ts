@@ -2935,6 +2935,24 @@ export class RustTranspiler extends BaseTranspiler {
         return undefined;
     }
 
+    /** ral-90rh R1: `n - k` / `k - n` with `n` an `Option<i64>` local seeded by `parseInt (s)` and `k` an int literal: the
+     *  printed name of `n` and the `i64` text over its payload `__b`. */
+    rust90rhOintShiftBound(expr: any): { name: string, text: string } | undefined {
+        const node: any = this.unwrapParens(expr);
+        if (node === undefined || !isBinaryExpression(node) || node.operatorToken.kind !== SyntaxKind.MinusToken) return undefined;
+        const [ left, right ] = [ this.unwrapParens(node.left), this.unwrapParens(node.right) ];
+        const local = (n: any): boolean => { const d: any = isIdentifier(n) ? this.rustDeclaredNode(n) : undefined; return d !== undefined && this.rustScalarLocalOf(n)?.kind === 'oint' && this.rust90rhParseIntInit(d.initializer); };
+        if (local(left) && this.rustScalarIntLiteral(right) !== undefined) return { name: super.printIdentifier(left), text: `__b - ${this.rustScalarIntLiteral(right)}` };
+        if (local(right) && this.rustScalarIntLiteral(left) !== undefined) return { name: super.printIdentifier(right), text: `${this.rustScalarIntLiteral(left)} - __b` };
+        return undefined;
+    }
+
+    /** ral-90rh R1: a declaration initializer `parseInt (s)` (one argument, checker type `string`; no multiply form). */
+    rust90rhParseIntInit(expr: any): boolean {
+        const node: any = this.unwrapParens(expr);
+        return node !== undefined && isCallExpression(node) && this.rustDeclInitPosition(node) && this.rust68bParseIntWrite(node);
+    }
+
     /** ral-68b: `parseInt (s)` with one argument whose checker type is `string`, or that call times an integer literal. */
     rust68bParseIntWrite(expr: any): boolean {
         const node: any = this.unwrapParens(expr);
@@ -5157,6 +5175,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (isPropertyAccessExpression(node)) return isIdentifier(node.name) && node.name.text === 'length' && (isIdentifier(node.expression) || this.rustSelfRootedLengthRecv(node.expression) || this.rustLocalRootedLengthRecv(node.expression));
         if (isElementAccessExpression(node)) return isIdentifier(node.expression) || this.rustInlineHandleStrSlot(node);
         if (isCallExpression(node) && isIdentifier(node.expression) && RustTranspiler.RUST_STR_RUNTIME_FREE.has(String(node.expression.text))) return true;
+        // ral-90rh R1: `parseInt (s)` of one checker-string argument (its kind is proven by rust90rhParseIntInit)
+        if (this.rust90rhParseIntInit(node)) return true;
         if (!isCallExpression(node) || !isPropertyAccessExpression(node.expression) || !this.rustScalarReceiver(node.expression.expression)) return false;
         // any `this.m(..)`: the kind comes from the callee's checker return
         return true;
@@ -5278,6 +5298,8 @@ export class RustTranspiler extends BaseTranspiler {
         const clientOnce = nativeUses === 0 && boxed === 1 && this.rustWsClientOnlyUse(declaration);
         // ral-51n: an any-list length typed only for its native uses (a box-only length stays the `Value` it is handed as)
         if (anyLength && typedUses === 0) return undefined;
+        // ral-90rh R1: a parseInt local typed only for its native uses (box-only stays the boxed parse)
+        if (kind === 'oint' && typedUses === 0 && this.rust90rhParseIntInit(declaration.initializer)) return undefined;
         // ral-87re: a comparison seed reading another local (cex `deposit`, only boxed into a literal) is typed for a native use only
         if (kind === 'bool' && typedUses === 0 && this.rust87reLocalSeeds.has(declaration)) return undefined;
         // ral-61p: a handleOption local typed from its default literal only for its native uses (boxed-straight-back stays `Value`)
@@ -5709,6 +5731,8 @@ export class RustTranspiler extends BaseTranspiler {
         const cast = this.rustStrCastCall(node); if (cast !== undefined) return this.rustScalarValueKind(cast, fresh) === 'ostr' ? 'ostr' : undefined;
         if (fresh && this.rustClockString(node)) return 'str';
         if (fresh && this.rustNumParamToString(node)) return 'str';
+        // ral-90rh R1: `const n = parseInt (s)` over a checker-string `s`: the native parse answers `Int` or `Null` (`Option<i64>`)
+        if (fresh && this.rust90rhParseIntInit(node)) return 'oint';
         // ral-87rh R3: `x = v.toString ()` as a statement write into a `let` seeded with a string literal, where the printer
         // boxes the call whole as `Value::Str(format!("{}", v))` (rustFormatPrints): the `String` that `format!` makes
         if (fresh && this.rust87rhToStringWrite(node)) return 'str';
@@ -7765,6 +7789,10 @@ export class RustTranspiler extends BaseTranspiler {
         // tb: an `Option<i64>` parseToInt bound: `is_less_than(Int, Null)` is false, `Some` orders as f64 like the helper;
         // ral-55e / ral-56n: or a parseToInt bound whose `Option<i64>` kind is already decided (rustDecidedOintBound)
         if (boundKind === 'oint' && (this.rustTbCounterBound(cond, bound, 'oint') !== undefined || this.rustDecidedOintBound(cond, bound))) return `matches!(${super.printIdentifier(bound)}, Some(__b) if (${name} as f64) ${operator} (__b as f64))`;
+        // ral-90rh R1: `i < n - k` / `i < k - n` over a parseInt `Option<i64>` local `n` and an int literal `k`: the boxed bound
+        // was `Int` arithmetic or `Null` (NaN, false), so `Some` compares its difference as f64 and `None` is false
+        const shifted = this.rust90rhOintShiftBound(bound);
+        if (shifted !== undefined) return `matches!(${shifted.name}, Some(__b) if (${name} as f64) ${operator} ((${shifted.text}) as f64))`;
         const refs = (n: any): boolean => (isIdentifier(n) && n.text === name) || (n.forEachChild(refs) ?? false);
         if (refs(right) || !this.printsValueExpression(left) || !this.printsValueExpression(this.orderedComparisonOperand(right))) return undefined;
         if (this.printRustScalarBinary(cond) !== undefined || this.rustScalarOwnsOperand(left) || this.rustScalarOwnsOperand(right)) return undefined;

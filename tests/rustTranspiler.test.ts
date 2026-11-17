@@ -25197,3 +25197,16 @@ describe('ral-87rh R4: a bool local strictly compared with an Option<bool> reade
         expect(out).toContain('== Some(wantActive))');
     });
 });
+
+describe('ral-90rh R1: a parseInt local over a string parameter', () => {
+    test('precisionNumber is Option<i64>; == 0, > 0 and the n - 1 / -1 - n for bounds read it natively', () => {
+        const dir = path.join (rustFixtureRoot, 'r90rh-parseint');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export type Str = string | undefined;\nexport default class Exchange {\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    parsePrecision (precision?: string): Str {\n        if (precision === undefined) {\n            return undefined;\n        }\n        const precisionNumber = parseInt (precision);\n        if (precisionNumber === 0) {\n            return '1';\n        }\n        if (precisionNumber > 0) {\n            let parsedPrecision = '0.';\n            for (let i = 0; i < precisionNumber - 1; i++) {\n                parsedPrecision = parsedPrecision + '0';\n            }\n            return parsedPrecision + '1';\n        } else {\n            let parsedPrecision = '1';\n            for (let i = 0; i < -1 - precisionNumber; i++) {\n                parsedPrecision = parsedPrecision + '0';\n            }\n            return parsedPrecision + '0';\n        }\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts')).content;
+        expect(out).toContain('let mut precisionNumber: Option<i64> = ');
+        expect(out).toContain('(precisionNumber == Some(0))');
+        expect(out).toContain('matches!(precisionNumber, Some(__b) if (i as f64) < ((__b - 1) as f64))');
+        expect(out).toContain('matches!(precisionNumber, Some(__b) if (i as f64) < ((-1 - __b) as f64))');
+    });
+});
