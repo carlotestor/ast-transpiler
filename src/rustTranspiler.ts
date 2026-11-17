@@ -13505,9 +13505,32 @@ export class RustTranspiler extends BaseTranspiler {
         const inner: any = this.unwrapParens(node);
         if (inner === undefined) return false;
         if (isIdentifier(inner)) return this.rustValueIntCounter(inner);
+        // ral-87rb R4: also `c * k` and a step of a step (`(c * k) - k`) at a declaration whose `this.sum` uses all add int
+        // literals (rust87rbSumLiteralOnly; ral-57e keeps a product summed with an `any` operand boxed): an `Int` on every path
+        // (the boxed form already printed the native `Value::Int((c * k))`)
+        if (isBinaryExpression(inner) && (inner.operatorToken.kind === SyntaxKind.AsteriskToken || inner.operatorToken.kind === SyntaxKind.PlusToken || inner.operatorToken.kind === SyntaxKind.MinusToken)
+            && isBinaryExpression(this.unwrapParens(inner.left)) && this.rust76eCounterStep(inner.left) && this.rustScalarIntLiteral(this.unwrapParens(inner.right)) !== undefined) return this.rust87rbSumLiteralOnly(inner);
+        if (isBinaryExpression(inner) && inner.operatorToken.kind === SyntaxKind.AsteriskToken) {
+            const factor: Node = this.unwrapParens(inner.left);
+            return isIdentifier(factor) && this.rustValueIntCounter(factor) && this.rustScalarIntLiteral(this.unwrapParens(inner.right)) !== undefined && this.rust87rbSumLiteralOnly(inner);
+        }
         if (!isBinaryExpression(inner) || (inner.operatorToken.kind !== SyntaxKind.PlusToken && inner.operatorToken.kind !== SyntaxKind.MinusToken)) return false;
         const left: any = this.unwrapParens(inner.left);
         return isIdentifier(left) && this.rustValueIntCounter(left) && this.rustScalarIntLiteral(this.unwrapParens(inner.right)) !== undefined;
+    }
+
+    /** ral-87rb R4: `node` is (inside parentheses) the initializer of a declaration (or an operand of one) whose every
+     *  `this.sum (..)` use has only int-literal partners. */
+    rust87rbSumLiteralOnly(node: Node): boolean {
+        let top: Node = node;
+        while (top.parent !== undefined && (isParenthesizedExpression(top.parent) || isBinaryExpression(top.parent))) top = top.parent;
+        const declaration: Node = top.parent;
+        if (declaration === undefined || !isVariableDeclaration(declaration) || declaration.initializer !== top || !isIdentifier(declaration.name)) return false;
+        return this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n: Node) => {
+            const call: Node = n.parent;
+            if (!isCallExpression(call) || !this.rustSumShape(call)) return true;
+            return Array.from(call.arguments).every((a: Node) => a === n || this.rustScalarIntLiteral(this.unwrapParens(a)) !== undefined);
+        });
     }
 
     /** tb: `const b = this.parseToInt (..)` (an `Int`-or-`Null` producer, `i64` / `Option<i64>`). */

@@ -24773,3 +24773,25 @@ describe("ral-87rb R3: a slot-written bool compared === true is a bool", () => {
         expect(out).not.toContain('let mut isTrigger: Value');
     });
 });
+
+describe("ral-87rb R4: a for counter times an int literal is an i64", () => {
+    const files: Record<string, string> = {
+        "ts/src/base/Exchange.ts": "export default class Exchange {\n    secret: string = undefined;\n    sum (...xs: any[]): any { return xs[0]; }\n    parseToInt (x: any): number { return x; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n",
+        "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n    convertSecretToPem (secret: any): string {\n        const fullLines = this.parseToInt (secret.length / 64);\n        let pem = '';\n        for (let i = 0; i <= fullLines; i++) {\n            const start = i * 64;\n            const end = this.sum (start, 64);\n            pem += this.secret.slice (start, end) + '\\n';\n        }\n        return pem;\n    }\n}\n",
+    };
+    let out: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), "astfx-rs-87rb4-"));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = transpiler.transpileRustByPath(path.join (root, "ts/src/venue.ts")).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test("lbank convertSecretToPem start: i64 from the counter, end follows natively", () => {
+        expect(out).toContain('let mut start: i64 = (i * 64);');
+        expect(out).toContain('let mut end: i64 = (start + 64);');
+        expect(out).not.toContain('let mut start: Value');
+    });
+});
