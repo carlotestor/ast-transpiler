@@ -15576,6 +15576,11 @@ function ccxtGoNilDeclaredJoinType(goTranspiler, declaration) {
   if (scope === void 0) {
     return void 0;
   }
+  const copyComponent = ccxtGo93CopyComponentJoin(goTranspiler, declaration);
+  if (copyComponent !== null) {
+    return copyComponent;
+  }
+  const copyReadTypes = [];
   let joinType;
   let writeCount = 0;
   let readUnproven = false;
@@ -15596,7 +15601,7 @@ function ccxtGoNilDeclaredJoinType(goTranspiler, declaration) {
       const isWrite = parent !== void 0 && parent.kind === ts.SyntaxKind.BinaryExpression && parent.left === n && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken;
       if (isWrite) {
         writeCount += 1;
-        const written = goTranspiler.goTypeOfInitializer(parent.right, goTranspiler.printNode(parent.right, 0));
+        const written = ccxtGo93CopyType(goTranspiler, parent.right) ?? goTranspiler.goTypeOfInitializer(parent.right, goTranspiler.printNode(parent.right, 0));
         parsedNumberWrite = parsedNumberWrite || ccxtGoIsOneArgParseNumber(goTranspiler, parent.right);
         if (written === void 0 || joinType !== void 0 && written !== joinType) {
           readUnproven = true;
@@ -15613,6 +15618,8 @@ function ccxtGoNilDeclaredJoinType(goTranspiler, declaration) {
           literalCompareRead = true;
         } else if (ccxtGo90StringPtrArgument(goTranspiler, n)) {
           stringPtrArgumentRead = true;
+        } else if (ccxtGo93CopyTargetType(goTranspiler, n) !== void 0) {
+          copyReadTypes.push(ccxtGo93CopyTargetType(goTranspiler, n));
         } else {
           readUnproven = true;
           return;
@@ -15633,6 +15640,9 @@ function ccxtGoNilDeclaredJoinType(goTranspiler, declaration) {
     return void 0;
   }
   if (NIL_DECLARED_SCALAR_POINTER_TYPES.indexOf(joinType) < 0) {
+    return void 0;
+  }
+  if (copyReadTypes.some((t) => t !== joinType)) {
     return void 0;
   }
   if (stringOnlyRead && joinType !== "*string") {
@@ -45808,6 +45818,129 @@ GoTranspiler.prototype.printReturnStatement = function(node, identation) {
     return this.printNodeCommentsIfAny(node, identation, this.getIden(identation) + "return SafeListTypedDefault(" + args.join(", ") + ")");
   }
   return printReturnStatementBaseTypedVenue.call(this, node, identation);
+};
+var CCXT_GO_93_COPY_ASSUMED = /* @__PURE__ */ new Map();
+var CCXT_GO_93_COPY_VERDICTS = /* @__PURE__ */ new WeakMap();
+function ccxtGo93NilSeedOf(goTranspiler, node) {
+  while (node?.kind === SyntaxKind5.ParenthesizedExpression || node?.kind === SyntaxKind5.AsExpression) {
+    node = node.expression;
+  }
+  if (node?.kind !== SyntaxKind5.Identifier) {
+    return void 0;
+  }
+  const declaration = ccxtGoParamDeclarationOf(goTranspiler, node);
+  if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier || !isNilDeclaredInitializer(declaration.initializer) || declaration.parent?.declarations?.length !== 1 || declaration.parent?.parent?.kind !== SyntaxKind5.VariableStatement) {
+    return void 0;
+  }
+  return declaration;
+}
+function ccxtGo93CopyPair(goTranspiler, assignment) {
+  if (assignment?.kind !== SyntaxKind5.BinaryExpression || assignment.operatorToken.kind !== SyntaxKind5.EqualsToken || assignment.parent?.kind !== SyntaxKind5.ExpressionStatement) {
+    return void 0;
+  }
+  const target = ccxtGo93NilSeedOf(goTranspiler, assignment.left);
+  const source = ccxtGo93NilSeedOf(goTranspiler, assignment.right);
+  if (target === void 0 || source === void 0 || target === source || goTranspiler.goEnclosingFunction(target) !== goTranspiler.goEnclosingFunction(source)) {
+    return void 0;
+  }
+  return { target, source };
+}
+function ccxtGo93CopyType(goTranspiler, right) {
+  const pair = ccxtGo93CopyPair(goTranspiler, right?.parent);
+  return pair !== void 0 && pair.source.parent?.parent !== void 0 ? CCXT_GO_93_COPY_ASSUMED.get(pair.source) : void 0;
+}
+function ccxtGo93CopyTargetType(goTranspiler, read) {
+  let node = read;
+  while (node.parent?.kind === SyntaxKind5.ParenthesizedExpression || node.parent?.kind === SyntaxKind5.AsExpression) {
+    node = node.parent;
+  }
+  const pair = node.parent?.right === node ? ccxtGo93CopyPair(goTranspiler, node.parent) : void 0;
+  return pair !== void 0 ? CCXT_GO_93_COPY_ASSUMED.get(pair.target) : void 0;
+}
+function ccxtGo93CopyComponentJoin(goTranspiler, declaration) {
+  if (CCXT_GO_93_COPY_ASSUMED.has(declaration)) {
+    return null;
+  }
+  if (CCXT_GO_93_COPY_VERDICTS.has(declaration)) {
+    return CCXT_GO_93_COPY_VERDICTS.get(declaration);
+  }
+  const scope = goTranspiler.goEnclosingFunction(declaration);
+  const pairs = [];
+  const visit = (n) => {
+    const pair = ccxtGo93CopyPair(goTranspiler, n);
+    if (pair !== void 0) {
+      pairs.push(pair);
+    }
+    n.forEachChild(visit);
+  };
+  scope?.forEachChild(visit);
+  const members = /* @__PURE__ */ new Set([declaration]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const p of pairs) {
+      if (members.has(p.target) !== members.has(p.source)) {
+        members.add(p.target);
+        members.add(p.source);
+        grew = true;
+      }
+    }
+  }
+  if (members.size < 2) {
+    return null;
+  }
+  for (const m of members) {
+    CCXT_GO_93_COPY_VERDICTS.set(m, void 0);
+  }
+  let verdict;
+  for (const candidate of NIL_DECLARED_SCALAR_POINTER_TYPES) {
+    for (const m of members) {
+      CCXT_GO_93_COPY_ASSUMED.set(m, candidate);
+    }
+    let agrees = true;
+    try {
+      for (const m of members) {
+        if (ccxtGoNilDeclaredJoinType(goTranspiler, m) !== candidate) {
+          agrees = false;
+          break;
+        }
+      }
+    } finally {
+      for (const m of members) {
+        CCXT_GO_93_COPY_ASSUMED.delete(m);
+      }
+    }
+    if (agrees) {
+      verdict = candidate;
+      break;
+    }
+  }
+  const tested = [...members].filter((m) => ccxtGo92HasNilTest(goTranspiler, m)).length;
+  if (verdict !== void 0 && 2 * tested < members.size) {
+    verdict = void 0;
+  }
+  for (const m of members) {
+    CCXT_GO_93_COPY_VERDICTS.set(m, verdict);
+    if (verdict !== void 0) {
+      CCXT_GO_90_POINTER_JOINS.set(m, verdict);
+    }
+  }
+  return verdict;
+}
+var goTypeOfInitializerBase93Copy = GoTranspiler.prototype.goTypeOfInitializer;
+GoTranspiler.prototype.goTypeOfInitializer = function(initializer, printedValue) {
+  const pair = ccxtGo93CopyPair(this, initializer?.parent);
+  if (pair !== void 0 && pair.target.parent !== void 0) {
+    const assumed = CCXT_GO_93_COPY_ASSUMED.get(pair.source);
+    if (assumed !== void 0) {
+      return assumed;
+    }
+    const decided = CCXT_GO_93_COPY_VERDICTS.get(pair.source);
+    if (decided !== void 0 && CCXT_GO_93_COPY_VERDICTS.get(pair.target) === decided) {
+      return decided;
+    }
+  }
+  return goTypeOfInitializerBase93Copy.call(this, initializer, printedValue);
 };
 
 // src/javaTranspiler.ts
