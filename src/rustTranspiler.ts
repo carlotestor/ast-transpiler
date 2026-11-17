@@ -13063,6 +13063,8 @@ export class RustTranspiler extends BaseTranspiler {
             let rhs: string | undefined;
             if (this.literalKindOfNode(right) === 'string' && !(right.text in this.StringLiteralReplacements)) rhs = dry ? '_' : this.quotedStringLiteral(right.text);
             else if (isIdentifier(right) && this.rustScalarLocalOf(right)?.kind === 'str') rhs = dry ? '_' : `${super.printIdentifier(right)}`;
+            // a `String` method of a `String` local (`tz.toLowerCase ()`): the text its `Str` box displayed
+            else if (isCallExpression(right) && this.rustScalarStrMethod(right, false, true)?.kind === 'str') rhs = dry ? '_' : this.rustScalarExpressionText('str', right);
             else if (isBinaryExpression(right) && right.operatorToken.kind === SyntaxKind.PlusToken && this.primitiveKindOfType(this.typeOfNodeIfAny(right)) === 'string') rhs = this.rustScalarFormatText(right);
             if (rhs === undefined) return undefined;
             return dry ? '_' : `${name} = Some(format!("{}{}", ${name}.as_deref().unwrap_or("null"), ${rhs}))`;

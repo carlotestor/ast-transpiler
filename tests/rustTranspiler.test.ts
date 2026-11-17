@@ -26196,3 +26196,21 @@ describe('rust cast length of a string reader local', () => {
         expect(out).toContain('raw.as_deref().unwrap_or_default().chars().count() as i64');
     });
 });
+
+describe('rust optional string += a String method of a String local', () => {
+    const base = "export type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return d; }\n}\n";
+    const venue = "import Exchange from './base/Exchange.js';\n"
+        + "export default class venue extends Exchange {\n"
+        + "    barOf (frames: any, timeframe: string, options: any): any {\n        const timezone = this.safeString (options, 'timezone', 'UTC');\n        let bar = this.safeString (frames, timeframe, timeframe);\n        if (timezone === 'UTC') {\n            bar += timezone.toLowerCase ();\n        }\n        return { 'bar': bar };\n    }\n}\n";
+    test('the Option<String> local appends the lowered text', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-93re4-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), venue);
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        let out = '';
+        try { out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+        expect(out).toContain('let mut bar: Option<String> = ');
+        expect(out).toContain('bar = Some(format!("{}{}", bar.as_deref().unwrap_or("null"), timezone.to_lowercase()));');
+    });
+});
