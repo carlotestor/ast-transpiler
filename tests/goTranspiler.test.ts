@@ -16571,6 +16571,21 @@ describe('ral-92g7 native sum / min / max over int64 operands', () => {
         expect(out).toContain('lo > 3');
         expect(out).toContain('var hi any = max(x, 5)');
     });
+    test('a max local handed to a sum with an int64 partner types int64', () => {
+        const out = goTranspile87g8(head
+            + '    f (s: number, l: number) {\n'
+            + '        const request = {};\n'
+            + '        const since = this.parseToInt (s);\n'
+            + '        const span = this.parseToInt (l) * 1000;\n'
+            + '        const sinceResolved = Math.max (since - 1, 0);\n'
+            + '        request[\'start\'] = sinceResolved;\n'
+            + '        request[\'end\'] = this.sum (sinceResolved, span);\n'
+            + '        return request;\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('var sinceResolved int64 = max(since - 1, 0)');
+        expect(out).toContain('sinceResolved + span');
+    });
     test('a sum operand that is a sum keeps its grouping', () => {
         const out = goTranspile87g8(head
             + '    f (a: number) {\n'

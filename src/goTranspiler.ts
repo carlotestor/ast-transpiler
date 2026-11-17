@@ -38154,7 +38154,20 @@ export interface GoTranspiler {
     go92g7MinMaxName(call): string | undefined;
     go92g7OperandText(operand, index: number): string;
     go92g7HasNumericUse(declaration): boolean;
+    go92g7IsBaseSum(call): boolean;
 }
+
+// the callee test of goInt64SumOperands alone: the operand being decided cannot be asked for its type
+GoTranspiler.prototype.go92g7IsBaseSum = function (call): boolean {
+    if ((call?.kind !== SyntaxKind.CallExpression) || (call.expression?.kind !== SyntaxKind.PropertyAccessExpression)
+        || (call.expression.expression?.kind !== SyntaxKind.ThisKeyword) || (call.expression.name?.text !== 'sum') || (call.arguments?.length !== 2)) {
+        return false;
+    }
+    const symbol = this.checkerOrUndefined()?.getSymbolAtLocation(call.expression.name);
+    const declaration = symbol?.valueDeclaration?.resolve?.() ?? symbol?.declarations?.map((d) => d.resolve())?.[0];
+    return ((declaration?.kind === SyntaxKind.MethodDeclaration) || (declaration?.kind === SyntaxKind.PropertyDeclaration))
+        && (this.goEnclosingClassName(declaration) === 'BaseExchange');
+};
 
 GoTranspiler.prototype.go92g7Int64Operands = function (call): Node[] | undefined {
     if ((call?.kind !== SyntaxKind.CallExpression) || (call.arguments?.length !== 2)) {
@@ -38214,7 +38227,7 @@ GoTranspiler.prototype.go92g7HasNumericUse = function (declaration): boolean {
         if ((call?.kind !== SyntaxKind.CallExpression) || (call.arguments.indexOf(n) < 0)) {
             return false;
         }
-        if ((this.goInt64SumOperands(call) === undefined) && (this.go92g7MinMaxName(call) === undefined)) {
+        if (!this.go92g7IsBaseSum(call) && (this.go92g7MinMaxName(call) === undefined)) {
             return false;
         }
         // the local itself is the int64 being decided; the other operand must already be one
