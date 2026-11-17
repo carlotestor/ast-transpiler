@@ -25231,3 +25231,17 @@ describe('ral-90re R2: a required number parameter written into an optional numb
         expect(out).toContain('let mut cost: Option<f64> = ');
     });
 });
+
+describe('ral-90re R3: a ternary of two String fields of a safeMarket local keys a proven map read', () => {
+    test('binance parseAccountPositions code: `code in balances` and `balances[code]` read natively', () => {
+        const typed = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['market', 'safeMarket'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const dir = path.join (rustFixtureRoot, 'ral-90re-r3');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/types.ts'), "export interface Dictionary<T> { [key: string]: T }\nexport type Dict = Dictionary<any>;\nexport type Str = string | undefined;\nexport interface MarketInterface { id: Str; symbol: string; base: string; quote: string; linear: boolean | undefined; contract: boolean; }\nexport type Market = MarketInterface | undefined;\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "import type { Dict, Str, MarketInterface } from './types.js';\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeBool (o: any, k: any, d: any = undefined): boolean | undefined { return o; }\n    safeValue (o: any, k: any, d: any = undefined): any { return o; }\n    safeMarket (marketId: Str = undefined, market: any = undefined, delimiter: Str = undefined, marketType: Str = undefined): MarketInterface { return market; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/types.js';\nexport default class venue extends Exchange {\n    p (positions: Dict[], assets: Dict[]) {\n        const balances: Dict = {};\n        for (let i = 0; i < assets.length; i++) {\n            const code = this.safeString (assets[i], 'asset');\n            if (code !== undefined) {\n                balances[code] = { 'crossMargin': this.safeString (assets[i], 'm') };\n            }\n        }\n        const result = [];\n        for (let i = 0; i < positions.length; i++) {\n            const position = positions[i];\n            const marketId = this.safeString (position, 'symbol');\n            const market = this.safeMarket (marketId, undefined, undefined, 'contract');\n            const code = (this.safeBool (market, 'linear', false)) ? market['quote'] : market['base'];\n            if (code in balances) {\n                const parsed = this.safeValue (balances[code], 'crossMargin');\n                result.push (parsed);\n            }\n        }\n        return result;\n    }\n}\n");
+        const out = typed.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut code: String = ');
+        expect(out).toContain('if (balances.contains_key(code.as_str())) {');
+    });
+});

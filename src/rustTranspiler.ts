@@ -5276,6 +5276,8 @@ export class RustTranspiler extends BaseTranspiler {
         const storeOnly = guarded && nativeUses === 0 && boxed === 1 && !handOff;
         // ral-90re R1: a string local boxed into a pushed `this.parseNumber` pair is typed only for a native use elsewhere (a box alone moves the conversion)
         if (ok && nativeUses === 0 && this.rust90rePairAdmitted.has(declaration)) return undefined;
+        // ral-90re R3: a ternary over `String` fields of an owned `safeMarket` local is typed only for a native use (boxed straight back it moves the conversion)
+        if (ok && nativeUses === 0 && kind === 'str' && this.rust90reSmktArmTernary(declaration.initializer)) return undefined;
         // ral-84e: a record-arm ternary string is typed only for a native use (boxed straight back it stays the `Value` it is handed as)
         if (ok && nativeUses === 0 && kind === 'ostr' && this.rust84eRecordArmTernary(declaration.initializer)) return undefined;
         const unused = typedUses === 0 && !handOff && this.rustScalarNeedsNativeUse(declaration.initializer) && !this.rustVenueIntReboxed(declaration, kind, boxed);
@@ -8793,6 +8795,9 @@ export class RustTranspiler extends BaseTranspiler {
         if (kind === 'ostr' && this.rustInitKeyLocal(n) && this.rustUrlsKeyReadUse(n)) return 'okey';
         // uh: a ternary of two string literals keys a proven map read natively (`m.get(k)` is the entry `get_value` reads)
         if (kind === 'str' && this.rustStrLiteralTernaryLocal(n) && this.rustOkeyReadUse(n)) return 'okey';
+        // ral-90re R3: a ternary of two `String` fields of a typed market local (`c ? market['quote'] : market['base']`) keys a
+        // proven map read the same way (both arms are a `String`, so the key is never `Null`)
+        if (kind === 'str' && this.rust90reMarketFieldTernaryLocal(n) && this.rustOkeyReadUse(n)) return 'okey';
         // 40b: any initialised `String` local keys a proven map read by borrowing it (`m.get(k.as_str())` is the entry
         // `get_value` reads for its `Str` box); ws cache / subscription keys never reach here (rustWsCacheMapKeyUse above)
         if (kind === 'str' && this.rustInitKeyLocal(n) && !this.rustTestTierSource(n) && !this.rust40bProTier(n) && this.rust40bFieldKeyRead(n)) return 'okey';
@@ -13485,6 +13490,26 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     /** uh: the use's local is initialised by `c ? 'a' : 'b'` (both arms string literals). */
+    /** ral-90re R3: a ternary initializer one of whose arms is a field read of an owned `safeMarket` (`smkt`) local. */
+    rust90reSmktArmTernary(init: Node): boolean {
+        const node: Node = this.unwrapParens(init);
+        if (node === undefined || !isConditionalExpression(node)) return false;
+        return [ node.whenTrue, node.whenFalse ].some((arm: Node) => {
+            const a: Node = this.unwrapParens(arm);
+            const local: Node | undefined = (isElementAccessExpression(a) || isPropertyAccessExpression(a)) ? this.rustTypedMarketLocalOf(a.expression) : undefined;
+            return local !== undefined && this.rustMarketLocalKind(local) === 'smkt';
+        });
+    }
+
+    /** ral-90re R3: `n` reads a local initialised from a ternary whose two arms are `String` fields of a typed market local. */
+    rust90reMarketFieldTernaryLocal(n: Node): boolean {
+        const declaration: Node | undefined = this.rustDeclaredNode(n);
+        if (declaration === undefined || !isVariableDeclaration(declaration) || declaration.initializer === undefined) return false;
+        const init: Node = this.unwrapParens(declaration.initializer);
+        return isConditionalExpression(init) && this.rustMarketArmStrKind(this.unwrapParens(init.whenTrue)) === 'str'
+            && this.rustMarketArmStrKind(this.unwrapParens(init.whenFalse)) === 'str';
+    }
+
     rustStrLiteralTernaryLocal(n: any): boolean {
         const declaration: any = this.rustDeclaredNode(n);
         const init: any = declaration !== undefined && isVariableDeclaration(declaration) ? this.unwrapParens(declaration.initializer) : undefined;
@@ -16323,7 +16348,8 @@ export class RustTranspiler extends BaseTranspiler {
     rustMarketArmStrKind(node): string | undefined {
         if (!this.rustTernaryArm(node) || !(isElementAccessExpression(node) || isPropertyAccessExpression(node))) return undefined;
         const declaration = this.rustTypedMarketLocalOf(node.expression);
-        if (declaration === undefined || this.rustMarketLocalKind(declaration) !== 'struct') return undefined;
+        // ral-90re R3: an owned `safeMarket` local (`smkt`, a `crate::types::Market`) carries the same `String` fields
+        if (declaration === undefined || (this.rustMarketLocalKind(declaration) !== 'struct' && this.rustMarketLocalKind(declaration) !== 'smkt')) return undefined;
         const key = this.rustMarketReadKey(node.expression);
         if (key === undefined) return undefined;
         if (RustTranspiler.RUST_MARKET_STR_FIELDS[key] !== undefined) return 'str';
