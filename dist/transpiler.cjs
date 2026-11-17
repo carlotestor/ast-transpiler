@@ -57203,6 +57203,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     let joined = "null";
     let writes = 0;
+    let baseFieldWrite = false;
     for (const n of this.rustScopeNameNodes(scope, name)) {
       if (_is.isIdentifier.call(void 0, n) && this.rustNilSlotWrite(n) && this.rustDeclaredNode(n) === declaration) {
         if (this.primitiveKindOfType(this.typeOfNodeIfAny(n)) !== "string")
@@ -57220,6 +57221,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const rhs = this.unwrapParens(parent.right);
       if (!this.rustNilDecodedWrite(rhs))
         writes++;
+      if (this.rustBaseStrFieldRead(rhs))
+        baseFieldWrite = true;
       let write = _is.isIdentifier.call(void 0, rhs) && this.literalKindOfNode(rhs) !== "null" ? _nullishCoalesce(this.rustScalarIdentifierKind(rhs), () => ( (this.rustNilValueStrAlias(rhs) ? "ostr" : void 0))) : this.rustScalarValueKind(rhs, true);
       if (write === void 0 && _is.isIdentifier.call(void 0, rhs) && this.rust68aStrParamWrite(rhs))
         write = "ostr";
@@ -57272,7 +57275,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         native++;
       return form !== void 0;
     });
-    if (!ok || native === 0 && writes <= 1 && !this.rustNilScalarHandOff(declaration, scope, kind, boxed) || boxed.length > 0 && scope.kind !== _ast.SyntaxKind.MethodDeclaration)
+    if (!ok || native === 0 && (baseFieldWrite || writes <= 1 && !this.rustNilScalarHandOff(declaration, scope, kind, boxed)) || boxed.length > 0 && scope.kind !== _ast.SyntaxKind.MethodDeclaration)
       return void 0;
     if (boxed.length > 0)
       this.rustScalarGuarded.add(declaration);
@@ -59695,6 +59698,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (fresh && _is.isBinaryExpression.call(void 0, node) && this.rustDeclInitPosition(node) && this.rust76eCounterStep(node))
       return "int";
     if (fresh && this.rustTernaryArm(node) && this.rustBaseStrFieldRead(node))
+      return "ostr";
+    if (fresh && this.rustNilVenueWrite(node) && this.rustBaseStrFieldRead(node))
       return "ostr";
     if (fresh && this.rustTernaryArm(node) && this.rust65nBaseStrParamArm(node))
       return "ostr";
@@ -65114,7 +65119,7 @@ ${binding(plan.indent)}` : ""), head: "" };
       return this.rustListLengthText(node);
     if (kind === "oint" && this.rustListLengthInit(node) && this.rust67bCastListLengthRecv(node.expression))
       return wrap(this.rustListLengthText(node));
-    if (kind === "ostr" && this.rustTernaryArm(node) && this.rustBaseStrFieldRead(node))
+    if (kind === "ostr" && (this.rustTernaryArm(node) || this.rustNilVenueWrite(node)) && this.rustBaseStrFieldRead(node))
       return `${this.printNode(node, 0).trim()}.as_str().map(str::to_owned)`;
     if (kind === "ostr" && this.rustTernaryArm(node) && this.rust65nBaseStrParamArm(node))
       return `${super.printIdentifier(node)}.as_str().map(str::to_owned)`;
