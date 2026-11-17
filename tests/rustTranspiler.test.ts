@@ -24717,8 +24717,20 @@ describe('ral-87rh R1: nested precision reads off a market struct local', () => 
         expect(out).toMatch(/fn priceToPrecision[^\n]*\n\s*let mut market: crate::types::Market = /);
         expect(out).toMatch(/fn feeToPrecision[^\n]*\n\s*let mut market: crate::types::Market = /);
         expect(out).toContain('crate::value::KeyRead::key_read(&&market, "precision"), "price")');
-        expect(out).toContain('Value::from((market).symbol.clone())');
+        expect(out).toContain('Value::from((market).symbol.as_str())');
         // negative: a nested write keeps the boxed local
         expect(out).toMatch(/fn writes[\s\S]*?let mut market: Value = /);
+    });
+});
+
+describe('ral-87rh R2: symbol of an untyped base market parameter', () => {
+    test('(market === undefined) ? undefined : market[\'symbol\'] into a typed filter slot is an Option<String>', () => {
+        const dir = path.join (rustFixtureRoot, 'r87rh-symbol');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface MarketInterface { symbol: string; [key: string]: any }\nexport type Market = MarketInterface | undefined;\nexport type Str = string | undefined;\nexport type Int = number | undefined;\nexport default class Exchange {\n    filterBySymbolSinceLimit (array: any, symbol: Str = undefined, since: Int = undefined, limit: Int = undefined): any { return array; }\n    sortBy (a: any, k: any): any { return a; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    parseRows (rows: any[], market: Market = undefined, since: Int = undefined, limit: Int = undefined): any {\n        const sorted = this.sortBy (rows, 'timestamp');\n        const symbol = (market === undefined) ? undefined : market['symbol'];\n        return this.filterBySymbolSinceLimit (sorted, symbol, since, limit);\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts')).content;
+        expect(out).toContain('let mut symbol: Option<String> = ');
+        expect(out).toContain('.and_then(Value::as_str).map(str::to_owned)');
+        expect(out).not.toContain('let mut symbol: Value');
     });
 });
