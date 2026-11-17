@@ -35043,7 +35043,23 @@ function ccxtGo87g2BaseListParser (goTranspiler, call, outer): boolean {
         return false;
     }
 }
-function ccxtGo87g2ListLocal (goTranspiler, declaration, mode: 'F' | 'G'): string | undefined {
+// I. the local rebound only as `xs = this.sortBy|sortBy2|filterBy|arraySlice (xs, ..)` (base methods whose Go
+// return is []any) with the local itself as the first argument. Without a default the transform must sit inside an
+// `xs !== undefined` block (a nil box and a nil slice would reach the helper differently); with a `[]` default the
+// helper sees an empty list either way.
+const CCXT_GO_87G2_LIST_TRANSFORMS = [ 'sortBy', 'sortBy2', 'filterBy', 'arraySlice' ];
+function ccxtGo87g2ListTransform (goTranspiler, call, name: string, noDefault: boolean): boolean {
+    if ((call?.kind !== SyntaxKind.CallExpression) || (call.expression?.kind !== SyntaxKind.PropertyAccessExpression)
+        || (call.expression.expression?.kind !== SyntaxKind.ThisKeyword) || (CCXT_GO_87G2_LIST_TRANSFORMS.indexOf(call.expression.name?.text) < 0)) {
+        return false;
+    }
+    const first = ccxtGoUnwrapTypeOnly(call.arguments[0]);
+    if ((first?.kind !== SyntaxKind.Identifier) || (first.text !== name)) {
+        return false;
+    }
+    return !noDefault || goTranspiler.goInsideNonNilBlock(call, name);
+}
+function ccxtGo87g2ListLocal (goTranspiler, declaration, mode: 'F' | 'G' | 'I'): string | undefined {
     if ((declaration?.kind !== SyntaxKind.VariableDeclaration) || (declaration.name?.kind !== SyntaxKind.Identifier)
         || (declaration.parent?.parent?.kind !== SyntaxKind.FirstStatement) || (goTranspiler.goSafeListLocalArgs(declaration.initializer) === undefined)
         || /(^|[\\/])ts[\\/]src[\\/]base[\\/]/.test(String(declaration.getSourceFile?.()?.fileName ?? ''))) {
@@ -35060,6 +35076,10 @@ function ccxtGo87g2ListLocal (goTranspiler, declaration, mode: 'F' | 'G'): strin
         const outer = ccxtGoSafeCollectionTypeOnlyWrapper(n);
         const parent = outer.parent;
         if ((parent?.kind === SyntaxKind.BinaryExpression) && (parent.left === outer) && (parent.operatorToken?.kind === SyntaxKind.EqualsToken)) {
+            if ((mode === 'I') && ccxtGo87g2ListTransform(goTranspiler, ccxtGoUnwrapTypeOnly(parent.right), declaration.name.text, noDefault)) {
+                feature++;
+                return true;
+            }
             if ((mode === 'F') && (ccxtGoUnwrapTypeOnly(parent.right)?.kind === SyntaxKind.ArrayLiteralExpression)
                 && !ccxtGoUnwrapTypeOnly(parent.right).elements.some((e) => e.kind === SyntaxKind.SpreadElement)) {
                 feature++;
@@ -35069,6 +35089,11 @@ function ccxtGo87g2ListLocal (goTranspiler, declaration, mode: 'F' | 'G'): strin
         }
         if (goTranspiler.goIsNilComparisonOperand(outer, parent)) {
             return noDefault;
+        }
+        if ((mode === 'I') && (parent?.kind === SyntaxKind.CallExpression) && (parent.arguments[0] === outer)
+            && (parent.parent?.kind === SyntaxKind.BinaryExpression) && (parent.parent.right === parent)
+            && ccxtGo87g2ListTransform(goTranspiler, parent, declaration.name.text, noDefault)) {
+            return true; // the transform's own argument
         }
         if (mode === 'G') {
             if ((parent?.kind === SyntaxKind.ElementAccessExpression) && (parent.expression === outer)
@@ -35116,7 +35141,7 @@ function ccxtGo87g2ListLocal (goTranspiler, declaration, mode: 'F' | 'G'): strin
             return memo.get(declaration);
         }
         memo.set(declaration, undefined); // re-entry answers box
-        const verdict = ccxtGo87g2ListLocal(this, declaration, 'F') ?? ccxtGo87g2ListLocal(this, declaration, 'G');
+        const verdict = ccxtGo87g2ListLocal(this, declaration, 'F') ?? ccxtGo87g2ListLocal(this, declaration, 'G') ?? ccxtGo87g2ListLocal(this, declaration, 'I');
         memo.set(declaration, verdict);
         return verdict;
     };

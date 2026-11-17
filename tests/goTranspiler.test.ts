@@ -15056,6 +15056,15 @@ describe ('ral-87g2 reader-result locals', () => {
         // the base class keeps its box
         expect (run (body, 'ts/src/base')).not.toContain ('var xs []any');
     });
+    test ('I: a no-default list local rebound through sortBy inside its nil guard and read natively is a []any', () => {
+        const pre = '    sortBy (a: any, k: any): any[] { return a; }\n';
+        const body = pre + '    f (message: Dict): any {\n        let xs = this.safeList (message, "data");\n        let n = 0;\n        if (xs !== undefined) {\n            xs = this.sortBy (xs, "t");\n            for (let i = 0; i < xs.length; i++) {\n                n = n + 1;\n            }\n        }\n        return n;\n    }\n';
+        const out = run (body, 'ts/src/pro');
+        expect (out).toContain ('var xs []any = SafeListTyped(message, "data")');
+        expect (out).toContain ('len(xs)');
+        // outside the nil guard the transform would see a nil slice instead of the nil box: keep the box
+        expect (run (body.replace ('if (xs !== undefined) {\n            xs = this.sortBy (xs, "t");', 'xs = this.sortBy (xs, "t");\n        if (xs !== undefined) {'), 'ts/src/pro')).not.toContain ('var xs []any');
+    });
     test ('H: handleOption locals read only against true, `as Bool` wrapped or declared in sibling blocks, are bool', () => {
         const pre = '    handleOption (m: string, o: string, d: any = undefined) { return d; }\n';
         const body = pre + '    f (a: boolean): any {\n        if (a) {\n            const ck = this.handleOption ("watchX", "ck", true);\n            if (ck === true) {\n                return 1;\n            }\n        } else {\n            const ck = this.handleOption ("watchX", "ck", true) as boolean;\n            if (ck === true) {\n                return 2;\n            }\n        }\n        return 0;\n    }\n';
