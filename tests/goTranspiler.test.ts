@@ -17211,6 +17211,20 @@ describe('*string safeString seeds rebound by a literal concat', () => {
         expect (out).toContain ('var bar *string = this.SafeString(t, tf, tf)');
         expect (out).toMatch (/barValue := \*bar \+ (strings\.)?ToLower\(tz\)/);
     });
+    test('a seed used as a reader key grows by += and keeps Add in a + read', () => {
+        const out = print ('class x extends Exchange {\n'
+            + '    f (t: object, subs: object, id: string) {\n'
+            + '        let h = this.safeString (t, \'k\');\n'
+            + '        let sub = this.safeString (subs, h + \'.*\');\n'
+            + '        h += \'.x\';\n'
+            + '        sub = this.safeString (subs, h);\n'
+            + '        return sub;\n'
+            + '    }\n'
+            + '}\n');
+        expect (out).toContain ('var h *string = this.SafeString(t, "k")');
+        expect (out).toContain ('hValue := *h + ".x"');
+        expect (out).toContain ('Add(h, ".*")');
+    });
     test('a seed handed to another call keeps any', () => {
         const out = print ('class x extends Exchange {\n'
             + '    f (t: object) {\n'
