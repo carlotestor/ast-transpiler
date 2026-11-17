@@ -15581,6 +15581,7 @@ function ccxtGoNilDeclaredJoinType(goTranspiler, declaration) {
     return copyComponent;
   }
   const copyReadTypes = [];
+  let guardedArmRead = false;
   let joinType;
   let writeCount = 0;
   let readUnproven = false;
@@ -15618,6 +15619,8 @@ function ccxtGoNilDeclaredJoinType(goTranspiler, declaration) {
           literalCompareRead = true;
         } else if (ccxtGo90StringPtrArgument(goTranspiler, n)) {
           stringPtrArgumentRead = true;
+        } else if (ccxtGo93GuardedTernaryArm(goTranspiler, n, declaration)) {
+          guardedArmRead = true;
         } else if (ccxtGo93CopyTargetType(goTranspiler, n) !== void 0) {
           copyReadTypes.push(ccxtGo93CopyTargetType(goTranspiler, n));
         } else {
@@ -15643,6 +15646,9 @@ function ccxtGoNilDeclaredJoinType(goTranspiler, declaration) {
     return void 0;
   }
   if (copyReadTypes.some((t) => t !== joinType)) {
+    return void 0;
+  }
+  if (guardedArmRead && (joinType === "*string" || !nilTestRead)) {
     return void 0;
   }
   if (stringOnlyRead && joinType !== "*string") {
@@ -45942,6 +45948,37 @@ GoTranspiler.prototype.goTypeOfInitializer = function(initializer, printedValue)
   }
   return goTypeOfInitializerBase93Copy.call(this, initializer, printedValue);
 };
+function ccxtGo93GuardedTernaryArm(goTranspiler, read, declaration) {
+  let arm = read;
+  while (arm.parent?.kind === SyntaxKind5.ParenthesizedExpression || arm.parent?.kind === SyntaxKind5.AsExpression) {
+    arm = arm.parent;
+  }
+  const conditional = arm.parent;
+  if (conditional?.kind !== SyntaxKind5.ConditionalExpression || conditional.condition === arm) {
+    return false;
+  }
+  let test = conditional.condition;
+  while (test?.kind === SyntaxKind5.ParenthesizedExpression) {
+    test = test.expression;
+  }
+  if (test?.kind !== SyntaxKind5.BinaryExpression || COMPARISON_TOKENS.indexOf(test.operatorToken.kind) < 0) {
+    return false;
+  }
+  const tested = isUndefinedLiteral(test.right) ? test.left : isUndefinedLiteral(test.left) ? test.right : void 0;
+  if (tested?.kind !== SyntaxKind5.Identifier || ccxtGoParamDeclarationOf(goTranspiler, tested) !== declaration) {
+    return false;
+  }
+  const negated = test.operatorToken.kind === SyntaxKind5.ExclamationEqualsEqualsToken || test.operatorToken.kind === SyntaxKind5.ExclamationEqualsToken;
+  if ((negated ? conditional.whenTrue : conditional.whenFalse) !== arm) {
+    return false;
+  }
+  let outer = conditional;
+  while (outer.parent?.kind === SyntaxKind5.ParenthesizedExpression) {
+    outer = outer.parent;
+  }
+  const host = outer.parent;
+  return host?.kind === SyntaxKind5.VariableDeclaration && host.initializer === outer || host?.kind === SyntaxKind5.PropertyAssignment && host.initializer === outer;
+}
 
 // src/javaTranspiler.ts
 init_esm_shims();
