@@ -7651,7 +7651,7 @@ export class RustTranspiler extends BaseTranspiler {
     rustScalarFeedsElementWrite(n: any, write: any): boolean {
         const left: any = write.left;
         if (!isElementAccessExpression(left)) return false;
-        let recv: any = this.unwrapParens(left.expression);
+        let recv: Node = this.unwrapParens(left.expression);
         // ral-87rb R1: a nested element write `m['a']['b'] = ..` writes a `Value` slot of a map just the same
         while (isElementAccessExpression(recv)) recv = this.unwrapParens(recv.expression);
         if (!isIdentifier(recv) && !(isPropertyAccessExpression(recv) && recv.expression.kind === SyntaxKind.ThisKeyword)) return false;
