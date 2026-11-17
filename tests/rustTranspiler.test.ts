@@ -25265,3 +25265,24 @@ describe('ral-90rg R2: a safeCurrencyCode local strictly compared with a string 
         expect(out).not.toContain('let mut parsedCurrency: Value');
     });
 });
+
+describe('ral-90rg R3: a const alias of a never-empty marketSymbols list at its last use', () => {
+    test('symbolsList: string[] = symbolsNormalized moves the List handle; both are crate::value::List', () => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-90rg-r3-'));
+        const files: Record<string, string> = {
+            'ts/src/base/Exchange.ts': "export type Strings = string[] | undefined;\nexport default class Exchange {\n    marketSymbols (symbols: Strings = undefined, type: string = undefined, allowEmpty: boolean = true): string[] { return symbols; }\n    filterByArray (o: any, k: any, v: any): any { return o; }\n    tickers: any = {};\n}\n",
+            'ts/src/venue.ts': "import Exchange from './base/Exchange.js';\nimport type { Strings } from './base/Exchange.js';\nexport default class venue extends Exchange {\n"
+                + "    pick (symbols: Strings = undefined) {\n        const symbolsNormalized = this.marketSymbols (symbols, undefined, false);\n        const symbolsList: string[] = symbolsNormalized;\n        let n = 0;\n        for (let i = 0; i < symbolsList.length; i++) {\n            n = n + 1;\n        }\n        return this.filterByArray (this.tickers, 'symbol', symbolsList);\n    }\n}\n",
+        };
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        t.transpileRustByPath(path.join (root, 'ts/src/base/Exchange.ts'));
+        const out = t.transpileRustByPath(path.join (root, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut symbolsNormalized: crate::value::List = ');
+        expect(out).toContain('let mut symbolsList: crate::value::List = symbolsNormalized;');
+        expect(out).toContain('symbolsList.len()');
+    });
+});

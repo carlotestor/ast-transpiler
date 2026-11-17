@@ -1,5 +1,5 @@
 import { BaseTranspiler } from "./baseTranspiler.js";
-import { NodeFlags, SyntaxKind, type BinaryExpression, type BindingElement, type Block, type CallExpression, type ClassDeclaration, type Declaration, type DeleteExpression, type ElementAccessExpression, type Expression, type ExpressionWithTypeArguments, type Identifier, type MethodDeclaration, type Node, type NodeArray, type ParameterDeclaration, type PropertyAccessExpression, type SourceFile, type TypeNode, type VariableDeclaration } from "typescript/unstable/ast";
+import { NodeFlags, SyntaxKind, type BinaryExpression, type BindingElement, type Block, type CallExpression, type ClassDeclaration, type Declaration, type DeleteExpression, type ElementAccessExpression, type Expression, type ExpressionWithTypeArguments, type Identifier, type MethodDeclaration, type Node, type NodeArray, type ParameterDeclaration, type ParenthesizedExpression, type PropertyAccessExpression, type SourceFile, type TypeNode, type VariableDeclaration } from "typescript/unstable/ast";
 import { isArrayBindingPattern, isArrayLiteralExpression, isArrayTypeNode, isArrowFunction, isAsExpression, isBinaryExpression, isBindingElement, isBlock, isCallExpression, isClassDeclaration, isClassExpression, isConditionalExpression, isDeleteExpression, isElementAccessExpression, isForInStatement, isForOfStatement, isIdentifier, isIfStatement, isMethodDeclaration, isNewExpression, isNoSubstitutionTemplateLiteral, isNonNullExpression, isNumericLiteral, isObjectLiteralExpression, isParameterDeclaration, isParenthesizedExpression, isPostfixUnaryExpression, isPrefixUnaryExpression, isPropertyAccessExpression, isPropertyDeclaration, isPropertyAssignment, isReturnStatement, isShorthandPropertyAssignment, isSourceFile, isStatement, isStringLiteral, isStringLiteralLikeNode, isTypeAssertion, isTypeReferenceNode, isVariableDeclaration, isVariableDeclarationList } from "typescript/unstable/ast/is";
 import { IndexKind, ObjectFlags, SignatureKind, SymbolFlags, TypeFlags, type Symbol as TsSymbol, type Type } from "typescript/unstable/sync";
 import { findAncestor, getAllSuperTypeNodes, isFunctionLike, signatureDeclaration, symbolDeclarations, symbolValueDeclaration, typeParts, typeTarget } from "./tsUtils.js";
@@ -2544,6 +2544,8 @@ export class RustTranspiler extends BaseTranspiler {
         }
         if (node.declarations.length === 1 && this.rustLentListLocal(declaration) && this.rust66cBookCacheRead(declaration.initializer) !== undefined) return `${indent}let mut ${varName}: crate::value::List = ${super.printIdentifier(this.rust66cBookCacheRead(declaration.initializer))}.cache_items()`;
         if (node.declarations.length === 1 && this.rustLentListLocal(declaration) && this.rustTypedListField(declaration.initializer)) return `${indent}let mut ${varName}: crate::value::List = self.${String(this.rustSkipWrappers(declaration.initializer).name.text)}.clone()`;
+        // ral-90rg R3: a lent-list alias takes the source's handle (moved: the alias is the source's last use)
+        if (node.declarations.length === 1 && this.rustLentListLocal(declaration) && this.rust90rgLentListAliasSource(declaration.initializer) !== undefined) return `${indent}let mut ${varName}: crate::value::List = ${super.printIdentifier(this.rustSkipWrappers(declaration.initializer))}`;
         if (node.declarations.length === 1 && this.rustLentListLocal(declaration)) return this.printBuiltListDeclaration(declaration, indent, varName) ?? `${indent}let mut ${varName}: crate::value::List = ${this.rustWsFieldGetText(this.rustSkipWrappers(declaration.initializer), false) ?? parsedValue}.into_list()`;
         if (node.declarations.length === 1 && this.rustBorrowedDictLocal(declaration) && this.rustEcdsaCall(this.rustSkipWrappers(declaration.initializer))) { this.rustPrintedBorrowed.add(declaration); return `${indent}let mut ${varName}: crate::value::Dict = ${this.rustBytesBareText(this.rustSkipWrappers(declaration.initializer), identation)}`; }
         if (node.declarations.length === 1 && this.rustBorrowedDictLocal(declaration) && this.rustNnAliasDecls.has(declaration)) { this.rustPrintedBorrowed.add(declaration); return `${indent}let mut ${varName}: crate::value::${this.rustBorrowedLocalKind(declaration) === 'list' ? 'List' : 'Dict'} = ${this.rustNnAliasSourceText(this.rustSkipWrappers(declaration.initializer), declaration)}.into_${this.rustBorrowedLocalKind(declaration) === 'list' ? 'list' : 'dict'}()`; }
@@ -27513,6 +27515,7 @@ export class RustTranspiler extends BaseTranspiler {
     /** A call that yields a string list on every path (never `undefined`). */
     rustLentListSource(init: any): boolean {
         if (this.rustTypedListField(init)) return true;
+        if (this.rust90rgLentListAliasSource(init) !== undefined) return true;
         if (this.rust66cBookCacheRead(init) !== undefined) return true;
         if (!isCallExpression(init) || !isPropertyAccessExpression(init.expression)) return false;
         const callee: any = init.expression;
@@ -27532,6 +27535,25 @@ export class RustTranspiler extends BaseTranspiler {
         // the ral-57i table rustBaseArraySliceCall), so `.into_list()` takes exactly that list
         if (method === 'arraySlice') return !this.rustTestTierSource(init) && this.rustBaseArraySliceCall(init);
         return this.rustDefaultedListRead(init);
+    }
+
+    /** ral-90rg R3: `init` is (through wrappers) a read of a never-reassigned `const xs = <never-empty base list source>` of the same
+     *  function (a `marketSymbols (.., false, ..)` result and the like, rustLentListSource without this rule) that is the whole
+     *  initializer of a `const` declaration at the source's last use: the source's declaration, else undefined. Structural only
+     *  (never asks rustLentListLocal of the source, so the source's own decision can ask about this alias). */
+    rust90rgLentListAliasSource(init: Node): VariableDeclaration | undefined {
+        const node: Node = this.rustSkipWrappers(init);
+        if (node === undefined || !isIdentifier(node)) return undefined;
+        let top: Node = node;
+        while ((isAsExpression(top.parent) || isParenthesizedExpression(top.parent)) && (top.parent as ParenthesizedExpression).expression === top) top = top.parent;
+        const alias: Node = top.parent;
+        if (alias === undefined || !isVariableDeclaration(alias) || alias.initializer !== top || !isIdentifier(alias.name) || (alias.parent.flags & NodeFlags.Const) === 0) return undefined;
+        const source: Node = this.rustDeclaredNode(node);
+        if (source === undefined || !isVariableDeclaration(source) || source === alias || !isIdentifier(source.name) || (source.parent.flags & NodeFlags.Const) === 0) return undefined;
+        if (this.rustEnclosingFunction(source) !== this.rustEnclosingFunction(alias) || !this.rustLocalLastUse(node, source)) return undefined;
+        const sourceInit: Node = this.rustSkipWrappers(source.initializer);
+        if (sourceInit === undefined || isIdentifier(sourceInit) || !this.rustLentListSource(sourceInit)) return undefined;
+        return source;
     }
 
     /** ral-48e: `xs[i]['k'] = v` (a statement) on a `[]`-defaulted list local, `i` an i64 counter or a non-negative integer
@@ -27672,6 +27694,12 @@ export class RustTranspiler extends BaseTranspiler {
             }
             if (isReturnStatement(up) && up.expression === n) {
                 boxes.push([n, 'move']);
+                return true;
+            }
+            // ral-90rg R3: the whole initializer of a `const ys: string[] = xs` alias at this local's last use, the alias itself a lent
+            // list (rust90rgLentListAliasSource): the handle moves into it (`let mut ys: crate::value::List = xs;`), no box
+            if (at === n && isVariableDeclaration(up) && up.initializer === n && this.rust90rgLentListAliasSource(n) === declaration && this.rustLentListLocal(up)) {
+                natives++;
                 return true;
             }
             if (at === n && (this.rustLentListSlot(up, n) || this.rustLentVenueSlot(up, n) !== undefined)) {
