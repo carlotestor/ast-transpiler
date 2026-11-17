@@ -4577,6 +4577,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-90rf R1: the implicit endpoint is declared (ts/src/abstract) to answer `Promise<Dict>`, `Promise<List>` or
      *  `Promise<Dict | List>`: outside its list arm the answer is the map the split holds (`__map`). */
     rust90rfMapOrListEndpoint(init: Node): boolean;
+    /** ral-90rf R4: `n` is the last read of the declaration apart from reads inside `test` (no read after it, none in the
+     *  rest of its statement, no loop between it and the declaration). */
+    rust90rfLastBesidesTest(n: Node, test: Node, declaration: VariableDeclaration): boolean;
+    /** ral-90rf R4: some `Array.isArray (x)` of this declaration in its function. */
+    rust90rfArrayTested(declaration: VariableDeclaration): boolean;
+    /** ral-90rf R4: `x !== undefined` / `undefined !== x` (parenthesised or not) on this declaration. */
+    rust90rfPresentTestOf(cond: Node, declaration: VariableDeclaration): boolean;
     /** ral-90rf R1: a whole read of the local: a `this.m (..)` argument at a `Value` slot, `return x`, an object-literal value
      *  or a list-literal element. */
     rust90rfWholeBoxUse(n: Node): boolean;

@@ -86184,8 +86184,10 @@ ${iden}}`;
       init = this.rustSkipWrappers(init.expression);
     const nil = this.rustOptListNilInit(declaration);
     const strVecAlias = !nil && this.rust80cStrVecParamAlias(init);
-    const split = !nil && !strVecAlias && !this.rustOptListSource(init) && (list.flags & NodeFlags4.Const) !== 0 && init !== void 0 && (this.rustSafeValueKeyReadSource(init) || this.rust87rfEndpointSplitSource(declaration, init)) && String(init.getText()).split("\n")[0].length <= 240;
-    if (!nil && !strVecAlias && !split && !this.rustOptListSource(init))
+    const split0 = !nil && !strVecAlias && !this.rustOptListSource(init) && (list.flags & NodeFlags4.Const) !== 0 && init !== void 0 && (this.rustSafeValueKeyReadSource(init) || this.rust87rfEndpointSplitSource(declaration, init)) && String(init.getText()).split("\n")[0].length <= 240;
+    const declaredList = !nil && !strVecAlias && (list.flags & NodeFlags4.Const) !== 0 && init !== void 0 && isCallExpression6(init) && !this.rust90rfArrayTested(declaration) && this.rustSkipWrappers(declaration.initializer)?.kind === SyntaxKind7.AwaitExpression && !this.rustTestTierSource(init) && this.rustDeclaredEndpointKind(init) === "list" && String(init.getText()).split("\n")[0].length <= 240;
+    const split = split0 && !declaredList;
+    if (!nil && !strVecAlias && !split && !declaredList && !this.rustOptListSource(init))
       return false;
     const name = String(declaration.name.text);
     const fn = this.rustEnclosingFunction(declaration);
@@ -86199,6 +86201,7 @@ ${iden}}`;
     let mapReads = 0;
     let isArrayTests = 0;
     const mapBoxes = [];
+    const ternaryMoves = /* @__PURE__ */ new Map();
     const rejoins = [];
     const safe = this.rustLocalUsesAll(declaration, name, false, (n) => {
       if (split && !this.rustIdentifierIsPropertyName(n) && this.rustIdentifierRefersToDeclaration(n, declaration) && this.rustEnclosingFunction(n) === fn) {
@@ -86298,6 +86301,10 @@ ${iden}}`;
         boxes.push([n, "clone"]);
         return true;
       }
+      if (declaredList && at === n && isConditionalExpression4(up) && up.whenTrue === n && this.rust90rfPresentTestOf(up.condition, declaration)) {
+        ternaryMoves.set(n, this.rust90rfLastBesidesTest(n, up.condition, declaration));
+        return true;
+      }
       const extra = at === n ? this.rustOptListExtraUse(n, declaration) : void 0;
       if (extra === "join")
         natives++;
@@ -86305,12 +86312,14 @@ ${iden}}`;
         boxes.push([n, extra]);
       return extra !== void 0;
     });
-    if (!safe || nil && (writes === 0 || natives === 0) || split && isArrayTests === 0)
+    if (!safe || nil && (writes === 0 || natives === 0) || split && isArrayTests === 0 || declaredList && natives === 0)
       return false;
     if (split && (mapReads > 0 || mapBoxes.length > 0 || rejoins.length > 0))
       this.rust80dSplitLocals.add(declaration);
     for (const n of rejoins)
       this.rustOptListBoxes.set(n, this.rustLocalLastUse(n, declaration) ? "rejoinMove" : "rejoin");
+    for (const [n, move] of ternaryMoves)
+      this.rustOptListBoxes.set(n, move ? "move" : "clone");
     for (const n of mapBoxes)
       this.rustOptListBoxes.set(n, this.rustLocalLastUse(n, declaration) ? "mapBoxMove" : "mapBox");
     const finals = /* @__PURE__ */ new Map();
@@ -86350,6 +86359,46 @@ ${iden}}`;
     const arg = ret.typeArguments[0];
     const parts = isUnionTypeNode(arg) ? arg.types : [arg];
     return parts.every((t) => isTypeReferenceNode2(t) && isIdentifier3(t.typeName) && t.typeArguments === void 0 && (t.typeName.text === "Dict" || t.typeName.text === "List"));
+  }
+  /** ral-90rf R4: `n` is the last read of the declaration apart from reads inside `test` (no read after it, none in the
+   *  rest of its statement, no loop between it and the declaration). */
+  rust90rfLastBesidesTest(n, test, declaration) {
+    let statement = n;
+    while (statement.parent !== void 0 && !isStatement(statement))
+      statement = statement.parent;
+    const scope = this.rustEnclosingFunction(declaration);
+    if (scope === void 0 || !isIdentifier3(declaration.name))
+      return false;
+    for (const m of this.rustScopeNameNodes(scope, String(declaration.name.text))) {
+      if (m === n || m === declaration.name || !isIdentifier3(m) || this.rustIdentifierIsPropertyName(m) || !this.rustIdentifierRefersToDeclaration(m, declaration))
+        continue;
+      if (m.pos >= test.pos && m.end <= test.end)
+        continue;
+      if (m.pos > n.pos || m.pos >= statement.pos && m.end <= statement.end)
+        return false;
+    }
+    for (let up = n.parent; up !== void 0 && !(up.pos <= declaration.pos && declaration.end <= up.end); up = up.parent) {
+      if (isFunctionLike(up) || up.kind === SyntaxKind7.ForStatement || up.kind === SyntaxKind7.ForOfStatement || up.kind === SyntaxKind7.ForInStatement || up.kind === SyntaxKind7.WhileStatement || up.kind === SyntaxKind7.DoStatement)
+        return false;
+    }
+    return true;
+  }
+  /** ral-90rf R4: some `Array.isArray (x)` of this declaration in its function. */
+  rust90rfArrayTested(declaration) {
+    const fn = this.rustEnclosingFunction(declaration);
+    if (fn === void 0 || !isIdentifier3(declaration.name))
+      return true;
+    return this.rustScopeNameNodes(fn, String(declaration.name.text)).some((n) => isIdentifier3(n) && n !== declaration.name && isCallExpression6(n.parent) && n.parent.arguments.length === 1 && n.parent.arguments[0] === n && this.rustIsArrayIsArrayCallee(n.parent));
+  }
+  /** ral-90rf R4: `x !== undefined` / `undefined !== x` (parenthesised or not) on this declaration. */
+  rust90rfPresentTestOf(cond, declaration) {
+    const e = this.unwrapParens(cond);
+    if (!isBinaryExpression5(e) || e.operatorToken.kind !== SyntaxKind7.ExclamationEqualsEqualsToken && e.operatorToken.kind !== SyntaxKind7.ExclamationEqualsToken)
+      return false;
+    const l = this.unwrapParens(e.left);
+    const r = this.unwrapParens(e.right);
+    const self = this.literalKindOfNode(r) === "null" ? l : this.literalKindOfNode(l) === "null" ? r : void 0;
+    return self !== void 0 && isIdentifier3(self) && this.rustIdentifierRefersToDeclaration(self, declaration);
   }
   /** ral-90rf R1: a whole read of the local: a `this.m (..)` argument at a `Value` slot, `return x`, an object-literal value
    *  or a list-literal element. */
