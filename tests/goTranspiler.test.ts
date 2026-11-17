@@ -15014,3 +15014,46 @@ describe('84g7 R2 int64 pointer arm next to an int arm', () => {
         expect(out).toContain('var since *int64 = GetArgInt64Ptr(optionalArgs, 0, nil)');
     });
 });
+
+describe ('ral-87g2 reader-result locals', () => {
+    const PRELUDE =
+        'type Dict = { [key: string]: any };\n' +
+        'type List = any[];\n' +
+        'export class Exchange {\n' +
+        '    safeDict (a: any, k: any, d: any = undefined): Dict { return a; }\n' +
+        '    safeList (a: any, k: any, d: any = undefined): any[] { return a; }\n' +
+        '    extend (a: any, b: any): Dict { return a; }\n';
+    const run = (members: string, dir: string): string => {
+        const tmp = fs.mkdtempSync (path.join (os.tmpdir (), 'r87g2-'));
+        try {
+            const src = path.join (tmp, dir);
+            fs.mkdirSync (src, { recursive: true });
+            const file = path.join (src, 'x.ts');
+            fs.writeFileSync (file, PRELUDE + members + '}\n');
+            return new Transpiler ({ verbose: false, go: { parser: { NUM_LINES_END_FILE: 0 } } }).transpileGoByPath (file).content;
+        } finally {
+            fs.rmSync (tmp, { recursive: true, force: true });
+        }
+    };
+    test ('F: a list local rebound only to an array literal and read natively is a []any', () => {
+        const body = '    f (message: Dict, one: Dict): any {\n        let xs = this.safeList (message, "args");\n        if (xs === undefined) {\n            xs = [ one ];\n        }\n        let n = 0;\n        for (let i = 0; i < xs.length; i++) {\n            const row = this.safeDict (xs, i);\n            n = n + 1;\n        }\n        return n;\n    }\n';
+        const out = run (body, 'ts/src/pro');
+        expect (out).toContain ('var xs []any = SafeListTyped(message, "args")');
+        expect (out).toContain ('xs == nil');
+        expect (out).toContain ('len(xs)');
+        // with a `[]` default the nil test would see the dropped default: keep the box
+        expect (run (body.replace ('"args")', '"args", [])'), 'ts/src/pro')).not.toContain ('var xs []any');
+        // a rebinding to another value keeps the box
+        expect (run (body.replace ('xs = [ one ];', 'xs = one[\'k\'];'), 'ts/src/pro')).not.toContain ('var xs []any');
+    });
+    test ('G: a list local written by index and read natively is a []any', () => {
+        const body = '    f (response: Dict, cursor: string): any {\n        const xs = this.safeList (response, "data", []);\n        const length = xs.length;\n        if (cursor !== undefined) {\n            xs[0] = this.extend (this.safeDict (xs, 0, {}), { "c": cursor });\n        }\n        return length;\n    }\n';
+        const out = run (body, 'ts/src');
+        expect (out).toContain ('var xs []any = SafeListTyped(response, "data")');
+        expect (out).toContain ('len(xs)');
+        // without a native read the local keeps the box
+        expect (run (body.replace ('xs.length', '3'), 'ts/src')).not.toContain ('var xs []any');
+        // the base class keeps its box
+        expect (run (body, 'ts/src/base')).not.toContain ('var xs []any');
+    });
+});
