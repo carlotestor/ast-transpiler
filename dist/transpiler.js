@@ -14821,8 +14821,91 @@ function ccxtGoFamilyCallType(goTranspiler, initializer, printedValue) {
   if (value.substring(0, open) !== expectedCallee) {
     return void 0;
   }
-  const methodNode = findClassMethod(enclosingClassDeclaration(initializer), name) ?? ccxtGoInheritedVenueMethod(goTranspiler, initializer);
-  return ccxtGoFamilyMethodReturnType(goTranspiler, methodNode);
+  const own = findClassMethod(enclosingClassDeclaration(initializer), name);
+  if (own !== void 0) {
+    return ccxtGoFamilyMethodReturnType(goTranspiler, own);
+  }
+  const inherited = ccxtGoInheritedVenueMethod(goTranspiler, initializer);
+  const goType = inherited !== void 0 ? ccxtGoFamilyMethodReturnType(goTranspiler, inherited) : void 0;
+  return goType !== void 0 && ccxtGoLocalHasNativeUse(goTranspiler, initializer, goType) ? goType : void 0;
+}
+function ccxtGoLocalHasNativeUse(goTranspiler, initializer, goType) {
+  const SK2 = ts.SyntaxKind;
+  let declaration = initializer.parent;
+  while (declaration?.kind === SK2.ParenthesizedExpression) {
+    declaration = declaration.parent;
+  }
+  if (declaration?.kind !== SK2.VariableDeclaration || declaration.name?.kind !== SK2.Identifier) {
+    return false;
+  }
+  const scope = typeof goTranspiler.goEnclosingFunction === "function" ? goTranspiler.goEnclosingFunction(declaration) : void 0;
+  let checker;
+  try {
+    checker = goTranspiler.getChecker();
+  } catch (e) {
+    return false;
+  }
+  if (scope === void 0 || checker === void 0) {
+    return false;
+  }
+  const symbol = checker.getSymbolAtLocation(declaration.name);
+  const isCompare = (op) => op === SK2.EqualsEqualsEqualsToken || op === SK2.ExclamationEqualsEqualsToken || op === SK2.EqualsEqualsToken || op === SK2.ExclamationEqualsToken;
+  const native = (node) => {
+    let current = node;
+    let parent = current.parent;
+    while (parent?.kind === SK2.ParenthesizedExpression) {
+      current = parent;
+      parent = current.parent;
+    }
+    if (parent === void 0) {
+      return false;
+    }
+    if (goType === "bool") {
+      if ((parent.kind === SK2.IfStatement || parent.kind === SK2.WhileStatement) && parent.expression === current) {
+        return true;
+      }
+      if (parent.kind === SK2.ConditionalExpression && parent.condition === current) {
+        return true;
+      }
+      if (parent.kind === SK2.PrefixUnaryExpression && parent.operator === SK2.ExclamationToken) {
+        return true;
+      }
+      return parent.kind === SK2.BinaryExpression && (parent.operatorToken.kind === SK2.AmpersandAmpersandToken || parent.operatorToken.kind === SK2.BarBarToken || isCompare(parent.operatorToken.kind) && [parent.left, parent.right].some((side) => side.kind === SK2.TrueKeyword || side.kind === SK2.FalseKeyword));
+    }
+    if (goType === "string" || goType === "*string") {
+      if (parent.kind !== SK2.BinaryExpression) {
+        return false;
+      }
+      const other = parent.left === current ? parent.right : parent.left;
+      if (isCompare(parent.operatorToken.kind)) {
+        return ts.isStringLiteral(other) || ts.isNoSubstitutionTemplateLiteral(other) || goType === "*string" && isAbsentExpression(other);
+      }
+      return goType === "string" && parent.operatorToken.kind === SK2.PlusToken;
+    }
+    if (goType === "map[string]any" || goType === "[]any") {
+      if (parent.kind === SK2.ElementAccessExpression && parent.expression === current) {
+        return true;
+      }
+      if (goType === "[]any" && parent.kind === SK2.PropertyAccessExpression && parent.expression === current && parent.name?.text === "length") {
+        return true;
+      }
+      return goType === "map[string]any" && parent.kind === SK2.BinaryExpression && parent.operatorToken.kind === SK2.InKeyword && parent.right === current;
+    }
+    return false;
+  };
+  let found = false;
+  const visit = (node) => {
+    if (found) {
+      return;
+    }
+    if (node.kind === SK2.Identifier && node !== declaration.name && node.text === declaration.name.text && checker.getSymbolAtLocation(node) === symbol && native(node)) {
+      found = true;
+      return;
+    }
+    node.forEachChild(visit);
+  };
+  scope.forEachChild(visit);
+  return found;
 }
 function ccxtGoInheritedVenueMethod(goTranspiler, initializer) {
   let declaration;
