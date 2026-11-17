@@ -42533,6 +42533,107 @@ GoTranspiler.prototype.goNativeCompoundAssignment = function(op, leftNode, leftT
   }
   return `${leftText.trim()} ${op === SyntaxKind5.PlusEqualsToken ? "+=" : "-="} ${rightText.trim()}`;
 };
+function go87g8LiteralOrNil(node) {
+  while (node?.kind === SyntaxKind5.ParenthesizedExpression) {
+    node = node.expression;
+  }
+  return node?.kind === SyntaxKind5.StringLiteral || node?.kind === SyntaxKind5.NoSubstitutionTemplateLiteral || node?.kind === SyntaxKind5.NullKeyword || node?.kind === SyntaxKind5.UndefinedKeyword || node?.kind === SyntaxKind5.Identifier && node.text === "undefined";
+}
+function go87g8UseIsNative(n, goType) {
+  let node = n;
+  let parent = node.parent;
+  while (parent?.kind === SyntaxKind5.ParenthesizedExpression) {
+    node = parent;
+    parent = parent.parent;
+  }
+  if (parent?.kind === SyntaxKind5.BinaryExpression) {
+    const op = parent.operatorToken.kind;
+    const other = parent.left === node ? parent.right : parent.left;
+    const equality = op === SyntaxKind5.EqualsEqualsEqualsToken || op === SyntaxKind5.ExclamationEqualsEqualsToken || op === SyntaxKind5.EqualsEqualsToken || op === SyntaxKind5.ExclamationEqualsToken;
+    if (equality && go87g8LiteralOrNil(other)) {
+      return goType !== "map[string]any" || !(other.kind === SyntaxKind5.StringLiteral || other.kind === SyntaxKind5.NoSubstitutionTemplateLiteral);
+    }
+    if (goType === "string" && op === SyntaxKind5.PlusToken) {
+      return true;
+    }
+    if (goType === "map[string]any" && op === SyntaxKind5.InKeyword && parent.right === node) {
+      return true;
+    }
+    return false;
+  }
+  return goType === "map[string]any" && parent?.kind === SyntaxKind5.ElementAccessExpression && parent.expression === node;
+}
+function go87g8NativeUseGate(goTranspiler, initializer, goType) {
+  const declaration = initializer?.parent;
+  if (goType === void 0 || declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.initializer !== initializer || declaration.name?.kind !== SyntaxKind5.Identifier) {
+    return void 0;
+  }
+  const scope = goTranspiler.goEnclosingFunction(declaration);
+  if (scope === void 0) {
+    return void 0;
+  }
+  const name = declaration.name.text;
+  const native = goTranspiler.hasNodeWhere(scope, (n) => n.kind === SyntaxKind5.Identifier && n.text === name && n !== declaration.name && !(n.parent?.kind === SyntaxKind5.PropertyAccessExpression && n.parent.name === n) && goTranspiler.goIdentifierRefersToDeclaration(n, declaration) && go87g8UseIsNative(n, goType));
+  return native ? goType : void 0;
+}
+function goInheritedFamilyCallType87g8(goTranspiler, initializer, printedValue) {
+  const callee = initializer?.expression;
+  if (initializer?.kind !== SyntaxKind5.CallExpression || initializer.questionDotToken !== void 0 || callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword || !CCXT_GO_FAMILY_METHOD.test(String(callee.name?.text ?? ""))) {
+    return void 0;
+  }
+  const name = callee.name.text;
+  const value = (printedValue ?? "").trim();
+  const open = value.indexOf("(");
+  if (open <= 0 || !goTranspiler.isWholePrintedCall(value, open) || value.substring(0, open) !== "this." + name.charAt(0).toUpperCase() + name.slice(1)) {
+    return void 0;
+  }
+  let resolved = void 0;
+  try {
+    resolved = goTranspiler.getChecker().getResolvedSignature(initializer)?.declaration?.resolve();
+  } catch (e) {
+    return void 0;
+  }
+  const owner = resolved?.parent;
+  if (resolved?.kind !== SyntaxKind5.MethodDeclaration || owner?.kind !== SyntaxKind5.ClassDeclaration || owner === enclosingClassDeclaration(initializer) || ["Exchange", "BaseExchange"].indexOf(String(owner.name?.text ?? "")) >= 0) {
+    return void 0;
+  }
+  return ccxtGoFamilyMethodReturnType(goTranspiler, resolved) === CCXT_GO_FAMILY_RETURN_TYPE ? CCXT_GO_FAMILY_RETURN_TYPE : void 0;
+}
+var goTypeOfInitializerBase87g8R3a = GoTranspiler.prototype.goTypeOfInitializer;
+GoTranspiler.prototype.goTypeOfInitializer = function(initializer, printedValue) {
+  const known = goTypeOfInitializerBase87g8R3a.call(this, initializer, printedValue);
+  return known !== void 0 ? known : go87g8NativeUseGate(this, initializer, goInheritedFamilyCallType87g8(this, initializer, printedValue));
+};
+var GO_84G8_INHERITED_RESULT_TYPES = ["string", "*string", "map[string]any"];
+function goInheritedAnnotatedCallType87g8(goTranspiler, initializer, printedValue) {
+  const callee = initializer?.expression;
+  if (initializer?.kind !== SyntaxKind5.CallExpression || initializer.questionDotToken !== void 0 || callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword || typeof callee.name?.text !== "string" || CCXT_GO_FAMILY_METHOD.test(callee.name.text)) {
+    return void 0;
+  }
+  const name = callee.name.text;
+  const value = (printedValue ?? "").trim();
+  const open = value.indexOf("(");
+  if (open <= 0 || !goTranspiler.isWholePrintedCall(value, open) || value.substring(0, open) !== "this." + name.charAt(0).toUpperCase() + name.slice(1)) {
+    return void 0;
+  }
+  let resolved = void 0;
+  try {
+    resolved = goTranspiler.getChecker().getResolvedSignature(initializer)?.declaration?.resolve();
+  } catch (e) {
+    return void 0;
+  }
+  const owner = resolved?.parent;
+  if (resolved?.kind !== SyntaxKind5.MethodDeclaration || owner?.kind !== SyntaxKind5.ClassDeclaration || owner === enclosingClassDeclaration(initializer) || ["Exchange", "BaseExchange", "PredictionExchange"].indexOf(String(owner.name?.text ?? "")) >= 0) {
+    return void 0;
+  }
+  const goType = ccxtGoFamilyMethodReturnType(goTranspiler, resolved);
+  return GO_84G8_INHERITED_RESULT_TYPES.indexOf(goType) >= 0 ? goType : void 0;
+}
+var goTypeOfInitializerBase87g8R3b = GoTranspiler.prototype.goTypeOfInitializer;
+GoTranspiler.prototype.goTypeOfInitializer = function(initializer, printedValue) {
+  const known = goTypeOfInitializerBase87g8R3b.call(this, initializer, printedValue);
+  return known !== void 0 ? known : go87g8NativeUseGate(this, initializer, goInheritedAnnotatedCallType87g8(this, initializer, printedValue));
+};
 
 // src/javaTranspiler.ts
 init_esm_shims();
