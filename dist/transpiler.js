@@ -69729,6 +69729,8 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
         rhs = dry ? "_" : this.quotedStringLiteral(right.text);
       else if (isIdentifier3(right) && this.rustScalarLocalOf(right)?.kind === "str")
         rhs = dry ? "_" : `${super.printIdentifier(right)}`;
+      else if (isCallExpression6(right) && this.rustScalarStrMethod(right, false, true)?.kind === "str")
+        rhs = dry ? "_" : this.rustScalarExpressionText("str", right);
       else if (isBinaryExpression5(right) && right.operatorToken.kind === SyntaxKind7.PlusToken && this.primitiveKindOfType(this.typeOfNodeIfAny(right)) === "string")
         rhs = this.rustScalarFormatText(right);
       if (rhs === void 0)
