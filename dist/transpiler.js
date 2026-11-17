@@ -77871,7 +77871,8 @@ ${iden}}`;
     for (const n of indexReadUses)
       this.rustBorrowedIndexReads.add(n.parent);
     if (optional) {
-      if (from === "api" || nilDeclared && writes === 0 || !nilDeclared && !((zgRow || elementKeyWrites > 0) && this.rustDictElementSource(init)) && !optMapInit && !this.rustOptContainerSourceOk(init, from))
+      const declaredDictConst = !nilDeclared && writes === 0 && from === "dict" && endpoint && (declaration.parent.flags & NodeFlags4.Const) !== 0 && init !== void 0 && isCallExpression6(init) && this.rustDeclaredEndpointKind(init) === "dict";
+      if (from === "api" || nilDeclared && writes === 0 || !nilDeclared && !((zgRow || elementKeyWrites > 0) && this.rustDictElementSource(init)) && !optMapInit && !this.rustOptContainerSourceOk(init, from) && !declaredDictConst)
         return void 0;
       this.rustOptContainerLocals.add(declaration);
     }
