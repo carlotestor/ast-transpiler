@@ -6302,7 +6302,6 @@ export class RustTranspiler extends BaseTranspiler {
         usesPrivateKey: [ 'boolean', 'bool' ],
         isGateFuturesContractWithDecimalSize: [ 'boolean', 'bool' ],
         paramsToString: [ 'string', 'str' ],
-        generateBatchPayload: [ 'string', 'str' ],
         // pg: the precision formatters answer `Str` (overrides may spell `string`); every return is a string or undefined
         amountToPrecision: [ 'Str|string', 'ostr' ], priceToPrecision: [ 'Str|string', 'ostr' ], costToPrecision: [ 'Str|string', 'ostr' ],
         feeToPrecision: [ 'Str|string', 'ostr' ], currencyToPrecision: [ 'Str|string', 'ostr' ],
