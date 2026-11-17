@@ -25245,3 +25245,16 @@ describe('ral-90re R3: a ternary of two String fields of a safeMarket local keys
         expect(out).toContain('if (balances.contains_key(code.as_str())) {');
     });
 });
+
+describe('ral-90re R4: two string locals ordered against each other', () => {
+    test('sxbet applySxbetWsSnapshot version <= held: both String locals, the parse-else-str order', () => {
+        const dir = path.join (rustFixtureRoot, 'ral-90re-r4');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    options: Dict = {};\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeDict (o: any, k: any, d: any = undefined): Dict | undefined { return o; }\n    hold (m: any): any { return m; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    a (snapshot: Dict, marketHash: string) {\n        const version = this.safeString (snapshot, 'version', '');\n        const held = this.safeString (this.safeDict (this.options, 'v', {}), marketHash, '');\n        if ((held !== '') && (version <= held)) {\n            return false;\n        }\n        return this.hold (version);\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut version: String = ');
+        expect(out).toContain('let mut held: String = ');
+        expect(out).toContain('(match (Some(version.as_str()), Some(held.as_str())) { (Some(__x), Some(__y)) => (match (__x.parse::<f64>(), __y.parse::<f64>()) { (Ok(__p), Ok(__q)) => __p < __q, _ => __x < __y }) || __x == __y, (None, None) => true, _ => false })');
+    });
+});
