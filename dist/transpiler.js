@@ -42428,17 +42428,14 @@ function ccxtGo87TrueSlotCall(node) {
   if (pattern?.kind !== SyntaxKind5.ArrayLiteralExpression || pattern.elements[0] !== node || pattern.elements.length !== 2 || !pattern.elements.every((e) => e.kind === SyntaxKind5.Identifier) || assignment?.kind !== SyntaxKind5.BinaryExpression || assignment.left !== pattern || assignment.operatorToken.kind !== SyntaxKind5.EqualsToken || assignment.parent?.kind !== SyntaxKind5.ExpressionStatement) {
     return void 0;
   }
-  let call = assignment.right;
-  if (call?.kind === SyntaxKind5.AwaitExpression) {
-    call = call.expression;
-  }
+  const call = assignment.right;
   const callee = call?.expression;
   if (call?.kind !== SyntaxKind5.CallExpression || callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword || CCXT_GO_87_SLOT_OWNED.has(String(callee.name?.text ?? ""))) {
     return void 0;
   }
   return call;
 }
-function ccxtGo87OnlyTrueCompares(scope, declaration, name) {
+function ccxtGo87OnlyTrueCompares(scope, declaration, name, tupleSlots) {
   let ok = true;
   let slots = 0;
   const visit = (n) => {
@@ -42451,7 +42448,14 @@ function ccxtGo87OnlyTrueCompares(scope, declaration, name) {
     }
     if (n.kind === SyntaxKind5.Identifier && n.text === name && n !== declaration.name) {
       const parent = n.parent;
-      if (ccxtGo87TrueSlotCall(n) !== void 0) {
+      const slotCall = ccxtGo87TrueSlotCall(n);
+      if (slotCall !== void 0) {
+        const holder = n.parent.elements.map((e) => e.text).join("") + "Variable";
+        const info = tupleSlots?.producerInfo(slotCall);
+        if (info === void 0 || info.pair === true || !String(info.slots?.[0] ?? "").startsWith("plain") || !tupleSlots.holderIsUnique(n.parent.parent, holder)) {
+          ok = false;
+          return;
+        }
         slots += 1;
       } else if (parent?.kind === SyntaxKind5.BinaryExpression && COMPARISON_TOKENS.includes(parent.operatorToken.kind) && (parent.left === n ? parent.right : parent.left)?.kind === SyntaxKind5.TrueKeyword) {
       } else if (parent?.kind === SyntaxKind5.BinaryExpression && parent.left === n && parent.operatorToken.kind === SyntaxKind5.EqualsToken && (parent.right?.kind === SyntaxKind5.TrueKeyword || parent.right?.kind === SyntaxKind5.FalseKeyword)) {
@@ -42479,7 +42483,7 @@ function ccxtGo87TrueSlotDeclaration(goTranspiler, target) {
   const cache = goTranspiler.ccxtGo87TrueSlots;
   if (!cache.has(declaration)) {
     const scope = goTranspiler.goEnclosingFunction?.(declaration);
-    cache.set(declaration, scope !== void 0 && ccxtGo87OnlyTrueCompares(scope, declaration, declaration.name.text));
+    cache.set(declaration, scope !== void 0 && ccxtGo87OnlyTrueCompares(scope, declaration, declaration.name.text, new TupleSlots(goTranspiler)));
   }
   return cache.get(declaration) ? declaration : void 0;
 }
@@ -42522,6 +42526,85 @@ GoTranspiler.prototype.printCustomBinaryExpressionIfAny = function(node, identat
     const m = /^(\s*)(\w+) = (?:GetValue\((\w+), 0\)|(\w+)\[0\])$/.exec(line);
     return m !== null && m[2] === name ? m[1] + name + " = " + (m[4] !== void 0 ? m[4] + "[0]" : "GetValue(" + m[3] + ", 0)") + " == true" : line;
   }).join("\n");
+};
+function ccxtGo87TruthyRead(node) {
+  let current = node;
+  while (current.parent?.kind === SyntaxKind5.ParenthesizedExpression) {
+    current = current.parent;
+  }
+  const parent = current.parent;
+  switch (parent?.kind) {
+    case SyntaxKind5.IfStatement:
+    case SyntaxKind5.WhileStatement:
+    case SyntaxKind5.DoStatement:
+      return parent.expression === current;
+    case SyntaxKind5.ConditionalExpression:
+      return parent.condition === current;
+    case SyntaxKind5.PrefixUnaryExpression:
+      return parent.operator === SyntaxKind5.ExclamationToken;
+    case SyntaxKind5.BinaryExpression: {
+      const op = parent.operatorToken.kind;
+      if (COMPARISON_TOKENS.includes(op)) {
+        return (parent.left === current ? parent.right : parent.left)?.kind === SyntaxKind5.TrueKeyword;
+      }
+      if (op === SyntaxKind5.AmpersandAmpersandToken || op === SyntaxKind5.BarBarToken) {
+        return ccxtGoNilJoinIsCondition(parent);
+      }
+      return false;
+    }
+  }
+  return false;
+}
+function ccxtGo87TruthyOnlyBool(goTranspiler, declaration) {
+  if (declaration?.kind !== SyntaxKind5.VariableDeclaration || !ts.isIdentifier(declaration.name) || !isNilDeclaredInitializer(declaration.initializer) || declaration.parent?.parent?.kind !== SyntaxKind5.VariableStatement || declaration.parent.declarations.length !== 1) {
+    return false;
+  }
+  goTranspiler.ccxtGo87TruthyOnly ??= /* @__PURE__ */ new WeakMap();
+  const cache = goTranspiler.ccxtGo87TruthyOnly;
+  if (cache.has(declaration)) {
+    return cache.get(declaration);
+  }
+  const scope = goTranspiler.goEnclosingFunction?.(declaration);
+  const name = declaration.name.text;
+  let ok = scope !== void 0;
+  let writes = 0;
+  let reads = 0;
+  const visit = (n) => {
+    if (!ok) {
+      return;
+    }
+    if (n !== declaration && (n.kind === SyntaxKind5.VariableDeclaration || n.kind === SyntaxKind5.Parameter || n.kind === SyntaxKind5.BindingElement) && bindingMentionsName(n.name, name)) {
+      ok = false;
+      return;
+    }
+    if (n !== scope && ts.isFunctionLike(n) && scopeMentionsIdentifier(n, name)) {
+      ok = false;
+      return;
+    }
+    if (n.kind === SyntaxKind5.Identifier && n.text === name && n !== declaration.name) {
+      const parent = n.parent;
+      if (parent?.kind === SyntaxKind5.BinaryExpression && parent.left === n && parent.operatorToken.kind === SyntaxKind5.EqualsToken && parent.parent?.kind === SyntaxKind5.ExpressionStatement && (parent.right?.kind === SyntaxKind5.TrueKeyword || parent.right?.kind === SyntaxKind5.FalseKeyword)) {
+        writes += 1;
+      } else if (ccxtGo87TruthyRead(n)) {
+        reads += 1;
+      } else {
+        ok = false;
+      }
+      return;
+    }
+    n.forEachChild(visit);
+  };
+  scope?.forEachChild(visit);
+  const result = ok && writes > 0 && reads > 0 && !goTranspiler.goTypeNameIsShadowed?.(scope, "bool");
+  cache.set(declaration, result);
+  return result;
+}
+var goNilValueClassify87 = GoNilDeclaredValueAssignmentScan.prototype.classifyIdentifier;
+GoNilDeclaredValueAssignmentScan.prototype.classifyIdentifier = function(node, assigned) {
+  if (!assigned && ccxtGo87TruthyRead(node) && !this.inNestedFunction(node) && ccxtGo87TruthyOnlyBool(this.goTranspiler, this.declaration)) {
+    return assigned;
+  }
+  return goNilValueClassify87.call(this, node, assigned);
 };
 
 // src/javaTranspiler.ts
