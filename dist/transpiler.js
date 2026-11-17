@@ -60577,7 +60577,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "Vec<String>";
     if (this.rustParamReadsByReference(param))
       return "impl KeyRead";
-    if (this.rustParamIsLentResponse(param) || this.rustParamIsLentVenue(param) || this.rustSafeDictKeyParam(param) || this.rustLentSlotParam(param))
+    if (this.rustParamIsLentResponse(param) || this.rustParamIsLentVenue(param) || this.rustSafeDictKeyParam(param) || this.rustLentSlotParam(param) || this.rustPriceSlotParam(param))
       return "impl Into<crate::Value>";
     if (this.rustBookSideParam(param))
       return this.rustWsBookPath(param, "pro::order_book::Side");
@@ -65276,6 +65276,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "parg";
     if ((kind === "int" || kind === "oint" || kind === "num" || kind === "onum") && this.rustSafeDictKeyArg(n))
       return "parg";
+    if ((kind === "int" || kind === "oint" || kind === "num" || kind === "onum") && this.rustPriceSlotArg(n))
+      return "parg";
     if (kind === "int" && this.rustElemInsertKey(n) && this.rustSafeDictKeyOnlyLocal(this.rustDeclaredNode(n)))
       return "box";
     if ((kind === "int" || kind === "oint") && this.rust53eElemReadKey(n))
@@ -67409,6 +67411,20 @@ ${binding(plan.indent)}` : ""), head: "" };
   rustSafeDictKeyParam(param) {
     const method = param?.parent;
     return param?.kind === SyntaxKind7.Parameter && isMethodDeclaration5(method) && method.body !== void 0 && isIdentifier3(method.name) && String(method.name.text) === "safeDict" && method.parameters?.[1] === param && isIdentifier3(param.name) && param.initializer === void 0 && param.questionToken === void 0 && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(param.getSourceFile?.()?.fileName ?? "")) && !this.rustMethodReferencedAsValue(method);
+  }
+  /** The `price` parameter (slot 1) of a `priceToPrecision` body (base or venue override): prints `impl Into<crate::Value>`
+   *  and binds `let mut price: Value = price.into();` (every `Value` argument still passes; a number local passes unboxed). */
+  rustPriceSlotParam(param) {
+    const method = param?.parent;
+    return param?.kind === SyntaxKind7.Parameter && isMethodDeclaration5(method) && method.body !== void 0 && isIdentifier3(method.name) && String(method.name.text) === "priceToPrecision" && method.parameters?.length === 2 && method.parameters[1] === param && isIdentifier3(param.name) && param.initializer === void 0 && param.questionToken === void 0 && param.dotDotDotToken === void 0 && isClassDeclaration4(method.parent) && !this.rustTestTierSource(param) && !this.rustMethodReferencedAsValue(method);
+  }
+  /** `n` is the price (argument 1) of `this.priceToPrecision (s, n)` whose resolved body takes the lent price slot. */
+  rustPriceSlotArg(n) {
+    const call = n?.parent;
+    if (this.rustTestTierSource(n) || !isCallExpression6(call) || call.arguments.length !== 2 || call.arguments[1] !== n || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(call.expression.name.text) !== "priceToPrecision")
+      return false;
+    const declaration = this.rustScalarCallee(call);
+    return declaration !== void 0 && isMethodDeclaration5(declaration) && this.rustPriceSlotParam(declaration.parameters?.[1]);
   }
   /** ral-50e: a local read only as base `safeDict` keys (its `any` checker type comes from an `any` operand such as
    *  `response.length`): an `i64` the printer proved passes there as the Int its box held, so the checker's `any` is moot. */
@@ -91269,7 +91285,7 @@ ${iden}}`;
   }
   /** `let mut params: Value = params.into();` heading a method whose params dict is lent: the body reads the `Value`. */
   rustLentParamsBinding(node, identation) {
-    const lent = Array.from(node.parameters ?? []).filter((p) => this.rustParamIsLentDict(p) || this.rustParamIsLentList(p) || this.rustParamIsLentResponse(p) || this.rustParamIsLentVenue(p) || this.rustSafeDictKeyParam(p) || this.rustLentSlotParam(p) || this.rustVenueStrParamType(p) !== void 0 && !this.rustVenueStrParamUnbound(p));
+    const lent = Array.from(node.parameters ?? []).filter((p) => this.rustParamIsLentDict(p) || this.rustParamIsLentList(p) || this.rustParamIsLentResponse(p) || this.rustParamIsLentVenue(p) || this.rustSafeDictKeyParam(p) || this.rustLentSlotParam(p) || this.rustPriceSlotParam(p) || this.rustVenueStrParamType(p) !== void 0 && !this.rustVenueStrParamUnbound(p));
     return lent.map((p) => {
       const name = this.printNode(p.name, 0);
       return `${this.getIden(identation + 2)}let mut ${name}: Value = ${name}.into();
