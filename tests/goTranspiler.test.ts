@@ -14935,7 +14935,7 @@ describe('84g7 ternary locals copied into a defaulted parameter scan', () => {
         const src = 'type Int = number | undefined;\n'
             + 'class X {\n'
             + '    options: any = {};\n'
-            + '    safeInteger (o: any, k: string, d: Int = undefined): Int { return d; }\n'
+            + '    safeInteger (o: object, k: string, d: Int = undefined): Int { return d; }\n'
             + '    f (tf: number, now: number, limit: Int = undefined) {\n'
             + '        const request = {};\n'
             + '        const defaultLimit = this.safeInteger (this.options, \'l\', 200);\n'
@@ -17107,5 +17107,46 @@ describe('ral-92g8 R4 venue string[] producers over a literal-defaulted safeList
             + '    }\n'
             + '}\n');
         expect(out).toContain('OrderFlags(flags any) any {');
+    });
+});
+
+describe('ral-93g4 native sum / min over nil-guarded *int64 operands', () => {
+    const head = 'type Int = number | undefined;\n'
+        + 'class BaseExchange {\n'
+        + '    sum (a: number, b: number): number { return a + b; }\n'
+        + '    milliseconds (): number { return 0; }\n'
+        + '    safeInteger (o: object, k: string, d: Int = undefined): Int { return d; }\n'
+        + '    parseToInt (x: number): number { return x; }\n'
+        + '}\n'
+        + 'export class ex extends BaseExchange {\n';
+    test('a guarded *int64 plus an int64 prints `*a + b`, and its min against another guarded pointer types int64', () => {
+        const out = goTranspile87g8(head
+            + '    f (params = {}) {\n'
+            + '        const request = {};\n'
+            + '        const since = this.safeInteger (params, \'since\');\n'
+            + '        const until = this.safeInteger (params, \'until\');\n'
+            + '        if (since !== undefined) {\n'
+            + '            let endTime = this.sum (since, 7776000000);\n'
+            + '            if (until !== undefined) {\n'
+            + '                endTime = Math.min (endTime, until);\n'
+            + '            }\n'
+            + '            request[\'endTime\'] = endTime;\n'
+            + '        }\n'
+            + '        return request;\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('var endTime int64 = *since + 7776000000');
+        expect(out).toContain('endTime = min(endTime, *until)');
+        expect(out).not.toContain('this.Sum(');
+    });
+    test('an unguarded *int64 operand keeps the boxed sum', () => {
+        const out = goTranspile87g8(head
+            + '    f (params = {}) {\n'
+            + '        const since = this.safeInteger (params, \'since\');\n'
+            + '        const endTime = this.sum (since, 1000);\n'
+            + '        return endTime > 5;\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('this.Sum(since, 1000)');
     });
 });
