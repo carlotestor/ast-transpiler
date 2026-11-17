@@ -55332,7 +55332,7 @@ ${this.getIden(identation)}}}`;
 // src/rustTranspiler.ts
 init_esm_shims();
 import { NodeFlags as NodeFlags4, SyntaxKind as SyntaxKind7 } from "typescript/unstable/ast";
-import { isArrayBindingPattern, isArrayLiteralExpression as isArrayLiteralExpression4, isArrayTypeNode as isArrayTypeNode2, isArrowFunction as isArrowFunction5, isAsExpression as isAsExpression3, isBinaryExpression as isBinaryExpression5, isBindingElement, isBlock as isBlock4, isCallExpression as isCallExpression6, isClassDeclaration as isClassDeclaration4, isClassExpression as isClassExpression2, isConditionalExpression as isConditionalExpression4, isDeleteExpression as isDeleteExpression2, isElementAccessExpression as isElementAccessExpression4, isForInStatement as isForInStatement2, isForOfStatement as isForOfStatement2, isIdentifier as isIdentifier3, isIfStatement as isIfStatement4, isMethodDeclaration as isMethodDeclaration5, isNewExpression, isNoSubstitutionTemplateLiteral, isNonNullExpression as isNonNullExpression2, isNumericLiteral as isNumericLiteral4, isObjectLiteralExpression as isObjectLiteralExpression4, isParameterDeclaration as isParameterDeclaration3, isParenthesizedExpression as isParenthesizedExpression3, isPostfixUnaryExpression as isPostfixUnaryExpression3, isPrefixUnaryExpression as isPrefixUnaryExpression3, isPropertyAccessExpression as isPropertyAccessExpression3, isPropertyDeclaration as isPropertyDeclaration2, isPropertyAssignment as isPropertyAssignment2, isReturnStatement as isReturnStatement4, isShorthandPropertyAssignment as isShorthandPropertyAssignment2, isSourceFile as isSourceFile5, isStatement, isStringLiteral as isStringLiteral3, isStringLiteralLikeNode as isStringLiteralLikeNode4, isTypeAssertion as isTypeAssertion3, isThrowStatement as isThrowStatement4, isTypeReferenceNode as isTypeReferenceNode2, isUnionTypeNode, isVariableDeclaration as isVariableDeclaration3, isVariableDeclarationList as isVariableDeclarationList2 } from "typescript/unstable/ast/is";
+import { isArrayBindingPattern, isArrayLiteralExpression as isArrayLiteralExpression4, isArrayTypeNode as isArrayTypeNode2, isArrowFunction as isArrowFunction5, isAsExpression as isAsExpression3, isBinaryExpression as isBinaryExpression5, isBindingElement, isBlock as isBlock4, isCallExpression as isCallExpression6, isClassDeclaration as isClassDeclaration4, isClassExpression as isClassExpression2, isConditionalExpression as isConditionalExpression4, isDeleteExpression as isDeleteExpression2, isElementAccessExpression as isElementAccessExpression4, isForInStatement as isForInStatement2, isForOfStatement as isForOfStatement2, isForStatement as isForStatement2, isIdentifier as isIdentifier3, isIfStatement as isIfStatement4, isMethodDeclaration as isMethodDeclaration5, isNewExpression, isNoSubstitutionTemplateLiteral, isNonNullExpression as isNonNullExpression2, isNumericLiteral as isNumericLiteral4, isObjectLiteralExpression as isObjectLiteralExpression4, isParameterDeclaration as isParameterDeclaration3, isParenthesizedExpression as isParenthesizedExpression3, isPostfixUnaryExpression as isPostfixUnaryExpression3, isPrefixUnaryExpression as isPrefixUnaryExpression3, isPropertyAccessExpression as isPropertyAccessExpression3, isPropertyDeclaration as isPropertyDeclaration2, isPropertyAssignment as isPropertyAssignment2, isReturnStatement as isReturnStatement4, isShorthandPropertyAssignment as isShorthandPropertyAssignment2, isSourceFile as isSourceFile5, isStatement, isStringLiteral as isStringLiteral3, isStringLiteralLikeNode as isStringLiteralLikeNode4, isTypeAssertion as isTypeAssertion3, isThrowStatement as isThrowStatement4, isTypeReferenceNode as isTypeReferenceNode2, isUnionTypeNode, isVariableDeclaration as isVariableDeclaration3, isVariableDeclarationList as isVariableDeclarationList2 } from "typescript/unstable/ast/is";
 import { IndexKind as IndexKind4, ObjectFlags, SignatureKind as SignatureKind2, SymbolFlags as SymbolFlags3, TypeFlags as TypeFlags6 } from "typescript/unstable/sync";
 import * as fs3 from "fs";
 import * as tsSync2 from "typescript/unstable/sync";
@@ -85562,6 +85562,9 @@ ${iden}}`;
     }
     if (!isElementAccessExpression4(n))
       return void 0;
+    const listed = this.rust92rfLoopListElementKind(n, constLocal);
+    if (listed !== void 0)
+      return listed;
     const map = constLocal(this.rustStripWrappers(n.expression));
     const mapInit = map === void 0 ? void 0 : this.rustStripWrappers(map.initializer);
     if (map === void 0 || mapInit === void 0 || !isObjectLiteralExpression4(mapInit) || mapInit.properties.length !== 0)
@@ -85614,6 +85617,64 @@ ${iden}}`;
       }
     }
     return ok ? kind : void 0;
+  }
+  /** ral-92rf R3: `xs[i]` where `xs` is a handler's own `[]` list local whose every write is a statement `xs.push (v)` (v one
+   *  resolved kind, cache or dict), read only by `xs[..]` / `xs.length`, and `i` the unwritten counter of the enclosing
+   *  `for (let i = 0; i < xs.length; i++)` with no push inside that loop: the element is present and holds that kind. */
+  rust92rfLoopListElementKind(n, constLocal) {
+    const list = constLocal(this.rustStripWrappers(n.expression));
+    const init = list === void 0 ? void 0 : this.rustStripWrappers(list.initializer);
+    if (list === void 0 || init === void 0 || !isArrayLiteralExpression4(init) || init.elements.length !== 0)
+      return void 0;
+    const idx = this.rustStripWrappers(n.argumentExpression);
+    const iDecl = isIdentifier3(idx) ? this.rustDeclarationOfIdentifier(idx) : void 0;
+    const loop = iDecl !== void 0 && isVariableDeclaration3(iDecl) ? iDecl.parent?.parent : void 0;
+    if (loop === void 0 || !isForStatement2(loop) || !(n.pos >= loop.statement.pos && n.end <= loop.statement.end))
+      return void 0;
+    const f = loop;
+    const cond = f.condition === void 0 ? void 0 : this.rustStripWrappers(f.condition);
+    const lenOk = cond !== void 0 && isBinaryExpression5(cond) && cond.operatorToken.kind === SyntaxKind7.LessThanToken && isIdentifier3(this.rustStripWrappers(cond.left)) && this.rustDeclarationOfIdentifier(this.rustStripWrappers(cond.left)) === iDecl && isPropertyAccessExpression3(this.rustStripWrappers(cond.right)) && this.rustStripWrappers(cond.right).name.text === "length" && isIdentifier3(this.rustStripWrappers(cond.right).expression) && this.rustDeclarationOfIdentifier(this.rustStripWrappers(cond.right).expression) === list;
+    const start = iDecl.initializer;
+    const startLit = start === void 0 ? void 0 : this.rustStripWrappers(start);
+    if (!lenOk || startLit === void 0 || !isNumericLiteral4(startLit) || startLit.text !== "0")
+      return void 0;
+    for (const r of this.rustScopeNameNodes(f, String(iDecl.name.text))) {
+      if (!isIdentifier3(r) || this.rustDeclarationOfIdentifier(r) !== iDecl || r === iDecl.name)
+        continue;
+      const up = r.parent;
+      const written = isBinaryExpression5(up) && up.left === r && rustIsAssignmentOperator(up.operatorToken.kind) || (isPrefixUnaryExpression3(up) || isPostfixUnaryExpression3(up)) && up.operand === r;
+      if (written && up !== f.incrementor)
+        return void 0;
+    }
+    const fn = findAncestor(list, isFunctionLike);
+    if (fn === void 0 || findAncestor(n, isFunctionLike) !== fn)
+      return void 0;
+    let kind;
+    for (const r of this.rustScopeNameNodes(fn, String(list.name.text))) {
+      if (r === list.name || !isIdentifier3(r) || this.rustIdentifierIsPropertyName(r))
+        continue;
+      if (this.rustDeclarationOfIdentifier(r) !== list || findAncestor(r, isFunctionLike) !== fn)
+        return void 0;
+      const up = r.parent;
+      if (isPropertyAccessExpression3(up) && up.expression === r && up.name.text === "length" && !this.isNativeWriteTargetBase(up))
+        continue;
+      if (isPropertyAccessExpression3(up) && up.expression === r && up.name.text === "push") {
+        const call = up.parent;
+        if (!isCallExpression6(call) || call.expression !== up || call.arguments.length !== 1 || call.parent?.kind !== SyntaxKind7.ExpressionStatement)
+          return void 0;
+        if (call.pos >= f.pos && call.end <= f.end)
+          return void 0;
+        const k = this.rustWsResolvedKind(call.arguments[0]);
+        if (k !== "cache" && k !== "dict" || kind !== void 0 && kind !== k)
+          return void 0;
+        kind = k;
+        continue;
+      }
+      if (isElementAccessExpression4(up) && up.expression === r && !this.isNativeWriteTargetBase(up) && !isDeleteExpression2(up.parent) && !(isBinaryExpression5(up.parent) && up.parent.left === up))
+        continue;
+      return void 0;
+    }
+    return kind;
   }
   /** ral-ye: a read of a plain base cache field the class keeps as a map, typed by the field's declaration:
    *  `this.F` whose declared type is a map (`balance: Dict`, `tickers: Dictionary<Ticker>`), or `this.F[k]` right
