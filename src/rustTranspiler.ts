@@ -13762,9 +13762,19 @@ export class RustTranspiler extends BaseTranspiler {
         });
     }
 
+    // venue string helpers whose `: Str` return was spelled with their callers already typed elsewhere: only their results need
+    // the native-use proof (other pass-through `Str` helpers keep the decisions they had)
+    private static readonly RUST_PASS_THROUGH_STR_HELPERS: Record<string, string[]> = {
+        'phemex.ts#phemex': [ 'fromEp', 'fromEv', 'fromEr' ], 'pro/phemex.ts#phemex': [ 'fromEp', 'fromEv', 'fromEr' ],
+    };
+
     rustPassThroughStrMethod(method: Node | undefined): boolean {
-        if (method === undefined || !isMethodDeclaration(method) || method.body === undefined
-            || RustTranspiler.RUST_BASE_TIER_FILE.test(String(method.getSourceFile().fileName))) return false;
+        if (method === undefined || !isMethodDeclaration(method) || method.body === undefined || !isIdentifier(method.name) || !isClassDeclaration(method.parent)) return false;
+        const file = String(method.getSourceFile().fileName).replace(/\\/g, '/');
+        const at = file.lastIndexOf('/ts/src/');
+        const cls = method.parent.name;
+        if (at < 0 || cls === undefined) return false;
+        if (!(RustTranspiler.RUST_PASS_THROUGH_STR_HELPERS[`${file.slice(at + '/ts/src/'.length)}#${String(cls.text)}`] ?? []).includes(String(method.name.text))) return false;
         const params = new Set<Node>(method.parameters);
         const body: Node = method.body;
         let found = false;
