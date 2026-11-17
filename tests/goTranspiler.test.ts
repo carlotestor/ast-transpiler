@@ -17201,3 +17201,26 @@ describe('map-row lists: an unannotated list whose row is stored keeps the box',
         expect(out).not.toContain('SafeListMapsTyped');
     });
 });
+
+describe('map-row lists: a literal-key row read is the map index', () => {
+    test('prints row["k"]', () => {
+        const out = goTranspileMapRows('type Dict = { [key: string]: unknown };\n'
+            + 'class base {\n'
+            + '    safeList (d: unknown, k: unknown, x: unknown = undefined): unknown[] { return []; }\n'
+            + '    safeString (d: unknown, k: unknown, x: unknown = undefined): string { return \'\'; }\n'
+            + '}\n'
+            + 'export class ex extends base {\n'
+            + '    f (response: Dict) {\n'
+            + '        const rows = this.safeList (response, \'data\');\n'
+            + '        const result = [];\n'
+            + '        for (let i = 0; i < rows.length; i++) {\n'
+            + '            const entry = rows[i];\n'
+            + '            result.push ({ \'v\': entry[\'v\'], \'id\': this.safeString (entry, \'id\') });\n'
+            + '        }\n'
+            + '        return result;\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('var entry map[string]any = rows[i]');
+        expect(out).toContain('entry["v"]');
+    });
+});

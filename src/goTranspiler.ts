@@ -39126,6 +39126,15 @@ function goMapRowSafeReaderUse (goTranspiler, n): boolean {
         && /^safe[A-Z]/.test (callee.name?.text ?? '') && (GO_MAP_ROW_READERS.indexOf (callee.name.text) >= 0)
         && ((key?.kind === SyntaxKind.StringLiteral) || (key?.kind === SyntaxKind.NoSubstitutionTemplateLiteral));
 }
+// `e['literal']` read (never written): on the map row it is the native index, nil where GetValue answered nil
+function goMapRowKeyRead (goTranspiler, n): boolean {
+    const access = n.parent;
+    const key = access?.argumentExpression;
+    return (access?.kind === SyntaxKind.ElementAccessExpression) && (access.expression === n)
+        && ((key?.kind === SyntaxKind.StringLiteral) || (key?.kind === SyntaxKind.NoSubstitutionTemplateLiteral))
+        && !goTranspiler.isGoElementAccessAssignmentTarget (access) && (access.parent?.kind !== SyntaxKind.ElementAccessExpression)
+        && (access.parent?.kind !== SyntaxKind.PropertyAccessExpression) && (access.parent?.kind !== SyntaxKind.DeleteExpression);
+}
 const GO_MAP_ROW_READERS = [ 'safeString', 'safeString2', 'safeStringLower', 'safeStringUpper', 'safeInteger', 'safeInteger2',
     'safeNumber', 'safeNumber2', 'safeBool', 'safeTimestamp', 'safeTimestamp2', 'safeValue', 'safeDict', 'safeList', 'safeFloat',
     'safeIntegerProduct', 'safeStringLower2', 'safeStringUpper2', 'safeBool2', 'safeValue2', 'safeDict2', 'safeList2' ];
@@ -39157,8 +39166,8 @@ function goMapRowElementLocal (goTranspiler, declaration, list): boolean {
         return false;
     }
     const uses = goMapRowIdentifierUses (goTranspiler, declaration);
-    return (uses !== undefined) && (uses.length > 0) && uses.some ((n) => goMapRowSafeReaderUse (goTranspiler, n))
-        && uses.every ((n) => goMapRowSafeReaderUse (goTranspiler, n)
+    return (uses !== undefined) && (uses.length > 0) && uses.some ((n) => goMapRowSafeReaderUse (goTranspiler, n) || goMapRowKeyRead (goTranspiler, n))
+        && uses.every ((n) => goMapRowSafeReaderUse (goTranspiler, n) || goMapRowKeyRead (goTranspiler, n)
             || ((list.type !== undefined) && (n.parent?.kind === SyntaxKind.PropertyAssignment) && (n.parent.initializer === n)));
 }
 // no annotation, or a list of dictionaries (`Dict[]`, `any[]`, `object[]`)
@@ -39169,6 +39178,19 @@ function goMapRowListAnnotationIsRows (type): boolean {
     const element = (type.kind === SyntaxKind.ArrayType) ? type.elementType : undefined;
     return (element?.kind === SyntaxKind.TypeReference) && (element.typeName?.text === 'Dict');
 }
+// the safeList called is the inherited reader, not one the calling class declares itself
+function goMapRowReaderIsInherited (goTranspiler, declaration): boolean {
+    const callee = declaration.initializer?.expression;
+    if ((callee?.kind !== SyntaxKind.PropertyAccessExpression) || (callee.name === undefined)) {
+        return false;
+    }
+    const reader = goTranspiler.checkerOrUndefined ()?.getSymbolAtLocation (callee?.name)?.valueDeclaration?.resolve ();
+    let owner = declaration.parent;
+    while ((owner !== undefined) && (owner.kind !== SyntaxKind.ClassDeclaration)) {
+        owner = owner.parent;
+    }
+    return (reader !== undefined) && (owner !== undefined) && (reader.parent !== owner);
+}
 function goMapRowList (goTranspiler, declaration): boolean {
     if (goMapRowListVerdicts.has (declaration)) {
         return goMapRowListVerdicts.get (declaration);
@@ -39178,7 +39200,7 @@ function goMapRowList (goTranspiler, declaration): boolean {
     const file = String (declaration?.getSourceFile?.()?.fileName ?? '');
     const args = (declaration?.kind === SyntaxKind.VariableDeclaration) && (declaration.name?.kind === SyntaxKind.Identifier)
         && goMapRowListAnnotationIsRows (declaration.type) && (declaration.parent?.declarations?.length === 1) && !/(^|[\\/])base[\\/]/.test (file)
-        ? goTranspiler.goSafeListLocalArgs (declaration.initializer) : undefined;
+        && goMapRowReaderIsInherited (goTranspiler, declaration) ? goTranspiler.goSafeListLocalArgs (declaration.initializer) : undefined;
     if (args !== undefined) {
         const uses = goMapRowIdentifierUses (goTranspiler, declaration);
         let elements = 0;
