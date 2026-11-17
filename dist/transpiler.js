@@ -44992,6 +44992,14 @@ GoTranspiler.prototype.printCallExpression = function(node, identation) {
   }
   return printCallExpressionBase90g8.call(this, node, identation);
 };
+GoTranspiler.prototype.go92g7IsBaseSum = function(call) {
+  if (call?.kind !== SyntaxKind5.CallExpression || call.expression?.kind !== SyntaxKind5.PropertyAccessExpression || call.expression.expression?.kind !== SyntaxKind5.ThisKeyword || call.expression.name?.text !== "sum" || call.arguments?.length !== 2) {
+    return false;
+  }
+  const symbol = this.checkerOrUndefined()?.getSymbolAtLocation(call.expression.name);
+  const declaration = symbol?.valueDeclaration?.resolve?.() ?? symbol?.declarations?.map((d) => d.resolve())?.[0];
+  return (declaration?.kind === SyntaxKind5.MethodDeclaration || declaration?.kind === SyntaxKind5.PropertyDeclaration) && this.goEnclosingClassName(declaration) === "BaseExchange";
+};
 GoTranspiler.prototype.go92g7Int64Operands = function(call) {
   if (call?.kind !== SyntaxKind5.CallExpression || call.arguments?.length !== 2) {
     return void 0;
@@ -45041,7 +45049,7 @@ GoTranspiler.prototype.go92g7HasNumericUse = function(declaration) {
     if (call?.kind !== SyntaxKind5.CallExpression || call.arguments.indexOf(n) < 0) {
       return false;
     }
-    if (this.goInt64SumOperands(call) === void 0 && this.go92g7MinMaxName(call) === void 0) {
+    if (!this.go92g7IsBaseSum(call) && this.go92g7MinMaxName(call) === void 0) {
       return false;
     }
     const other = call.arguments[1 - call.arguments.indexOf(n)];
