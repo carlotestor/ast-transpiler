@@ -94132,13 +94132,15 @@ ${this.getIden(identation)}}`;
    *  method's own top-level `if (x === undefined || ..) { throw .. }` rules out before the return: a loaded market
    *  record, decoded once at the return (`FromRaw`), so callers hold the struct. */
   rust92rgLoadedMarketReturn(method, ret) {
+    if (!isReturnStatement4(ret) || ret.parent !== method.body)
+      return false;
     let inner = this.unwrapParens(ret.expression);
-    if (inner !== void 0 && isAsExpression3(inner) && inner.type?.kind === SyntaxKind7.TypeReference && isIdentifier3(inner.type.typeName) && /^(?:Market|MarketInterface)$/.test(String(inner.type.typeName.text)))
+    if (inner !== void 0 && isAsExpression3(inner) && isTypeReferenceNode2(inner.type) && isIdentifier3(inner.type.typeName) && /^(?:Market|MarketInterface)$/.test(String(inner.type.typeName.text)))
       inner = this.unwrapParens(inner.expression);
-    if (inner === void 0 || !isIdentifier3(inner) || ret.parent !== method.body)
+    if (inner === void 0 || !isIdentifier3(inner))
       return false;
     const declaration = this.rustDeclarationOfIdentifier(inner);
-    if (declaration?.kind !== SyntaxKind7.VariableDeclaration || (declaration.parent.flags & NodeFlags4.Const) === 0 || declaration.parent.declarations.length !== 1)
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || !isVariableDeclarationList2(declaration.parent) || (declaration.parent.flags & NodeFlags4.Const) === 0 || declaration.parent.declarations.length !== 1)
       return false;
     const init = this.unwrapParens(declaration.initializer);
     if (init === void 0 || !isCallExpression6(init) || !isPropertyAccessExpression3(init.expression) || init.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(init.expression.name.text) !== "safeDict" || init.arguments.length !== 2)
@@ -94163,7 +94165,7 @@ ${this.getIden(identation)}}`;
       const id = this.unwrapParens(b.left);
       return isIdentifier3(id) && this.getChecker().getSymbolAtLocation(id) === symbol && this.literalKindOfNode(this.unwrapParens(b.right)) === "null";
     };
-    const throws = (s) => s !== void 0 && (s.kind === SyntaxKind7.ThrowStatement || isBlock4(s) && s.statements.length === 1 && s.statements[0].kind === SyntaxKind7.ThrowStatement);
+    const throws = (s) => s !== void 0 && (isThrowStatement4(s) || isBlock4(s) && s.statements.length === 1 && isThrowStatement4(s.statements[0]));
     return statements.slice(declAt + 1, retAt).some((s) => isIfStatement4(s) && s.elseStatement === void 0 && throws(s.thenStatement) && isNullTest(s.expression));
   }
   /** The `market` parameter of a base market-slot reader, read only by key readers, null tests or `Value` hand-offs. */

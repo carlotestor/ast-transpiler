@@ -1,5 +1,5 @@
 import { BaseTranspiler } from "./baseTranspiler.js";
-import { type BinaryExpression, type BindingElement, type Block, type CallExpression, type Declaration, type DeleteExpression, type ElementAccessExpression, type Expression, type Identifier, type MethodDeclaration, type Node, type ParameterDeclaration, type VariableDeclaration } from "typescript/unstable/ast";
+import { type BinaryExpression, type BindingElement, type Block, type CallExpression, type Declaration, type DeleteExpression, type ElementAccessExpression, type Expression, type Identifier, type MethodDeclaration, type Node, type ParameterDeclaration, type Statement, type VariableDeclaration } from "typescript/unstable/ast";
 import { type Symbol as TsSymbol, type Type } from "typescript/unstable/sync";
 /** A ts/src index scan reads real `*.ts` sources and this process's own stripped base copy only: no `.d.ts`, no
  *  dot-file temp copy, no other process's `*.nooverloads.<pid>.ts` (it can vanish or change mid-scan). */
@@ -5444,7 +5444,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-92rg R1: `return x` / `return x as MarketInterface` of a const `x = this.safeDict (this.markets, k)` the
      *  method's own top-level `if (x === undefined || ..) { throw .. }` rules out before the return: a loaded market
      *  record, decoded once at the return (`FromRaw`), so callers hold the struct. */
-    rust92rgLoadedMarketReturn(method: any, ret: any): boolean;
+    rust92rgLoadedMarketReturn(method: MethodDeclaration, ret: Statement): boolean;
     /** The `market` parameter of a base market-slot reader, read only by key readers, null tests or `Value` hand-offs. */
     rustMarketSlotParam(param: any): boolean;
     private rustMarketDepth;
