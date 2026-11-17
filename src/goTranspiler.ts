@@ -38142,3 +38142,114 @@ GoTranspiler.prototype.printCallExpression = function (node, identation) {
     return printCallExpressionBase90g8.call(this, node, identation);
 };
 // ===== ral-90g8 R3 (end), R4 inside =====
+
+// ===== ral-92g2 R1: string-list reader locals (safeList2 / safeListN joined as strings) =====
+// `const xs = this.safeList2|safeListN (..)` (no default) read only by nil tests and `.join ('lit')`, and written only
+// with string-literal arrays, is the []string the typed readers SafeList2Strings / SafeListNStrings return: nil exactly
+// where the box was nil, otherwise the elements as Join prints them, so `.join` prints strings.Join.
+const GO92G2_STRING_LIST_READERS: { [name: string]: [ string, number ] } = { 'safeList2': [ 'SafeList2Strings', 3 ], 'safeListN': [ 'SafeListNStrings', 2 ] };
+function go92g2ReaderCall (initializer): { call: CallExpression, reader: string } | undefined {
+    let node = initializer;
+    while ((node?.kind === SyntaxKind.ParenthesizedExpression) || (node?.kind === SyntaxKind.AsExpression) || (node?.kind === SyntaxKind.NonNullExpression)) {
+        node = node.expression;
+    }
+    const callee = node?.expression;
+    if ((node?.kind !== SyntaxKind.CallExpression) || (callee?.kind !== SyntaxKind.PropertyAccessExpression) || (callee.expression?.kind !== SyntaxKind.ThisKeyword)) {
+        return undefined;
+    }
+    const entry = GO92G2_STRING_LIST_READERS[String(callee.name?.text ?? '')];
+    if ((entry === undefined) || (node.arguments.length !== entry[1]) || node.arguments.some((a) => a.kind === SyntaxKind.SpreadElement)) {
+        return undefined;
+    }
+    return { call: node, reader: entry[0] };
+}
+function go92g2StringLiteralArray (node): boolean {
+    return (node?.kind === SyntaxKind.ArrayLiteralExpression) && (node.elements.length > 0)
+        && node.elements.every((e) => (e.kind === SyntaxKind.StringLiteral) || (e.kind === SyntaxKind.NoSubstitutionTemplateLiteral));
+}
+const go92g2StringListVerdicts = new WeakMap<object, Node[] | null>();
+// the string-literal array writes of the local when it qualifies, else undefined
+function go92g2StringListLocal (goTranspiler: GoTranspiler, declaration): Node[] | undefined {
+    if (go92g2StringListVerdicts.has(declaration)) {
+        return go92g2StringListVerdicts.get(declaration) ?? undefined;
+    }
+    go92g2StringListVerdicts.set(declaration, null);
+    const verdict = go92g2StringListScan(goTranspiler, declaration);
+    go92g2StringListVerdicts.set(declaration, verdict ?? null);
+    return verdict;
+}
+function go92g2StringListScan (goTranspiler: GoTranspiler, declaration): Node[] | undefined {
+    if ((declaration?.kind !== SyntaxKind.VariableDeclaration) || (declaration.name?.kind !== SyntaxKind.Identifier)
+        || (declaration.parent?.parent?.kind !== SyntaxKind.FirstStatement) || (declaration.parent.declarations.length !== 1)
+        || (go92g2ReaderCall(declaration.initializer) === undefined)) {
+        return undefined;
+    }
+    // REST venue files only: the pro / prediction packages reach the readers through another qualifier
+    if (!/(^|[\\/])ts[\\/]src[\\/][^\\/]+\.ts$/.test(String(declaration.getSourceFile()?.fileName ?? ''))) {
+        return undefined;
+    }
+    const scope: any = goTranspiler.goEnclosingFunction(declaration);
+    if ((scope === undefined) || goTranspiler.goTypeNameIsShadowed(scope, GO_STRING_LIST_LOCAL_TYPE)) {
+        return undefined;
+    }
+    const name = declaration.name.text;
+    const writes: Node[] = [];
+    let joins = 0;
+    const unsafe = goTranspiler.hasNodeWhere(scope, (n: any) => {
+        if ((n.kind === SyntaxKind.VariableDeclaration || n.kind === SyntaxKind.Parameter || n.kind === SyntaxKind.BindingElement)
+            && (n !== declaration) && (n.name?.kind === SyntaxKind.Identifier) && (n.name.text === name)) {
+            return true;
+        }
+        if ((n.kind !== SyntaxKind.Identifier) || (n.text !== name) || (n === declaration.name)) {
+            return false;
+        }
+        const parent = n.parent;
+        if ((parent?.kind === SyntaxKind.PropertyAccessExpression) && (parent.name === n)) {
+            return false;
+        }
+        if (!goTranspiler.goIdentifierRefersToDeclaration(n, declaration)) {
+            return true;
+        }
+        if (goTranspiler.goIsNilComparisonOperand(n, parent)) {
+            return false;
+        }
+        if ((parent?.kind === SyntaxKind.PropertyAccessExpression) && (parent.expression === n) && (parent.name?.text === 'join')
+            && (parent.parent?.kind === SyntaxKind.CallExpression) && (parent.parent.expression === parent)
+            && (parent.parent.arguments.length === 1) && (parent.parent.arguments[0].kind === SyntaxKind.StringLiteral)) {
+            joins++;
+            return false;
+        }
+        if ((parent?.kind === SyntaxKind.BinaryExpression) && (parent.left === n) && (parent.operatorToken?.kind === SyntaxKind.EqualsToken)
+            && (parent.parent?.kind === SyntaxKind.ExpressionStatement) && go92g2StringLiteralArray(parent.right)) {
+            writes.push(parent.right);
+            return false;
+        }
+        return true;
+    });
+    return (unsafe || (joins === 0)) ? undefined : writes;
+}
+{
+    const getGoLocalType = GoTranspiler.prototype.getGoLocalType;
+    GoTranspiler.prototype.getGoLocalType = function (declaration, parsedValue: string) {
+        const writes = go92g2StringListLocal(this, declaration);
+        if (writes !== undefined) {
+            for (const literal of writes) {
+                this.goSliceLiteralTypes.set(literal, GO_STRING_LIST_LOCAL_TYPE);
+            }
+            return GO_STRING_LIST_LOCAL_TYPE;
+        }
+        return getGoLocalType.call(this, declaration, parsedValue);
+    };
+    const printVariableDeclarationList = GoTranspiler.prototype.printVariableDeclarationList;
+    GoTranspiler.prototype.printVariableDeclarationList = function (node, identation) {
+        const declaration = node?.declarations?.[0];
+        if ((node?.declarations?.length === 1) && (go92g2StringListLocal(this, declaration) !== undefined)
+            && (this.getGoLocalType(declaration, '') === GO_STRING_LIST_LOCAL_TYPE)) {
+            const found = go92g2ReaderCall(declaration.initializer);
+            const args = found.call.arguments.map((a) => this.printNode(a, 0).trim()).join(', ');
+            return `${this.getIden(identation)}var ${this.printNode(declaration.name, 0)} ${GO_STRING_LIST_LOCAL_TYPE} = ${found.reader}(${args})`;
+        }
+        return printVariableDeclarationList.call(this, node, identation);
+    };
+}
+// ===== ral-92g2 R1 (end) =====

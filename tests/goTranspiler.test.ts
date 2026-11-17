@@ -16523,3 +16523,52 @@ describe('ral-90g8 R4 annotated int counters and loop-index writes', () => {
         expect(out).toContain('page = page + 1');
     });
 });
+
+describe ('ral-92g2 R1 string-list reader locals', () => {
+    const PRELUDE =
+        'type Dict = { [key: string]: any };\n' +
+        'type Strings = string[] | undefined;\n' +
+        'export class Exchange {\n' +
+        '    safeList2 (a: any, k1: any, k2: any, d: any = undefined): any[] { return a; }\n' +
+        '    safeListN (a: any, ks: any[], d: any = undefined): any[] { return a; }\n';
+    const run = (members: string): string => {
+        const tmp = fs.mkdtempSync (path.join (os.tmpdir (), 'r92g2-'));
+        try {
+            const src = path.join (tmp, 'ts', 'src');
+            fs.mkdirSync (src, { recursive: true });
+            const file = path.join (src, 'x.ts');
+            fs.writeFileSync (file, PRELUDE + members + '}\n');
+            return new Transpiler ({ verbose: false, go: { parser: { NUM_LINES_END_FILE: 0 } } }).transpileGoByPath (file).content;
+        } finally {
+            fs.rmSync (tmp, { recursive: true, force: true });
+        }
+    };
+    const body = '    f (params: Dict, trigger: boolean): Dict {\n' +
+        '        const request: Dict = {};\n' +
+        '        let types: Strings = this.safeList2 (params, "types", "order_types");\n' +
+        '        if ((types === undefined) && trigger) {\n' +
+        '            types = [ "a", "b" ];\n' +
+        '        }\n' +
+        '        if (types !== undefined) {\n' +
+        '            request["types"] = types.join (",");\n' +
+        '        }\n' +
+        '        const ids = this.safeListN (params, [ "ids", "client_ids" ]);\n' +
+        '        if (ids !== undefined) {\n' +
+        '            request["ids"] = ids.join (",");\n' +
+        '        }\n' +
+        '        return request;\n' +
+        '    }\n';
+    test ('a safeList2 / safeListN local only nil-tested and joined is a []string read by strings.Join', () => {
+        const out = run (body);
+        expect (out).toContain ('var types []string = SafeList2Strings(params, "types", "order_types")');
+        expect (out).toContain ('types = []string{"a", "b"}');
+        expect (out).toContain ('strings.Join(types, ",")');
+        expect (out).toContain ('var ids []string = SafeListNStrings(params, []any{"ids", "client_ids"})');
+        expect (out).toContain ('strings.Join(ids, ",")');
+    });
+    test ('a local also handed on whole keeps the box', () => {
+        const out = run (body.replace ('return request;', 'request["raw"] = ids;\n        return request;'));
+        expect (out).not.toContain ('var ids []string');
+        expect (out).toContain ('var types []string');
+    });
+});
