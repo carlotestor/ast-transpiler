@@ -38254,6 +38254,12 @@ function go92g2StringListScan (goTranspiler: GoTranspiler, declaration): Node[] 
 // `const xs = this.safeList (c, k, dflt)` with a non-literal default, used only as `xs.length` and as the receiver of
 // `this.safeX (xs, i)` inside `for (.. i < xs.length ..)`, is the []any BaseExchange.SafeListSlice returns: the member or
 // default list, nil for a non-list default. A non-list box had length 0 too, so the loops never read it in either form.
+// the member resolves only to a declaration of the base Exchange class (a venue override has a call-site-typed signature)
+function go92g2BaseExchangeMember (goTranspiler: GoTranspiler, member): boolean {
+    const symbol = goTranspiler.checkerOrUndefined()?.getSymbolAtLocation(member.name);
+    const declarations = (symbol?.declarations ?? []).map((d) => d.resolve?.());
+    return (declarations.length > 0) && declarations.every((d) => GO_BASE_EXCHANGE_FILE.test(String(d?.getSourceFile?.()?.fileName ?? '')));
+}
 // `xs.length`, or a `const n = xs.length` local never written again
 function go92g2LengthOf (goTranspiler: GoTranspiler, node, declaration): boolean {
     if ((node?.kind === SyntaxKind.PropertyAccessExpression) && (node.name?.text === 'length')
@@ -38308,9 +38314,13 @@ function go92g2LoopListLocal (goTranspiler: GoTranspiler, declaration): boolean 
     // no-default safeListN (nil tests allowed: SafeListNSlice is nil exactly where SafeListN is)
     const method = String(callee?.name?.text ?? '');
     const nilExact = (method === 'safeListN') && (call?.arguments?.length === 2);
+    // an empty-literal-default safeList is never nil (SafeListTypedDefault answers []any{} where the box did), so it may
+    // also be handed whole to a `this.parse*s` reader: its `any` parameter receives the same list
+    const plainList = (method === 'safeList') && (call?.arguments?.length === 3)
+        && (call.arguments[2].kind === SyntaxKind.ArrayLiteralExpression) && (call.arguments[2].elements.length === 0);
     if ((call?.kind !== SyntaxKind.CallExpression) || (callee?.kind !== SyntaxKind.PropertyAccessExpression) || (callee.expression?.kind !== SyntaxKind.ThisKeyword)
         || call.arguments.some((a) => a.kind === SyntaxKind.SpreadElement)
-        || !(nilExact || ((method === 'safeList') && (call.arguments.length === 3)
+        || !(nilExact || plainList || ((method === 'safeList') && (call.arguments.length === 3)
             && ![ SyntaxKind.ArrayLiteralExpression, SyntaxKind.ObjectLiteralExpression ].includes(call.arguments[2].kind)))) {
         return false;
     }
@@ -38342,6 +38352,11 @@ function go92g2LoopListLocal (goTranspiler: GoTranspiler, declaration): boolean 
         if (nilExact && goTranspiler.goIsNilComparisonOperand(n, parent)) {
             return false;
         }
+        if (plainList && (parent?.kind === SyntaxKind.CallExpression) && (parent.arguments[0] === n)
+            && (parent.expression?.kind === SyntaxKind.PropertyAccessExpression) && (parent.expression.expression?.kind === SyntaxKind.ThisKeyword)
+            && /^parse[A-Z]\w*s$/.test(String(parent.expression.name?.text ?? '')) && go92g2BaseExchangeMember(goTranspiler, parent.expression)) {
+            return false;
+        }
         const reader = parent?.expression;
         if ((parent?.kind === SyntaxKind.CallExpression) && (parent.arguments[0] === n) && (parent.arguments.length >= 2)
             && (reader?.kind === SyntaxKind.PropertyAccessExpression) && (reader.expression?.kind === SyntaxKind.ThisKeyword)
@@ -38364,8 +38379,11 @@ function go92g2LoopListLocal (goTranspiler: GoTranspiler, declaration): boolean 
     GoTranspiler.prototype.goSafeListUnboxValue = function (declaration, identation: number) {
         if ((listType.call(this, declaration) === undefined) && go92g2LoopListLocal(this, declaration)) {
             const args = declaration.initializer.arguments.map((a, i) => this.printNode(a, i === 0 ? identation : 0).trim());
-            const reader = (declaration.initializer.expression.name.text === 'safeListN') ? 'SafeListNSlice' : 'SafeListSlice';
-            return `this.${reader}(${args.join(', ')})`;
+            if (declaration.initializer.expression.name.text === 'safeListN') {
+                return `this.SafeListNSlice(${args.join(', ')})`;
+            }
+            const literal = declaration.initializer.arguments[2];
+            return (literal.kind === SyntaxKind.ArrayLiteralExpression) ? `SafeListTypedDefault(${args.join(', ')})` : `this.SafeListSlice(${args.join(', ')})`;
         }
         return listValue.call(this, declaration, identation);
     };
