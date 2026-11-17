@@ -57019,7 +57019,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const needle = node.arguments[0];
     if (!_is.isIdentifier.call(void 0, recv) || this.literalKindOfNode(needle) !== "string" || this.rustNativeStringLiteralArg(needle) === void 0 || needle.text === "")
       return false;
-    return this.primitiveKindOfType(this.typeOfNodeIfAny(recv)) === "string" && this.rustScalarIdentifierKind(recv) === void 0;
+    return this.primitiveKindOfType(this.typeOfNodeIfAny(recv)) === "string" && this.rustScalarIdentifierKind(recv) === void 0 && this.rustScalarParamRead(recv) === void 0;
   }
   /** ral-90rh R1: `n - k` / `k - n` with `n` an `Option<i64>` local seeded by `parseInt (s)` and `k` an int literal: the
    *  printed name of `n` and the `i64` text over its payload `__b`. */
