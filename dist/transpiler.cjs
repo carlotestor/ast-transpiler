@@ -56991,6 +56991,36 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     return void 0;
   }
+  /** ral-90rh R4: `m['k']` off a typed (`struct`) market local whose field is a `String` (kind `ostr`) or an `Option<bool>`
+   *  (kind `obool`): the field text (`(m).market_type`, `(m).linear`), else undefined. */
+  rust90rhMarketFieldPartner(partner, kind) {
+    if (partner === void 0 || !(_is.isElementAccessExpression.call(void 0, partner) || _is.isPropertyAccessExpression.call(void 0, partner)))
+      return void 0;
+    const declaration = this.rustTypedMarketLocalOf(partner.expression);
+    if (declaration === void 0 || this.rustMarketLocalKind(declaration) !== "struct")
+      return void 0;
+    const key = this.rustMarketReadKey(partner.expression);
+    if (key === void 0)
+      return void 0;
+    const recv = `(${this.printNode(declaration.name, 0)})`;
+    if (kind === "ostr" && _RustTranspiler.RUST_MARKET_STR_FIELDS[key] !== void 0)
+      return `${recv}.${_RustTranspiler.RUST_MARKET_STR_FIELDS[key]}`;
+    if (kind === "obool" && _RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS.has(key))
+      return `${recv}.${key}`;
+    return void 0;
+  }
+  /** ral-90rh R3: a declaration initializer `s.indexOf ('<non-empty literal>')`, `s` a bare identifier the checker types
+   *  `string` and no scalar rule types (it prints as `Value`). */
+  rust90rhValueIndexOf(expr) {
+    const node = this.unwrapParens(expr);
+    if (node === void 0 || !_is.isCallExpression.call(void 0, node) || !_is.isPropertyAccessExpression.call(void 0, node.expression) || String(node.expression.name.text) !== "indexOf" || node.arguments.length !== 1 || !this.rustDeclInitPosition(node))
+      return false;
+    const recv = node.expression.expression;
+    const needle = node.arguments[0];
+    if (!_is.isIdentifier.call(void 0, recv) || this.literalKindOfNode(needle) !== "string" || this.rustNativeStringLiteralArg(needle) === void 0 || needle.text === "")
+      return false;
+    return this.primitiveKindOfType(this.typeOfNodeIfAny(recv)) === "string" && this.rustScalarIdentifierKind(recv) === void 0;
+  }
   /** ral-90rh R1: `n - k` / `k - n` with `n` an `Option<i64>` local seeded by `parseInt (s)` and `k` an int literal: the
    *  printed name of `n` and the `i64` text over its payload `__b`. */
   rust90rhOintShiftBound(expr) {
@@ -59681,6 +59711,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "str";
     if (fresh && this.rustNumParamToString(node))
       return "str";
+    if (fresh && this.rust90rhValueIndexOf(node))
+      return "int";
     if (fresh && this.rust90rhParseIntInit(node))
       return "oint";
     if (fresh && this.rust87rhToStringWrite(node))
@@ -65081,6 +65113,10 @@ ${binding(plan.indent)}` : ""), head: "" };
     const paramText = this.rustOptParamText(kind, node);
     if (paramText !== void 0)
       return paramText;
+    if (kind === "int" && this.rust90rhValueIndexOf(node)) {
+      const needle = this.rustNativeStringLiteralArg(node.arguments[0]);
+      return `${super.printIdentifier(node.expression.expression)}.as_str().and_then(|__s| __s.find("${needle}")).map(|__i| __i as i64).unwrap_or(-1)`;
+    }
     if (kind === "oint" && this.rustLimitCall(node))
       return this.rustLimitCallText(node);
     const shadowRead = this.rustProShadowScalarText(kind, node);
@@ -66548,6 +66584,13 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
     }
     if (!_is.isIdentifier.call(void 0, self) || this.rustScalarIdentifierKind(self) === void 0)
       return void 0;
+    const field = this.rust90rhMarketFieldPartner(partner, kind);
+    if (field !== void 0) {
+      if (dry)
+        return "_";
+      const name2 = super.printIdentifier(self);
+      return kind === "ostr" ? `(Some(${field}.as_str()) ${sign} ${name2}.as_deref())` : `(${field} ${sign} ${name2})`;
+    }
     if (!_is.isIdentifier.call(void 0, partner))
       return this.rust59nValueReaderPartner(partner) ? this.rustScalarPayloadPartnerTest(self, partner, kind, sign, dry) : void 0;
     const base = kind.startsWith("o") ? kind.slice(1) : kind;

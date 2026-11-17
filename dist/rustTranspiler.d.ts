@@ -411,6 +411,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustSiblingStrBoxesMove(declaration: any, scope: any): boolean;
     /** Static kind of a write's right-hand side: `null`, or the `Option` payload it yields exactly. */
     rustNilWriteKind(rhs: any): string | undefined;
+    /** ral-90rh R4: `m['k']` off a typed (`struct`) market local whose field is a `String` (kind `ostr`) or an `Option<bool>`
+     *  (kind `obool`): the field text (`(m).market_type`, `(m).linear`), else undefined. */
+    rust90rhMarketFieldPartner(partner: any, kind: string): string | undefined;
+    /** ral-90rh R3: a declaration initializer `s.indexOf ('<non-empty literal>')`, `s` a bare identifier the checker types
+     *  `string` and no scalar rule types (it prints as `Value`). */
+    rust90rhValueIndexOf(expr: any): boolean;
     /** ral-90rh R1: `n - k` / `k - n` with `n` an `Option<i64>` local seeded by `parseInt (s)` and `k` an int literal: the
      *  printed name of `n` and the `i64` text over its payload `__b`. */
     rust90rhOintShiftBound(expr: any): {
