@@ -24706,3 +24706,26 @@ describe('ral-84h R2: `i + 1` of an always-Int for counter at a declaration is a
         expect(out).not.toContain('let mut iteration: Value');
     });
 });
+
+describe('ral-87rg R1: a handleParamBool / handleParamString params slot written back into its own lent map', () => {
+    test('`[ h, p ] = this.handleParamBool (p, ..)` on a handed omit map keeps p a Dict and takes slot 1 back', () => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-87rg1-'));
+        const files: Record<string, string> = {
+            'ts/src/base/Exchange.ts': "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Bool = boolean | undefined;\nexport default class Exchange {\n    extend (...args: any[]): any { return Object.assign ({}, ...args); }\n    omit (x: any, ...args: any[]): any { return x; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeBool (o: any, k: any, d: Bool = undefined): Bool { return o; }\n    async privatePostX (p: any = {}): Promise<any> { return p; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    handleParamBool (params: object, paramName: string, defaultValue: Bool = undefined): [Bool, object] {\n        const value = this.safeBool (params, paramName, defaultValue);\n        let paramsOmitted = params;\n        if (value !== undefined) {\n            paramsOmitted = this.omit (params, paramName);\n        }\n        return [ value, paramsOmitted ];\n    }\n}\n",
+            'ts/src/venue.ts': "import Exchange from './base/Exchange.js';\nimport type { Dict, Bool, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n"
+                + "    async fetchTransfers (code: Str = undefined, params: Dict = {}): Promise<any> {\n        const request: Dict = {};\n        let paramsOmitted: Dict = this.omit ({ 'a': 1, 'test': true }, 'test');\n        let hedged: Bool = undefined;\n        [ hedged, paramsOmitted ] = this.handleParamBool (paramsOmitted, 'hedged', false);\n        const side = this.safeString (paramsOmitted, 'side');\n        request['side'] = side;\n        request['hedged'] = hedged;\n        return await this.privatePostX (this.extend (request, paramsOmitted));\n    }\n"
+                + "    async fetchLedger (code: Str = undefined, params: Dict = {}): Promise<any> {\n        let other: Dict = this.omit ({ 'a': 1, 'test': true }, 'test');\n        const seed: Dict = this.omit ({ 'b': 1, 'x': true }, 'x');\n        let hedged: Bool = undefined;\n        [ hedged, other ] = this.handleParamBool (seed, 'hedged', false);\n        const side = this.safeString (other, 'side');\n        return await this.privatePostX (this.extend ({ 'side': side, 'hedged': hedged }, other));\n    }\n}\n",
+        };
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['fetchTransfers', 'fetchLedger'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        t.transpileRustByPath(path.join (root, 'ts/src/base/Exchange.ts'));
+        const out = t.transpileRustByPath(path.join (root, 'ts/src/venue.ts')).content;
+        expect(out).toMatch(/let mut paramsOmitted: crate::value::Dict = self\.omit\(/);
+        expect(out).toContain('paramsOmitted = __destr_tmp.get(1).cloned().unwrap_or(Value::Null).into_dict()');
+        // negative: slot 1 answers another map (`seed`), not the written local: no proof that the head is the local itself
+        expect(out).toMatch(/let mut other: Value = /);
+    });
+});

@@ -32075,12 +32075,25 @@ export class RustTranspiler extends BaseTranspiler {
         if (!isCallExpression(call) || !isPropertyAccessExpression(call.expression) || call.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
         const at = list.elements.indexOf(n);
         if (/^handle\w*AndParams\d*$/.test(String(call.expression.name.text)) && list.elements.length === 2 && at === 1) return true;
+        // ral-87rg R1: base `handleParamBool|String|Integer[2] (x, ..)` hands back `x` itself or `this.omit (x, ..)` at slot 1
+        // (Exchange.ts: `paramsOmitted = params` / `this.omit (params, name)`): a map whenever the lent `x` is the written local
+        if (list.elements.length === 2 && at === 1 && this.rust87rgParamSlotCall(call, n)) return true;
         if (!this.rustNativeListSource(call)) return false;
         const declaration: any = this.rustCalleeDeclaration(call);
         let type: any = declaration?.type;
         const named = (t: any, name: string): boolean => t?.kind === SyntaxKind.TypeReference && isIdentifier(t.typeName) && t.typeName.text === name;
         if (named(type, 'Promise') && type.typeArguments?.length === 1) type = type.typeArguments[0];
         return type?.kind === SyntaxKind.TupleType && named(type.elements?.[at], 'Dict') && type.elements[at].typeArguments === undefined;
+    }
+
+    private static readonly RUST_87RG_PARAM_SLOT_HELPERS = new Set([ 'handleParamBool', 'handleParamBool2', 'handleParamString', 'handleParamString2', 'handleParamInteger', 'handleParamInteger2' ]);
+
+    /** ral-87rg R1: `[ v, x ] = this.handleParamBool|String|Integer[2] (x, ..)` on the base runtime helper, whose first argument
+     *  is the very local the slot writes back (so slot 1 is that map, or its omit, on every path). */
+    rust87rgParamSlotCall(call: any, n: any): boolean {
+        if (!this.rustBaseCallNamed(call, RustTranspiler.RUST_87RG_PARAM_SLOT_HELPERS) || this.rustTestTierSource(call) || !isIdentifier(n)) return false;
+        const head: any = this.rustSkipWrappers(call.arguments[0]);
+        return head !== undefined && isIdentifier(head) && this.rustDeclaredNode(head) === this.rustDeclaredNode(n) && this.rustDeclaredNode(n) !== undefined;
     }
 
     rustNilSlotDictCandidateUncached(declaration: any): boolean {
