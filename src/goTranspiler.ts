@@ -39202,6 +39202,14 @@ GoTranspiler.prototype.printCallExpression = function (node, identation) {
         return printCallExpressionBase93g4.call(this, node, identation);
     }
     const minMax = this.go92g7MinMaxName(node);
+    let arm = up;
+    while (arm?.kind === SyntaxKind.ParenthesizedExpression) {
+        arm = arm.parent;
+    }
+    // a ternary arm keeps the box: the joined closure's nil tests key on the boxed arm
+    if ((minMax !== undefined) && (arm?.kind === SyntaxKind.ConditionalExpression)) {
+        return printCallExpressionBase93g4.call(this, node, identation);
+    }
     if (minMax !== undefined) {
         return `${minMax}(${texts[0]}, ${texts[1]})`;
     }

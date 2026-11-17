@@ -17192,3 +17192,22 @@ describe('ral-93g4 a native sum declaration keeps int64', () => {
         expect(out).toMatch(/var newValue int64 = previousValue \+ 1/);
     });
 });
+
+describe('ral-93g4 min in a ternary arm', () => {
+    test('a guarded Math.min arm keeps mathMin', () => {
+        const out = goTranspile87g8('type Int = number | undefined;\n'
+            + 'class BaseExchange {\n'
+            + '}\n'
+            + 'export class ex extends BaseExchange {\n'
+            + '    f (limit: Int = undefined) {\n'
+            + '        const limitResolved: Int = (limit === undefined) ? undefined : Math.min (limit, 1000);\n'
+            + '        const request = {};\n'
+            + '        if (limitResolved !== undefined) {\n'
+            + '            request[\'limit\'] = limitResolved;\n'
+            + '        }\n'
+            + '        return request;\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('mathMin(limit, 1000)');
+    });
+});
