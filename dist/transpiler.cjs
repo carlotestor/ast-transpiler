@@ -78368,7 +78368,7 @@ ${iden}}`;
         return "map";
       }
       if (method === "safeList" || method === "safeListValue") {
-        return args.length < 3 || _is.isArrayLiteralExpression.call(void 0, this.rustSkipWrappers(args[2])) ? "list" : void 0;
+        return args.length < 3 || _is.isArrayLiteralExpression.call(void 0, this.rustSkipWrappers(args[2])) || this.rust92rgListLiteralDefault(args[2]) ? "list" : void 0;
       }
       if (this.rustDeclaredArrayProof && this.rustAlwaysListProducer(expr))
         return "list";
@@ -78388,6 +78388,18 @@ ${iden}}`;
         return "list";
     }
     return void 0;
+  }
+  /** ral-92rg R2: a `safeList` default that is a never-written const of the same function initialised to a ternary whose
+   *  two arms are array literals (gate `getSettlementCurrencies`: `const d = (t === 'swap') ? [ 'usdt' ] : [ 'btc' ]`). */
+  rust92rgListLiteralDefault(arg) {
+    const id = this.rustSkipWrappers(arg);
+    if (id === void 0 || !_is.isIdentifier.call(void 0, id))
+      return false;
+    const declaration = this.rustDeclarationOfIdentifier(id);
+    if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || declaration.name === id || !_is.isVariableDeclarationList.call(void 0, declaration.parent) || (declaration.parent.flags & _ast.NodeFlags.Const) === 0 || this.rustEnclosingFunction(declaration) !== this.rustEnclosingFunction(id))
+      return false;
+    const init = this.rustSkipWrappers(declaration.initializer);
+    return init !== void 0 && _is.isConditionalExpression.call(void 0, init) && _is.isArrayLiteralExpression.call(void 0, this.rustSkipWrappers(init.whenTrue)) && _is.isArrayLiteralExpression.call(void 0, this.rustSkipWrappers(init.whenFalse));
   }
   /** True when the only writes to this local inside its own function are
    *  element writes and container rebuilds (no whole-local write of another
@@ -79152,7 +79164,31 @@ ${iden}}`;
     const init = this.rustSkipWrappers(declaration.initializer);
     if (init === void 0 || !_is.isCallExpression.call(void 0, init))
       return false;
-    return this.rust90rCompareLeftBearers.has(declaration) || this.rust90rForwardListCalls.has(init);
+    return this.rust90rCompareLeftBearers.has(declaration) || this.rust90rForwardListCalls.has(init) || this.rust92rgSafeListForward(init);
+  }
+  /** ral-92rg R2: a call of a sync venue method whose every return is `this.safeList (o, k, d)` with `d` a
+   *  rust92rgListLiteralDefault const: the call result is a list on every path, moved into its bearer. */
+  rust92rgSafeListForward(call) {
+    if (!_is.isPropertyAccessExpression.call(void 0, call.expression) || call.expression.expression.kind !== _ast.SyntaxKind.ThisKeyword)
+      return false;
+    const impl = this.rustScalarCallee(call);
+    if (impl === void 0 || !_is.isMethodDeclaration.call(void 0, impl) || impl.body === void 0 || this.isAsyncFunction(impl) || _RustTranspiler.RUST_BASE_TIER_FILE.test(String(impl.getSourceFile().fileName)) || this.getMethodOverride(impl) !== void 0)
+      return false;
+    let returns = 0;
+    let ok = true;
+    const visit = (n) => {
+      if (!ok || n !== impl.body && _chunkC7C726CWcjs.isFunctionLike.call(void 0, n))
+        return;
+      if (_is.isReturnStatement.call(void 0, n)) {
+        returns++;
+        const r = this.rustSkipWrappers(n.expression);
+        ok = r !== void 0 && _is.isCallExpression.call(void 0, r) && _is.isPropertyAccessExpression.call(void 0, r.expression) && r.expression.expression.kind === _ast.SyntaxKind.ThisKeyword && String(r.expression.name.text) === "safeList" && r.arguments.length === 3 && this.rust92rgListLiteralDefault(r.arguments[2]);
+        return;
+      }
+      n.forEachChild(visit);
+    };
+    impl.body.forEachChild(visit);
+    return ok && returns > 0;
   }
   rustReadBearerKindUncached(declaration) {
     const init = this.rustSkipWrappers(declaration.initializer);
@@ -94367,6 +94403,7 @@ ${this.getIden(identation)}}`;
     let forwards = 0;
     let reads = 0;
     let others = 0;
+    let literalSlots = 0;
     const ok = this.rustLocalUsesAll(param, name, true, (n) => {
       if (this.isNativeWriteTargetBase(n) || _is.isDeleteExpression.call(void 0, _optionalChain([n, 'access', _13239 => _13239.parent, 'optionalAccess', _13240 => _13240.parent])))
         return false;
@@ -94374,11 +94411,14 @@ ${this.getIden(identation)}}`;
         forwards++;
       else if (this.rustMarketReaderArg(n) || this.rustIsNullTestOf(n) || this.rustDictKeyReadUse(n))
         reads++;
+      else if (this.rust92rgLiteralValueSlot(n))
+        literalSlots++;
       else
         others++;
       return true;
     });
-    if (!ok || forwards === 0 && (reads === 0 || others > 0))
+    const readsAndBoxes = forwards === 0 && reads > 0 && others === 0 && literalSlots > 0 && param.initializer === void 0;
+    if (!ok || forwards === 0 && (reads === 0 || others > 0 || literalSlots > 0 && !readsAndBoxes))
       return false;
     const sibling = this.rustWsSiblingCallSites(method);
     if (sibling === void 0)
@@ -94390,6 +94430,14 @@ ${this.getIden(identation)}}`;
         return false;
       return args[at] === void 0 ? param.initializer !== void 0 : this.rustMarketArgLends(args[at]);
     });
+  }
+  /** ral-92rg R3: `n` is the whole value of a property of an object literal (`{ 'info': market }`): one box of the record. */
+  rust92rgLiteralValueSlot(n) {
+    let top = n;
+    while (top.parent !== void 0 && (_is.isParenthesizedExpression.call(void 0, top.parent) || _is.isAsExpression.call(void 0, top.parent)))
+      top = top.parent;
+    const up = top.parent;
+    return up !== void 0 && _is.isPropertyAssignment.call(void 0, up) && up.initializer === top && _is.isObjectLiteralExpression.call(void 0, up.parent);
   }
   /** The calls of REST method `m` from `ts/src/pro/<id>.ts` (checker-resolved to `m`): none when the ws class does
    *  not call it, undefined when it does but this program does not load the ws file. */

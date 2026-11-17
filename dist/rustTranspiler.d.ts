@@ -3358,6 +3358,9 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  writes, a `this.` builder that copies plain operands, a pass-through
      *  builder of a built argument. */
     rustBuiltContainerKind(node: any, depth?: number): 'map' | 'list' | undefined;
+    /** ral-92rg R2: a `safeList` default that is a never-written const of the same function initialised to a ternary whose
+     *  two arms are array literals (gate `getSettlementCurrencies`: `const d = (t === 'swap') ? [ 'usdt' ] : [ 'btc' ]`). */
+    rust92rgListLiteralDefault(arg: Node): boolean;
     /** True when the only writes to this local inside its own function are
      *  element writes and container rebuilds (no whole-local write of another
      *  shape): the container it was built as is what it holds at every use. */
@@ -3504,6 +3507,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** stack-90r: the list bearer's initializer is a call (its result is a temporary no other node reads, so moving it out is
      *  the copy without the copy) and the bearer is typed through ral-90rb R2 or ral-90rg R4. Decided from the AST. */
     rust90rMoveBearer(declaration: VariableDeclaration): boolean;
+    /** ral-92rg R2: a call of a sync venue method whose every return is `this.safeList (o, k, d)` with `d` a
+     *  rust92rgListLiteralDefault const: the call result is a list on every path, moved into its bearer. */
+    rust92rgSafeListForward(call: CallExpression): boolean;
     rustReadBearerKindUncached(declaration: any): 'list' | 'map' | false;
     private rustContainerBoxUses;
     private static readonly RUST_CONTAINER_NULL_SAFE_READERS;
@@ -5475,6 +5481,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A per-venue helper's `market: Market` parameter that it forwards to a lent market slot: lent itself when every
      *  caller in its file lends a typed market (or passes `undefined`), so no caller decodes. */
     rustVenueMarketParam(method: any, param: any): boolean;
+    /** ral-92rg R3: `n` is the whole value of a property of an object literal (`{ 'info': market }`): one box of the record. */
+    rust92rgLiteralValueSlot(n: Node): boolean;
     /** The calls of REST method `m` from `ts/src/pro/<id>.ts` (checker-resolved to `m`): none when the ws class does
      *  not call it, undefined when it does but this program does not load the ws file. */
     rustWsSiblingCallSites(method: any): any[] | undefined;
