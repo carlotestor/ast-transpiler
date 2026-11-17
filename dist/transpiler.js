@@ -45896,6 +45896,62 @@ GoTranspiler.prototype.goLocalStaticType = function(node) {
   this.goLocalStaticTypeCache.delete(owner);
   return answer;
 };
+var goTernaryJoin93GuardedPartsUncached = GoTranspiler.prototype.goTernaryJoinPartsUncached;
+GoTranspiler.prototype.goTernaryJoinPartsUncached = function(declaration) {
+  const known = goTernaryJoin93GuardedPartsUncached.call(this, declaration);
+  if (known !== void 0 || this.goTernaryJoinProvisional()) {
+    return known;
+  }
+  const ternary = this.goUnwrapParenthesizedNode(declaration?.initializer);
+  if (ternary?.kind !== SyntaxKind5.ConditionalExpression) {
+    return void 0;
+  }
+  const whenTrue = this.goTernaryJoinArmType(ternary.whenTrue);
+  const whenFalse = this.goTernaryJoinArmType(ternary.whenFalse);
+  const guarded = (armNode, armType) => {
+    const arm = this.goUnwrapParenthesizedNode(armNode);
+    return armType === "*int64" && arm?.kind === SyntaxKind5.Identifier && this.goTernaryJoin93StatementGuarded(declaration, arm);
+  };
+  const value = (armType) => armType === "int64" || armType === "int" || armType === "const-int";
+  const pointerTrue = guarded(ternary.whenTrue, whenTrue) && value(whenFalse);
+  const pointerFalse = guarded(ternary.whenFalse, whenFalse) && value(whenTrue);
+  if (!pointerTrue && !pointerFalse || this.goWithExprDepth(1, () => this.printCondition(ternary.condition, 0)).includes("\n") || this.goTernaryJoinFeedsParameterCopy(declaration) || !this.goTernaryJoin90HasArithmeticUse(declaration)) {
+    return void 0;
+  }
+  return {
+    goType: "int64",
+    derefTrue: pointerTrue,
+    derefFalse: pointerFalse,
+    widenTrue: whenTrue === "int",
+    widenFalse: whenFalse === "int"
+  };
+};
+GoTranspiler.prototype.goTernaryJoin93StatementGuarded = function(declaration, ident) {
+  const checker = this.checkerOrUndefined();
+  const statement = declaration?.parent?.parent;
+  if (checker === void 0 || statement?.kind !== SyntaxKind5.FirstStatement || this.goLocalIsRebound(this.goEnclosingFunction(declaration), ident)) {
+    return false;
+  }
+  let child = statement;
+  let parent = statement.parent;
+  while (parent !== void 0) {
+    if (parent.kind === SyntaxKind5.Block) {
+      child = parent;
+      parent = parent.parent;
+      continue;
+    }
+    if (parent.kind === SyntaxKind5.IfStatement) {
+      if (child === parent.thenStatement && this.goConditionProvesNonNil(parent.expression, ident)) {
+        return true;
+      }
+      child = parent;
+      parent = parent.parent;
+      continue;
+    }
+    return false;
+  }
+  return false;
+};
 
 // src/javaTranspiler.ts
 init_esm_shims();
