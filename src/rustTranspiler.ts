@@ -38082,33 +38082,35 @@ export class RustTranspiler extends BaseTranspiler {
     /** ral-92rg R1: `return x` / `return x as MarketInterface` of a const `x = this.safeDict (this.markets, k)` the
      *  method's own top-level `if (x === undefined || ..) { throw .. }` rules out before the return: a loaded market
      *  record, decoded once at the return (`FromRaw`), so callers hold the struct. */
-    rust92rgLoadedMarketReturn(method, ret): boolean {
-        let inner = this.unwrapParens(ret.expression);
-        if (inner !== undefined && isAsExpression(inner) && inner.type?.kind === SyntaxKind.TypeReference && isIdentifier(inner.type.typeName)
+    rust92rgLoadedMarketReturn(method: MethodDeclaration, ret: Statement): boolean {
+        if (!isReturnStatement(ret) || ret.parent !== method.body) return false;
+        let inner: Node = this.unwrapParens(ret.expression);
+        if (inner !== undefined && isAsExpression(inner) && isTypeReferenceNode(inner.type) && isIdentifier(inner.type.typeName)
             && /^(?:Market|MarketInterface)$/.test(String(inner.type.typeName.text))) inner = this.unwrapParens(inner.expression);
-        if (inner === undefined || !isIdentifier(inner) || ret.parent !== method.body) return false;
-        const declaration = this.rustDeclarationOfIdentifier(inner);
-        if (declaration?.kind !== SyntaxKind.VariableDeclaration || (declaration.parent.flags & NodeFlags.Const) === 0 || declaration.parent.declarations.length !== 1) return false;
-        const init = this.unwrapParens(declaration.initializer);
+        if (inner === undefined || !isIdentifier(inner)) return false;
+        const declaration: Node = this.rustDeclarationOfIdentifier(inner);
+        if (declaration === undefined || !isVariableDeclaration(declaration) || !isVariableDeclarationList(declaration.parent)
+            || (declaration.parent.flags & NodeFlags.Const) === 0 || declaration.parent.declarations.length !== 1) return false;
+        const init: Node = this.unwrapParens(declaration.initializer);
         if (init === undefined || !isCallExpression(init) || !isPropertyAccessExpression(init.expression) || init.expression.expression.kind !== SyntaxKind.ThisKeyword
             || String(init.expression.name.text) !== 'safeDict' || init.arguments.length !== 2) return false;
-        const store = this.unwrapParens(init.arguments[0]);
+        const store: Node = this.unwrapParens(init.arguments[0]);
         if (!isPropertyAccessExpression(store) || store.expression.kind !== SyntaxKind.ThisKeyword || String(store.name.text) !== 'markets') return false;
-        const statements = Array.from(method.body.statements);
-        const declAt = statements.indexOf(declaration.parent.parent);
+        const statements: Statement[] = Array.from(method.body.statements);
+        const declAt = statements.indexOf(declaration.parent.parent as Statement);
         const retAt = statements.indexOf(ret);
         if (declAt < 0 || retAt <= declAt) return false;
         const symbol = this.getChecker().getSymbolAtLocation(inner);
-        const isNullTest = (e): boolean => {
-            const b = this.unwrapParens(e);
+        const isNullTest = (e: Node): boolean => {
+            const b: Node = this.unwrapParens(e);
             if (!isBinaryExpression(b)) return false;
             if (b.operatorToken.kind === SyntaxKind.BarBarToken) return isNullTest(b.left);
             if (b.operatorToken.kind !== SyntaxKind.EqualsEqualsEqualsToken) return false;
-            const id = this.unwrapParens(b.left);
+            const id: Node = this.unwrapParens(b.left);
             return isIdentifier(id) && this.getChecker().getSymbolAtLocation(id) === symbol && this.literalKindOfNode(this.unwrapParens(b.right)) === 'null';
         };
-        const throws = (s): boolean => s !== undefined && (s.kind === SyntaxKind.ThrowStatement || (isBlock(s) && s.statements.length === 1 && s.statements[0].kind === SyntaxKind.ThrowStatement));
-        return statements.slice(declAt + 1, retAt).some((s) => isIfStatement(s) && s.elseStatement === undefined && throws(s.thenStatement) && isNullTest(s.expression));
+        const throws = (s: Statement): boolean => s !== undefined && (isThrowStatement(s) || (isBlock(s) && s.statements.length === 1 && isThrowStatement(s.statements[0])));
+        return statements.slice(declAt + 1, retAt).some((s: Statement) => isIfStatement(s) && s.elseStatement === undefined && throws(s.thenStatement) && isNullTest(s.expression));
     }
 
     /** The `market` parameter of a base market-slot reader, read only by key readers, null tests or `Value` hand-offs. */
