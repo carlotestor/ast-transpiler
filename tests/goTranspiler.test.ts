@@ -16523,3 +16523,38 @@ describe('ral-90g8 R4 annotated int counters and loop-index writes', () => {
         expect(out).toContain('page = page + 1');
     });
 });
+
+describe('base Str precision / network helpers return *string', () => {
+    const BASE = 'export type Str = string | undefined;\n'
+        + 'export default class Exchange {\n'
+        + '    currencyToPrecision (code: Str, fee: number, networkCode: Str = undefined): Str { return code; }\n'
+        + '    networkCodeToId (networkCode: Str, currencyCode: Str = undefined): Str { return networkCode; }\n'
+        + '}\n';
+    const run = (members: string): string => {
+        const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'g92-'));
+        try {
+            fs.mkdirSync(path.join(tmp, 'ts/src/base'), { recursive: true });
+            fs.writeFileSync(path.join(tmp, 'ts/src/base/Exchange.ts'), BASE);
+            const file = path.join(tmp, 'ts/src/x.ts');
+            fs.writeFileSync(file, "import Exchange, { Str } from './base/Exchange.js';\nclass X extends Exchange {\n" + members + '}\n');
+            const t = new Transpiler({ verbose: false, go: { parser: { NUM_LINES_END_FILE: 0 } } });
+            installCcxtGoHooks(t.goTranspiler);
+            return t.transpileGoByPath(file).content;
+        } finally {
+            fs.rmSync(tmp, { recursive: true, force: true });
+        }
+    };
+    test('currencyToPrecision and networkCodeToId results type *string with native nil tests and string ops', () => {
+        const out = run('    f (code: string, amount: number, net: string) {\n'
+            + '        const amountString = this.currencyToPrecision (code, amount);\n'
+            + '        const networkId = this.networkCodeToId (net, code);\n'
+            + '        if (networkId !== undefined) {\n'
+            + '            return networkId.toLowerCase ();\n'
+            + '        }\n'
+            + '        return amountString;\n'
+            + '    }\n');
+        expect(out).toContain('var amountString *string = this.CurrencyToPrecision(code, amount)');
+        expect(out).toContain('var networkId *string = this.NetworkCodeToId(net, code)');
+        expect(out).toContain('strings.ToLower(*networkId)');
+    });
+});

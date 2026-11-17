@@ -1143,7 +1143,9 @@ export const CCXT_GO_BOOL_METHOD_NAMES = [
 // coerceStringPtrMethods retypes the base copy and every venue override to `*string`.
 // ral-77g4: `omitZero (stringNumber: string | undefined)` (base/functions/number.ts) answers the
 // string or undefined on every path; its hand-written Go twin (exchange_generic.go) returns *string
-export const CCXT_GO_STRING_PTR_METHOD_NAMES = [ 'NetworkIdToCode', 'FindTimeframe', 'AmountToPrecision', 'PriceToPrecision', 'OmitZero' ];
+// currencyToPrecision / networkCodeToId are `: Str` in base/Exchange.ts; every return is a string, a
+// Safe* string or undefined, and the htx override answers the same (its interface line is *string too)
+export const CCXT_GO_STRING_PTR_METHOD_NAMES = [ 'NetworkIdToCode', 'FindTimeframe', 'AmountToPrecision', 'PriceToPrecision', 'OmitZero', 'CurrencyToPrecision', 'NetworkCodeToId' ];
 
 export const CCXT_GO_HELPER_RETURN_TYPES = {
     // Typed twins of GetArg (go/v4/exchange_helpers.go) -- the `var x <T> = GetArg<T>(...)`
