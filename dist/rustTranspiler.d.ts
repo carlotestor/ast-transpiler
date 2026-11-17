@@ -411,6 +411,14 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustSiblingStrBoxesMove(declaration: any, scope: any): boolean;
     /** Static kind of a write's right-hand side: `null`, or the `Option` payload it yields exactly. */
     rustNilWriteKind(rhs: any): string | undefined;
+    /** ral-90rh R1: `n - k` / `k - n` with `n` an `Option<i64>` local seeded by `parseInt (s)` and `k` an int literal: the
+     *  printed name of `n` and the `i64` text over its payload `__b`. */
+    rust90rhOintShiftBound(expr: any): {
+        name: string;
+        text: string;
+    } | undefined;
+    /** ral-90rh R1: a declaration initializer `parseInt (s)` (one argument, checker type `string`; no multiply form). */
+    rust90rhParseIntInit(expr: any): boolean;
     /** ral-68b: `parseInt (s)` with one argument whose checker type is `string`, or that call times an integer literal. */
     rust68bParseIntWrite(expr: any): boolean;
     /** za: a ternary whose arms are an `undefined` and a boolean literal (either order). */

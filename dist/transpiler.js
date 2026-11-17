@@ -56992,6 +56992,28 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     return void 0;
   }
+  /** ral-90rh R1: `n - k` / `k - n` with `n` an `Option<i64>` local seeded by `parseInt (s)` and `k` an int literal: the
+   *  printed name of `n` and the `i64` text over its payload `__b`. */
+  rust90rhOintShiftBound(expr) {
+    const node = this.unwrapParens(expr);
+    if (node === void 0 || !isBinaryExpression5(node) || node.operatorToken.kind !== SyntaxKind7.MinusToken)
+      return void 0;
+    const [left, right] = [this.unwrapParens(node.left), this.unwrapParens(node.right)];
+    const local = (n) => {
+      const d = isIdentifier3(n) ? this.rustDeclaredNode(n) : void 0;
+      return d !== void 0 && this.rustScalarLocalOf(n)?.kind === "oint" && this.rust90rhParseIntInit(d.initializer);
+    };
+    if (local(left) && this.rustScalarIntLiteral(right) !== void 0)
+      return { name: super.printIdentifier(left), text: `__b - ${this.rustScalarIntLiteral(right)}` };
+    if (local(right) && this.rustScalarIntLiteral(left) !== void 0)
+      return { name: super.printIdentifier(right), text: `${this.rustScalarIntLiteral(left)} - __b` };
+    return void 0;
+  }
+  /** ral-90rh R1: a declaration initializer `parseInt (s)` (one argument, checker type `string`; no multiply form). */
+  rust90rhParseIntInit(expr) {
+    const node = this.unwrapParens(expr);
+    return node !== void 0 && isCallExpression6(node) && this.rustDeclInitPosition(node) && this.rust68bParseIntWrite(node);
+  }
   /** ral-68b: `parseInt (s)` with one argument whose checker type is `string`, or that call times an integer literal. */
   rust68bParseIntWrite(expr) {
     const node = this.unwrapParens(expr);
@@ -59131,6 +59153,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return isIdentifier3(node.expression) || this.rustInlineHandleStrSlot(node);
     if (isCallExpression6(node) && isIdentifier3(node.expression) && _RustTranspiler.RUST_STR_RUNTIME_FREE.has(String(node.expression.text)))
       return true;
+    if (this.rust90rhParseIntInit(node))
+      return true;
     if (!isCallExpression6(node) || !isPropertyAccessExpression3(node.expression) || !this.rustScalarReceiver(node.expression.expression))
       return false;
     return true;
@@ -59236,6 +59260,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const unused = typedUses === 0 && !handOff && this.rustScalarNeedsNativeUse(declaration.initializer) && !this.rustVenueIntReboxed(declaration, kind, boxed);
     const clientOnce = nativeUses === 0 && boxed === 1 && this.rustWsClientOnlyUse(declaration);
     if (anyLength && typedUses === 0)
+      return void 0;
+    if (kind === "oint" && typedUses === 0 && this.rust90rhParseIntInit(declaration.initializer))
       return void 0;
     if (kind === "bool" && typedUses === 0 && this.rust87reLocalSeeds.has(declaration))
       return void 0;
@@ -59656,6 +59682,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "str";
     if (fresh && this.rustNumParamToString(node))
       return "str";
+    if (fresh && this.rust90rhParseIntInit(node))
+      return "oint";
     if (fresh && this.rust87rhToStringWrite(node))
       return "str";
     if (fresh && this.rustIdString(node) && !this.rustIntToStringShape(node))
@@ -61790,6 +61818,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return `(${name} as f64) ${operator} ${super.printIdentifier(bound)}`;
     if (boundKind === "oint" && (this.rustTbCounterBound(cond, bound, "oint") !== void 0 || this.rustDecidedOintBound(cond, bound)))
       return `matches!(${super.printIdentifier(bound)}, Some(__b) if (${name} as f64) ${operator} (__b as f64))`;
+    const shifted = this.rust90rhOintShiftBound(bound);
+    if (shifted !== void 0)
+      return `matches!(${shifted.name}, Some(__b) if (${name} as f64) ${operator} ((${shifted.text}) as f64))`;
     const refs = (n) => isIdentifier3(n) && n.text === name || (n.forEachChild(refs) ?? false);
     if (refs(right) || !this.printsValueExpression(left) || !this.printsValueExpression(this.orderedComparisonOperand(right)))
       return void 0;
