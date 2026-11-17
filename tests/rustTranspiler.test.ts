@@ -25827,3 +25827,26 @@ describe('ral-92rf R3: a resolve of `xs[i]` over the handler\'s own pushed list 
         expect(out).toMatch(/let mut ticker: Value = /);
     });
 });
+
+describe('ral-92rf R4: a venue-own plural parser with a list rows parameter takes it lent, so a declared List answer is lent', () => {
+    const mk = (name: string, rowsType: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync (path.join (dir, 'ts/src/abstract'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type List = any[];\nexport default class Exchange {\n    hold (o: any): any { return o; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/abstract/venue.ts'), "import _Exchange from '../base/Exchange.js';\nimport type { Dict, List } from '../base/Exchange.js';\nexport default abstract class Exchange extends _Exchange {\n    publicGetSettlements (params = {}): Promise<List> { return this.hold (params); }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './abstract/venue.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    async fetchSettlements (params = {}) {\n        const response = await this.publicGetSettlements (params);\n        const settlements = this.parseSettlements (response);\n        return settlements;\n    }\n    parseSettlements (settlements: " + rowsType + "): Dict[] {\n        const out = [];\n        for (let i = 0; i < settlements.length; i++) {\n            out.push (settlements[i]);\n        }\n        return out;\n    }\n}\n");
+        transpiler.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts'));
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('gate fetchSettlementHistory shape: the List answer is a typed list lent to parseSettlements', () => {
+        const out = mk ('ral-92rf-r4a', 'any[]');
+        expect(out).toContain('settlements: impl Into<crate::Value>');
+        expect(out).toContain('.parseSettlements(&response');
+        expect(out).not.toMatch(/let mut response: Value = /);
+    });
+    test('negative: a rows parameter typed any keeps the by-value slot', () => {
+        const out = mk ('ral-92rf-r4n', 'any');
+        expect(out).not.toContain('settlements: impl Into<crate::Value>');
+    });
+});

@@ -33600,8 +33600,9 @@ export class RustTranspiler extends BaseTranspiler {
         const file = String(method.getSourceFile().fileName).replace(/\\/g, '/');
         if (file.search(/\/ts\/src\/(?:base\/|pro\/|prediction\/)?[^/]+\.ts$/) < 0) return false;
         if (!RustTranspiler.RUST_BASE_TIER_FILE.test(file)) {
-            // an override keeps the signature of the base declaration it overrides (checker-resolved)
-            if (!(method.modifiers ?? []).some((m: any) => m.kind === SyntaxKind.OverrideKeyword)) return false;
+            // ral-92rf R4: a venue's own plural parser (no base declaration, REST tier) whose rows parameter is declared a
+            // list of any shape takes it lent too, so a held list answer is handed over with no box
+            if (!(method.modifiers ?? []).some((m: any) => m.kind === SyntaxKind.OverrideKeyword)) return this.rust92rfVenueRowsParam(method, param, file);
             const overridden: any = this.getMethodOverride(method);
             return overridden !== undefined && overridden !== method && this.rustParamIsLentList(overridden.parameters?.[0]);
         }
@@ -33612,6 +33613,17 @@ export class RustTranspiler extends BaseTranspiler {
         if (record) return this.rustLentRecordTypeNode(type);
         return RustTranspiler.RUST_LENT_LIST_TYPES.has(typeName) || this.rustRowListTypeNode(type) || type?.kind === SyntaxKind.AnyKeyword || type?.kind === SyntaxKind.ObjectKeyword
             || (name === 'convertTradingViewToOHLCV' && typeName === 'NullableDict');
+    }
+
+    /** ral-92rf R4: `parseXs (rows: any[] | Dict[] | List, ..)` declared in a REST venue file (`ts/src/<id>.ts`), not async, not
+     *  overriding and not overridden by a ws subclass method of the same name: its first parameter prints `impl Into<crate::Value>`. */
+    rust92rfVenueRowsParam(method: MethodDeclaration, param: ParameterDeclaration, file: string): boolean {
+        if (file.search(/\/ts\/src\/[^/]+\.ts$/) < 0 || this.isAsyncFunction(method) || this.getMethodOverride(method) !== undefined) return false;
+        if (!isIdentifier(method.name) || !/^parse[A-Z]\w*s$/.test(String(method.name.text))) return false;
+        const type: TypeNode | undefined = param.type;
+        const anyList = type !== undefined && isArrayTypeNode(type) && type.elementType.kind === SyntaxKind.AnyKeyword;
+        const typeName = type !== undefined && isTypeReferenceNode(type) && isIdentifier(type.typeName) && type.typeArguments === undefined ? String(type.typeName.text) : '';
+        return anyList || RustTranspiler.RUST_LENT_LIST_TYPES.has(typeName) || this.rustRowListTypeNode(type);
     }
 
     /** `object`, `Dict` or `any`, optionally `| undefined`: the parser reads its input as a `Value` of any shape. */
