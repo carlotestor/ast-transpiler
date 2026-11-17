@@ -26573,17 +26573,22 @@ export class RustTranspiler extends BaseTranspiler {
         return call !== undefined && isCallExpression(call) && this.rustBorrowedSourceKind(call) === 'api' && this.rustDeclaredEndpointKind(call) !== undefined;
     }
 
-    /** `this.safeDict (x, k, x)` whose default is its own receiver, a `let` filled only by endpoints declared `Promise<Dict>`
-     *  (ral-61i, a syntactic proof): the answer is the map read at k or x itself, so a map or Null on every path. */
+    /** `this.safeDict (x, k, x)` / `this.safeList (x, k, x)` whose default is its own receiver, x a `let` filled only by endpoints
+     *  declared `Promise<Dict>` (ral-61i, a syntactic proof) or a never-rewritten const answer of an endpoint declared of the
+     *  read's kind: the answer is the container read at k or x itself, so that kind or Null on every path. */
     rustSelfDefaultedRead(call: any, kind: 'dict' | 'list' | 'api'): boolean {
-        if (kind !== 'dict' || !isCallExpression(call) || call.arguments.length !== 3 || this.rustTestTierSource(call)) return false;
-        if (String((call.expression as any)?.name?.text ?? '') !== 'safeDict') return false;
+        if (kind === 'api' || !isCallExpression(call) || call.arguments.length !== 3 || this.rustTestTierSource(call)) return false;
+        if (String((call.expression as any)?.name?.text ?? '') !== (kind === 'dict' ? 'safeDict' : 'safeList')) return false;
         const recv: any = this.rustSkipWrappers(call.arguments[0]);
         const dflt: any = this.rustSkipWrappers(call.arguments[2]);
         if (!isIdentifier(recv) || !isIdentifier(dflt) || String(recv.text) !== String(dflt.text)) return false;
         const declaration: any = this.rustDeclarationOfIdentifier(recv);
         if (declaration === undefined || declaration !== this.rustDeclarationOfIdentifier(dflt)) return false;
-        return isVariableDeclaration(declaration) && this.rustDeclaredDictEndpointLet(declaration, true);
+        if (!isVariableDeclaration(declaration)) return false;
+        if (kind === 'dict' && this.rustDeclaredDictEndpointLet(declaration, true)) return true;
+        const init: any = this.rustSkipWrappers(declaration.initializer);
+        if ((declaration.parent.flags & NodeFlags.Const) === 0 || init?.kind !== SyntaxKind.AwaitExpression || !this.rustDeclaredEndpointWrite(init)) return false;
+        return this.rustDeclaredEndpointKind(this.rustSkipWrappers(init.expression)) === kind;
     }
 
     /** A base `safeDict*` / `safeList*` call (default absent, nullish or an empty literal of its kind), or a base `extend`/`omit`. */

@@ -26168,3 +26168,25 @@ describe('a safeDict read defaulted to its own declared-endpoint receiver holds 
         expect(out).toContain('let mut inner: Value');
     });
 });
+
+describe('a safeList read defaulted to its own const declared-endpoint receiver holds the optional list', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type List = any[];\nexport default class Exchange {\n    safeList (o: any, k: any, d: List = undefined): List { return o; }\n    keep (o: any): any { return o; }\n}\n";
+    const write = (name: string, decl: string, ret: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync (path.join (dir, 'ts/src/abstract'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/abstract/venue.ts'), "import Exchange from '../base/Exchange.js';\nimport type { Dict, List } from '../base/Exchange.js';\nexport default abstract class venueApi extends Exchange {\n    publicGetA (params = {}): Promise<" + ret + "> { return this.keep (params); }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import venueApi from './abstract/venue.js';\nimport type { Dict, List } from './base/Exchange.js';\nexport default class venue extends venueApi {\n    async m (params: Dict = {}) {\n        " + decl + " response = await this.publicGetA (params);\n        const rows = this.safeList (response, 'data', response as any);\n        return this.parseRows (rows);\n    }\n    parseRows (rows: List, market = undefined) {\n        const out = [];\n        for (let i = 0; i < rows.length; i++) {\n            out.push (rows[i]);\n        }\n        return out;\n    }\n}\n");
+        return path.join (dir, 'ts/src/venue.ts');
+    };
+    test('a const Promise<List> answer: the read is an optional list', () => {
+        const out = transpiler.transpileRustByPath (write ('self-list-pos', 'const', 'List')).content;
+        expect(out).toContain('let mut rows: Option<crate::value::List> = ');
+        expect(out).toContain('.into_opt_list();');
+    });
+    test('a Promise<Dict | List> answer or a let keeps the read Value', () => {
+        expect(transpiler.transpileRustByPath (write ('self-list-mixed', 'const', 'Dict | List')).content).toContain('let mut rows: Value');
+        expect(transpiler.transpileRustByPath (write ('self-list-let', 'let', 'List')).content).toContain('let mut rows: Value');
+    });
+});
