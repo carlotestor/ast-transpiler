@@ -25737,3 +25737,32 @@ describe('stack-90r: a list bearer admitted by a compare-left read moves its fre
         expect(out).not.toContain('.as_array().cloned()');
     });
 });
+
+describe('ral-92rg R1: a venue method returning a loaded market record it rules out as undefined', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface MarketInterface { symbol: string; id: string }\nexport type Market = MarketInterface | undefined;\n"
+        + "export default class Exchange {\n    markets: Dict = {};\n    safeDict (o: any, k: any, d: any = undefined): Dict { return o; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return d; }\n}\n";
+    const venue = "import Exchange from './base/Exchange.js';\nimport type { Dict, Str, Market, MarketInterface } from './base/Exchange.js';\n"
+        + "export default class venue extends Exchange {\n"
+        + "    listedMarket (symbol: string): MarketInterface {\n        const market = this.safeDict (this.markets, symbol);\n        if ((market === undefined) || (this.safeString (market, 'kind') !== 'rfq')) {\n            throw new Error ('not listed: ' + symbol);\n        }\n        return market as MarketInterface;\n    }\n"
+        + "    unguarded (symbol: string): MarketInterface {\n        const market = this.safeDict (this.markets, symbol);\n        return market as MarketInterface;\n    }\n"
+        + "    use (symbol: string): Str {\n        const market = this.listedMarket (symbol);\n        const loose = this.unguarded (symbol);\n        return this.safeString (market, 'base') + this.safeString (loose, 'base');\n    }\n}\n";
+    const out = () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-92rg1-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), venue);
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        try { return t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+    };
+    test('the producer returns the struct (decoded once) and its caller holds it and lends it to a key reader', () => {
+        const text = out();
+        expect(text).toMatch(/pub fn listedMarket\(&self, [^)]*\) -> crate::types::Market \{/);
+        expect(text).toContain('return <crate::types::Market as crate::types::FromRaw>::from_raw(market);');
+        expect(text).toMatch(/let mut market: crate::types::Market = self\.listedMarket\(/);
+    });
+    test('negative: without the throwing undefined test the record may be Null, the method stays Value', () => {
+        const text = out();
+        expect(text).toMatch(/pub fn unguarded\(&self, [^)]*\) -> Value \{/);
+        expect(text).toMatch(/let mut loose: Value = self\.unguarded\(/);
+    });
+});
