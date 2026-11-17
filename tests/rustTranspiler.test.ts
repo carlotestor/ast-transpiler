@@ -25234,3 +25234,12 @@ describe('ral-90rb R2: a list element compared (left operand of ===) is a read',
         expect(out).toContain('levelKeys.get(k as usize).cloned().unwrap_or(Value::Null).as_str() == Some("deletes")');
     });
 });
+
+describe('ral-90rb R3: a long literal list of string literals is a native List', () => {
+    test('an 11-key string list read by index in a loop', () => {
+        const ts = "class venue {\n    check (params: any) {\n        const unsupported = [ 'cost', 'quoteQuantity', 'postOnly', 'triggerPrice', 'stopLossPrice', 'takeProfitPrice', 'stopLoss', 'takeProfit', 'reduceOnly', 'timeInForce', 'selfTradePrevention' ];\n        for (let i = 0; i < unsupported.length; i++) {\n            const key = unsupported[i];\n            if (key in params) {\n                return key;\n            }\n        }\n        return undefined;\n    }\n}\n";
+        const out = transpiler.transpileRust(ts).content;
+        expect(out).toContain('let mut unsupported: crate::value::List = std::sync::Arc::new(vec![Value::Str("cost".into()), ');
+        expect(out).not.toContain('let mut unsupported: Value');
+    });
+});

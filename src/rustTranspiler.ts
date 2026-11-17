@@ -30668,7 +30668,10 @@ export class RustTranspiler extends BaseTranspiler {
             || this.rustNestedDictLocalIsTyped(declaration) || this.rustMarketLocalKind(declaration) !== false || this.rustBorrowedDictLocal(declaration)
             || this.rustNilLocalKind(declaration) !== undefined || this.rustScalarLocalKind(declaration) !== undefined) return false;
         this.rustBuiltListCopiedElement = false;
-        if (!nilAssigned && (String(init.getText()).split('\n')[0].length > (read || guardedInit ? 240 : 120) || !(guardedInit || this.rustBuiltListWriteSource(init)))) return false;
+        // ral-90rb R3: a literal of string literals only (no element read, no copy) keeps the read-initializer budget: its native
+        // `Arc::new(vec![..])` is the boxed `Value::from(vec![..])` with the same elements, a few characters longer
+        const strLiteralList = init !== undefined && isArrayLiteralExpression(init) && init.elements.length > 0 && init.elements.every((e: Node) => isStringLiteral(e));
+        if (!nilAssigned && (String(init.getText()).split('\n')[0].length > (read || guardedInit || strLiteralList ? 240 : 120) || !(guardedInit || this.rustBuiltListWriteSource(init)))) return false;
         const boxes: [any, 'clone' | 'move' | 'lend'][] = [];
         let natives = 0;
         let handOffs = 0;
