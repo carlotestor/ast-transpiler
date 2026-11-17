@@ -68525,7 +68525,7 @@ ${ind}];`;
         return;
       if (isReturnStatement4(n)) {
         const inner = this.unwrapParensNode(n.expression);
-        const own = inner !== void 0 && isIdentifier3(inner) && this.rust56xStrReturnLocal(inner, fn) && this.rustStrReturnSignature(fn, inner) && this.primitiveKindOfType(this.getCheckedTypeOf(inner)) === "string" || this.rust61xNilStrReturnLocal(inner, fn) || this.rust76aOptStrReturnLocal(inner, fn) || inner !== void 0 && isIdentifier3(inner) && this.rust56xStrReturnLocal(inner, fn) && this.rustScalarLocalOf(inner)?.kind === "ostr";
+        const own = inner !== void 0 && isIdentifier3(inner) && this.rust56xStrReturnLocal(inner, fn) && this.rustStrReturnSignature(fn, inner) && this.primitiveKindOfType(this.getCheckedTypeOf(inner)) === "string" || this.rust61xNilStrReturnLocal(inner, fn) || this.rust76aOptStrReturnLocal(inner, fn) || inner !== void 0 && isIdentifier3(inner) && this.rust56xStrReturnLocal(inner, fn) && this.rustDeclaredNode(inner).type === void 0 && this.rustScalarLocalOf(inner)?.kind === "ostr";
         if (!own && !this.rustStrReturnValueConverts(n.expression)) {
           ok = false;
           return;
