@@ -69340,6 +69340,8 @@ ${ind}];`;
       });
       if (enumerated && this.rustSafeCurrencyCodeInit(local.initializer))
         return this.rustScalarInsertKeyUse(n);
+      if (enumerated && !keyRead && this.rustVenueStrCall(this.unwrapParens(local.initializer)))
+        return this.rustScalarInsertKeyUse(n);
       if (enumerated && keyRead && isElementAccessExpression4(this.rustSkipWrappers(local.initializer)) && this.rust61kSelfReassignOnlyRead(declaration, name, n))
         return this.rustScalarInsertKeyUse(n);
       if (enumerated && keyRead && isElementAccessExpression4(this.rustSkipWrappers(local.initializer)) && this.rust62kOwnKeyOnlyRead(declaration, name, n))
