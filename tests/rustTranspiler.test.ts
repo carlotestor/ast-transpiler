@@ -26142,3 +26142,30 @@ describe('rust typed filterByCurrencySinceLimit', () => {
         expect(base).toMatch(/self\.filterByCurrencySinceLimit\([^;]*code\.as_deref\(\)/);
     });
 });
+
+describe('rust byte-buffer slices', () => {
+    const base = "export default class Exchange {\n    secret: string = '';\n    encode (s: string): Uint8Array { return new Uint8Array (); }\n    base64ToBinary (s: string): Uint8Array { return new Uint8Array (); }\n    arraySlice (array: any, first: any, second: any = undefined): any { return array; }\n}\n";
+    const crypto = "export function eddsa (request: any, secret: any, curve: any): string { return ''; }\n";
+    const venue = "import Exchange from './base/Exchange.js';\nimport { eddsa } from './base/functions/crypto.js';\nexport default class venue extends Exchange {\n"
+        + "    signIt (payload: string): string {\n        const secretBytes = this.base64ToBinary (this.secret);\n        const seed = this.arraySlice (secretBytes, 0, 32);\n        return eddsa (this.encode (payload), seed, 'ed25519');\n    }\n"
+        + "    tailOf (payload: string): string {\n        const secretBytes = this.base64ToBinary (this.secret);\n        const seed = this.arraySlice (secretBytes, 4, 36);\n        return eddsa (this.encode (payload), seed, 'ed25519');\n    }\n"
+        + "    openEnd (payload: string, n: number): string {\n        const secretBytes = this.base64ToBinary (this.secret);\n        const seed = this.arraySlice (secretBytes, 0, n);\n        return eddsa (this.encode (payload), seed, 'ed25519');\n    }\n}\n";
+    let out = '';
+    beforeAll(() => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-93rg1-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base/functions'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync(path.join(root, 'ts/src/base/functions/crypto.ts'), crypto);
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), venue);
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        try { out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+    });
+    test('a literal-bounded slice of a byte local is a byte buffer lent to the byte slot', () => {
+        expect(out).toContain('let mut seed: crate::value::Bytes = crate::value::Bytes(std::sync::Arc::new(secretBytes.0.iter().take(32).cloned().collect()));');
+        expect(out).toContain('crate::value::Bytes(std::sync::Arc::new(secretBytes.0.iter().skip(4).take(32).cloned().collect()))');
+        expect(out).toMatch(/eddsa\([^;]*, &seed, /);
+    });
+    test('a non-literal bound keeps the runtime arraySlice', () => {
+        expect(out).toContain('let mut seed: Value = self.arraySlice(Value::from(&secretBytes), Value::Int(0), &[n.clone()]);');
+    });
+});

@@ -6540,6 +6540,7 @@ export class RustTranspiler extends BaseTranspiler {
     /** `this.encode(..)` & co. resolved to the base tier, or such a call on a test's untyped `exchange`. */
     rustBytesProducer(node): boolean {
         if (this.rustHashBinaryCall(node)) return true;
+        if (this.rustBytesSliceSource(node) !== undefined) return true;
         if (node === undefined || !isCallExpression(node) || !isPropertyAccessExpression(node.expression) || !RustTranspiler.RUST_BYTES_PRODUCERS.has(String(node.expression.name.text))) return false;
         const recv: any = node.expression.expression;
         if (this.rustScalarReceiver(recv)) return this.rustCalleeIsRuntimeBase(node);
@@ -6587,7 +6588,25 @@ export class RustTranspiler extends BaseTranspiler {
         return (RustTranspiler.RUST_BYTES_SLOTS[String(callee.name.text)] ?? []).includes(at) && this.rustCalleeIsRuntimeBase(call);
     }
 
+    /** `this.arraySlice (b, s, e)` of a byte-buffer local `b` with integer-literal bounds `0 <= s <= e`: the runtime copies
+     *  `b[min(s, len) .. min(e, len)]` into a fresh list, so the slice is itself a byte buffer. Answers `b`'s identifier. */
+    rustBytesSliceSource(node): Node | undefined {
+        if (node === undefined || !isCallExpression(node) || !isPropertyAccessExpression(node.expression) || node.expression.expression.kind !== SyntaxKind.ThisKeyword
+            || String(node.expression.name.text) !== 'arraySlice' || node.arguments.length !== 3 || this.rustTestTierSource(node)) return undefined;
+        const bound = (a: Node): number | undefined => (isNumericLiteral(a) && /^[0-9]+$/.test(a.text) ? Number(a.text) : undefined);
+        const start = bound(node.arguments[1]);
+        const end = bound(node.arguments[2]);
+        const source: Node = this.unwrapParens(node.arguments[0]);
+        if (start === undefined || end === undefined || start > end || !isIdentifier(source) || !this.rustCalleeIsRuntimeBase(node)) return undefined;
+        return this.rustBytesLocalOf(source) === undefined ? undefined : source;
+    }
+
     rustBytesBareText(node, identation = 0): string {
+        const sliced: Node = this.rustBytesSliceSource(node);
+        if (sliced !== undefined) {
+            const [ start, end ] = [ Number(node.arguments[1].getText()), Number(node.arguments[2].getText()) ];
+            return `crate::value::Bytes(std::sync::Arc::new(${super.printIdentifier(sliced)}.0.iter()${start > 0 ? `.skip(${start})` : ''}.take(${end - start}).cloned().collect()))`;
+        }
         if (this.rustHashBinaryCall(node)) return `self.hash_binary(${this.rustPrintedArgs(node, identation).slice(0, 2).map((a) => this.rustSliceArgText(a.trim())).join(', ')})`;
         this.rustBytesBare.add(node);
         try {
