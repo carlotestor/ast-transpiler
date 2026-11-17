@@ -57757,8 +57757,18 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     };
     const declaration = isIdentifier3(n) ? this.rustDeclaredNode(n) : void 0;
     const slot = declaration?.kind === SyntaxKind7.BindingElement && !this.rustTestTierSource(declaration);
+    const nilStr = declaration !== void 0 && isVariableDeclaration3(declaration) && !this.rustTestTierSource(declaration) && this.rust90rcNilStrDecl(declaration);
     const lines = this.printNode(statement, 0).split("\n");
-    return lines.every((l) => column + width(l) <= 400 || slot && column + l.trim().length > 400);
+    return lines.every((l) => column + width(l) <= 400 || (slot || nilStr) && column + l.trim().length > 400);
+  }
+  /** ral-90rc R2: `let x: Str = undefined` (or `: string`), a plain one-declarator `let` statement inside a function. */
+  rust90rcNilStrDecl(declaration) {
+    const list = declaration.parent;
+    if (!isIdentifier3(declaration.name) || declaration.type === void 0 || !isVariableDeclarationList2(list) || list.declarations.length !== 1 || (list.flags & NodeFlags4.Const) !== 0 || list.parent?.kind !== SyntaxKind7.VariableStatement)
+      return false;
+    if (declaration.initializer !== void 0 && this.literalKindOfNode(declaration.initializer) !== "null")
+      return false;
+    return this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name)) === "string";
   }
   /** A write that decodes a `Value` result (a call, or a ternary over one). */
   rustNilDecodedWrite(rhs) {

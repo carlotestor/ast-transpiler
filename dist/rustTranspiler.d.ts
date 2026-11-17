@@ -522,6 +522,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rust56xFormatPartner(other: any): boolean;
     /** The `as_deref().unwrap_or("null")` read of a concat operand keeps its statement within the 400-char line budget. */
     rustOptStrConcatFits(n: any): boolean;
+    /** ral-90rc R2: `let x: Str = undefined` (or `: string`), a plain one-declarator `let` statement inside a function. */
+    rust90rcNilStrDecl(declaration: VariableDeclaration): boolean;
     /** A write that decodes a `Value` result (a call, or a ternary over one). */
     rustNilDecodedWrite(rhs: any): boolean;
     /** `[ x, .. ] = <list>` as its own statement: `x` is written from a tuple slot. */
@@ -2443,7 +2445,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     } | undefined;
     /** ral-90rc R1: `node` (through parens / `as`) is an arm, not the condition, of a ternary that is the whole right side of a
      *  statement write into a nil-declared local (rustNilVenueWrite). */
-    rust90rcNilWriteArm(node: any): boolean;
+    rust90rcNilWriteArm(node: Node | undefined): boolean;
     /** ral-57k: an arm of `x = c ? m['quote'] : m['base']` (a statement write into an initialised local, kucoin parseTrade
      *  `feeCurrency`) whose other arm is a field read of the same kind off the same typed market local: the ternary is that
      *  one kind, each arm the very `key_read` the boxed form printed (`None` where it held Null). */
