@@ -4418,8 +4418,8 @@ const CCXT_GO_TS_SRC_IMPORT_CACHE = new Map ();
 
 function ccxtGoGeneralAnnotatedReturnTypes (node, type, key) {
     const name = node.name?.text;
-    if ((typeof name !== 'string') || CCXT_GO_PARSE_METHOD.test (name)) {
-        return undefined; // the parse* family keeps its own mapping
+    if ((typeof name !== 'string') || (CCXT_GO_PARSE_METHOD.test (name) && ((key !== 'string') || !ccxtGoGeneralAnnotatedMethodIsClosed (node, name)))) {
+        return undefined; // the parse* family keeps its own mapping, except a closed venue `string` return
     }
     if ((key === 'Int') && (node.type?.getText () === 'Int')) {
         return CCXT_GO_GENERAL_ANNOTATED_RETURN_NATIVE['Int'];

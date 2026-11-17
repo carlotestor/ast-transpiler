@@ -17149,3 +17149,27 @@ describe('venue paged-list producers print []any', () => {
         expect(out).toContain(') Paged(response any) any {');
     });
 });
+
+describe('closed venue parse* methods annotated string print string', () => {
+    test('a string parse* producer and its `+=` consumer seed print string', () => {
+        const out = goTranspile92g8('class base {\n'
+            + '    json (v: unknown): string { return \'\'; }\n'
+            + '}\n'
+            + 'export class ex extends base {\n'
+            + '    parseArrayParam (array: unknown, key: string): string {\n'
+            + '        const s = this.json (array);\n'
+            + '        return key + \'=\' + s;\n'
+            + '    }\n'
+            + '    encode (keys: string[]): string {\n'
+            + '        let joined: string = \'\';\n'
+            + '        for (let i = 0; i < keys.length; i++) {\n'
+            + '            const part = this.parseArrayParam ([], keys[i]);\n'
+            + '            joined += part;\n'
+            + '        }\n'
+            + '        return joined;\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain(') ParseArrayParam(array any, key string) string {');
+        expect(out).toContain('var part string = this.ParseArrayParam(');
+    });
+});
