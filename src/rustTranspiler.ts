@@ -34231,8 +34231,8 @@ export class RustTranspiler extends BaseTranspiler {
         let root: any = access;
         while (isElementAccessExpression(root.parent) && root.parent.expression === root) root = root.parent;
         const up: any = root.parent;
-        // A write, `delete`, or a call/property target still reaches the helper.
-        if (up !== undefined && (isDeleteExpression(up) || (isBinaryExpression(up) && up.left === root)
+        // A write, `delete`, or a call/property target still reaches the helper (ral-90rb: a compare's left operand is a read).
+        if (up !== undefined && (isDeleteExpression(up) || (isBinaryExpression(up) && up.left === root && rustIsAssignmentOperator(up.operatorToken.kind))
             || (isCallExpression(up) && up.expression === root)
             || up.kind === SyntaxKind.PrefixUnaryExpression || up.kind === SyntaxKind.PostfixUnaryExpression)) return false;
         // The printer proves the position on the outermost chain node.

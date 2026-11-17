@@ -7928,7 +7928,8 @@ describe ('rustBearerBoxedKeyWrites', () => {
                 + '        return Object.keys (marketIds);\n'
                 + '    }\n');
             expect(out).toContain('let mut marketIds: indexmap::IndexMap<String, Value> = (');
-            expect(out).toContain('marketIds.insert(crate::runtime::stringify_param(&(market.as_map().and_then(|__m| __m.get("id")).cloned().unwrap_or(Value::Null))), Value::Bool(true));');
+            // ral-90rb R2: `market['id'] !== undefined` is a read, so `market` is a read bearer (native `.get("id")`)
+            expect(out).toContain('marketIds.insert(crate::runtime::stringify_param(&(market.get("id").cloned().unwrap_or(Value::Null))), Value::Bool(true));');
             expect(out).toContain('Value::Array(marketIds.keys().cloned().map(Value::from).collect())');
             expect(out).not.toContain('add_element_to_object(&mut marketIds');
         });
@@ -25222,5 +25223,14 @@ describe('ral-90rb R1: a key tested in client.subscriptions after a handle-synce
     });
     test('a whole-field write keeps the boxed key', () => {
         expect(out).toContain('let mut otherHash: Value = ');
+    });
+});
+
+describe('ral-90rb R2: a list element compared (left operand of ===) is a read', () => {
+    test('a literal string list indexed by a loop counter and compared is a native List', () => {
+        const ts = "class venue {\n    safeList (o: any, k: any, d: any = undefined): any { return o[k]; }\n    handle (data: any) {\n        const levelKeys = [ 'inserts', 'updates', 'deletes' ];\n        let n = 0;\n        for (let k = 0; k < levelKeys.length; k++) {\n            const isDelete = (levelKeys[k] === 'deletes');\n            const levels = this.safeList (data, levelKeys[k], []);\n            if (isDelete) {\n                n = n + levels.length;\n            }\n        }\n        return n;\n    }\n}\n";
+        const out = transpiler.transpileRust(ts).content;
+        expect(out).toContain('let mut levelKeys: crate::value::List = std::sync::Arc::new(vec![');
+        expect(out).toContain('levelKeys.get(k as usize).cloned().unwrap_or(Value::Null).as_str() == Some("deletes")');
     });
 });
