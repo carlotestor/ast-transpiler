@@ -45552,7 +45552,7 @@ function goTypedVenueProducerType(goTranspiler, node) {
     return GO_TYPED_VENUE_PRODUCER_CACHE.get(node);
   }
   GO_TYPED_VENUE_PRODUCER_CACHE.set(node, void 0);
-  const result = goTypedVenueProducerTypeUncached(goTranspiler, node) ?? (goTypedVenueStringListProducer(goTranspiler, node) ? "[]any" : void 0);
+  const result = goTypedVenueProducerTypeUncached(goTranspiler, node) ?? (goTypedVenueStringListProducer(goTranspiler, node) ? "[]any" : void 0) ?? (goPagedListProducerLocal(goTranspiler, node) !== void 0 ? "[]any" : void 0);
   GO_TYPED_VENUE_PRODUCER_CACHE.set(node, result);
   return result;
 }
@@ -45800,6 +45800,126 @@ GoTranspiler.prototype.printReturnStatement = function(node, identation) {
   }
   return printReturnStatementBaseTypedVenue.call(this, node, identation);
 };
+var GO_PAGED_LIST_PRODUCER_CACHE = /* @__PURE__ */ new WeakMap();
+function goPagedListReader(initializer) {
+  const e = goTypedVenueUnparen(initializer);
+  const callee = e?.kind === SyntaxKind5.CallExpression ? e.expression : void 0;
+  if (callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword || e.arguments.length !== 3 || e.arguments.some((a) => a.kind === SyntaxKind5.SpreadElement)) {
+    return void 0;
+  }
+  const fallback = goTypedVenueUnparen(e.arguments[2]);
+  if (fallback?.kind !== SyntaxKind5.ArrayLiteralExpression || fallback.elements.length !== 0) {
+    return void 0;
+  }
+  return { "safeList": "SafeListTypedDefault", "safeListN": "this.SafeListNSliceDefault" }[callee.name?.text];
+}
+function goPagedListProducerLocal(goTranspiler, node) {
+  if (node?.kind !== SyntaxKind5.MethodDeclaration || node.body === void 0) {
+    return void 0;
+  }
+  if (GO_PAGED_LIST_PRODUCER_CACHE.has(node)) {
+    return GO_PAGED_LIST_PRODUCER_CACHE.get(node);
+  }
+  GO_PAGED_LIST_PRODUCER_CACHE.set(node, void 0);
+  const result = goPagedListProducerLocalUncached(goTranspiler, node);
+  GO_PAGED_LIST_PRODUCER_CACHE.set(node, result);
+  return result;
+}
+function goPagedListProducerLocalUncached(goTranspiler, node) {
+  const annotation = node.type?.getText()?.replace(/\s+/g, "");
+  const name = node.name?.text;
+  const fileName = String(node.getSourceFile?.()?.fileName ?? "");
+  if (annotation !== "any[]" && annotation !== "Dict[]" || typeof name !== "string" || /(^|[\\/])base[\\/]/.test(fileName) || !/(^|[\\/])ts[\\/]src[\\/]/.test(fileName) || goTranspiler.isAsyncFunction(node) || !ccxtGoGeneralAnnotatedMethodIsClosed(node, name) || goTranspiler.goMethodKeepsBaseSignature?.(node)) {
+    return void 0;
+  }
+  const reserved = ccxtGoReservedMethodNames(node);
+  if (reserved !== void 0 && (reserved.has(name) || reserved.has(name.charAt(0).toUpperCase() + name.slice(1)))) {
+    return void 0;
+  }
+  const returns = collectReturnStatements(node.body);
+  if (returns.length === 0 || returns.some((r) => goTypedVenueUnparen(r.expression)?.kind !== SyntaxKind5.Identifier)) {
+    return void 0;
+  }
+  const declarations = new Set(returns.map((r) => goTranspiler.goDeclarationOfIdentifier(goTypedVenueUnparen(r.expression))));
+  const declaration = [...declarations][0];
+  if (declarations.size !== 1 || declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier || (declaration.parent?.flags & NodeFlags2.Const) === 0 || goTranspiler.goEnclosingFunction(declaration) !== node || goPagedListReader(declaration.initializer) === void 0) {
+    return void 0;
+  }
+  const local = declaration.name.text;
+  const unsafe = goTranspiler.hasNodeWhere(node.body, (n) => {
+    if ((n.kind === SyntaxKind5.VariableDeclaration || n.kind === SyntaxKind5.Parameter || n.kind === SyntaxKind5.BindingElement) && n !== declaration && n.name?.kind === SyntaxKind5.Identifier && n.name.text === local) {
+      return true;
+    }
+    if (n.kind !== SyntaxKind5.Identifier || n.text !== local || n === declaration.name) {
+      return false;
+    }
+    const parent = n.parent;
+    if (parent?.kind === SyntaxKind5.PropertyAccessExpression && parent.name === n) {
+      return false;
+    }
+    if (goTranspiler.goDeclarationOfIdentifier(n) !== declaration) {
+      return true;
+    }
+    return !(parent?.kind === SyntaxKind5.PropertyAccessExpression && parent.name?.text === "length" || parent?.kind === SyntaxKind5.ElementAccessExpression && parent.expression === n || parent?.kind === SyntaxKind5.ReturnStatement);
+  });
+  return unsafe ? void 0 : declaration;
+}
+function goPagedListLocalOf(goTranspiler, declaration) {
+  const method = declaration?.kind === SyntaxKind5.VariableDeclaration ? goTranspiler.goEnclosingFunction(declaration) : void 0;
+  return method !== void 0 && goPagedListProducerLocal(goTranspiler, method) === declaration;
+}
+{
+  const listType = GoTranspiler.prototype.goSafeListLocalUnbox;
+  GoTranspiler.prototype.goSafeListLocalUnbox = function(declaration) {
+    return goPagedListLocalOf(this, declaration) ? GO_SAFE_LIST_LOCAL_TYPE : listType.call(this, declaration);
+  };
+  const listValue = GoTranspiler.prototype.goSafeListUnboxValue;
+  GoTranspiler.prototype.goSafeListUnboxValue = function(declaration, identation) {
+    if (goPagedListLocalOf(this, declaration)) {
+      const call = goTypedVenueUnparen(declaration.initializer);
+      const args = call.arguments.map((a, i) => this.printNode(a, i === 0 ? identation : 0).trim());
+      return goPagedListReader(call) + "(" + args.join(", ") + ")";
+    }
+    return listValue.call(this, declaration, identation);
+  };
+}
+function goPagedListRowsLocal(goTranspiler, list) {
+  if (list?.kind !== SyntaxKind5.Identifier) {
+    return false;
+  }
+  const declaration = goTranspiler.goDeclarationOfIdentifier(list);
+  if (goPagedListLocalOf(goTranspiler, declaration)) {
+    return true;
+  }
+  const call = goTypedVenueUnparen(declaration?.initializer);
+  const callee = call?.kind === SyntaxKind5.CallExpression ? call.expression : void 0;
+  if (declaration?.kind !== SyntaxKind5.VariableDeclaration || (declaration.parent?.flags & NodeFlags2.Const) === 0 || callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword) {
+    return false;
+  }
+  const method = goTranspiler.goMethodDeclarationOfCallee(callee);
+  return goPagedListProducerLocal(goTranspiler, method) !== void 0 && goTranspiler.goNameWriteSites(goTranspiler.goEnclosingFunction(declaration), list.text, declaration).length === 0;
+}
+{
+  const pointerFree = GoTranspiler.prototype.goListElementsArePointerFree;
+  GoTranspiler.prototype.goListElementsArePointerFree = function(list, depth = 0) {
+    return goPagedListRowsLocal(this, list) || pointerFree.call(this, list, depth);
+  };
+  const elementRead = GoTranspiler.prototype.goNativeListElementRead;
+  GoTranspiler.prototype.goNativeListElementRead = function(node, containerStr, keyNode, keyStr) {
+    const shipped = elementRead.call(this, node, containerStr, keyNode, keyStr);
+    if (shipped === void 0 || !goPagedListRowsLocal(this, node?.expression) || this.goGb08BoundedListRead(node, keyNode) !== void 0 || this.goBoundedLoopListRead(node)) {
+      return shipped;
+    }
+    const level = this.goStatementLevel;
+    const body = this.getIden(level + 1);
+    return `func() any {
+${body}if ${keyStr} >= 0 && ${keyStr} < len(${containerStr}) {
+${this.getIden(level + 2)}return ${containerStr}[${keyStr}]
+${body}}
+${body}return nil
+${this.getIden(level)}}()`;
+  };
+}
 
 // src/javaTranspiler.ts
 init_esm_shims();
