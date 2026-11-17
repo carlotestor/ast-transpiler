@@ -2016,3 +2016,6 @@ export interface GoTranspiler {
 export interface GoTranspiler {
     goTernaryJoinFeedsParameterCopy(declaration: any): boolean;
 }
+export interface GoTranspiler {
+    goTernaryJoinR87HasNativeRead(declaration: any, kind: string): boolean;
+}

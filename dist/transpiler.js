@@ -42356,6 +42356,118 @@ ${iden}} else {
 ${iden}	${name} = ${whenFalse}
 ${iden}}`;
 };
+GoTranspiler.prototype.goTernaryJoinR87HasNativeRead = function(declaration, kind) {
+  const scope = this.goEnclosingFunction(declaration);
+  const name = declaration.name;
+  const checker = this.checkerOrUndefined();
+  if (scope === void 0 || checker === void 0) {
+    return false;
+  }
+  const isNil = (e) => e?.kind === SyntaxKind5.NullKeyword || e?.kind === SyntaxKind5.Identifier && e.text === "undefined";
+  return this.hasNodeWhere(scope, (n) => {
+    if (n.kind !== SyntaxKind5.Identifier || n.text !== name.text || n === name || checker.getSymbolAtLocation(n)?.valueDeclaration?.resolve() !== declaration) {
+      return false;
+    }
+    let current = n;
+    while (current.parent?.kind === SyntaxKind5.ParenthesizedExpression) {
+      current = current.parent;
+    }
+    const parent = current.parent;
+    if (kind === "list") {
+      return parent?.kind === SyntaxKind5.ElementAccessExpression && parent.expression === current || parent?.kind === SyntaxKind5.PropertyAccessExpression && parent.expression === current && parent.name?.text === "length";
+    }
+    if (parent?.kind !== SyntaxKind5.BinaryExpression || COMPARISON_TOKENS.indexOf(parent.operatorToken.kind) < 0) {
+      return false;
+    }
+    const other = this.goUnwrapParenthesizedNode(parent.left === current ? parent.right : parent.left);
+    return isNil(other) || other?.kind === SyntaxKind5.StringLiteral;
+  }) && (kind === "list" || !this.hasNodeWhere(scope, (n) => {
+    if (n.kind !== SyntaxKind5.Identifier || n.text !== name.text || n === name || checker.getSymbolAtLocation(n)?.valueDeclaration?.resolve() !== declaration) {
+      return false;
+    }
+    let current = n;
+    while (current.parent?.kind === SyntaxKind5.ParenthesizedExpression) {
+      current = current.parent;
+    }
+    const parent = current.parent;
+    if (parent?.kind !== SyntaxKind5.BinaryExpression) {
+      return true;
+    }
+    const op = parent.operatorToken.kind;
+    if (COMPARISON_TOKENS.indexOf(op) >= 0) {
+      const other = this.goUnwrapParenthesizedNode(parent.left === current ? parent.right : parent.left);
+      return !(isNil(other) || other?.kind === SyntaxKind5.StringLiteral);
+    }
+    return op !== SyntaxKind5.PlusToken;
+  }));
+};
+var goTernaryJoinR87PartsUncached = GoTranspiler.prototype.goTernaryJoinPartsUncached;
+GoTranspiler.prototype.goTernaryJoinPartsUncached = function(declaration) {
+  const known = goTernaryJoinR87PartsUncached.call(this, declaration);
+  if (known !== void 0 || this.goTernaryJoinProvisional()) {
+    return known;
+  }
+  const ternary = this.goUnwrapParenthesizedNode(declaration?.initializer);
+  if (ternary?.kind !== SyntaxKind5.ConditionalExpression || declaration.type !== void 0 && declaration.type.kind === SyntaxKind5.AnyKeyword) {
+    return void 0;
+  }
+  const isEmptyList = (n) => {
+    const u = this.goUnwrapParenthesizedNode(n);
+    return u?.kind === SyntaxKind5.ArrayLiteralExpression && u.elements.length === 0;
+  };
+  const emptyTrue = isEmptyList(ternary.whenTrue);
+  const emptyFalse = isEmptyList(ternary.whenFalse);
+  if (emptyTrue !== emptyFalse) {
+    const otherNode = this.goUnwrapParenthesizedNode(emptyTrue ? ternary.whenFalse : ternary.whenTrue);
+    let other = this.goTernaryJoinArmType(otherNode);
+    if (other === void 0 && otherNode?.kind === SyntaxKind5.Identifier) {
+      const target = this.checkerOrUndefined()?.getSymbolAtLocation(otherNode)?.valueDeclaration?.resolve();
+      other = target?.kind === SyntaxKind5.Parameter ? this.goGetArgParameterType(target) : this.goDeclaredTypeOfIdentifier(otherNode);
+    }
+    if (other === "[]string" && !this.goWithExprDepth(1, () => this.printCondition(ternary.condition, 0)).includes("\n") && this.goTernaryJoinR87HasNativeRead(declaration, "list")) {
+      return { goType: "[]string", derefTrue: false, derefFalse: false, emptyTrue, emptyFalse };
+    }
+    return void 0;
+  }
+  const whenTrue = this.goTernaryJoinArmType(ternary.whenTrue);
+  const whenFalse = this.goTernaryJoinArmType(ternary.whenFalse);
+  const pairs = whenTrue === "string" && whenFalse === "*string" || whenTrue === "*string" && whenFalse === "string";
+  if (!pairs || this.goWithExprDepth(1, () => this.printCondition(ternary.condition, 0)).includes("\n") || !this.goTernaryJoinR87HasNativeRead(declaration, "string")) {
+    return void 0;
+  }
+  return { goType: "*string", derefTrue: false, derefFalse: false, addressTrue: whenTrue === "string", addressFalse: whenFalse === "string" };
+};
+var goTernaryJoinR87Declaration = GoTranspiler.prototype.goTernaryJoinDeclaration;
+GoTranspiler.prototype.goTernaryJoinDeclaration = function(statement, declaration, identation) {
+  const parts = goTernaryJoinOwner(declaration?.initializer) === declaration ? this.goTernaryJoinParts(declaration) : void 0;
+  if (parts === void 0 || !(parts.emptyTrue || parts.emptyFalse || parts.addressTrue || parts.addressFalse)) {
+    return goTernaryJoinR87Declaration.call(this, statement, declaration, identation);
+  }
+  if (statement?.parent?.kind !== SyntaxKind5.FirstStatement || statement.declarations?.length !== 1 || this.getGoLocalType(declaration, this.printNode(declaration.initializer, identation)) !== parts.goType) {
+    return void 0;
+  }
+  const ternary = this.goUnwrapParenthesizedNode(declaration.initializer);
+  const condition = this.goWithExprDepth(1, () => this.printCondition(ternary.condition, 0));
+  const name = this.printNode(declaration.name, 0);
+  const iden = this.getIden(identation);
+  const temp = name + "Value";
+  const branch = (node, empty, address) => {
+    if (empty) {
+      return `${iden}	${name} = []string{}`;
+    }
+    const printed = this.goPrintTernaryBranch(node, 1).trim();
+    return address ? `${iden}	${temp} := ${printed}
+${iden}	${name} = &${temp}` : `${iden}	${name} = ${printed}`;
+  };
+  const whenTrue = branch(ternary.whenTrue, parts.emptyTrue === true, parts.addressTrue === true);
+  const whenFalse = branch(ternary.whenFalse, parts.emptyFalse === true, parts.addressFalse === true);
+  return `${iden}var ${name} ${parts.goType}
+${iden}if ${this.goStripControlClauseParens(condition)} {
+${whenTrue}
+${iden}} else {
+${whenFalse}
+${iden}}`;
+};
 
 // src/javaTranspiler.ts
 init_esm_shims();
