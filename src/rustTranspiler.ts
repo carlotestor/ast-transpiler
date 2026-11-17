@@ -3194,6 +3194,7 @@ export class RustTranspiler extends BaseTranspiler {
         let joined: string | undefined = 'null';
         let writes = 0;
         let baseFieldWrite = false;
+        let passThroughWrite = false;
         for (const n of this.rustScopeNameNodes(scope, name) as any[]) {
             if (isIdentifier(n) && this.rustNilSlotWrite(n) && this.rustDeclaredNode(n) === declaration) {
                 if (this.primitiveKindOfType(this.typeOfNodeIfAny(n)) !== 'string') return undefined;
@@ -3209,6 +3210,7 @@ export class RustTranspiler extends BaseTranspiler {
             if (!this.rustNilDecodedWrite(rhs)) writes++;
             // ral-90rc R3: a write from a base credential field (`x = this.secret`) is admitted only for a native read (below)
             if (this.rustBaseStrFieldRead(rhs)) baseFieldWrite = true;
+            if (this.rustPassThroughStrCallIn(rhs)) passThroughWrite = true;
             let write = isIdentifier(rhs) && this.literalKindOfNode(rhs) !== 'null' ? (this.rustScalarIdentifierKind(rhs) ?? (this.rustNilValueStrAlias(rhs) ? 'ostr' : undefined)) : this.rustScalarValueKind(rhs, true);
             // ral-68a R1: `x = p` from an unwritten typed string parameter (`&str` / `Option<&str>` signature slot): the
             // parameter's rebinding holds that string (or Null), read back once as `Option<String>` (rustOptParamText)
@@ -3266,6 +3268,8 @@ export class RustTranspiler extends BaseTranspiler {
             return form !== undefined;
         });
         // without a native read, only repeated native writes (no `Value` decode) or a moving hand-off earn the type
+        // a write from a pass-through venue string helper earns the type only with a native read (boxed straight back it moves the conversion)
+        if (ok && native === 0 && passThroughWrite) return undefined;
         if (!ok || (native === 0 && (baseFieldWrite || (writes <= 1 && !this.rustNilScalarHandOff(declaration, scope, kind, boxed))))
             || (boxed.length > 0 && scope.kind !== SyntaxKind.MethodDeclaration)) return undefined;
         // boxed uses are checked against the printed method lines
@@ -5366,6 +5370,8 @@ export class RustTranspiler extends BaseTranspiler {
         const storeOnly = guarded && nativeUses === 0 && boxed === 1 && !handOff;
         // ral-90re R1: a string local boxed into a pushed `this.parseNumber` pair is typed only for a native use elsewhere (a box alone moves the conversion)
         if (ok && nativeUses === 0 && this.rust90rePairAdmitted.has(declaration)) return undefined;
+        // a local fed by a pass-through venue string helper (`fromEp`: returns its own parameter on one path) is typed only for a native use
+        if (ok && nativeUses === 0 && this.rustPassThroughStrCallIn(declaration.initializer)) return undefined;
         // ral-90re R3: a ternary over `String` fields of an owned `safeMarket` local is typed only for a native use (boxed straight back it moves the conversion)
         if (ok && nativeUses === 0 && kind === 'str' && this.rust90reSmktArmTernary(declaration.initializer)) return undefined;
         // ral-84e: a record-arm ternary string is typed only for a native use (boxed straight back it stays the `Value` it is handed as)
@@ -13738,6 +13744,40 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     /** uh: the use's local is initialised by `c ? 'a' : 'b'` (both arms string literals). */
+    /** `node` is fed by a venue string helper that returns one of its own parameters on some path (phemex `fromEp`): the
+     *  call itself, a reader / parse call taking it whole (not `omitZero`, whose result was typed before), or a call taking
+     *  a local initialised from it. */
+    rustPassThroughStrCallIn(node: Node, depth = 0): boolean {
+        const n: Node | undefined = node === undefined ? undefined : this.unwrapParensNode(node);
+        if (n === undefined || !isCallExpression(n) || !isPropertyAccessExpression(n.expression) || n.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
+        if (this.rustNativeStrCalleeKind(n) === 'str' && this.rustPassThroughStrMethod(this.rustScalarCallee(n))) return true;
+        if (depth > 0 || String(n.expression.name.text) === 'omitZero') return false;
+        return n.arguments.some((a: Node) => {
+            const arg: Node = this.unwrapParensNode(a);
+            if (arg !== undefined && isIdentifier(arg)) {
+                const decl: Node | undefined = this.rustDeclaredNode(arg);
+                return decl !== undefined && isVariableDeclaration(decl) && decl.initializer !== undefined && this.rustPassThroughStrCallIn(decl.initializer, 1);
+            }
+            return this.rustPassThroughStrCallIn(arg, 1);
+        });
+    }
+
+    rustPassThroughStrMethod(method: Node | undefined): boolean {
+        if (method === undefined || !isMethodDeclaration(method) || method.body === undefined
+            || RustTranspiler.RUST_BASE_TIER_FILE.test(String(method.getSourceFile().fileName))) return false;
+        const params = new Set<Node>(method.parameters);
+        const body: Node = method.body;
+        let found = false;
+        const visit = (n: Node) => {
+            if (found || (n !== body && isFunctionLike(n))) return;
+            const value: Node | undefined = isReturnStatement(n) && n.expression !== undefined ? this.unwrapParensNode(n.expression) : undefined;
+            if (value !== undefined && isIdentifier(value) && params.has(this.rustDeclaredNode(value))) { found = true; return; }
+            n.forEachChild(visit);
+        };
+        body.forEachChild(visit);
+        return found;
+    }
+
     /** ral-90re R3: a ternary initializer one of whose arms is a field read of an owned `safeMarket` (`smkt`) local. */
     rust90reSmktArmTernary(init: Node): boolean {
         const node: Node = this.unwrapParens(init);

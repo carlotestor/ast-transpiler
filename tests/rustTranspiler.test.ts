@@ -25737,3 +25737,21 @@ describe('stack-90r: a list bearer admitted by a compare-left read moves its fre
         expect(out).not.toContain('.as_array().cloned()');
     });
 });
+
+describe('pass-through venue string helpers: `fromEp (ep: Str, market): Str` prints -> Option<String>; its result locals need a native use', () => {
+    const mk = () => {
+        const dir = path.join (rustFixtureRoot, 'r92-pass-through-str');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Int = number | undefined;\nexport interface MarketInterface { symbol: string; [key: string]: any }\nexport type Market = MarketInterface | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return o; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Market, Str, Int } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    fromEn (en: Str, scale: Int): Str {\n        if (en === undefined || scale === undefined) {\n            return undefined;\n        }\n        return en + 'x';\n    }\n    fromEp (ep: Str, market: Market = undefined): Str {\n        if ((ep === undefined) || (market === undefined)) {\n            return ep;\n        }\n        return this.fromEn (ep, this.safeInteger (market, 'priceScale'));\n    }\n    parseIt (ticker: Dict, market: Market = undefined): Dict {\n        const last = this.fromEp (this.safeString (ticker, 'l'), market);\n        const open = this.fromEp (this.safeString (ticker, 'o'), market);\n        let fee: Dict = undefined;\n        if (last !== undefined) {\n            fee = { 'cost': last };\n        }\n        return { 'open': open, 'fee': fee };\n    }\n}\n");
+        return new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } }).transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('the helper returns Option<String>; a local with a native test is typed, a box-only local stays Value', () => {
+        const out = mk();
+        expect(out).toMatch(/fn fromEp\([^)]*\) -> Option<String>/);
+        const t = out.slice(out.indexOf('fn parseIt'));
+        expect(t).toContain('let mut last: Option<String> = ');
+        expect(t).toContain('last.is_some()');
+        expect(t).toContain('let mut open: Value = ');
+    });
+});
