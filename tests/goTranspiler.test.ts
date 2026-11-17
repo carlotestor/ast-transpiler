@@ -17153,4 +17153,21 @@ describe('ral-93g7 ternary joins over int / int64 operands', () => {
         expect(out).toContain('limitCapped * d');
         expect(out).not.toContain('Multiply(');
     });
+    test('a *int64 arm guarded by the enclosing if reads as its pointee in an int64 join', () => {
+        const out = goTranspile87g8(head
+            + '    f (until: Int = undefined) {\n'
+            + '        const now = this.parseToInt (5);\n'
+            + '        const span = this.parseToInt (3);\n'
+            + '        const request = {};\n'
+            + '        if (until !== undefined) {\n'
+            + '            const end: int = (until > now) ? now : until;\n'
+            + '            request[\'start\'] = end - span;\n'
+            + '        }\n'
+            + '        return request;\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('var end int64');
+        expect(out).toContain('end = *until');
+        expect(out).toContain('end - span');
+    });
 });
