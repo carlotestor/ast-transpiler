@@ -17109,3 +17109,62 @@ describe('ral-92g8 R4 venue string[] producers over a literal-defaulted safeList
         expect(out).toContain('OrderFlags(flags any) any {');
     });
 });
+
+describe('orderbook delta cache as a typed list', () => {
+    const BOOK = {
+        'classes': [ 'OrderBook', 'WsOrderBook' ],
+        'constructors': [ 'orderBook' ],
+        'cacheReaders': [ 'safeValue' ],
+        'type': 'OrderBookInterface',
+        'sideType': 'IOrderBookSide',
+        'unbox': 'OrderBookTyped',
+        'sides': { 'asks': 'GetAsks', 'bids': 'GetBids' },
+    };
+    const HEAD = 'type Dict = { [key: string]: unknown };\n'
+        + 'class Side { store (p: number, a: number) { return p + a; } }\n'
+        + 'class WsOrderBook { asks: Side; bids: Side; cache: unknown[]; reset (x: Dict = {}) { return x; } limit () { return this; } }\n'
+        + 'class Exchange {\n'
+        + '    orderbooks: Dictionary<WsOrderBook> = {};\n'
+        + '    orderBook (snapshot = {}): WsOrderBook { return new WsOrderBook (); }\n'
+        + '    handleMessage (m: unknown) { return m; }\n'
+        + '    safeInteger (o: unknown, k: string): number | undefined { return undefined; }\n';
+    const print = (body: string): string => {
+        const dir = fs.mkdtempSync (path.join (os.tmpdir (), 'gobookcache-'));
+        try {
+            fs.mkdirSync (path.join (dir, 'ts', 'src', 'base'), { 'recursive': true });
+            fs.mkdirSync (path.join (dir, 'ts', 'src', 'pro'), { 'recursive': true });
+            const file = path.join (dir, 'ts', 'src', 'pro', 'x.ts');
+            fs.writeFileSync (path.join (dir, 'ts', 'src', 'base', 'Exchange.ts'), 'type Dictionary<T> = { [key: string]: T };\n' + HEAD + '}\nexport default Exchange;\n');
+            fs.writeFileSync (file, 'import Exchange from \'../base/Exchange.js\';\n' + body);
+            return new Transpiler ({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 }, 'orderBook': BOOK } }).transpileGoByPath (file).content;
+        } finally {
+            fs.rmSync (dir, { 'recursive': true, 'force': true });
+        }
+    };
+    test('a push prints AppendCache and a cache local read by length and index declares []any', () => {
+        const out = print ('class x extends Exchange {\n'
+            + '    handle (symbol: string, message: Dict) {\n'
+            + '        const orderbook = this.orderbooks[symbol];\n'
+            + '        orderbook.cache.push (message);\n'
+            + '        const messages = orderbook.cache;\n'
+            + '        for (let i = 0; i < messages.length; i++) {\n'
+            + '            this.handleMessage (messages[i]);\n'
+            + '        }\n'
+            + '    }\n'
+            + '}\n');
+        expect (out).toContain ('orderbook.AppendCache(message)');
+        expect (out).toContain ('var messages []any = orderbook.GetCache()');
+        expect (out).toContain ('this.HandleMessage(messages[i])');
+        expect (out).not.toContain ('AppendToArray(');
+    });
+    test('a cache local handed on whole keeps any', () => {
+        const out = print ('class x extends Exchange {\n'
+            + '    handle (symbol: string) {\n'
+            + '        const orderbook = this.orderbooks[symbol];\n'
+            + '        const messages = orderbook.cache;\n'
+            + '        this.handleMessage (messages);\n'
+            + '    }\n'
+            + '}\n');
+        expect (out).toContain ('var messages any = orderbook.GetCache()');
+    });
+});

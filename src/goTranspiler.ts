@@ -39108,3 +39108,91 @@ GoTranspiler.prototype.printReturnStatement = function (node, identation) {
     }
     return printReturnStatementBaseTypedVenue.call (this, node, identation);
 };
+
+// ===== orderbook delta cache as a typed list =====
+// OrderBookInterface.GetCache() returns the buffered deltas as []any and AppendCache(v) buffers one, so
+// `book.cache.push (v)` prints the method call and `const m = book.cache` declares []any when every use of m is
+// a `.length` or an element read (both answer a nil list like the boxed helpers answered a nil box).
+export interface GoTranspiler {
+    goOrderBookCacheLocal(declaration): boolean;
+    goOrderBookCacheLocalCache: WeakMap<object, boolean>;
+}
+GoTranspiler.prototype.goOrderBookCacheLocal = function (declaration) {
+    if ((declaration?.kind !== SyntaxKind.VariableDeclaration) || (declaration.name?.kind !== SyntaxKind.Identifier)
+        || (this.goOrderBookCacheAccessor(declaration.initializer) === undefined)) {
+        return false;
+    }
+    if (this.goOrderBookCacheLocalCache === undefined) {
+        this.goOrderBookCacheLocalCache = new WeakMap<object, boolean>();
+    }
+    if (this.goOrderBookCacheLocalCache.has(declaration)) {
+        return this.goOrderBookCacheLocalCache.get(declaration);
+    }
+    this.goOrderBookCacheLocalCache.set(declaration, false);
+    const checker: Checker | undefined = this.checkerOrUndefined();
+    const own: TsSymbol | undefined = checker?.getSymbolAtLocation(declaration.name);
+    const scope: Node | undefined = this.goEnclosingFunction(declaration);
+    const name: string = declaration.name.text;
+    const verdict = (own !== undefined) && (scope !== undefined) && !this.hasNodeWhere(scope, (n: Node) => {
+        if ((n.kind !== SyntaxKind.Identifier) || ((n as unknown as { text: string }).text !== name) || (n === declaration.name)) {
+            return false;
+        }
+        const parent = n.parent as unknown as { kind: SyntaxKind, name?: Node, expression?: Node, parent?: Node };
+        if (((parent?.kind === SyntaxKind.PropertyAccessExpression) || (parent?.kind === SyntaxKind.PropertyAssignment)) && (parent.name === n)) {
+            return false;
+        }
+        if (checker.getSymbolAtLocation(n) !== own) {
+            return true;
+        }
+        if ((parent?.kind === SyntaxKind.PropertyAccessExpression) && (parent.expression === n)
+            && ((parent.name as unknown as { text: string })?.text === 'length') && !this.isGoElementAccessAssignmentTarget(parent)) {
+            const up = parent.parent as unknown as { kind: SyntaxKind, left?: Node, operatorToken?: { kind: SyntaxKind } };
+            return (up?.kind === SyntaxKind.BinaryExpression) && (up.left === (parent as unknown as Node))
+                && (up.operatorToken.kind >= SyntaxKind.FirstAssignment) && (up.operatorToken.kind <= SyntaxKind.LastAssignment);
+        }
+        if ((parent?.kind === SyntaxKind.ElementAccessExpression) && (parent.expression === n)) {
+            return this.isGoElementAccessAssignmentTarget(parent);
+        }
+        // `this.safeX (m, i)` reads an element of the list like GetValue does
+        if ((parent?.kind === SyntaxKind.CallExpression)) {
+            const call = parent as unknown as CallExpression;
+            const callee = call.expression as unknown as { kind: SyntaxKind, expression?: Node, name?: { text: string } };
+            return !((call.arguments[0] === n) && (callee?.kind === SyntaxKind.PropertyAccessExpression)
+                && (callee.expression?.kind === SyntaxKind.ThisKeyword) && /^safe(Value|Dict|Integer|String|Number)$/.test(callee.name?.text ?? ''));
+        }
+        return true;
+    });
+    this.goOrderBookCacheLocalCache.set(declaration, verdict);
+    return verdict;
+};
+{
+    const goTypeOfInitializerOrderBookCache = GoTranspiler.prototype.goTypeOfInitializer;
+    GoTranspiler.prototype.goTypeOfInitializer = function (initializer, printedValue: string) {
+        const declaration = initializer?.parent;
+        if ((declaration?.kind === SyntaxKind.VariableDeclaration) && (declaration.initializer === initializer) && this.goOrderBookCacheLocal(declaration)) {
+            return '[]any';
+        }
+        return goTypeOfInitializerOrderBookCache.call(this, initializer, printedValue);
+    };
+    // AppendCache stores no scalar pointer, so an element of the cache list needs no DerefScalar
+    const goListElementsArePointerFreeOrderBookCache = GoTranspiler.prototype.goListElementsArePointerFree;
+    GoTranspiler.prototype.goListElementsArePointerFree = function (list, depth = 0) {
+        if (list?.kind === SyntaxKind.Identifier) {
+            const declaration = this.checkerOrUndefined()?.getSymbolAtLocation(list)?.valueDeclaration?.resolve?.();
+            if (this.goOrderBookCacheLocal(declaration)) {
+                return true;
+            }
+        }
+        return goListElementsArePointerFreeOrderBookCache.call(this, list, depth);
+    };
+    const printArrayPushCallOrderBookCache = GoTranspiler.prototype.printArrayPushCall;
+    GoTranspiler.prototype.printArrayPushCall = function (node: CallExpression, identation: number, name: string | undefined = undefined, parsedArg: string | undefined = undefined) {
+        const target = (node.expression as unknown as { expression?: Node })?.expression;
+        const bookCache = this.goOrderBookCacheAccessor(target);
+        if ((bookCache !== undefined) && bookCache.endsWith('.GetCache()')) {
+            return `${bookCache.slice(0, -'.GetCache()'.length)}.AppendCache(${this.goPrintCallArgument(node.arguments?.[0], parsedArg)})`;
+        }
+        return printArrayPushCallOrderBookCache.call(this, node, identation, name, parsedArg);
+    };
+}
+// ===== end orderbook delta cache =====
