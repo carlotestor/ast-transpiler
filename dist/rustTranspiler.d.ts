@@ -3836,6 +3836,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  argument is a proven map (a typed / helper-proven params parameter, a handed slot map or a settled Dict local): the
      *  base answers `[x, m]` or `[x, omit (m, k)]`, a map on every path. */
     rustHandleTupleMapSlotRead(rhs: any): boolean;
+    /** ral-87ra R1: `const p: Dict = t[k]` (literal index) of a never-rebound `const t = this.m (..)` whose venue callee declares
+     *  slot `k` of its tuple return a bare `Dict` (rustCallDeclaresDictSlot: bitget `handleProductTypeAndParams`, binance pro
+     *  `resolveAuthType`, dydx `createOrderRequest`) and whose every use is a literal-index read: the slot holds that map. */
+    rust87raVenueTupleMapSlotRead(rhs: Node): boolean;
     /** ral-51a: `this.handleRouteAndParams (m, params)` typed by name: a venue member of the enclosing class declared
      *  `handleRouteAndParams (methodName: string, params: Dict = {}): Dict` answers the (route-omitted) params map. */
     rustRouteParamsDictCall(init: any): boolean;

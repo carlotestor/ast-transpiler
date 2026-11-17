@@ -79169,6 +79169,31 @@ ${iden}}`;
       return this.rustProvenMapParam(d);
     return this.rustProvenMapParam(d) || this.rustHandedDictLocal(d) || this.rustBorrowedLocalKind(d) === "dict" && !this.rustOptContainerLocals.has(d);
   }
+  /** ral-87ra R1: `const p: Dict = t[k]` (literal index) of a never-rebound `const t = this.m (..)` whose venue callee declares
+   *  slot `k` of its tuple return a bare `Dict` (rustCallDeclaresDictSlot: bitget `handleProductTypeAndParams`, binance pro
+   *  `resolveAuthType`, dydx `createOrderRequest`) and whose every use is a literal-index read: the slot holds that map. */
+  rust87raVenueTupleMapSlotRead(rhs) {
+    if (rhs === void 0 || !_is.isElementAccessExpression.call(void 0, rhs) || !_is.isIdentifier.call(void 0, rhs.expression) || this.rustTestTierSource(rhs))
+      return false;
+    const idx = this.rustSkipWrappers(rhs.argumentExpression);
+    if (idx === void 0 || !_is.isNumericLiteral.call(void 0, idx))
+      return false;
+    const t = this.rustDeclaredNode(rhs.expression);
+    if (t === void 0 || !_is.isVariableDeclaration.call(void 0, t) || !_is.isIdentifier.call(void 0, t.name) || (t.parent.flags & _ast.NodeFlags.Const) === 0)
+      return false;
+    const call = this.rustSkipWrappers(t.initializer);
+    if (call === void 0 || !_is.isCallExpression.call(void 0, call) || !_is.isPropertyAccessExpression.call(void 0, call.expression) || call.expression.expression.kind !== _ast.SyntaxKind.ThisKeyword)
+      return false;
+    if (!this.rustCallDeclaresDictSlot(call, Number(idx.text)))
+      return false;
+    return this.rustLocalUsesAll(t, String(t.name.text), true, (n) => {
+      const up = n.parent;
+      if (!_is.isElementAccessExpression.call(void 0, up) || up.expression !== n || !_is.isNumericLiteral.call(void 0, this.rustSkipWrappers(up.argumentExpression)))
+        return false;
+      const use = up.parent;
+      return !(_is.isBinaryExpression.call(void 0, use) && use.left === up) && use.kind !== _ast.SyntaxKind.DeleteExpression;
+    });
+  }
   /** ral-51a: `this.handleRouteAndParams (m, params)` typed by name: a venue member of the enclosing class declared
    *  `handleRouteAndParams (methodName: string, params: Dict = {}): Dict` answers the (route-omitted) params map. */
   rustRouteParamsDictCall(init) {
@@ -85116,7 +85141,7 @@ ${iden}}`;
       if (nilSlot) {
         if (this.rustBorrowedLocalKind(declaration) !== void 0 || this.rustNilMapLocal(declaration) || this.rustOptListLocal(declaration) || this.rustCurrencyLocalKind(declaration) !== false)
           return false;
-      } else if (!this.rustBaseCallNamed(init, _RustTranspiler.RUST_HANDED_DICT_SOURCES) && !this.rustDictTernaryInit(init) && !this.rustHandleTupleMapSlotRead(init) && !this.rustRouteParamsDictCall(init) || this.rustBorrowedDictLocal(declaration))
+      } else if (!this.rustBaseCallNamed(init, _RustTranspiler.RUST_HANDED_DICT_SOURCES) && !this.rustDictTernaryInit(init) && !this.rustHandleTupleMapSlotRead(init) && !this.rustRouteParamsDictCall(init) && !this.rust87raVenueTupleMapSlotRead(init) || this.rustBorrowedDictLocal(declaration))
         return false;
       if (this.rustReadBearerKindOfDeclaration(declaration) !== false || this.rustDictLocalIsTyped(declaration) || this.rustVecLocalIsTyped(declaration) || this.rustNestedDictLocalIsTyped(declaration) || this.rustMarketLocalKind(declaration) !== false || this.rustNilLocalKind(declaration) !== void 0 || this.rustScalarLocalKind(declaration) !== void 0)
         return false;
