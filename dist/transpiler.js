@@ -82955,6 +82955,22 @@ ${iden}}`;
       call = this.rustSkipWrappers(call.expression);
     return call !== void 0 && isCallExpression6(call) && this.rustBorrowedSourceKind(call) === "api" && this.rustDeclaredEndpointKind(call) !== void 0;
   }
+  /** `this.safeDict (x, k, x)` whose default is its own receiver, a `let` filled only by endpoints declared `Promise<Dict>`
+   *  (ral-61i, a syntactic proof): the answer is the map read at k or x itself, so a map or Null on every path. */
+  rustSelfDefaultedRead(call, kind) {
+    if (kind !== "dict" || !isCallExpression6(call) || call.arguments.length !== 3 || this.rustTestTierSource(call))
+      return false;
+    if (String(call.expression?.name?.text ?? "") !== "safeDict")
+      return false;
+    const recv = this.rustSkipWrappers(call.arguments[0]);
+    const dflt = this.rustSkipWrappers(call.arguments[2]);
+    if (!isIdentifier3(recv) || !isIdentifier3(dflt) || String(recv.text) !== String(dflt.text))
+      return false;
+    const declaration = this.rustDeclarationOfIdentifier(recv);
+    if (declaration === void 0 || declaration !== this.rustDeclarationOfIdentifier(dflt))
+      return false;
+    return isVariableDeclaration3(declaration) && this.rustDeclaredDictEndpointLet(declaration);
+  }
   /** A base `safeDict*` / `safeList*` call (default absent, nullish or an empty literal of its kind), or a base `extend`/`omit`. */
   rustOptContainerSourceOk(call, kind) {
     if (kind === "api" || !isCallExpression6(call))
@@ -82967,6 +82983,8 @@ ${iden}}`;
     const at = name.endsWith("2") ? 3 : 2;
     const dflt = call.arguments.length > at ? this.rustSkipWrappers(call.arguments[at]) : void 0;
     if (dflt === void 0 || this.literalKindOfNode(dflt) === "null")
+      return true;
+    if (this.rustSelfDefaultedRead(call, kind))
       return true;
     return kind === "dict" ? isObjectLiteralExpression4(dflt) && dflt.properties.length === 0 : isArrayLiteralExpression4(dflt) && dflt.elements.length === 0;
   }

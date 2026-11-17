@@ -3894,6 +3894,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rust65iDeclaredDictEndpointWrite(rhs: any): boolean;
     /** ral-kc: `await this.<endpoint> (..)` whose abstract declaration spells `Promise<Dict>` / `Promise<List>`. */
     rustDeclaredEndpointWrite(rhs: any): boolean;
+    /** `this.safeDict (x, k, x)` whose default is its own receiver, a `let` filled only by endpoints declared `Promise<Dict>`
+     *  (ral-61i, a syntactic proof): the answer is the map read at k or x itself, so a map or Null on every path. */
+    rustSelfDefaultedRead(call: any, kind: 'dict' | 'list' | 'api'): boolean;
     /** A base `safeDict*` / `safeList*` call (default absent, nullish or an empty literal of its kind), or a base `extend`/`omit`. */
     rustOptContainerSourceOk(call: any, kind: 'dict' | 'list' | 'api'): boolean;
     /** The optional form's local behind an identifier, else undefined. */
