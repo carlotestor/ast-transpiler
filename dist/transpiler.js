@@ -84754,8 +84754,13 @@ ${iden}}`;
           this.rustOptListBoxes.set(n, "map");
           return true;
         }
-        if (!this.rust80dInListArm(n, declaration, fn))
+        const endpointSplit = this.rust87rfEndpointSplitSource(declaration, init);
+        if (!this.rust80dInListArm(n, declaration, fn, endpointSplit))
           return false;
+        if (endpointSplit && (isConditionalExpression4(use) && use.whenTrue === n && use.condition !== n || isBinaryExpression5(use) && use.right === n && use.operatorToken.kind === SyntaxKind7.EqualsToken && use.parent?.kind === SyntaxKind7.ExpressionStatement && isIdentifier3(use.left) && use.left.text !== n.text && this.rustOptListAliasTarget(use.left) && this.rustBuiltListOf(use.left) === void 0)) {
+          boxes.push([n, "clone"]);
+          return true;
+        }
         if (isBinaryExpression5(use) && use.right === n && use.operatorToken.kind === SyntaxKind7.EqualsToken && use.parent?.kind === SyntaxKind7.ExpressionStatement && isIdentifier3(use.left) && this.rust87rfEndpointSplitSource(declaration, init) && this.rustBuiltListOf(use.left) !== void 0) {
           natives++;
           this.rustOptListBoxes.set(n, this.rustLocalLastUse(n, declaration) ? "take" : "takeClone");
@@ -84914,9 +84919,14 @@ ${iden}}`;
   }
   /** ral-80d: `n` sits in the arm where `Array.isArray (x)` held: the then-branch / true arm of `Array.isArray (x)`, or the
    *  else-branch / false arm of `!Array.isArray (x)` (an `if` statement or a conditional expression inside `fn`). */
-  rust80dInListArm(n, declaration, fn) {
+  rust80dInListArm(n, declaration, fn, flags = false) {
     const test = (e) => {
       e = this.rustSkipWrappers(e);
+      if (flags && e !== void 0 && isIdentifier3(e)) {
+        const flag = this.rustDeclarationOfIdentifier(e);
+        if (flag !== void 0 && isVariableDeclaration3(flag) && flag.name !== e && (flag.parent.flags & NodeFlags4.Const) !== 0 && this.rustEnclosingFunction(flag) === fn && flag.initializer !== void 0)
+          return test(flag.initializer);
+      }
       if (e !== void 0 && e.kind === SyntaxKind7.PrefixUnaryExpression && e.operator === SyntaxKind7.ExclamationToken) {
         const inner = test(e.operand);
         return inner === void 0 ? void 0 : !inner;

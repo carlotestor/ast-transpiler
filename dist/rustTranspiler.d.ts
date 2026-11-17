@@ -4543,7 +4543,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustOptListParamInit(init: any): boolean;
     /** ral-80d: `n` sits in the arm where `Array.isArray (x)` held: the then-branch / true arm of `Array.isArray (x)`, or the
      *  else-branch / false arm of `!Array.isArray (x)` (an `if` statement or a conditional expression inside `fn`). */
-    rust80dInListArm(n: any, declaration: any, fn: any): boolean;
+    rust80dInListArm(n: any, declaration: any, fn: any, flags?: boolean): boolean;
     /** `Array.isArray`. */
     rustIsArrayIsArrayCallee(call: any): boolean;
     /** The optional list local an identifier reads (never its own declaration name). */
