@@ -22384,8 +22384,10 @@ export class RustTranspiler extends BaseTranspiler {
         return impl;
     }
 
-    /** ral-90rg R4: every `return` of `impl` (closures skipped) is an array literal or another built list (rustBuiltContainerKind). */
-    rust90rgImplReturnsList(impl: MethodDeclaration, depth: number): boolean {
+    /** ral-90rg R4: every `return` of `impl` (closures skipped) is an array literal (a tuple producer: `return [ v, params ]`). Only a
+     *  literal: a forwarded list pass-through (parseTrades -> filterBySymbolSinceLimit) stays with the lent-list rule, which moves
+     *  the list instead of copying it out. */
+    rust90rgImplReturnsList(impl: MethodDeclaration): boolean {
         let returns = 0;
         let ok = true;
         const visit = (node: Node) => {
@@ -22393,7 +22395,7 @@ export class RustTranspiler extends BaseTranspiler {
             if (node !== impl.body && isFunctionLike(node)) return;
             if (isReturnStatement(node)) {
                 returns++;
-                if (this.rustBuiltContainerKind(node.expression, depth + 1) !== 'list') ok = false;
+                if (!isArrayLiteralExpression(this.rustSkipWrappers(node.expression))) ok = false;
                 return;
             }
             node.forEachChild(visit);
@@ -22445,7 +22447,7 @@ export class RustTranspiler extends BaseTranspiler {
                 // handleOptionStringAndParams) yields what that callee builds: no proof depth for the hop
                 if (this.rustBuiltContainerKind(node.expression, depth + 1) === kind) return;
                 const forward = kind === 'list' ? this.rust90rgBaseTailForward(declaration, inner) : undefined;
-                if (forward === undefined || !this.rust90rgImplReturnsList(forward, depth)) ok = false;
+                if (forward === undefined || !this.rust90rgImplReturnsList(forward)) ok = false;
                 return;
             }
             // A store write (`this.orderbooks[sym] = book`, `this.tickers = ..`)
