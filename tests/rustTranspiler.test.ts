@@ -26190,3 +26190,22 @@ describe('a safeList read defaulted to its own const declared-endpoint receiver 
         expect(transpiler.transpileRustByPath (write ('self-list-let', 'let', 'List')).content).toContain('let mut rows: Value');
     });
 });
+
+describe('a safeDict read defaulted to its own never-written Dict parameter holds the optional map', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    safeDict (o: any, k: any, d: Dict = undefined): Dict { return o; }\n    safeString (o: any, k: any, d: any = undefined): string | undefined { return o; }\n}\n";
+    const write = (name: string, param: string, body = '') => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    m (" + param + ") {\n" + body + "        const inner = this.safeDict (raw, 'data', raw);\n        return { 'id': this.safeString (inner, 'id'), 'info': inner };\n    }\n}\n");
+        return path.join (dir, 'ts/src/venue.ts');
+    };
+    test('a Dict parameter: the read is a typed map', () => {
+        const out = transpiler.transpileRustByPath (write ('self-param-pos', 'raw: Dict')).content;
+        expect(out).toContain('let mut inner: Option<crate::value::Dict> = ');
+    });
+    test('an any parameter or a rewritten one keeps the read Value', () => {
+        expect(transpiler.transpileRustByPath (write ('self-param-any', 'raw: any')).content).toContain('let mut inner: Value');
+        expect(transpiler.transpileRustByPath (write ('self-param-written', 'raw: Dict', "        raw = this.safeDict (raw, 'x');\n")).content).toContain('let mut inner: Value');
+    });
+});
