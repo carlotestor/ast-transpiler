@@ -24728,3 +24728,25 @@ describe('ral-87rc R2: a nil-declared Str local keys an insert into an enumerate
         expect(out).not.toContain('stringify_param(&key)');
     });
 });
+
+describe('ral-87rc R3: a nil-declared Str local read by its own .length is an Option<String>', () => {
+    const files: Record<string, string> = {
+        "ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    urlencode (o: Dict = {}): string { return ''; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n",
+        "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    sign (path: string, method: string, params: Dict = {}): any {\n        let url = '/' + path;\n        let query: Str = undefined;\n        if (path === 'private') {\n            let bodySigned: Str = undefined;\n            query = this.customUrlencode (params);\n            if (method === 'GET') {\n                url = url + '?' + query;\n            } else {\n                bodySigned = query;\n            }\n            const bodyResolved = (method === 'GET') ? undefined : bodySigned;\n            return { 'url': url, 'body': bodyResolved };\n        } else {\n            query = this.urlencode (params);\n            if (query.length !== 0) {\n                url = url + '?' + query;\n            }\n        }\n        return { 'url': url, 'body': undefined };\n    }\n\n    customUrlencode (params: Dict = {}): Str {\n        let result = this.urlencode (params);\n        result = result.replace ('%2C', ',');\n        return result;\n    }\n}\n"
+    };
+    let out: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-87rc3-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = transpiler.transpileRustByPath(path.join (root, 'ts/src/venue.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test('the local is typed and its length is the native char count', () => {
+        expect(out).toMatch(/let mut query: Option<String> = None;/);
+        expect(out).toContain('query.as_deref().unwrap_or_default().chars().count() as i64');
+        expect(out).not.toContain('let mut query: Value');
+    });
+});

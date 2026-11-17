@@ -3198,7 +3198,11 @@ export class RustTranspiler extends BaseTranspiler {
             // an optional string has no native `+`: the concat would fall back to the `add` helper
             if (kind === 'ostr' && isBinaryExpression(n.parent) && n.parent.operatorToken.kind === SyntaxKind.PlusToken && !this.rustNilOptStrConcatUse(n)) return false;
             const optConcat = kind === 'ostr' && this.rustNilOptStrConcatUse(n);
-            const form = this.rustNilSlotWrite(n) ? 'slot' : (optConcat ? 'concat' : this.rustScalarUseForm(n, kind));
+            // ral-87rc R3: `x.length` of the optional string local itself: the length hook reads the settled decision, which the
+            // walk is proving, so the receiver is native here (`x.as_deref().unwrap_or_default().chars().count()`: 0 for None, as
+            // `get_array_length` of the `Null` box answered)
+            const ownLength = kind === 'ostr' && isPropertyAccessExpression(n.parent) && n.parent.expression === n && isIdentifier(n.parent.name) && n.parent.name.text === 'length';
+            const form = this.rustNilSlotWrite(n) ? 'slot' : (optConcat ? 'concat' : (ownLength ? 'native' : this.rustScalarUseForm(n, kind)));
             this.rustScalarUseForms.set(n, form);
             if (form === 'box' || form === 'xbox' || form === 'err') boxed.push(n);
             if (RustTranspiler.RUST_NIL_SCALAR_NATIVE_FORMS.has(form)) native++;
