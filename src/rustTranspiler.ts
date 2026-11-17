@@ -31721,7 +31721,7 @@ export class RustTranspiler extends BaseTranspiler {
 
     private rustOptListDecisions = new WeakMap<any, boolean>();
 
-    private rustOptListBoxes = new WeakMap<any, 'clone' | 'move' | 'lend' | 'map' | 'take' | 'takeClone' | 'mapBox' | 'mapBoxMove'>();
+    private rustOptListBoxes = new WeakMap<any, 'clone' | 'move' | 'lend' | 'map' | 'take' | 'takeClone' | 'mapBox' | 'mapBoxMove' | 'rejoin' | 'rejoinMove'>();
 
     /** ral-80d: optional list locals held in the split list-vs-map-vs-null form (a second `<name>__map` binding). */
     private rust80dSplitLocals = new WeakSet<any>();
@@ -31790,6 +31790,7 @@ export class RustTranspiler extends BaseTranspiler {
         let mapReads = 0;
         let isArrayTests = 0;
         const mapBoxes: Node[] = [];
+        const rejoins: Node[] = [];
         const safe = this.rustLocalUsesAll(declaration, name, false, (n: any) => {
             if (split && !this.rustIdentifierIsPropertyName(n) && this.rustIdentifierRefersToDeclaration(n, declaration) && this.rustEnclosingFunction(n) === fn) {
                 const use: any = n.parent;
@@ -31803,6 +31804,13 @@ export class RustTranspiler extends BaseTranspiler {
                 if (endpointSplit && this.rust90rfArmOf(n, declaration, fn) === 'map' && this.rust90rfMapOrListEndpoint(init) && this.rust90rfWholeBoxUse(n)) {
                     mapBoxes.push(n);
                     return true;
+                }
+                // ral-90rf R2: there an any-key reader lends the held map (`&x__map`, Null for None as for the boxed Null), and a
+                // whole use outside both arms puts the answer back together from whichever half holds it
+                if (endpointSplit && this.rust90rfMapOrListEndpoint(init)) {
+                    const arm = this.rust90rfArmOf(n, declaration, fn);
+                    if (arm === 'map' && isCallExpression(use) && use.arguments[0] === n && this.rustBorrowedAnyKeyReader(use)) { mapReads++; this.rustOptListBoxes.set(n, 'map'); return true; }
+                    if (arm === undefined && this.rust90rfWholeBoxUse(n)) { rejoins.push(n); return true; }
                 }
                 if (!this.rust80dInListArm(n, declaration, fn, endpointSplit) && !(endpointSplit && this.rust90rfArmOf(n, declaration, fn) === 'list')) return false;
                 // ral-87rf R2: in the list arm `x` is `Some`: a ternary arm (`c ? x : ..`) or a whole write into a plain local
@@ -31881,7 +31889,8 @@ export class RustTranspiler extends BaseTranspiler {
         // D11: a list that is only handed on is held too (the handle box replaces the Value box).
         if (!safe || (nil && (writes === 0 || natives === 0)) || (split && isArrayTests === 0)) return false;
         // with no string-key read the list alone is kept (`into_opt_list`), else the map is split off as well
-        if (split && (mapReads > 0 || mapBoxes.length > 0)) this.rust80dSplitLocals.add(declaration);
+        if (split && (mapReads > 0 || mapBoxes.length > 0 || rejoins.length > 0)) this.rust80dSplitLocals.add(declaration);
+        for (const n of rejoins) this.rustOptListBoxes.set(n, this.rustLocalLastUse(n, declaration) ? 'rejoinMove' : 'rejoin');
         for (const n of mapBoxes) this.rustOptListBoxes.set(n, this.rustLocalLastUse(n, declaration) ? 'mapBoxMove' : 'mapBox');
         // The only read inside a `return` statement moves the list (nothing runs after it).
         const finals = new Map<any, number>();
@@ -31925,6 +31934,9 @@ export class RustTranspiler extends BaseTranspiler {
      *  or a list-literal element. */
     rust90rfWholeBoxUse(n: Node): boolean {
         const up: Node = n.parent;
+        // ral-90rf R2: `Object.keys (x)` reads the keys of the boxed answer
+        if (isCallExpression(up) && up.arguments.length === 1 && up.arguments[0] === n && isPropertyAccessExpression(up.expression) && isIdentifier(up.expression.expression)
+            && up.expression.expression.text === 'Object' && up.expression.name.text === 'keys') return this.rustBoxLineOk(n);
         if (isCallExpression(up) && up.expression !== n && up.arguments.some((a) => a === n)) {
             const callee: Node = up.expression;
             return isPropertyAccessExpression(callee) && callee.expression.kind === SyntaxKind.ThisKeyword && this.rustNilBoxSlotOk(up, Array.from(up.arguments).indexOf(n as Expression)) && this.rustBoxLineOk(n);
@@ -32151,6 +32163,10 @@ export class RustTranspiler extends BaseTranspiler {
         if (form === 'lend') return `&${text}`;
         if (form === 'map') return `&${text}__map`;
         if (form === 'mapBox' || form === 'mapBoxMove') return `${text}__map${form === 'mapBox' ? '.clone()' : ''}.map_or(Value::Null, Value::Dict)`;
+        if (form === 'rejoin' || form === 'rejoinMove') {
+            const c = form === 'rejoin' ? '.clone()' : '';
+            return `${text}${c}.map(Value::Arr).or_else(|| ${text}__map${c}.map(Value::Dict)).unwrap_or_default()`;
+        }
         return form === 'move' ? `${text}.map_or(Value::Null, Value::Arr)` : `${text}.clone().map_or(Value::Null, Value::Arr)`;
     }
 

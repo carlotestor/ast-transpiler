@@ -25229,3 +25229,32 @@ describe('ral-90rf R1: a Dict / List endpoint split by Array.isArray boxes its h
         expect(out).toMatch(/let mut response: Value = /);
     });
 });
+
+describe('ral-90rf R2: a Dict / List endpoint split also rejoins outside both arms and gives Object.keys its map', () => {
+    const mk = (name: string, ret: string, venueBody: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync (path.join (dir, 'ts/src/abstract'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type List = any[];\nexport default class Exchange {\n    keep (o: any): any { return o; }\n    hold (o: any): any { return o; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/abstract/venue.ts'), "import _Exchange from '../base/Exchange.js';\nimport type { Dict, List } from '../base/Exchange.js';\nexport default abstract class Exchange extends _Exchange {\n    privateGetLeverage (params = {}): Promise<" + ret + "> { return this.hold (params); }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './abstract/venue.js';\nimport type { Dict, List } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + venueBody + "}\n");
+        transpiler.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts'));
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    const rejoin = "    async m (params = {}) {\n        const response = await this.privateGetLeverage (params);\n        let safeResponse = [];\n        if (Array.isArray (response)) {\n            safeResponse = response;\n        }\n        return this.keep ({ 'info': response, 'rows': safeResponse });\n    }\n";
+    const keys = "    async m (params = {}) {\n        const response = await this.privateGetLeverage (params);\n        if (Array.isArray (response)) {\n            return this.keep (response);\n        } else {\n            const ids = Object.keys (response);\n            return this.keep (ids);\n        }\n    }\n";
+    test('btse fetchLeverage: a whole use after the test rejoins the answer from the half that holds it', () => {
+        const out = mk ('ral-90rf-r2a', 'List', rejoin);
+        expect(out).toContain('response.map(Value::Arr).or_else(|| response__map.map(Value::Dict)).unwrap_or_default()');
+        expect(out).not.toMatch(/let mut response: Value = /);
+    });
+    test('whitebit fetchMyTrades: Object.keys in the map arm reads the held map', () => {
+        const out = mk ('ral-90rf-r2b', 'Dict | List', keys);
+        expect(out).toContain('if (response.is_some())');
+        expect(out).toMatch(/response__map(\.clone\(\))?\.map_or\(Value::Null, Value::Dict\)/);
+    });
+    test('negative: a Dict | List | string endpoint read whole after the test stays Value', () => {
+        const out = mk ('ral-90rf-r2n', 'Dict | List | string', rejoin);
+        expect(out).toMatch(/let mut response: Value = /);
+    });
+});
