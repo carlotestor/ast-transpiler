@@ -16528,9 +16528,11 @@ describe('92g1 parse* Num consumers', () => {
     const BASE = 'export type Dict = { [key: string]: unknown };\n'
         + 'export type Str = string | undefined;\n'
         + 'export type Num = number | undefined;\n'
+        + 'export type Int = number | undefined;\n'
         + 'export default class Exchange {\n'
         + '    safeString (a: Dict, k: string, d: Str = undefined): Str { return d; }\n'
         + '    parseNumber (v: Str, d: Num = undefined): Num { return d; }\n'
+        + '    parse8601 (v: Str): Int { return undefined; }\n'
         + '}\n';
     const run = (members: string): string => {
         const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'g92-'));
@@ -16538,7 +16540,13 @@ describe('92g1 parse* Num consumers', () => {
             fs.mkdirSync(path.join(tmp, 'ts/src/base'), { recursive: true });
             fs.writeFileSync(path.join(tmp, 'ts/src/base/Exchange.ts'), BASE);
             const file = path.join(tmp, 'ts/src/x.ts');
-            fs.writeFileSync(file, "import Exchange, { Dict, Str, Num } from './base/Exchange.js';\nclass X extends Exchange {\n"
+            fs.writeFileSync(file, "import Exchange, { Dict, Str, Num, Int } from './base/Exchange.js';\nclass X extends Exchange {\n"
+                + '    parseDay (day: string): Int {\n'
+                + "        if (day === '') {\n"
+                + '            return undefined;\n'
+                + '        }\n'
+                + "        return this.parse8601 (day + 'T00:00:00Z');\n"
+                + '    }\n'
                 + '    parseScaled (value: Str): Num {\n'
                 + '        if (value === undefined) {\n'
                 + '            return undefined;\n'
@@ -16576,5 +16584,20 @@ describe('92g1 parse* Num consumers', () => {
             + '    }\n');
         expect(out).toMatch(/ParseScaled\(value [^)]*\) \*float64 \{/);
         expect(out).toContain('var amount any = this.ParseScaled(');
+    });
+    test('R2: a parse* Int method returns *int64 and a nil-seeded local tested for nil follows', () => {
+        const out = run('    f (market: Dict): Dict {\n'
+            + '        let expiry = undefined;\n'
+            + "        if (market['future']) {\n"
+            + "            expiry = this.parseDay (this.safeString (market, 'day', ''));\n"
+            + '        }\n'
+            + '        if (expiry === undefined) {\n'
+            + '            return market;\n'
+            + '        }\n'
+            + "        return { 'expiry': expiry };\n"
+            + '    }\n');
+        expect(out).toMatch(/ParseDay\(day string\) \*int64 \{/);
+        expect(out).toContain('var expiry *int64 = nil');
+        expect(out).toContain('if expiry == nil {');
     });
 });
