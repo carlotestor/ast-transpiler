@@ -2958,7 +2958,9 @@ export class RustTranspiler extends BaseTranspiler {
         const recv: any = node.expression.expression;
         const needle: any = node.arguments[0];
         if (!isIdentifier(recv) || this.literalKindOfNode(needle) !== 'string' || this.rustNativeStringLiteralArg(needle) === undefined || needle.text === '') return false;
-        return this.primitiveKindOfType(this.typeOfNodeIfAny(recv)) === 'string' && this.rustScalarIdentifierKind(recv) === undefined;
+        // no typed-receiver rule takes the call (a string parameter read keeps its own closure-free `find` form: myriad, gate 15771)
+        return this.primitiveKindOfType(this.typeOfNodeIfAny(recv)) === 'string' && this.rustScalarIdentifierKind(recv) === undefined
+            && this.rustScalarParamRead(recv) === undefined;
     }
 
     /** ral-90rh R1: `n - k` / `k - n` with `n` an `Option<i64>` local seeded by `parseInt (s)` and `k` an int literal: the
