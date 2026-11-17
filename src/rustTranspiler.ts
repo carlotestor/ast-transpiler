@@ -1,5 +1,5 @@
 import { BaseTranspiler } from "./baseTranspiler.js";
-import { NodeFlags, SyntaxKind, type BinaryExpression, type BindingElement, type Block, type CallExpression, type ClassDeclaration, type Declaration, type DeleteExpression, type ElementAccessExpression, type Expression, type ExpressionWithTypeArguments, type Identifier, type MethodDeclaration, type Node, type NodeArray, type ParameterDeclaration, type SourceFile, type TypeNode, type VariableDeclaration } from "typescript/unstable/ast";
+import { NodeFlags, SyntaxKind, type BinaryExpression, type BindingElement, type Block, type CallExpression, type ClassDeclaration, type Declaration, type DeleteExpression, type ElementAccessExpression, type Expression, type ExpressionWithTypeArguments, type Identifier, type MethodDeclaration, type Node, type NodeArray, type ParameterDeclaration, type PropertyAccessExpression, type SourceFile, type TypeNode, type VariableDeclaration } from "typescript/unstable/ast";
 import { isArrayBindingPattern, isArrayLiteralExpression, isArrayTypeNode, isArrowFunction, isAsExpression, isBinaryExpression, isBindingElement, isBlock, isCallExpression, isClassDeclaration, isClassExpression, isConditionalExpression, isDeleteExpression, isElementAccessExpression, isForInStatement, isForOfStatement, isIdentifier, isIfStatement, isMethodDeclaration, isNewExpression, isNoSubstitutionTemplateLiteral, isNonNullExpression, isNumericLiteral, isObjectLiteralExpression, isParameterDeclaration, isParenthesizedExpression, isPostfixUnaryExpression, isPrefixUnaryExpression, isPropertyAccessExpression, isPropertyDeclaration, isPropertyAssignment, isReturnStatement, isShorthandPropertyAssignment, isSourceFile, isStatement, isStringLiteral, isStringLiteralLikeNode, isTypeAssertion, isTypeReferenceNode, isVariableDeclaration, isVariableDeclarationList } from "typescript/unstable/ast/is";
 import { IndexKind, ObjectFlags, SignatureKind, SymbolFlags, TypeFlags, type Symbol as TsSymbol, type Type } from "typescript/unstable/sync";
 import { findAncestor, getAllSuperTypeNodes, isFunctionLike, signatureDeclaration, symbolDeclarations, symbolValueDeclaration, typeParts, typeTarget } from "./tsUtils.js";
@@ -5286,6 +5286,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (kind === 'obool' && typedUses === 0 && this.rustHandleOptionLiteralKind(this.rust62pBoolCastOption(this.unwrapParens(declaration.initializer)) ? this.unwrapParens(declaration.initializer).expression : declaration.initializer) === 'obool') return undefined;
         // ral-54x K1: a cased reader `String` with no native use would only be boxed straight back (boxed-straight-back stays `Value`)
         if (nativeUses === 0 && kind === 'str' && this.rustReaderCaseStrRecv(this.unwrapParens(declaration.initializer)) !== undefined) return undefined;
+        // ral-90rg R2a: a `parseNumber` of a typed float parameter is typed only for a native use (box-only stays `Value`)
+        if (nativeUses === 0 && this.rust90rgParseNumberOfNumParam(this.unwrapParens(declaration.initializer))) return undefined;
         // ral-84h R1: a ternary with an arm read from a defaulted base `Str` parameter is typed only for a native use (box-only stays `Value`)
         const init84h: Node = this.unwrapParens(declaration.initializer);
         if (nativeUses === 0 && init84h !== undefined && isConditionalExpression(init84h) && [ init84h.whenTrue, init84h.whenFalse ].some((arm: Node) => this.rust84hDefaultedStrParamArm(this.unwrapParens(arm)))) return undefined;
@@ -5318,7 +5320,9 @@ export class RustTranspiler extends BaseTranspiler {
             && !(strKind && copied === 0 && nativeUses > 0 && !this.rust76fSourceMethodWrite(declaration, scope))) return undefined;
         // ral-52n: a box that is an argument of a `number`-typed parameter reads back through `as_f64()`, so an Int default
         // and its Float spelling hand the callee the same `f64`
-        if ((boxed > 0 && !this.rustNumParamBoxesOnly(declaration) || (expressionUses && !this.rustCompareOnlyNumUses(declaration))) && this.rustReaderIntDefaultNum(declaration.initializer)) return undefined;
+        // ral-90rg R2b: unless every use reads the number only through `as_f64` (rust90rgFloatOnlyUses): there `Int(0)` and `0.0` agree
+        if ((boxed > 0 && !this.rustNumParamBoxesOnly(declaration) || (expressionUses && !this.rustCompareOnlyNumUses(declaration))) && this.rustReaderIntDefaultNum(declaration.initializer)
+            && !this.rust90rgFloatOnlyUses(declaration, 0)) return undefined;
         // a reader-default string re-boxed anywhere but a moving `return` would copy where the `Value` moved
         const readerTouched = this.rustReaderDefaultTouched(declaration);
         // a reader string copied at a box is lent there (`Value::from(x.as_deref())`: the copy the `Value` clone made)
@@ -6714,7 +6718,19 @@ export class RustTranspiler extends BaseTranspiler {
         const kind = isIdentifier(arg) ? this.rustScalarIdentifierKind(arg) : this.rustScalarValueKind(arg, true);
         // ral-84g R1: a venue method already printed `-> Option<String>` (rustVenueStrCall: every venue declaration of the name
         // declares a string return) boxes into a `Str` or `Null` at the argument, never an `Int`
-        return kind === 'str' || kind === 'ostr' || this.rustVenueStrCall(arg);
+        // ral-87rg R2: an unwritten parameter whose typed signature slot is `f64` / `Option<f64>` (rustOptParamKind, from the
+        // signature table) is rebound from that float, so its `Value` is a `Float` or `Null`: `parse_number` hands it through
+        return kind === 'str' || kind === 'ostr' || this.rustVenueStrCall(arg) || this.rust90rgParseNumberOfNumParam(call);
+    }
+
+    /** ral-87rg R2 (ral-90rg: split out): `this.parseNumber (p)` of an unwritten parameter whose typed signature slot is `f64` /
+     *  `Option<f64>` (rustOptParamKind). Its result local is typed only for a native use (rustScalarNeedsNativeUse): boxed
+     *  straight back it stays the `Value` it is handed as. */
+    rust90rgParseNumberOfNumParam(call: Node): boolean {
+        if (call === undefined || !isCallExpression(call) || call.arguments.length !== 1) return false;
+        const arg: Node = this.unwrapParens(call.arguments[0]);
+        if (!isIdentifier(arg) || this.rustScalarIdentifierKind(arg) !== undefined) return false;
+        return [ 'num', 'onum' ].includes(this.rustOptParamKind(arg) ?? '');
     }
 
     // Any other callee: a base one whose checker return is a string, or one declaring `string`/`Str`/`int`/`Int`
@@ -7426,6 +7442,38 @@ export class RustTranspiler extends BaseTranspiler {
         const p: any = decl?.parameters?.[idx];
         if (p === undefined || p.type === undefined || p.dotDotDotToken !== undefined) return false;
         return p.type.kind === SyntaxKind.NumberKeyword;
+    }
+
+    /** ral-90rg R2b: every use of a number local reads it only as an `f64`: a nullish test (`x === undefined`), an argument of
+     *  `Math.floor|round|ceil|pow` (the runtime helpers convert through `as_f64` and answer `Float`), or an arm of the ternary
+     *  initializer of another `const` whose own uses are the same (two levels at most). An `Int` default and its `Float`
+     *  spelling then give the same result, so a `safeNumber (.., <int literal>)` reader local may be typed `Option<f64>`.
+     *  Decided from the TypeScript AST only. */
+    rust90rgFloatOnlyUses(declaration: Node, depth: number): boolean {
+        if (depth > 2 || declaration === undefined || !isVariableDeclaration(declaration) || !isIdentifier(declaration.name)) return false;
+        const list: Node = declaration.parent;
+        if (list === undefined || (list.flags & NodeFlags.Const) === 0) return false;
+        let uses = 0;
+        const ok = this.rustScalarUsesAll(declaration, String(declaration.name.text), (n: Node) => {
+            uses++;
+            let top: Node = n;
+            while (top.parent !== undefined && isParenthesizedExpression(top.parent)) top = top.parent;
+            const up: Node = top.parent;
+            if (up === undefined) return false;
+            if (isBinaryExpression(up) && this.isEqualityOp(up.operatorToken.kind)) {
+                const other: Node = up.left === top ? up.right : up.left;
+                return this.literalKindOfNode(this.unwrapParens(other)) === 'null';
+            }
+            if (isCallExpression(up) && up.expression !== top && this.rustMathFloatShape(up) && String((up.expression as PropertyAccessExpression).name.text) !== 'abs') return true;
+            if (isConditionalExpression(up) && (up.whenTrue === top || up.whenFalse === top)) {
+                let init: Node = up;
+                while (init.parent !== undefined && isParenthesizedExpression(init.parent)) init = init.parent;
+                const owner: Node = init.parent;
+                return owner !== undefined && isVariableDeclaration(owner) && owner.initializer === init && this.rust90rgFloatOnlyUses(owner, depth + 1);
+            }
+            return false;
+        });
+        return ok && uses > 0;
     }
 
     /** A number reader whose default may be an `Int` (an int literal, or anything not proven a float). */

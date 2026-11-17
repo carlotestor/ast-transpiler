@@ -25197,3 +25197,49 @@ describe('ral-87rh R4: a bool local strictly compared with an Option<bool> reade
         expect(out).toContain('== Some(wantActive))');
     });
 });
+
+describe('ral-90rg R2: parseNumber of a typed float parameter, typed for its native use only', () => {
+    test('amountNum read through unwrap_or is an Option<f64>; a parseNumber local only boxed into a literal stays Value', () => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-90rg2-'));
+        const files: Record<string, string> = {
+            'ts/src/base/Exchange.ts': "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Num = number | undefined;\nexport default class Exchange {\n    parseNumber (x: any, d: Num = undefined): Num { return x; }\n    parseToInt (x: any): number { return x; }\n    async privatePostX (p: any = {}): Promise<any> { return p; }\n}\n",
+            'ts/src/venue.ts': "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n"
+                + "    async transfer (code: string, amount: number, fromAccount: string, toAccount: string, params: Dict = {}): Promise<any> {\n        const amountNum = this.parseNumber (amount);\n        const amountValue = (amountNum === undefined) ? 0 : amountNum;\n        const scaled = this.parseToInt (amountValue * 100);\n        const parsedAmount = this.parseNumber (amount);\n        return await this.privatePostX ({ 'scaled': scaled, 'amount': parsedAmount });\n    }\n}\n",
+        };
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['transfer'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        t.transpileRustByPath(path.join (root, 'ts/src/base/Exchange.ts'));
+        const out = t.transpileRustByPath(path.join (root, 'ts/src/venue.ts')).content;
+        expect(out).toMatch(/let mut amountNum: Option<f64> = self\.parseNumber\(amount[^;]*\.as_f64\(\);/);
+        expect(out).toContain('amountNum.unwrap_or(');
+        // negative: boxed straight back into the literal, the local keeps the `Value` it is handed as
+        expect(out).toMatch(/let mut parsedAmount: Value = /);
+    });
+});
+
+describe('ral-90rg R2b: an Int-defaulted safeNumber read only as an f64', () => {
+    test('decimals = safeNumber (c, k, 0) feeding Math.pow through a defaulting ternary is an Option<f64>', () => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-90rg2b-'));
+        const files: Record<string, string> = {
+            'ts/src/base/Exchange.ts': "export type Num = number | undefined;\nexport default class Exchange {\n    safeNumber (o: any, k: any, d: Num = undefined): Num { return o; }\n    hold (x: any): any { return x; }\n}\n",
+            'ts/src/venue.ts': "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n"
+                + "    scale (currency: any) {\n        const decimalsNum = this.safeNumber (currency, 'decimals', 0);\n        const decimalsNumber = (decimalsNum === undefined) ? 0 : decimalsNum;\n        const factor = (Math.pow (10, decimalsNumber));\n        return this.hold (factor);\n    }\n"
+                + "    other (currency: any) {\n        const kept = this.safeNumber (currency, 'decimals', 0);\n        return this.hold (kept);\n    }\n}\n",
+        };
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        t.transpileRustByPath(path.join (root, 'ts/src/base/Exchange.ts'));
+        const out = t.transpileRustByPath(path.join (root, 'ts/src/venue.ts')).content;
+        expect(out).toMatch(/let mut decimalsNum: Option<f64> = /);
+        expect(out).toContain('let mut decimalsNumber: f64 = decimalsNum.unwrap_or(0.0);');
+        expect(out).toContain('f64::powf(10.0, decimalsNumber)');
+        // negative: boxed back as a `Value` the Int default would re-box as a Float: stays `Value`
+        expect(out).toMatch(/let mut kept: Value = /);
+    });
+});
