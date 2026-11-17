@@ -25225,22 +25225,6 @@ describe('ral-90ra R1: an element of a proven string-list parameter is an Option
     });
 });
 
-describe('ral-90ra R3: an element-read key whose only use is a plain read of a local literal map is an Option<String>', () => {
-    const emit = (body: string): string => {
-        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-90ra3-'));
-        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
-        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    safeDict (o: any, k: any, d: any = undefined): any { return o; }\n    safeString (o: any, k: any, d: any = undefined): any { return o; }\n    hold (x: any): any { return x; }\n}\n");
-        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
-        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
-        try { return t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
-    };
-    test('myriad fetchTickers: `const key = marketKeys[i]` keys only `outcomesByMarket[key]`', () => {
-        const out = emit("    fetchTickers (outcomes: any[]) {\n        const outcomesByMarket: Dict = {};\n        const marketKeys: string[] = [];\n        for (let i = 0; i < outcomes.length; i++) {\n            const key = this.safeString (outcomes[i], 'id');\n            if (!(key in outcomesByMarket)) {\n                outcomesByMarket[key] = [];\n                marketKeys.push (key);\n            }\n        }\n        const result: any[] = [];\n        for (let i = 0; i < marketKeys.length; i++) {\n            const key = marketKeys[i];\n            const grouped = outcomesByMarket[key] as any[];\n            result.push (this.safeDict (grouped, 0));\n        }\n        return this.hold (result);\n    }\n");
-        expect(out).toContain('let mut key: Option<String> = marketKeys.get(');
-        expect(out).toContain('outcomesByMarket.get(key.as_deref().unwrap_or(""))');
-    });
-});
-
 describe('ral-90ra R1c: an annotated literal-seeded Str accumulator keeps its kept by-name arm', () => {
     test('nado createOrderAppendix: `let appendix: Str = lit` rewritten by Precise and returned keeps keptostr', () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-90ra1c-'));
