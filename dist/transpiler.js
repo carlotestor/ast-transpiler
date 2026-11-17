@@ -76356,7 +76356,7 @@ ${iden}}`;
         return keyWriteUses.push(n) > 0 && ++keyWrites > 0 && ++reads > 0;
       if (extendReuse && this.rustReuseDynamicKeyWrite(n, declaration))
         return keyWriteUses.push(n) > 0 && ++keyWrites > 0 && ++reads > 0;
-      if (!extendReuse && !sbAlias && from === "dict" && this.rust84dStoreDelete(n, init))
+      if (!extendReuse && !sbAlias && from === "dict" && (this.rust84dStoreDelete(n, init) || this.rust87rdLiteralDelete(n, init)))
         return store84dWrites.push(n.parent.parent) > 0 && ++keyWrites > 0 && ++reads > 0;
       if (!extendReuse && !sbAlias && from === "dict" && this.rust84dStoreKeyWrite(n, init))
         return keyWriteUses.push(n) > 0 && store84dWrites.push(n.parent.parent) > 0 && ++keyWrites > 0 && ++reads > 0;
@@ -77612,6 +77612,26 @@ ${iden}}`;
     const head = this.rustSkipWrappers(init.arguments[0]);
     return head !== void 0 && isPropertyAccessExpression3(head) && head.expression.kind === SyntaxKind7.ThisKeyword && String(head.name.text) === "options";
   }
+  /** ral-87rd R2: `delete n['lit']` (statement) on `const n = this.safeDict (local, 'lit', {})` (a base reader with a map-literal
+   *  default: a map on every path) whose head local reads no tagged container: the untyped printer already removes it with the
+   *  native `shift_remove` (provenDictFieldDelete: no ws subscription route), so the typed map runs the same remove. */
+  rust87rdLiteralDelete(n, init) {
+    const access = n.parent;
+    const del = access?.parent;
+    if (!isElementAccessExpression4(access) || access.expression !== n || !isDeleteExpression2(del) || del.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const key = this.rustSkipWrappers(access.argumentExpression);
+    if (key === void 0 || !isStringLiteral3(key) || !this.rust84dNeverNullMapInit(init))
+      return false;
+    const head = this.rustSkipWrappers(init.arguments[0]);
+    if (head === void 0 || !isIdentifier3(head) || this.rustLocalInitReadsTaggedContainer(head))
+      return false;
+    try {
+      return this.provenDictFieldDelete(del) !== void 0;
+    } catch (e) {
+      return false;
+    }
+  }
   print84dStoreDelete(node) {
     if (!this.rust84dStoreWrites.has(node))
       return void 0;
@@ -77621,6 +77641,8 @@ ${iden}}`;
     if (declaration === void 0 || !this.rustPrintedBorrowed.has(declaration) || this.rustBorrowedLocalKind(declaration) !== "dict")
       return void 0;
     const key = target.argumentExpression;
+    if (isStringLiteral3(key))
+      return `std::sync::Arc::make_mut(&mut ${super.transformIdentifier(targetId, this.ReservedKeywordsReplacements[targetId.text] ?? targetId.text)}).shift_remove(${JSON.stringify(String(key.text))})`;
     const kind = this.rustScalarLocalOf(key)?.kind;
     const keyName = super.printIdentifier(key);
     const name = super.transformIdentifier(targetId, this.ReservedKeywordsReplacements[targetId.text] ?? targetId.text);
@@ -80193,17 +80215,24 @@ ${iden}}`;
     const declaration = this.rustScalarCallee(init);
     return declaration !== void 0 && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile().fileName));
   }
-  /** ral-87rd R1: some statement `name.push (v)` on this very binding inside its own function. */
+  /** ral-87rd R1: some statement `name.push (v)` on this very binding inside its own function, and no other binding of the same
+   *  name in that function (ccxt build/'s container-op prover reads the function text by name: a typed sibling `let` would make it
+   *  drop a native `len()` it proves for the other, still boxed, binding). */
   rust87rdPushedLocal(declaration, name) {
     const fn = this.rustEnclosingFunction(declaration);
     if (fn === void 0 || isSourceFile5(fn))
       return false;
+    let pushed = false;
     for (const n of this.rustScopeNameNodes(fn, name)) {
+      if (!isIdentifier3(n))
+        continue;
       const up = n.parent;
-      if (up !== void 0 && isIdentifier3(n) && isPropertyAccessExpression3(up) && up.expression === n && String(up.name.text) === "push" && isCallExpression6(up.parent) && up.parent.expression === up && up.parent.parent?.kind === SyntaxKind7.ExpressionStatement && this.rustIdentifierRefersToDeclaration(n, declaration))
-        return true;
+      if (up !== void 0 && n !== declaration.name && (isVariableDeclaration3(up) || isParameterDeclaration3(up) || isBindingElement(up)) && up.name === n)
+        return false;
+      if (up !== void 0 && isPropertyAccessExpression3(up) && up.expression === n && String(up.name.text) === "push" && isCallExpression6(up.parent) && up.parent.expression === up && up.parent.parent?.kind === SyntaxKind7.ExpressionStatement && this.rustDeclarationOfIdentifier(n) === declaration)
+        pushed = true;
     }
-    return false;
+    return pushed;
   }
   rustLentListLocalUncached(declaration) {
     if (declaration.name?.kind !== SyntaxKind7.Identifier)
@@ -80228,6 +80257,8 @@ ${iden}}`;
     if (this.rustBuiltListConcatInit(init) && isIdentifier3(declaration.name) && this.rustLocalIsReassigned(declaration, String(declaration.name.text)))
       return this.rustBuiltListLocal(declaration);
     if (this.rust65iFilterByCall(init) && isIdentifier3(declaration.name) && this.rustLocalIsReassigned(declaration, String(declaration.name.text)))
+      return this.rustBuiltListLocal(declaration);
+    if (this.rustArrayGuardedTernary(init) && isIdentifier3(declaration.name))
       return this.rustBuiltListLocal(declaration);
     if (!this.rustLentListSource(init))
       return false;
@@ -83565,10 +83596,11 @@ ${iden}}`;
     const init = declaration.initializer;
     const nilAssigned = this.rustNilListAssignedFirst(declaration);
     const read = init !== void 0 && (this.rustDefaultedListRead(this.rustSkipWrappers(init)) || this.rustBuiltListConcatInit(this.rustSkipWrappers(init)) || this.rust65iFilterByCall(this.rustSkipWrappers(init)));
-    if (!nilAssigned && (init === void 0 || !read && (!isArrayLiteralExpression4(init) || init.elements.some((e) => e.kind === SyntaxKind7.SpreadElement))))
+    const guardedInit = init !== void 0 && this.rustArrayGuardedTernary(init);
+    if (!nilAssigned && !guardedInit && (init === void 0 || !read && (!isArrayLiteralExpression4(init) || init.elements.some((e) => e.kind === SyntaxKind7.SpreadElement))))
       return false;
-    const type = nilAssigned ? void 0 : this.typeOfNodeIfAny(read ? init : declaration.name);
-    if (!nilAssigned && (type === void 0 || !this.getChecker().isArrayType(type)))
+    const type = nilAssigned || guardedInit ? void 0 : this.typeOfNodeIfAny(read ? init : declaration.name);
+    if (!nilAssigned && !guardedInit && (type === void 0 || !this.getChecker().isArrayType(type)))
       return false;
     const name = String(declaration.name.text);
     const fn = this.rustEnclosingFunction(declaration);
@@ -83577,7 +83609,7 @@ ${iden}}`;
     if (this.rustReadBearerKindOfDeclaration(declaration) !== false || this.rustDictLocalIsTyped(declaration) || this.rustVecLocalIsTyped(declaration) || this.rustNestedDictLocalIsTyped(declaration) || this.rustMarketLocalKind(declaration) !== false || this.rustBorrowedDictLocal(declaration) || this.rustNilLocalKind(declaration) !== void 0 || this.rustScalarLocalKind(declaration) !== void 0)
       return false;
     this.rustBuiltListCopiedElement = false;
-    if (!nilAssigned && (String(init.getText()).split("\n")[0].length > (read ? 240 : 120) || !this.rustBuiltListWriteSource(init)))
+    if (!nilAssigned && (String(init.getText()).split("\n")[0].length > (read || guardedInit ? 240 : 120) || !(guardedInit || this.rustBuiltListWriteSource(init))))
       return false;
     const boxes = [];
     let natives = 0;

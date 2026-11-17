@@ -3624,6 +3624,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rust84dStoreKeyArg(n: Node, keyNode: Node): string | undefined;
     /** ral-84d R2: `delete n[k]` (statement) on the `this.options` store copy, `k` a string local printed in the `dkey` form. */
     rust84dStoreDelete(n: Node, init: Node): boolean;
+    /** ral-87rd R2: `delete n['lit']` (statement) on `const n = this.safeDict (local, 'lit', {})` (a base reader with a map-literal
+     *  default: a map on every path) whose head local reads no tagged container: the untyped printer already removes it with the
+     *  native `shift_remove` (provenDictFieldDelete: no ws subscription route), so the typed map runs the same remove. */
+    rust87rdLiteralDelete(n: Node, init: Node): boolean;
     print84dStoreDelete(node: DeleteExpression): string | undefined;
     print84dStoreKeyWrite(left: ElementAccessExpression, right: Node, valueText: string): string | undefined;
     /** ral-48b: `n['k'] = v` (statement, literal non-digit key) whose value does not read `n`. */
@@ -3987,7 +3991,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rust64iBaseSliceInit(init: any): boolean;
     /** A base `safeList*` read with an empty `[]` default: a list on every path. */
     rustDefaultedListRead(init: any): boolean;
-    /** ral-87rd R1: some statement `name.push (v)` on this very binding inside its own function. */
+    /** ral-87rd R1: some statement `name.push (v)` on this very binding inside its own function, and no other binding of the same
+     *  name in that function (ccxt build/'s container-op prover reads the function text by name: a typed sibling `let` would make it
+     *  drop a native `len()` it proves for the other, still boxed, binding). */
     rust87rdPushedLocal(declaration: VariableDeclaration, name: string): boolean;
     rustLentListLocalUncached(declaration: any): boolean;
     private static readonly RUST_TYPED_LIST_FIELDS;
