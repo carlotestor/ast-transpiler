@@ -15057,4 +15057,34 @@ describe('87g1 nil-seed joins', () => {
             + '    }\n');
         expect(out).toContain('var postOnly any = nil');
     });
+    test('R2: a slot only compared with true joins as bool and prints the bare bool', () => {
+        const out = run('    async handleUTAAndParams (params: Dict, m: string, d: boolean = false): Promise<any[]> {\n'
+            + "        return [ params['uta'], params ];\n"
+            + '    }\n'
+            + '    async f (params: Dict = {}): Promise<any> {\n'
+            + '        let uta = undefined;\n'
+            + "        [ uta, params ] = await this.handleUTAAndParams (params, 'f', false);\n"
+            + '        if (uta === true) {\n'
+            + '            return 1;\n'
+            + '        }\n'
+            + '        return 2;\n'
+            + '    }\n');
+        expect(out).toContain('var uta bool\n');
+        expect(out).toContain('uta = GetValue(utaparamsVariable, 0) == true');
+        expect(out).toContain('\tif uta {\n');
+    });
+    test('R2: a slot handed on as a value keeps the box', () => {
+        const out = run('    async handleUTAAndParams (params: Dict, m: string, d: boolean = false): Promise<any[]> {\n'
+            + "        return [ params['uta'], params ];\n"
+            + '    }\n'
+            + '    async f (params: Dict = {}): Promise<any> {\n'
+            + '        let uta = undefined;\n'
+            + "        [ uta, params ] = await this.handleUTAAndParams (params, 'f', false);\n"
+            + '        if (uta === true) {\n'
+            + '            return 1;\n'
+            + '        }\n'
+            + '        return uta;\n'
+            + '    }\n');
+        expect(out).toContain('var uta any = nil');
+    });
 });
