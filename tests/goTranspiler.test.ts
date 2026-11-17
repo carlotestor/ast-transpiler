@@ -17109,3 +17109,75 @@ describe('ral-92g8 R4 venue string[] producers over a literal-defaulted safeList
         expect(out).toContain('OrderFlags(flags any) any {');
     });
 });
+
+describe('nil-seeded scalar pointers joined through plain copies', () => {
+    const BASE = 'export type Dict = { [key: string]: unknown };\n'
+        + 'export type Str = string | undefined;\n'
+        + 'export type Num = number | undefined;\n'
+        + 'export default class Exchange {\n'
+        + '    safeString (a: Dict, k: string, d: Str = undefined): Str { return d; }\n'
+        + '    safeNumber (a: Dict, k: string, d: Num = undefined): Num { return d; }\n'
+        + '}\n';
+    const run = (members: string): string => {
+        const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'g93-'));
+        try {
+            fs.mkdirSync(path.join(tmp, 'ts/src/base'), { recursive: true });
+            fs.writeFileSync(path.join(tmp, 'ts/src/base/Exchange.ts'), BASE);
+            const file = path.join(tmp, 'ts/src/x.ts');
+            fs.writeFileSync(file, "import Exchange, { Dict, Str, Num } from './base/Exchange.js';\nclass X extends Exchange {\n" + members + '}\n');
+            const t = new Transpiler({ verbose: false, go: { parser: { NUM_LINES_END_FILE: 0 } } });
+            installCcxtGoHooks(t.goTranspiler);
+            return t.transpileGoByPath(file).content;
+        } finally {
+            fs.rmSync(tmp, { recursive: true, force: true });
+        }
+    };
+    test('two string seeds copied into each other take *string with native nil tests', () => {
+        const out = run('    f (p: Dict): Dict {\n'
+            + '        let sell: Str = undefined;\n'
+            + '        let buy: Str = undefined;\n'
+            + "        sell = this.safeString (p, 'sell');\n"
+            + "        buy = this.safeString (p, 'buy');\n"
+            + '        if (buy === undefined) {\n'
+            + '            buy = sell;\n'
+            + '        }\n'
+            + '        if (sell === undefined) {\n'
+            + '            sell = buy;\n'
+            + '        }\n'
+            + "        return { 'buy': buy, 'sell': sell };\n"
+            + '    }\n');
+        expect(out).toContain('var sell *string = nil');
+        expect(out).toContain('var buy *string = nil');
+        expect(out).toContain('if buy == nil {');
+        expect(out).toContain('buy = sell');
+    });
+    test('a number seed copied into another seed takes *float64', () => {
+        const out = run('    f (p: Dict): Dict {\n'
+            + '        let bid: Num = undefined;\n'
+            + "        if (p['x']) {\n"
+            + "            bid = this.safeNumber (p, 'bid');\n"
+            + '        }\n'
+            + '        let mid: Num = undefined;\n'
+            + '        if (bid !== undefined) {\n'
+            + '            mid = bid;\n'
+            + '        }\n'
+            + "        return { 'bid': bid, 'mid': mid };\n"
+            + '    }\n');
+        expect(out).toContain('var bid *float64 = nil');
+        expect(out).toContain('var mid *float64 = nil');
+        expect(out).toContain('if bid != nil {');
+    });
+    test('a copy-linked component with a foreign write keeps the box', () => {
+        const out = run('    f (p: Dict): Dict {\n'
+            + '        let a: Str = undefined;\n'
+            + '        let b: Str = undefined;\n'
+            + "        a = this.safeString (p, 'a');\n"
+            + "        b = 'lit';\n"
+            + '        if (a === undefined) {\n'
+            + '            a = b;\n'
+            + '        }\n'
+            + "        return { 'a': a };\n"
+            + '    }\n');
+        expect(out).toContain('var a any = nil');
+    });
+});
