@@ -25197,3 +25197,24 @@ describe('ral-87rh R4: a bool local strictly compared with an Option<bool> reade
         expect(out).toContain('== Some(wantActive))');
     });
 });
+describe('ral-90rd: safeValue / safeDict / safeList result locals', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport interface Dictionary<T> { [key: string]: T }\nexport default class Exchange {\n    safeValue (o: any, k: any, d: any = undefined): any { return o; }\n    safeDict (o: any, k: any, d: any = undefined): Dict { return o; }\n    safeList (o: any, k: any, d: any = undefined): any[] { return o; }\n    safeString (o: any, k: any, d: any = undefined): string { return o; }\n    parseOrder (o: Dict, m: any = undefined): Dict { return o; }\n    parseOrders (o: any, m: any = undefined): any[] { return o; }\n    extend (...args: any[]): any { return args[0]; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Dictionary } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        transpiler.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts'));
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('R1 kraken fetchLedger: a Dictionary<Dict> map whose own-key row bind is mutated is a typed Dict', () => {
+        const out = write ('ral-90rd-r1a', "    m (result: Dict) {\n        const ledger: Dictionary<Dict> = this.safeDict (result, 'ledger', {});\n        const keys = Object.keys (ledger);\n        const items = [];\n        for (let i = 0; i < keys.length; i++) {\n            const key = keys[i];\n            const value = ledger[key];\n            value['id'] = key;\n            items.push (value);\n        }\n        return items;\n    }\n");
+        expect(out).toContain('let mut ledger: crate::value::Dict = ');
+        expect(out).toContain('Value::Array(ledger.keys().cloned().map(Value::from).collect())');
+        expect(out).not.toContain('get_value(&ledger');
+    });
+    test('R1 negative: an untyped (Dict) map with a mutated row bind stays Value', () => {
+        const out = write ('ral-90rd-r1n', "    m (result: Dict) {\n        const ledger = this.safeDict (result, 'ledger', {});\n        const keys = Object.keys (ledger);\n        const items = [];\n        for (let i = 0; i < keys.length; i++) {\n            const key = keys[i];\n            const value = ledger[key];\n            value['id'] = key;\n            items.push (value);\n        }\n        return items;\n    }\n");
+        expect(out).not.toContain('let mut ledger: crate::value::Dict = ');
+    });
+});

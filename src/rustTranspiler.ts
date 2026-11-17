@@ -24144,7 +24144,11 @@ export class RustTranspiler extends BaseTranspiler {
             if (isBinaryExpression(at) && at.operatorToken.kind === SyntaxKind.EqualsToken && isElementAccessExpression(at.left) && isIdentifier(at.left.expression)
                 && at.left.expression.text === n.text && this.isNodeInsideNode(up, at.right) && this.rustListIndexLiteralWrite(at.left.expression)) ownWrite = at;
         }
-        if ((this.isWriteBackBindRead(up) && !(top === up && this.rustExplicitWriteBackBind(up))) || !this.isNativeAccessPositionSafe(up, ownWrite) || (top !== up && (this.isWriteBackBindRead(top) || !this.isNativeAccessPositionSafe(top, ownWrite)))) return false;
+        // ral-90rd R1: a bind `const v = m[k]` of a record element (checker type a declared record, `Dictionary<Dict>`) keyed by an
+        // element of `m`'s own `Object.keys (m)` list prints its held `Option<Dict>` form, which ccxt's Value-bind write-back
+        // pass never matches (ral-49e), so a mutation of the bind after it changes no write-back
+        const ownKeysRowBind = top === up && this.rustOwnKeysElementKey(n, this.rustSkipWrappers(up.argumentExpression)) && this.rustOwnKeysTypedRowRead(up);
+        if ((this.isWriteBackBindRead(up) && !(top === up && (this.rustExplicitWriteBackBind(up) || ownKeysRowBind))) || !this.isNativeAccessPositionSafe(up, ownWrite) || (top !== up && (this.isWriteBackBindRead(top) || !this.isNativeAccessPositionSafe(top, ownWrite)))) return false;
         const key: any = this.rustSkipWrappers(up.argumentExpression);
         if (key === undefined || isStringLiteralLikeNode(key)) return false;
         if (isNumericLiteral(key)) return Number.isInteger(Number(key.text)) && Number(key.text) >= 0;
