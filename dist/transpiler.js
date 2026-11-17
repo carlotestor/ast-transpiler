@@ -74987,16 +74987,19 @@ ${this.getIden(identation)}}`;
     const call = access.parent;
     return isCallExpression6(call) && call.expression === access && String(access.name.text) === "join" && call.arguments.length === 1 && this.rustNativeStringLiteralArg(call.arguments[0]) !== void 0 && !this.rustScalarInNestedWrite(access.expression, true);
   }
-  /** ral-90rd R2: the join of a typed list local the borrowed-container rule admitted at this call. */
+  /** ral-90rd R2: the join of a typed list local the borrowed-container rule admitted at this call (the optional form joins its
+   *  slice, empty for `None`: the runtime `join` answered "" for a non-list). */
   printBorrowedListJoin(node) {
     if (!this.rust90rdJoinReads.has(node))
       return void 0;
     const access = node.expression;
     const declaration = this.rustDeclarationOfIdentifier(access.expression);
-    if (declaration === void 0 || this.rustBorrowedLocalKind(declaration) !== "list" || this.rustOptContainerLocals.has(declaration))
+    if (declaration === void 0 || this.rustBorrowedLocalKind(declaration) !== "list")
       return void 0;
     const literal2 = this.rustNativeStringLiteralArg(node.arguments[0]);
-    return `Value::Str(${this.printNode(access.expression, 0).trim()}.iter().map(crate::runtime::stringify_param).collect::<Vec<String>>().join("${literal2}").into())`;
+    const name = this.printNode(access.expression, 0).trim();
+    const list = this.rustOptContainerLocals.has(declaration) ? `${name}.as_deref().map(Vec::as_slice).unwrap_or_default()` : name;
+    return `Value::Str(${list}.iter().map(crate::runtime::stringify_param).collect::<Vec<String>>().join("${literal2}").into())`;
   }
   printJoinCall(node, identation, name = void 0, parsedArg = void 0) {
     return this.printBorrowedListJoin(node) ?? this.printOptListJoin(node) ?? this.printLentListJoin(node) ?? this.printStrVecParamJoin(node) ?? this.printVecJoin(node) ?? this.printNativeStringJoin(node, name) ?? this.printStrSliceJoin(node) ?? `join(&${name}, &${parsedArg})`;
@@ -77704,7 +77707,6 @@ ${iden}}`;
       }
       if (from === "list" && isPropertyAccessExpression3(up) && up.expression === n && this.rust90rdListJoinUse(up)) {
         joinUses.push(up.parent);
-        lengths++;
         return ++reads > 0;
       }
       if (isPropertyAccessExpression3(up) && up.expression === n && String(up.name.text) === "length") {
@@ -77852,7 +77854,7 @@ ${iden}}`;
       return void 0;
     const neverNullRewrites = writes > 0 && writes === sameKindWrites && from === "dict" && init !== void 0 && (this.rustContainerInitNeverNull(init, "map") || omitInitRewrites);
     const optional = nilDeclared || nullTests > 0 || writes > 0 && !neverNullRewrites || lentNullable > 0 || optionalBoxes > 0 || zgRow || elementKeyWrites > 0 || optMapInit;
-    if (joinUses.length > 0 && (optional || from !== "list"))
+    if (joinUses.length > 0 && from !== "list")
       return void 0;
     if (jwtLends > 0 && optional)
       return void 0;

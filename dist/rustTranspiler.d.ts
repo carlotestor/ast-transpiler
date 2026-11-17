@@ -3080,7 +3080,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-90rd R2: `x.join ('lit')`, a single string-literal separator, the call in a read position (not a callee, chain head
      *  or write target). */
     rust90rdListJoinUse(access: any): boolean;
-    /** ral-90rd R2: the join of a typed list local the borrowed-container rule admitted at this call. */
+    /** ral-90rd R2: the join of a typed list local the borrowed-container rule admitted at this call (the optional form joins its
+     *  slice, empty for `None`: the runtime `join` answered "" for a non-list). */
     printBorrowedListJoin(node: any): string | undefined;
     printJoinCall(node: any, identation: any, name?: any, parsedArg?: any): string;
     /** ral-42f: `parts.join('-')` where `parts` is a never-reassigned local `this.arraySlice(<string[] local>, ..)`: every element is a
