@@ -24728,3 +24728,26 @@ describe("ral-87rb R1: a precision string read inside a nested element write sou
         expect(out).not.toContain('let mut feeCostString: Value');
     });
 });
+
+describe("ral-87rb R2: a numberToString string lent into a Precise write is an Option<String>", () => {
+    const files: Record<string, string> = {
+        "ts/src/base/Exchange.ts": "export type Str = string | undefined;\nfunction numberToString (x: number | string): string;\nfunction numberToString (x: any): string | undefined;\nfunction numberToString (x: any): string | undefined { return x; }\nexport default class Exchange {\n    numberToString = numberToString;\n    hold (x: any): any { return x; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n",
+        "ts/src/precise.ts": "export class Precise {\n    static stringMul (a: string, b: string): string { return a; }\n}\n",
+        "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport { Precise } from './precise.js';\nimport type { Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    createOrderRequest (amount: number, price: number, params: any = {}) {\n        const request: any = {};\n        let notional: Str = undefined;\n        if (price !== undefined) {\n            const amountString = this.numberToString (amount);\n            const priceString = this.numberToString (price);\n            notional = Precise.stringMul (amountString, priceString);\n        } else {\n            const amountString = this.numberToString (amount);\n            notional = amountString;\n        }\n        request['notional'] = notional;\n        return this.hold (request);\n    }\n}\n",
+    };
+    let out: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), "astfx-rs-87rb2-"));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = transpiler.transpileRustByPath(path.join (root, "ts/src/venue.ts")).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test("binance createOrderRequest amountString / priceString: Option<String>, lent to Precise.stringMul", () => {
+        expect(out).toContain('let mut amountString: Option<String> = ');
+        expect(out).toContain('let mut priceString: Option<String> = ');
+        expect(out).toContain('let mut amountString: Option<String> = self.numberToString(amount.clone());');
+    });
+});

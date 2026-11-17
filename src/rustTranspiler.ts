@@ -7617,7 +7617,7 @@ export class RustTranspiler extends BaseTranspiler {
         const form = this.rustScalarUseForms.get(n);
         // vd lends a typed operand of a lent entry point as is ('parg'); the written text is still the Precise call
         // ral-76h: a lent operand ('parg') prints `&x` for the boxed and the typed local alike and moves nothing, so any use qualifies
-        if ((form !== 'box' && form !== 'parg') || !this.rustPreciseStringCall(declaration.initializer) || (form === 'box' && !this.rustLocalLastUse(n, declaration))) return false;
+        if ((form !== 'box' && form !== 'parg') || (form === 'box' && (!this.rustPreciseStringCall(declaration.initializer) || !this.rustLocalLastUse(n, declaration)))) return false;
         let top: any = n;
         for (;;) {
             while (isParenthesizedExpression(top.parent)) top = top.parent;
