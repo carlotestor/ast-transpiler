@@ -8988,7 +8988,7 @@ describe ('goTupleFirstResultBinds', () => {
         'type Bool = boolean | undefined;',
         'class BaseExchange {',
         '    options: Dict = {};',
-        '    handleMarketTypeAndParams (methodName: string, market: any = undefined, params: Dict = {}, defaultValue: Str = undefined): [Str, Dict] { return [ undefined, params ]; }',
+        '    handleMarketTypeAndParams (methodName: string, market: any = undefined, params: Dict = {}, defaultValue: Str = undefined): [Str, Dict] { return [ false, params ]; }',
         '    handleOptionBoolAndParams (params: Dict, methodName: Str, optionName: string, defaultValue: Bool = undefined): [Bool, Dict] { return [ true, params ]; }',
         '    handleUntilOption (key: string, request: Dict, params: Dict, multiplier: number = 1): [Dict, Dict] { return [ request, params ]; }',
         '}',
@@ -9018,7 +9018,7 @@ describe ('goTupleFirstResultBinds', () => {
     ].join ('\n');
     const STP = BASE + '\n' + [
         'class Ex extends BaseExchange {',
-        '    handleOptionStringAndParams (params: Dict, methodName: Str, optionName: string, defaultValue: Str = undefined): [Str, Dict] { return [ undefined, params ]; }',
+        '    handleOptionStringAndParams (params: Dict, methodName: Str, optionName: string, defaultValue: Str = undefined): [Str, Dict] { return [ false, params ]; }',
         '    f (params: Dict) {',
         '        let stp: Str = undefined;',
         '        [ stp, params ] = this.handleOptionStringAndParams (params, "createOrder", "stp");',
@@ -11982,11 +11982,11 @@ describe ('goPointerHelperTupleSlots', () => {
     const PRELUDE = 'type Dict = { [key: string]: any };\n'
         + 'type Str = string | undefined;\ntype Int = number | undefined;\ntype Bool = boolean | undefined;\n'
         + 'class Base {\n'
-        + '    handleParamString (params: Dict, name: string, d?: string): [Str, Dict] { return [ undefined, params ]; }\n'
-        + '    handleParamBool (params: Dict, name: string, d?: boolean): [Bool, Dict] { return [ undefined, params ]; }\n'
-        + '    handleParamInteger (params: Dict, name: string, d?: number): [Int, Dict] { return [ undefined, params ]; }\n'
-        + '    handleOptionBoolAndParams (params: Dict, m: string, o: string, d?: boolean): [Bool, Dict] { return [ undefined, params ]; }\n'
-        + '    handleOptionIntegerAndParams (params: Dict, m: string, o: string, d?: number): [Int, Dict] { return [ undefined, params ]; }\n'
+        + '    handleParamString (params: Dict, name: string, d?: string): [Str, Dict] { return [ false, params ]; }\n'
+        + '    handleParamBool (params: Dict, name: string, d?: boolean): [Bool, Dict] { return [ false, params ]; }\n'
+        + '    handleParamInteger (params: Dict, name: string, d?: number): [Int, Dict] { return [ false, params ]; }\n'
+        + '    handleOptionBoolAndParams (params: Dict, m: string, o: string, d?: boolean): [Bool, Dict] { return [ false, params ]; }\n'
+        + '    handleOptionIntegerAndParams (params: Dict, m: string, o: string, d?: number): [Int, Dict] { return [ false, params ]; }\n'
         + '    checkAddress (a: any, c?: any, t?: any): any { return a; }\n'
         + '    other (a: any): any { return a; }\n'
         + '}\n';
@@ -15058,33 +15058,83 @@ describe('87g1 nil-seed joins', () => {
         expect(out).toContain('var postOnly any = nil');
     });
     test('R2: a slot only compared with true joins as bool and prints the bare bool', () => {
-        const out = run('    async handleUTAAndParams (params: Dict, m: string, d: boolean = false): Promise<any[]> {\n'
-            + "        return [ params['uta'], params ];\n"
+        const out = run('    handleUTAAndParams (params: Dict, m: string, d: boolean = false): [ boolean, Dict ] {\n'
+            + "        if (params['uta'] !== undefined) {\n"
+            + '            return [ true, params ];\n'
+            + '        }\n'
+            + "        return [ false, params ];\n"
             + '    }\n'
-            + '    async f (params: Dict = {}): Promise<any> {\n'
+            + '    f (params: Dict = {}): any {\n'
             + '        let uta = undefined;\n'
-            + "        [ uta, params ] = await this.handleUTAAndParams (params, 'f', false);\n"
+            + "        [ uta, params ] = this.handleUTAAndParams (params, 'f', false);\n"
             + '        if (uta === true) {\n'
             + '            return 1;\n'
             + '        }\n'
             + '        return 2;\n'
             + '    }\n');
         expect(out).toContain('var uta bool\n');
-        expect(out).toContain('uta = GetValue(utaparamsVariable, 0) == true');
+        expect(out).toContain('uta = utaparamsVariable[0] == true');
         expect(out).toContain('\tif uta {\n');
     });
     test('R2: a slot handed on as a value keeps the box', () => {
-        const out = run('    async handleUTAAndParams (params: Dict, m: string, d: boolean = false): Promise<any[]> {\n'
-            + "        return [ params['uta'], params ];\n"
+        const out = run('    handleUTAAndParams (params: Dict, m: string, d: boolean = false): [ boolean, Dict ] {\n'
+            + "        if (params['uta'] !== undefined) {\n"
+            + '            return [ true, params ];\n'
+            + '        }\n'
+            + "        return [ false, params ];\n"
             + '    }\n'
-            + '    async f (params: Dict = {}): Promise<any> {\n'
+            + '    f (params: Dict = {}): any {\n'
             + '        let uta = undefined;\n'
-            + "        [ uta, params ] = await this.handleUTAAndParams (params, 'f', false);\n"
+            + "        [ uta, params ] = this.handleUTAAndParams (params, 'f', false);\n"
             + '        if (uta === true) {\n'
             + '            return 1;\n'
             + '        }\n'
             + '        return uta;\n'
             + '    }\n');
         expect(out).toContain('var uta any = nil');
+    });
+});
+
+describe('87g1 R2/R3 more', () => {
+    const go = (body: string): string => {
+        const t = new Transpiler({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        installCcxtGoHooks(t.goTranspiler);
+        return t.transpileGo('type Dict = { [key: string]: any };\ntype Bool = boolean | undefined;\nclass V {\n' + body + '}\n').content;
+    };
+    test('R2: an awaited slot keeps the box', () => {
+        const out = go('    async h (p: Dict): Promise<any[]> { return [ p[\'u\'], p ]; }\n'
+            + '    async f (params: Dict = {}): Promise<any> {\n'
+            + '        let uta = undefined;\n'
+            + "        [ uta, params ] = await this.h (params);\n"
+            + '        if (uta === true) {\n'
+            + '            return 1;\n'
+            + '        }\n'
+            + '        return 2;\n'
+            + '    }\n');
+        expect(out).toContain('var uta any = nil');
+    });
+    test('R3: a literal-written flag read only as a condition is a Go bool', () => {
+        const out = go('    f (params: Dict = {}): any {\n'
+            + '        let isAlgo: Bool = undefined;\n'
+            + "        if (params['a'] !== undefined) {\n"
+            + '            isAlgo = true;\n'
+            + '        }\n'
+            + '        if (isAlgo) {\n'
+            + '            return 1;\n'
+            + '        }\n'
+            + '        return !isAlgo ? 2 : 3;\n'
+            + '    }\n');
+        expect(out).toContain('var isAlgo bool\n');
+        expect(out).toContain('\tif isAlgo {\n');
+    });
+    test('R3: a flag stored as a value keeps the box', () => {
+        const out = go('    f (params: Dict = {}): any {\n'
+            + '        let isAlgo: Bool = undefined;\n'
+            + "        if (params['a'] !== undefined) {\n"
+            + '            isAlgo = true;\n'
+            + '        }\n'
+            + "        return { 'algo': isAlgo };\n"
+            + '    }\n');
+        expect(out).toContain('var isAlgo any = nil');
     });
 });

@@ -35112,10 +35112,8 @@ function ccxtGo87TrueSlotCall (node) {
         || (assignment.operatorToken.kind !== SyntaxKind.EqualsToken) || (assignment.parent?.kind !== SyntaxKind.ExpressionStatement)) {
         return undefined;
     }
-    let call = assignment.right;
-    if (call?.kind === SyntaxKind.AwaitExpression) {
-        call = call.expression;
-    }
+    // an awaited holder is typed only by ccxt's channel stage; its slot read stays GetValue (+1 helper): refused
+    const call = assignment.right;
     const callee = call?.expression;
     if ((call?.kind !== SyntaxKind.CallExpression) || (callee?.kind !== SyntaxKind.PropertyAccessExpression)
         || (callee.expression?.kind !== SyntaxKind.ThisKeyword) || CCXT_GO_87_SLOT_OWNED.has (String (callee.name?.text ?? ''))) {
@@ -35125,7 +35123,7 @@ function ccxtGo87TrueSlotCall (node) {
 }
 
 // every other mention of the name in the scope is a `x ==/=== true` (or `!=`/`!==`) operand or a bool-literal write
-function ccxtGo87OnlyTrueCompares (scope, declaration, name) {
+function ccxtGo87OnlyTrueCompares (scope, declaration, name, tupleSlots) {
     let ok = true;
     let slots = 0;
     const visit = (n) => {
@@ -35139,7 +35137,15 @@ function ccxtGo87OnlyTrueCompares (scope, declaration, name) {
         }
         if ((n.kind === SyntaxKind.Identifier) && (n.text === name) && (n !== declaration.name)) {
             const parent = n.parent;
-            if (ccxtGo87TrueSlotCall (n) !== undefined) {
+            const slotCall = ccxtGo87TrueSlotCall (n);
+            if (slotCall !== undefined) {
+                const holder = n.parent.elements.map ((e) => e.text).join ('') + 'Variable';
+                const info = tupleSlots?.producerInfo (slotCall);
+                if ((info === undefined) || (info.pair === true) || !String (info.slots?.[0] ?? '').startsWith ('plain')
+                    || !tupleSlots.holderIsUnique (n.parent.parent, holder)) {
+                    ok = false;
+                    return;
+                }
                 slots += 1;
             } else if ((parent?.kind === SyntaxKind.BinaryExpression) && COMPARISON_TOKENS.includes (parent.operatorToken.kind)
                 && (((parent.left === n) ? parent.right : parent.left)?.kind === SyntaxKind.TrueKeyword)) {
@@ -35174,7 +35180,7 @@ function ccxtGo87TrueSlotDeclaration (goTranspiler, target) {
     const cache = goTranspiler.ccxtGo87TrueSlots;
     if (!cache.has (declaration)) {
         const scope = goTranspiler.goEnclosingFunction?.(declaration);
-        cache.set (declaration, (scope !== undefined) && ccxtGo87OnlyTrueCompares (scope, declaration, declaration.name.text));
+        cache.set (declaration, (scope !== undefined) && ccxtGo87OnlyTrueCompares (scope, declaration, declaration.name.text, new TupleSlots (goTranspiler)));
     }
     return cache.get (declaration) ? declaration : undefined;
 }
@@ -35222,6 +35228,97 @@ GoTranspiler.prototype.printCustomBinaryExpressionIfAny = function (node, identa
     return read.split ('\n').map ((line) => {
         const m = /^(\s*)(\w+) = (?:GetValue\((\w+), 0\)|(\w+)\[0\])$/.exec (line);
         // the slot-read pass already indexed a proven []any holder: compare that element, else GetValue's deref
-        return ((m !== null) && (m[2] === name)) ? (m[1] + name + ' = ' + ((m[4] !== undefined) ? (m[4] + '[0]') : ('GetValue(' + m[3] + ', 0)')) + ' == true') : line;
+        return ((m !== null) && (m[2] === name)) ? (m[1] + name + ' = ' + ((m[4] !== undefined) ? (m[4] + '[0]') : ('GetValue(' + m[3] + ', 0)')) + ' == true') : line;  // the GetValue arm only if the proofs above disagree (compiles, census shows it)
     }).join ('\n');
+};
+
+// R3: `let x: Bool = undefined` whose every write is a true/false literal and whose every read is a truthiness
+// test (`if (x)`, `!x`, `x === true`, an `&&`/`||` condition, a ternary condition). Those reads answer an untyped
+// nil exactly as a Go false, so `var x bool` (zero value false) keeps every answer even where a read precedes the
+// writes. Any value read (map literal, argument, return, nil test, `=== false`) keeps the box.
+function ccxtGo87TruthyRead (node) {
+    let current = node;
+    while (current.parent?.kind === SyntaxKind.ParenthesizedExpression) {
+        current = current.parent;
+    }
+    const parent = current.parent;
+    switch (parent?.kind) {
+    case SyntaxKind.IfStatement:
+    case SyntaxKind.WhileStatement:
+    case SyntaxKind.DoStatement:
+        return parent.expression === current;
+    case SyntaxKind.ConditionalExpression:
+        return parent.condition === current;
+    case SyntaxKind.PrefixUnaryExpression:
+        return parent.operator === SyntaxKind.ExclamationToken;
+    case SyntaxKind.BinaryExpression: {
+        const op = parent.operatorToken.kind;
+        if (COMPARISON_TOKENS.includes (op)) {
+            return ((parent.left === current) ? parent.right : parent.left)?.kind === SyntaxKind.TrueKeyword;
+        }
+        if ((op === SyntaxKind.AmpersandAmpersandToken) || (op === SyntaxKind.BarBarToken)) {
+            return ccxtGoNilJoinIsCondition (parent);
+        }
+        return false;
+    }
+    }
+    return false;
+}
+
+function ccxtGo87TruthyOnlyBool (goTranspiler, declaration) {
+    if ((declaration?.kind !== SyntaxKind.VariableDeclaration) || !ts.isIdentifier (declaration.name)
+        || !isNilDeclaredInitializer (declaration.initializer) || (declaration.parent?.parent?.kind !== SyntaxKind.VariableStatement)
+        || (declaration.parent.declarations.length !== 1)) {
+        return false;
+    }
+    goTranspiler.ccxtGo87TruthyOnly ??= new WeakMap ();
+    const cache = goTranspiler.ccxtGo87TruthyOnly;
+    if (cache.has (declaration)) {
+        return cache.get (declaration);
+    }
+    const scope = goTranspiler.goEnclosingFunction?.(declaration);
+    const name = declaration.name.text;
+    let ok = scope !== undefined;
+    let writes = 0;
+    let reads = 0;
+    const visit = (n) => {
+        if (!ok) {
+            return;
+        }
+        if ((n !== declaration) && ((n.kind === SyntaxKind.VariableDeclaration) || (n.kind === SyntaxKind.Parameter) || (n.kind === SyntaxKind.BindingElement))
+            && bindingMentionsName (n.name, name)) {
+            ok = false;
+            return;
+        }
+        if ((n !== scope) && ts.isFunctionLike (n) && scopeMentionsIdentifier (n, name)) {
+            ok = false;                                     // a closure over x
+            return;
+        }
+        if ((n.kind === SyntaxKind.Identifier) && (n.text === name) && (n !== declaration.name)) {
+            const parent = n.parent;
+            if ((parent?.kind === SyntaxKind.BinaryExpression) && (parent.left === n) && (parent.operatorToken.kind === SyntaxKind.EqualsToken)
+                && (parent.parent?.kind === SyntaxKind.ExpressionStatement)
+                && ((parent.right?.kind === SyntaxKind.TrueKeyword) || (parent.right?.kind === SyntaxKind.FalseKeyword))) {
+                writes += 1;
+            } else if (ccxtGo87TruthyRead (n)) {
+                reads += 1;
+            } else {
+                ok = false;
+            }
+            return;
+        }
+        n.forEachChild (visit);
+    };
+    scope?.forEachChild (visit);
+    const result = ok && (writes > 0) && (reads > 0) && !goTranspiler.goTypeNameIsShadowed?.(scope, 'bool');
+    cache.set (declaration, result);
+    return result;
+}
+
+const goNilValueClassify87 = GoNilDeclaredValueAssignmentScan.prototype.classifyIdentifier;
+GoNilDeclaredValueAssignmentScan.prototype.classifyIdentifier = function (node, assigned) {
+    if (!assigned && ccxtGo87TruthyRead (node) && !this.inNestedFunction (node) && ccxtGo87TruthyOnlyBool (this.goTranspiler, this.declaration)) {
+        return assigned;                                    // a truthiness read sees nil and false alike
+    }
+    return goNilValueClassify87.call (this, node, assigned);
 };
