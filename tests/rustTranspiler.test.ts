@@ -26163,3 +26163,24 @@ describe('rust venue usesPrivateKey prints -> bool', () => {
         expect(out).not.toContain('self.usesPrivateKey().as_bool()');
     });
 });
+
+describe('rust venue paramsToString prints -> String', () => {
+    const base = "export default class Exchange {\n    parseToInt (x: any): number { return x; }\n    safeString (o: any, k: any, d: any = undefined): string { return o[k] ?? d; }\n}\n";
+    const venue = "import Exchange from './base/Exchange.js';\n"
+        + "export default class venue extends Exchange {\n"
+        + "    paramsToString (object: any, level: number): string {\n        const depth = this.parseToInt (level);\n        if (typeof object === 'string') {\n            return object;\n        }\n        let returnString: string = '';\n        const keys = Object.keys (object);\n        for (let i = 0; i < keys.length; i++) {\n            const key = this.safeString (keys, i, '');\n            returnString += key;\n            returnString += this.paramsToString (object[key], depth + 1);\n        }\n        return returnString;\n    }\n"
+        + "    signIt (params: any): string {\n        const strSortKey = this.paramsToString (params, 0);\n        return 'a' + strSortKey;\n    }\n}\n";
+    test('the accumulator is a String and the recursive call appends its text', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-93rb2-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), venue);
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        let out = '';
+        try { out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+        expect(out).toMatch(/pub fn paramsToString\(&self, [^)]*\) -> String \{/);
+        expect(out).toContain('let mut returnString: String = ');
+        expect(out).toContain('returnString.push_str(&self.paramsToString(');
+        expect(out).toContain('let mut strSortKey: String = self.paramsToString(');
+    });
+});
