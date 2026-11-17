@@ -24706,3 +24706,23 @@ describe('ral-84h R2: `i + 1` of an always-Int for counter at a declaration is a
         expect(out).not.toContain('let mut iteration: Value');
     });
 });
+
+describe('ral-87ra R1: a Dict slot read off a const venue tuple whose callee declares that slot `Dict`', () => {
+    const emit = (body: string): string => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-87ra1-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nconst extend = (...args: any[]) => Object.assign ({}, ...args);\nexport default class Exchange {\n    extend = extend;\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    async privatePostA (p: any = {}): Promise<any> { return p; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    resolveAuth (methodName: string, params: Dict = {}): [string, Str, Dict] {\n        const t = this.safeString (params, 'type', 'spot');\n        return [ t, undefined, params ];\n    }\n" + body + "}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        try { return t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+    };
+    test('binance pro authenticate: `const p: Dict = t[2]` is a Dict lent by reference', () => {
+        const out = emit("    async auth (params: Dict = {}) {\n        const resolved = this.resolveAuth ('authenticate', params);\n        const type = resolved[0];\n        const paramsAuth: Dict = resolved[2];\n        return await this.privatePostA (this.extend ({ 'type': type }, paramsAuth));\n    }\n");
+        expect(out).toContain('let mut paramsAuth: crate::value::Dict = ');
+        expect(out).not.toContain('paramsAuth.clone()');
+    });
+    test('negative: a slot the callee declares `Str` stays as it was', () => {
+        const out = emit("    async auth2 (params: Dict = {}) {\n        const resolved = this.resolveAuth ('authenticate', params);\n        const sub = resolved[1];\n        return await this.privatePostA ({ 'sub': sub });\n    }\n");
+        expect(out).not.toContain('let mut sub: crate::value::Dict');
+    });
+});

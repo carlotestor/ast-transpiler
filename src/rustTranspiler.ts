@@ -26297,6 +26297,26 @@ export class RustTranspiler extends BaseTranspiler {
         return this.rustProvenMapParam(d) || this.rustHandedDictLocal(d) || (this.rustBorrowedLocalKind(d) === 'dict' && !this.rustOptContainerLocals.has(d));
     }
 
+    /** ral-87ra R1: `const p: Dict = t[k]` (literal index) of a never-rebound `const t = this.m (..)` whose venue callee declares
+     *  slot `k` of its tuple return a bare `Dict` (rustCallDeclaresDictSlot: bitget `handleProductTypeAndParams`, binance pro
+     *  `resolveAuthType`, dydx `createOrderRequest`) and whose every use is a literal-index read: the slot holds that map. */
+    rust87raVenueTupleMapSlotRead(rhs: Node): boolean {
+        if (rhs === undefined || !isElementAccessExpression(rhs) || !isIdentifier(rhs.expression) || this.rustTestTierSource(rhs)) return false;
+        const idx: Node = this.rustSkipWrappers(rhs.argumentExpression);
+        if (idx === undefined || !isNumericLiteral(idx)) return false;
+        const t: Node = this.rustDeclaredNode(rhs.expression);
+        if (t === undefined || !isVariableDeclaration(t) || !isIdentifier(t.name) || (t.parent.flags & NodeFlags.Const) === 0) return false;
+        const call: Node = this.rustSkipWrappers(t.initializer);
+        if (call === undefined || !isCallExpression(call) || !isPropertyAccessExpression(call.expression) || call.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
+        if (!this.rustCallDeclaresDictSlot(call, Number(idx.text))) return false;
+        return this.rustLocalUsesAll(t, String(t.name.text), true, (n: Node) => {
+            const up: Node = n.parent;
+            if (!isElementAccessExpression(up) || up.expression !== n || !isNumericLiteral(this.rustSkipWrappers(up.argumentExpression))) return false;
+            const use: Node = up.parent;
+            return !(isBinaryExpression(use) && use.left === up) && use.kind !== SyntaxKind.DeleteExpression;
+        });
+    }
+
     /** ral-51a: `this.handleRouteAndParams (m, params)` typed by name: a venue member of the enclosing class declared
      *  `handleRouteAndParams (methodName: string, params: Dict = {}): Dict` answers the (route-omitted) params map. */
     rustRouteParamsDictCall(init: any): boolean {
@@ -31889,7 +31909,7 @@ export class RustTranspiler extends BaseTranspiler {
                     || this.rustCurrencyLocalKind(declaration) !== false) return false;
             } else if (!this.rustBaseCallNamed(init, RustTranspiler.RUST_HANDED_DICT_SOURCES) && !this.rustDictTernaryInit(init)
                 // ral-51a: `const p: Dict = t[1]` of a never-rebound `const t = this.handle*AndParams (m, ..)` lent a proven map
-                && !this.rustHandleTupleMapSlotRead(init) && !this.rustRouteParamsDictCall(init) || this.rustBorrowedDictLocal(declaration)) return false;
+                && !this.rustHandleTupleMapSlotRead(init) && !this.rustRouteParamsDictCall(init) && !this.rust87raVenueTupleMapSlotRead(init) || this.rustBorrowedDictLocal(declaration)) return false;
             if (this.rustReadBearerKindOfDeclaration(declaration) !== false || this.rustDictLocalIsTyped(declaration) || this.rustVecLocalIsTyped(declaration)
                 || this.rustNestedDictLocalIsTyped(declaration) || this.rustMarketLocalKind(declaration) !== false
                 || this.rustNilLocalKind(declaration) !== undefined || this.rustScalarLocalKind(declaration) !== undefined) return false;
