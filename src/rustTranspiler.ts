@@ -7054,13 +7054,13 @@ export class RustTranspiler extends BaseTranspiler {
     /** ral-90ra R1: `rustScalarFeedsWrite`, except that a plain `y = x;` statement or a `let y: Str = x;` declaration whose
      *  target `y` is a local (one declarator, same function) the checker types `string` is allowed: that target is decided by
      *  the same scalar solve (a string local copied from an `Option<String>` reads the same Str / Null the `Value` held). */
-    rust90raFeedsForeignWrite(declaration: any, scope: any): boolean {
+    rust90raFeedsForeignWrite(declaration: VariableDeclaration, scope: Node): boolean {
         let foreign = false;
-        this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n: any) => {
-            let at: any = n;
+        this.rustLocalUsesAll(declaration, String((declaration.name as Identifier).text), false, (n: Node) => {
+            let at: Node = n;
             while (at.parent !== undefined && (isParenthesizedExpression(at.parent) || at.parent.kind === SyntaxKind.AsExpression || isConditionalExpression(at.parent))) at = at.parent;
-            const up: any = at.parent;
-            let target: any;
+            const up: Node = at.parent;
+            let target: Node | undefined;
             if (isBinaryExpression(up) && up.operatorToken.kind === SyntaxKind.EqualsToken && up.left !== at) {
                 if (at !== n || !isIdentifier(up.left) || up.parent?.kind !== SyntaxKind.ExpressionStatement) { foreign = true; return true; }
                 target = this.rustDeclaredNode(up.left);
@@ -7068,9 +7068,8 @@ export class RustTranspiler extends BaseTranspiler {
                 if (at !== n) { foreign = true; return true; }
                 target = up;
             } else return true;
-            const list: any = target?.parent;
-            if (target === undefined || !isVariableDeclaration(target) || !isIdentifier(target.name) || list?.kind !== SyntaxKind.VariableDeclarationList
-                || list.declarations.length !== 1 || this.rustEnclosingFunction(target) !== scope
+            if (target === undefined || !isVariableDeclaration(target) || !isIdentifier(target.name) || !isVariableDeclarationList(target.parent)
+                || target.parent.declarations.length !== 1 || this.rustEnclosingFunction(target) !== scope
                 || this.primitiveKindOfType(this.typeOfNodeIfAny(target.name)) !== 'string') foreign = true;
             return true;
         });
@@ -7079,12 +7078,13 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** ral-90ra R3: `n` (an element-read key local) is the whole key of a plain READ `m[n]` (never a write target, update or
      *  delete) on a local map declared from an object literal: the bearer read prints `m.get(n.as_deref()..)`, a native use. */
-    rust90raLitMapReadKey(n: any): boolean {
-        const keyNode: any = this.rustKeyWrapped(n);
-        const access: any = keyNode?.parent;
+    rust90raLitMapReadKey(n: Node): boolean {
+        if (!isIdentifier(n)) return false;
+        const keyNode: Node = this.rustKeyWrapped(n);
+        const access: Node = keyNode?.parent;
         if (!isElementAccessExpression(access) || access.argumentExpression !== keyNode || !isIdentifier(access.expression) || this.rust70fWriteTargetKey(access)) return false;
-        const declaration: any = this.rustDeclarationOfIdentifier(access.expression);
-        const init: any = declaration !== undefined && isVariableDeclaration(declaration) && declaration.initializer !== undefined ? this.rustSkipWrappers(declaration.initializer) : undefined;
+        const declaration: Node | undefined = this.rustDeclarationOfIdentifier(access.expression);
+        const init: Node | undefined = declaration !== undefined && isVariableDeclaration(declaration) && declaration.initializer !== undefined ? this.rustSkipWrappers(declaration.initializer) : undefined;
         // the same structural conditions as rustBearerTypedStrReadKey (the key's own decision is still open while it solves)
         return init !== undefined && isObjectLiteralExpression(init) && keyNode === n && access.argumentExpression === n && !this.isWriteBackBindRead(access)
             && !this.rustNodeIsKeyUnsafePlace(String(n.text));
