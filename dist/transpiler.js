@@ -58802,7 +58802,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const rhs = this.unwrapParens(parent.right);
       if (!this.rustNilDecodedWrite(rhs))
         writes++;
-      if (this.rustBaseStrFieldRead(rhs))
+      if (this.rustBaseStrFieldRead(rhs) || this.rustWsUrlRead(rhs))
         baseFieldWrite = true;
       let write = isIdentifier3(rhs) && this.literalKindOfNode(rhs) !== "null" ? this.rustScalarIdentifierKind(rhs) ?? (this.rustNilValueStrAlias(rhs) ? "ostr" : void 0) : this.rustScalarValueKind(rhs, true);
       if (write === void 0 && isIdentifier3(rhs) && this.rust68aStrParamWrite(rhs))
@@ -61319,6 +61319,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (fresh && this.rustTernaryArm(node) && this.rustBaseStrFieldRead(node))
       return "ostr";
     if (fresh && this.rustNilVenueWrite(node) && this.rustBaseStrFieldRead(node))
+      return "ostr";
+    if (fresh && this.rustNilVenueWrite(node) && this.rustWsUrlRead(node))
       return "ostr";
     if (fresh && this.rustTernaryArm(node) && this.rust65nBaseStrParamArm(node))
       return "ostr";
@@ -66899,6 +66901,8 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (kind === "oint" && this.rustListLengthInit(node) && this.rust67bCastListLengthRecv(node.expression))
       return wrap(this.rustListLengthText(node));
     if (kind === "ostr" && (this.rustTernaryArm(node) || this.rustNilVenueWrite(node)) && this.rustBaseStrFieldRead(node))
+      return `${this.printNode(node, 0).trim()}.as_str().map(str::to_owned)`;
+    if (kind === "ostr" && this.rustNilVenueWrite(node) && this.rustWsUrlRead(node))
       return `${this.printNode(node, 0).trim()}.as_str().map(str::to_owned)`;
     if (kind === "ostr" && this.rustTernaryArm(node) && this.rust65nBaseStrParamArm(node))
       return `${super.printIdentifier(node)}.as_str().map(str::to_owned)`;
