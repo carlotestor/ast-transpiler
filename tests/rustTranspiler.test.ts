@@ -26203,3 +26203,22 @@ describe('rust venue generateBatchPayload prints -> String', () => {
         expect(out).toContain('let mut payload: String = ');
     });
 });
+
+describe('rust venue isGateFuturesContractWithDecimalSize prints -> bool', () => {
+    const base = "export default class Exchange {\n    hold (x: any): any { return x; }\n    safeBool (o: any, k: string, d: boolean = undefined): boolean { return o[k] ?? d; }\n}\n";
+    const venue = "import Exchange from './base/Exchange.js';\n"
+        + "export default class venue extends Exchange {\n"
+        + "    isGateFuturesContractWithDecimalSize (market: any): boolean {\n        const isSwap = this.safeBool (market, 'swap', false);\n        const enableDecimal = this.safeBool (market, 'enable_decimal', false);\n        return isSwap && enableDecimal;\n    }\n"
+        + "    orderIt (market: any, amount: string) {\n        let useDecimal = false;\n        if (amount === 'x') {\n            useDecimal = this.isGateFuturesContractWithDecimalSize (market);\n        }\n        if (useDecimal) {\n            return this.hold (1);\n        }\n        return this.hold (2);\n    }\n}\n";
+    test('the seeded false local is a native bool written from the typed call', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-93rb4-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), venue);
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        let out = '';
+        try { out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+        expect(out).toMatch(/pub fn isGateFuturesContractWithDecimalSize\(&self, [^)]*\) -> bool \{/);
+        expect(out).toContain('let mut useDecimal: bool = false;');
+    });
+});
