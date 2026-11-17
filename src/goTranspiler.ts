@@ -38254,6 +38254,19 @@ function go92g2StringListScan (goTranspiler: GoTranspiler, declaration): Node[] 
 // `const xs = this.safeList (c, k, dflt)` with a non-literal default, used only as `xs.length` and as the receiver of
 // `this.safeX (xs, i)` inside `for (.. i < xs.length ..)`, is the []any BaseExchange.SafeListSlice returns: the member or
 // default list, nil for a non-list default. A non-list box had length 0 too, so the loops never read it in either form.
+// `xs.length`, or a `const n = xs.length` local never written again
+function go92g2LengthOf (goTranspiler: GoTranspiler, node, declaration): boolean {
+    if ((node?.kind === SyntaxKind.PropertyAccessExpression) && (node.name?.text === 'length')
+        && (node.expression?.kind === SyntaxKind.Identifier) && goTranspiler.goIdentifierRefersToDeclaration(node.expression, declaration)) {
+        return true;
+    }
+    if (node?.kind !== SyntaxKind.Identifier) {
+        return false;
+    }
+    const alias = goTranspiler.goDeclarationOfIdentifier(node);
+    return (alias !== undefined) && (alias !== declaration) && ((alias.parent?.flags & NodeFlags.Const) !== 0)
+        && (alias.initializer?.kind === SyntaxKind.PropertyAccessExpression) && go92g2LengthOf(goTranspiler, alias.initializer, declaration);
+}
 function go92g2LoopIndexOver (goTranspiler: GoTranspiler, index, declaration, use): boolean {
     if (index?.kind !== SyntaxKind.Identifier) {
         return false;
@@ -38266,8 +38279,7 @@ function go92g2LoopIndexOver (goTranspiler: GoTranspiler, index, declaration, us
     const cond = loop.condition;
     if ((cond?.kind !== SyntaxKind.BinaryExpression) || (cond.operatorToken?.kind !== SyntaxKind.LessThanToken)
         || (cond.left?.kind !== SyntaxKind.Identifier) || (goTranspiler.goDeclarationOfIdentifier(cond.left) !== indexDecl)
-        || (cond.right?.kind !== SyntaxKind.PropertyAccessExpression) || (cond.right.name?.text !== 'length')
-        || (cond.right.expression?.kind !== SyntaxKind.Identifier) || !goTranspiler.goIdentifierRefersToDeclaration(cond.right.expression, declaration)) {
+        || !go92g2LengthOf(goTranspiler, cond.right, declaration)) {
         return false;
     }
     for (let up = use; up !== undefined; up = up.parent) {
@@ -38292,10 +38304,14 @@ function go92g2LoopListLocal (goTranspiler: GoTranspiler, declaration): boolean 
     go92g2LoopListVerdicts.set(declaration, false);
     const call: any = declaration.initializer;
     const callee = call?.expression;
+    // a 3-arg safeList with an expression default (no nil test: SafeListSlice is nil for a non-list default), or a
+    // no-default safeListN (nil tests allowed: SafeListNSlice is nil exactly where SafeListN is)
+    const method = String(callee?.name?.text ?? '');
+    const nilExact = (method === 'safeListN') && (call?.arguments?.length === 2);
     if ((call?.kind !== SyntaxKind.CallExpression) || (callee?.kind !== SyntaxKind.PropertyAccessExpression) || (callee.expression?.kind !== SyntaxKind.ThisKeyword)
-        || (callee.name?.text !== 'safeList') || (call.arguments.length !== 3)
-        || [ SyntaxKind.ArrayLiteralExpression, SyntaxKind.ObjectLiteralExpression, SyntaxKind.SpreadElement ].includes(call.arguments[2].kind)
-        || call.arguments.some((a) => a.kind === SyntaxKind.SpreadElement)) {
+        || call.arguments.some((a) => a.kind === SyntaxKind.SpreadElement)
+        || !(nilExact || ((method === 'safeList') && (call.arguments.length === 3)
+            && ![ SyntaxKind.ArrayLiteralExpression, SyntaxKind.ObjectLiteralExpression ].includes(call.arguments[2].kind)))) {
         return false;
     }
     const scope: any = goTranspiler.goEnclosingFunction(declaration);
@@ -38323,6 +38339,9 @@ function go92g2LoopListLocal (goTranspiler: GoTranspiler, declaration): boolean 
             lengths++;
             return false;
         }
+        if (nilExact && goTranspiler.goIsNilComparisonOperand(n, parent)) {
+            return false;
+        }
         const reader = parent?.expression;
         if ((parent?.kind === SyntaxKind.CallExpression) && (parent.arguments[0] === n) && (parent.arguments.length >= 2)
             && (reader?.kind === SyntaxKind.PropertyAccessExpression) && (reader.expression?.kind === SyntaxKind.ThisKeyword)
@@ -38345,7 +38364,8 @@ function go92g2LoopListLocal (goTranspiler: GoTranspiler, declaration): boolean 
     GoTranspiler.prototype.goSafeListUnboxValue = function (declaration, identation: number) {
         if ((listType.call(this, declaration) === undefined) && go92g2LoopListLocal(this, declaration)) {
             const args = declaration.initializer.arguments.map((a, i) => this.printNode(a, i === 0 ? identation : 0).trim());
-            return `this.SafeListSlice(${args.join(', ')})`;
+            const reader = (declaration.initializer.expression.name.text === 'safeListN') ? 'SafeListNSlice' : 'SafeListSlice';
+            return `this.${reader}(${args.join(', ')})`;
         }
         return listValue.call(this, declaration, identation);
     };

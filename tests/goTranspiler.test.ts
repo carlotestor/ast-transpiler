@@ -16611,3 +16611,56 @@ describe ('ral-92g2 R2 expression-defaulted list locals read by length-bounded l
         expect (out).not.toContain ('var balances []any');
     });
 });
+
+describe ('ral-92g2 R3 nil-tested safeListN loop lists and aliased length bounds', () => {
+    const PRELUDE =
+        'type Dict = { [key: string]: any };\n' +
+        'export class Exchange {\n' +
+        '    safeList (a: any, k: any, d: any = undefined): any[] { return a; }\n' +
+        '    safeListN (a: any, ks: any[], d: any = undefined): any[] { return a; }\n' +
+        '    safeDict (a: any, k: any, d: any = undefined): Dict { return a; }\n' +
+        '    safeString (a: any, k: any, d: any = undefined): string { return a; }\n';
+    const run = (members: string): string => {
+        const tmp = fs.mkdtempSync (path.join (os.tmpdir (), 'r92g2c-'));
+        try {
+            const src = path.join (tmp, 'ts', 'src');
+            fs.mkdirSync (src, { recursive: true });
+            const file = path.join (src, 'x.ts');
+            fs.writeFileSync (file, PRELUDE + members + '}\n');
+            return new Transpiler ({ verbose: false, go: { parser: { NUM_LINES_END_FILE: 0 } } }).transpileGoByPath (file).content;
+        } finally {
+            fs.rmSync (tmp, { recursive: true, force: true });
+        }
+    };
+    test ('a no-default safeListN local nil-tested and looped is the SafeListNSlice slice', () => {
+        const out = run ('    f (r: any): Dict {\n' +
+            '        const result: Dict = {};\n' +
+            '        const rows = this.safeListN (r, [ "list", "rows" ]);\n' +
+            '        if (rows === undefined) {\n' +
+            '            return result;\n' +
+            '        }\n' +
+            '        for (let i = 0; i < rows.length; i++) {\n' +
+            '            const row = this.safeDict (rows, i);\n' +
+            '            result[this.safeString (row, "id")] = row;\n' +
+            '        }\n' +
+            '        return result;\n' +
+            '    }\n');
+        expect (out).toContain ('var rows []any = this.SafeListNSlice(r, []any{"list", "rows"})');
+        expect (out).toContain ('if rows == nil {');
+        expect (out).toContain ('i < len(rows)');
+    });
+    test ('a loop bounded by a const length alias reads the SafeListSlice slice', () => {
+        const out = run ('    f (r: any, d: any): Dict {\n' +
+            '        const result: Dict = {};\n' +
+            '        const rows = this.safeList (r, "data", d);\n' +
+            '        const n = rows.length;\n' +
+            '        for (let i = 0; i < n; i++) {\n' +
+            '            const row = this.safeDict (rows, i);\n' +
+            '            result[this.safeString (row, "id")] = row;\n' +
+            '        }\n' +
+            '        return result;\n' +
+            '    }\n');
+        expect (out).toContain ('var rows []any = this.SafeListSlice(r, "data", d)');
+        expect (out).toContain ('var n int = len(rows)');
+    });
+});
