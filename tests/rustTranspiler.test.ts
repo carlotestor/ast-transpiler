@@ -25222,3 +25222,14 @@ describe('ral-90rh R2: a nil-declared Str local read as a map key under `as stri
         expect(out).toContain('crate::value::KeyRead::read(&&market, &key.as_deref().map(Value::from).unwrap_or(Value::Null))');
     });
 });
+
+describe('ral-90rh R3: an indexOf local over an untyped string parameter', () => {
+    test('colonIndex is i64; the >= 0 test and the slice bound read it natively', () => {
+        const dir = path.join (rustFixtureRoot, 'r90rh-indexof');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export type Str = string | undefined;\nexport default class Exchange {\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    query (outcomeSymbol: string): Str {\n        let marketPart = outcomeSymbol;\n        const colonIndex = outcomeSymbol.indexOf (':');\n        if (colonIndex >= 0) {\n            marketPart = outcomeSymbol.slice (0, colonIndex);\n        }\n        return marketPart;\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts')).content;
+        expect(out).toContain('let mut colonIndex: i64 = outcomeSymbol.as_str().and_then(|__s| __s.find(\":\")).map(|__i| __i as i64).unwrap_or(-1);');
+        expect(out).toContain('if colonIndex >= 0 {');
+    });
+});

@@ -2935,6 +2935,18 @@ export class RustTranspiler extends BaseTranspiler {
         return undefined;
     }
 
+    /** ral-90rh R3: a declaration initializer `s.indexOf ('<non-empty literal>')`, `s` a bare identifier the checker types
+     *  `string` and no scalar rule types (it prints as `Value`). */
+    rust90rhValueIndexOf(expr: any): boolean {
+        const node: any = this.unwrapParens(expr);
+        if (node === undefined || !isCallExpression(node) || !isPropertyAccessExpression(node.expression) || String(node.expression.name.text) !== 'indexOf'
+            || node.arguments.length !== 1 || !this.rustDeclInitPosition(node)) return false;
+        const recv: any = node.expression.expression;
+        const needle: any = node.arguments[0];
+        if (!isIdentifier(recv) || this.literalKindOfNode(needle) !== 'string' || this.rustNativeStringLiteralArg(needle) === undefined || needle.text === '') return false;
+        return this.primitiveKindOfType(this.typeOfNodeIfAny(recv)) === 'string' && this.rustScalarIdentifierKind(recv) === undefined;
+    }
+
     /** ral-90rh R1: `n - k` / `k - n` with `n` an `Option<i64>` local seeded by `parseInt (s)` and `k` an int literal: the
      *  printed name of `n` and the `i64` text over its payload `__b`. */
     rust90rhOintShiftBound(expr: any): { name: string, text: string } | undefined {
@@ -5734,6 +5746,9 @@ export class RustTranspiler extends BaseTranspiler {
         const cast = this.rustStrCastCall(node); if (cast !== undefined) return this.rustScalarValueKind(cast, fresh) === 'ostr' ? 'ostr' : undefined;
         if (fresh && this.rustClockString(node)) return 'str';
         if (fresh && this.rustNumParamToString(node)) return 'str';
+        // ral-90rh R3: `const i = s.indexOf ('<lit>')` over a checker-string `s` that no typed-local rule holds: printed
+        // `Value::Int(s.as_str().and_then(find).unwrap_or(-1))`, an `Int` on every path
+        if (fresh && this.rust90rhValueIndexOf(node)) return 'int';
         // ral-90rh R1: `const n = parseInt (s)` over a checker-string `s`: the native parse answers `Int` or `Null` (`Option<i64>`)
         if (fresh && this.rust90rhParseIntInit(node)) return 'oint';
         // ral-87rh R3: `x = v.toString ()` as a statement write into a `let` seeded with a string literal, where the printer
@@ -10950,6 +10965,11 @@ export class RustTranspiler extends BaseTranspiler {
         if (base === 'str' && this.rust68aJoinWrite(node)) return wrap(this.rustSbJoinText(node));
         if (this.rustBaseTypedReturnKind(node) !== undefined && !(kind === 'int' && this.rustVenueParseToInt(node))) return this.rustBaseTypedText(kind, node);
         const paramText = this.rustOptParamText(kind, node); if (paramText !== undefined) return paramText;
+        // ral-90rh R3: `s.indexOf ('<lit>')` on a `Value` string: the `find` the boxed form wrapped, `-1` where it misses
+        if (kind === 'int' && this.rust90rhValueIndexOf(node)) {
+            const needle = this.rustNativeStringLiteralArg(node.arguments[0]);
+            return `${super.printIdentifier(node.expression.expression)}.as_str().and_then(|__s| __s.find("${needle}")).map(|__i| __i as i64).unwrap_or(-1)`;
+        }
         if (kind === 'oint' && this.rustLimitCall(node)) return this.rustLimitCallText(node);
         const shadowRead = this.rustProShadowScalarText(kind, node); if (shadowRead !== undefined) return shadowRead;
         const marketField = base === 'str' ? this.rustMarketArmStrText(kind, node) : undefined; if (marketField !== undefined) return marketField;
