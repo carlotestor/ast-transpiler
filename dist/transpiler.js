@@ -43475,6 +43475,281 @@ GoTranspiler.prototype.goNativeCompoundAssignment = function(op, leftNode, leftT
   }
   return `${leftText.trim()} ${op === SyntaxKind5.PlusEqualsToken ? "+=" : "-="} ${rightText.trim()}`;
 };
+var ral90g4R1Verdicts = /* @__PURE__ */ new WeakMap();
+var ral90g4R1Pending = /* @__PURE__ */ new Set();
+function ral90g4Unparen(node) {
+  while (node?.kind === SyntaxKind5.ParenthesizedExpression) {
+    node = node.expression;
+  }
+  return node;
+}
+function ral90g4IsStringLiteral(node) {
+  const n = ral90g4Unparen(node);
+  return n?.kind === SyntaxKind5.StringLiteral || n?.kind === SyntaxKind5.NoSubstitutionTemplateLiteral;
+}
+function ral90g4Block(node) {
+  let current = node?.parent;
+  while (current !== void 0 && current.kind !== SyntaxKind5.Block && current.kind !== SyntaxKind5.SourceFile) {
+    current = current.parent;
+  }
+  return current;
+}
+function ral90g4References(goTranspiler, declaration) {
+  const scope = goTranspiler.goEnclosingFunction(declaration);
+  const name = declaration?.name?.text;
+  if (scope === void 0 || typeof name !== "string" || NIL_DECLARED_GUARD_NAMES.indexOf(name) >= 0) {
+    return void 0;
+  }
+  const refs = [];
+  let ok = true;
+  const visit = (n) => {
+    if (!ok) {
+      return;
+    }
+    if (n !== scope && FUNCTION_LIKE_KINDS.indexOf(n.kind) >= 0) {
+      ok = !scopeMentionsIdentifier(n, name);
+      return;
+    }
+    if (n !== declaration && (n.kind === SyntaxKind5.VariableDeclaration || n.kind === SyntaxKind5.Parameter) && bindingMentionsName(n.name, name)) {
+      ok = false;
+      return;
+    }
+    if (isIdentifierNamed(n, name) && n !== declaration.name) {
+      if (ccxtGoParamDeclarationOf(goTranspiler, n) !== declaration) {
+        ok = false;
+        return;
+      }
+      refs.push(n);
+    }
+    n.forEachChild(visit);
+  };
+  scope.forEachChild(visit);
+  return ok ? refs : void 0;
+}
+function ral90g4LiteralWrite(ref) {
+  const parent = ref.parent;
+  return parent?.kind === SyntaxKind5.BinaryExpression && parent.left === ref && parent.operatorToken.kind === SyntaxKind5.EqualsToken && parent.parent?.kind === SyntaxKind5.ExpressionStatement && ral90g4IsStringLiteral(parent.right);
+}
+function ral90g4WritesAreDistinct(writes) {
+  const blocks = /* @__PURE__ */ new Set();
+  for (const w of writes) {
+    const block = ral90g4Block(w.parent.parent);
+    if (block === void 0 || blocks.has(block)) {
+      return false;
+    }
+    blocks.add(block);
+  }
+  return true;
+}
+function ral90g4PointerUsesPass(goTranspiler, declaration, refs, extraRead) {
+  const writes = [];
+  for (const ref of refs) {
+    if (ral90g4LiteralWrite(ref)) {
+      writes.push(ref);
+      continue;
+    }
+    if (isDestructuringTarget(ref)) {
+      if (!ccxtGoTupleStringIsProducerElement(goTranspiler, ref)) {
+        return false;
+      }
+      continue;
+    }
+    const parent = ref.parent;
+    if (parent?.kind === SyntaxKind5.BinaryExpression && parent.left === ref && parent.operatorToken.kind >= ASSIGNMENT_KIND_MIN && parent.operatorToken.kind <= ASSIGNMENT_KIND_MAX) {
+      return false;
+    }
+    if (!extraRead(ref) && !ccxtGoTupleStringReadIsSafe(goTranspiler, ref)) {
+      return false;
+    }
+  }
+  const name = declaration.name.text + "Value";
+  if (goTranspiler.hasNodeWhere(goTranspiler.goEnclosingFunction(declaration), (n) => isIdentifierNamed(n, name))) {
+    return false;
+  }
+  return ral90g4WritesAreDistinct(writes);
+}
+function ral90g4ThisCallName(node) {
+  const call = ral90g4Unparen(node);
+  if (call?.kind !== SyntaxKind5.CallExpression || call.expression?.kind !== SyntaxKind5.PropertyAccessExpression || call.expression.expression?.kind !== SyntaxKind5.ThisKeyword || call.questionDotToken !== void 0) {
+    return void 0;
+  }
+  return call.expression.name?.text;
+}
+function ral90g4R1(goTranspiler, method) {
+  if (method?.kind !== SyntaxKind5.MethodDeclaration) {
+    return void 0;
+  }
+  if (ral90g4R1Verdicts.has(method)) {
+    return ral90g4R1Verdicts.get(method) ?? void 0;
+  }
+  if (ral90g4R1Pending.has(method)) {
+    return void 0;
+  }
+  ral90g4R1Pending.add(method);
+  let verdict;
+  try {
+    verdict = ral90g4R1Uncached(goTranspiler, method);
+  } finally {
+    ral90g4R1Pending.delete(method);
+  }
+  ral90g4R1Verdicts.set(method, verdict ?? null);
+  if (verdict !== void 0) {
+    CCXT_GO_TUPLE_STRING_CACHE.set(verdict.local, "*string");
+    for (const declaration of [verdict.local, ...verdict.callers]) {
+      goTranspiler.goDeclaredTypeCache.delete(declaration);
+    }
+  }
+  return verdict;
+}
+function ral90g4R1Uncached(goTranspiler, method) {
+  const name = method.name?.text;
+  if (typeof name !== "string" || CCXT_GO_PARSE_METHOD.test(name) || method.body?.kind !== SyntaxKind5.Block || goTranspiler.isAsyncFunction(method) || goTranspiler.goMethodKeepsBaseSignature(method) || method.type?.kind !== SyntaxKind5.StringKeyword || !ccxtGoGeneralAnnotatedMethodIsClosed(method, name)) {
+    return void 0;
+  }
+  const reserved = ccxtGoReservedMethodNames(method);
+  if (reserved !== void 0 && (reserved.has(name) || reserved.has(name.charAt(0).toUpperCase() + name.slice(1)))) {
+    return void 0;
+  }
+  const fileName = String(method.getSourceFile?.()?.fileName ?? "");
+  if (!/(^|[\\/])ts[\\/]src[\\/]/.test(fileName) || /(^|[\\/])ts[\\/]src[\\/](base|test)[\\/]/.test(fileName)) {
+    return void 0;
+  }
+  const returns = collectReturnStatements(method.body);
+  let local;
+  for (const statement of returns) {
+    const expression = ral90g4Unparen(statement.expression);
+    const declaration = expression?.kind === SyntaxKind5.Identifier ? ccxtGoParamDeclarationOf(goTranspiler, expression) : void 0;
+    if (declaration === void 0 || local !== void 0 && declaration !== local) {
+      return void 0;
+    }
+    local = declaration;
+  }
+  if (local?.kind !== SyntaxKind5.VariableDeclaration || local.name?.kind !== SyntaxKind5.Identifier || !isNilDeclaredInitializer(local.initializer) || local.parent?.parent?.kind !== SyntaxKind5.VariableStatement || local.parent.declarations.length !== 1 || local.parent.parent.parent !== method.body || goTranspiler.goEnclosingFunction(local) !== method || goTranspiler.goTypeNameIsShadowed(method, "*string")) {
+    return void 0;
+  }
+  const refs = ral90g4References(goTranspiler, local);
+  if (refs === void 0 || !refs.some((ref) => ccxtGoTupleStringIsProducerElement(goTranspiler, ref))) {
+    return void 0;
+  }
+  const isReturn = (ref) => ref.parent?.kind === SyntaxKind5.ReturnStatement && ref.parent.expression === ref;
+  if (!ral90g4PointerUsesPass(goTranspiler, local, refs, isReturn)) {
+    return void 0;
+  }
+  const graph = ccxtGoTsSrcImportGraph(fileName);
+  if (graph === void 0) {
+    return void 0;
+  }
+  const needle = new RegExp("\\." + name + "\\s*\\(", "g");
+  let textCalls = 0;
+  for (const [file, text] of graph.texts) {
+    const count = (text.match(needle) ?? []).length;
+    if (count > 0 && path2.resolve(file) !== path2.resolve(fileName)) {
+      return void 0;
+    }
+    textCalls += count;
+  }
+  const callers = [];
+  let astCalls = 0;
+  let ok = true;
+  const sourceFile = method.getSourceFile();
+  const visit = (n) => {
+    if (!ok) {
+      return;
+    }
+    if (n.kind === SyntaxKind5.PropertyAccessExpression && n.name?.text === name && n.parent?.kind === SyntaxKind5.CallExpression && n.parent.expression === n) {
+      astCalls += 1;
+      const call = n.parent;
+      const declaration = call.parent;
+      if (ral90g4ThisCallName(call) !== name || declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.initializer !== call || declaration.name?.kind !== SyntaxKind5.Identifier || declaration.parent?.declarations?.length !== 1 || goTranspiler.goTypeNameIsShadowed(goTranspiler.goEnclosingFunction(declaration), "*string")) {
+        ok = false;
+        return;
+      }
+      const callerRefs = ral90g4References(goTranspiler, declaration);
+      if (callerRefs === void 0 || !ral90g4PointerUsesPass(goTranspiler, declaration, callerRefs, () => false)) {
+        ok = false;
+        return;
+      }
+      callers.push(declaration);
+    }
+    n.forEachChild(visit);
+  };
+  sourceFile.forEachChild(visit);
+  if (!ok || astCalls !== textCalls || callers.length === 0) {
+    return void 0;
+  }
+  return { local, callers };
+}
+function ral90g4OwnMethodOf(goTranspiler, call) {
+  const name = ral90g4ThisCallName(call);
+  if (name === void 0) {
+    return void 0;
+  }
+  let declaration;
+  try {
+    declaration = goTranspiler.getChecker().getResolvedSignature(call)?.declaration?.resolve();
+  } catch (e) {
+    return void 0;
+  }
+  return declaration?.kind === SyntaxKind5.MethodDeclaration && declaration.name?.text === name ? declaration : void 0;
+}
+function ral90g4R1Local(goTranspiler, declaration) {
+  if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier) {
+    return false;
+  }
+  if (isNilDeclaredInitializer(declaration.initializer)) {
+    const method2 = goTranspiler.goEnclosingFunction(declaration);
+    return ral90g4R1(goTranspiler, method2)?.local === declaration;
+  }
+  const method = ral90g4OwnMethodOf(goTranspiler, declaration.initializer);
+  return method !== void 0 && (ral90g4R1(goTranspiler, method)?.callers.indexOf(declaration) ?? -1) >= 0;
+}
+var ral90g4UpstreamLocalType = GoTranspiler.prototype.getGoLocalType;
+GoTranspiler.prototype.getGoLocalType = function(declaration, parsedValue) {
+  const known = ral90g4UpstreamLocalType.call(this, declaration, parsedValue);
+  return known === "any" && ral90g4R1Local(this, declaration) ? "*string" : known;
+};
+var ral90g4UpstreamDeclarationList = GoTranspiler.prototype.printVariableDeclarationList;
+GoTranspiler.prototype.printVariableDeclarationList = function(node, identation) {
+  const printed = ral90g4UpstreamDeclarationList.call(this, node, identation);
+  const declaration = node?.declarations?.[0];
+  if (typeof printed !== "string" || node?.declarations?.length !== 1 || !isNilDeclaredInitializer(declaration?.initializer) || !ral90g4R1Local(this, declaration)) {
+    return printed;
+  }
+  const head = this.getIden(identation) + "var " + this.printNode(declaration.name, 0) + " ";
+  return printed === head + "any = " + this.UNDEFINED_TOKEN ? head + "*string = " + this.UNDEFINED_TOKEN : printed;
+};
+var ral90g4UpstreamExpressionStatement = GoTranspiler.prototype.printExpressionStatement;
+GoTranspiler.prototype.printExpressionStatement = function(node, identation) {
+  const write = node?.expression;
+  if (write?.kind === SyntaxKind5.BinaryExpression && ral90g4LiteralWrite(write.left) && ral90g4R1Local(this, ccxtGoParamDeclarationOf(this, write.left))) {
+    const name = this.printNode(write.left, 0).trim();
+    const iden = this.getIden(identation);
+    return iden + name + "Value := " + this.printNode(ral90g4Unparen(write.right), 0).trim() + "\n" + iden + name + " = &" + name + "Value";
+  }
+  return ral90g4UpstreamExpressionStatement.call(this, node, identation);
+};
+var ral90g4UpstreamDerefable = GoTranspiler.prototype.goDerefableStringOperand;
+GoTranspiler.prototype.goDerefableStringOperand = function(node) {
+  if (node?.kind === SyntaxKind5.Identifier && ral90g4R1Local(this, ccxtGoParamDeclarationOf(this, node))) {
+    return false;
+  }
+  return ral90g4UpstreamDerefable.call(this, node);
+};
+var ral90g4UpstreamNilProven = GoTranspiler.prototype.goNilProvenStringDeref;
+GoTranspiler.prototype.goNilProvenStringDeref = function(node) {
+  if (node?.kind === SyntaxKind5.Identifier && ral90g4R1Local(this, ccxtGoParamDeclarationOf(this, node))) {
+    return false;
+  }
+  return ral90g4UpstreamNilProven.call(this, node);
+};
+var ral90g4UpstreamMethodDefinition = GoTranspiler.prototype.printMethodDefinition;
+GoTranspiler.prototype.printMethodDefinition = function(node, identation) {
+  const printed = ral90g4UpstreamMethodDefinition.call(this, node, identation);
+  if (typeof printed !== "string" || ral90g4R1(this, node) === void 0) {
+    return printed;
+  }
+  return printed.replace(/(\)\s+)any(\s*)$/, "$1*string$2");
+};
 
 // src/javaTranspiler.ts
 init_esm_shims();
