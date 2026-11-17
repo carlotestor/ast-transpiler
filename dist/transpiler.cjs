@@ -86197,6 +86197,7 @@ ${iden}}`;
     let mapReads = 0;
     let isArrayTests = 0;
     const mapBoxes = [];
+    const rejoins = [];
     const safe = this.rustLocalUsesAll(declaration, name, false, (n) => {
       if (split && !this.rustIdentifierIsPropertyName(n) && this.rustIdentifierRefersToDeclaration(n, declaration) && this.rustEnclosingFunction(n) === fn) {
         const use = n.parent;
@@ -86214,6 +86215,18 @@ ${iden}}`;
         if (endpointSplit && this.rust90rfArmOf(n, declaration, fn) === "map" && this.rust90rfMapOrListEndpoint(init) && this.rust90rfWholeBoxUse(n)) {
           mapBoxes.push(n);
           return true;
+        }
+        if (endpointSplit && this.rust90rfMapOrListEndpoint(init)) {
+          const arm = this.rust90rfArmOf(n, declaration, fn);
+          if (arm === "map" && _is.isCallExpression.call(void 0, use) && use.arguments[0] === n && this.rustBorrowedAnyKeyReader(use)) {
+            mapReads++;
+            this.rustOptListBoxes.set(n, "map");
+            return true;
+          }
+          if (arm === void 0 && this.rust90rfWholeBoxUse(n)) {
+            rejoins.push(n);
+            return true;
+          }
         }
         if (!this.rust80dInListArm(n, declaration, fn, endpointSplit) && !(endpointSplit && this.rust90rfArmOf(n, declaration, fn) === "list"))
           return false;
@@ -86292,8 +86305,10 @@ ${iden}}`;
     });
     if (!safe || nil && (writes === 0 || natives === 0) || split && isArrayTests === 0)
       return false;
-    if (split && (mapReads > 0 || mapBoxes.length > 0))
+    if (split && (mapReads > 0 || mapBoxes.length > 0 || rejoins.length > 0))
       this.rust80dSplitLocals.add(declaration);
+    for (const n of rejoins)
+      this.rustOptListBoxes.set(n, this.rustLocalLastUse(n, declaration) ? "rejoinMove" : "rejoin");
     for (const n of mapBoxes)
       this.rustOptListBoxes.set(n, this.rustLocalLastUse(n, declaration) ? "mapBoxMove" : "mapBox");
     const finals = /* @__PURE__ */ new Map();
@@ -86338,6 +86353,8 @@ ${iden}}`;
    *  or a list-literal element. */
   rust90rfWholeBoxUse(n) {
     const up = n.parent;
+    if (_is.isCallExpression.call(void 0, up) && up.arguments.length === 1 && up.arguments[0] === n && _is.isPropertyAccessExpression.call(void 0, up.expression) && _is.isIdentifier.call(void 0, up.expression.expression) && up.expression.expression.text === "Object" && up.expression.name.text === "keys")
+      return this.rustBoxLineOk(n);
     if (_is.isCallExpression.call(void 0, up) && up.expression !== n && up.arguments.some((a) => a === n)) {
       const callee = up.expression;
       return _is.isPropertyAccessExpression.call(void 0, callee) && callee.expression.kind === _ast.SyntaxKind.ThisKeyword && this.rustNilBoxSlotOk(up, Array.from(up.arguments).indexOf(n)) && this.rustBoxLineOk(n);
@@ -86582,6 +86599,10 @@ ${iden}}`;
       return `&${text}__map`;
     if (form === "mapBox" || form === "mapBoxMove")
       return `${text}__map${form === "mapBox" ? ".clone()" : ""}.map_or(Value::Null, Value::Dict)`;
+    if (form === "rejoin" || form === "rejoinMove") {
+      const c = form === "rejoin" ? ".clone()" : "";
+      return `${text}${c}.map(Value::Arr).or_else(|| ${text}__map${c}.map(Value::Dict)).unwrap_or_default()`;
+    }
     return form === "move" ? `${text}.map_or(Value::Null, Value::Arr)` : `${text}.clone().map_or(Value::Null, Value::Arr)`;
   }
   // ── optional list locals: joins, map-literal values, literal writes ─────
