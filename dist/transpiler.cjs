@@ -54232,6 +54232,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustMarketLentLocals = /* @__PURE__ */ new WeakSet();
     /** ral-70f: ral-70f reader locals whose last use walk accepted every use (rustScalarLocalKindCore). */
     this.rust70fWalkOk = /* @__PURE__ */ new WeakSet();
+    /** ral-90re R1: locals whose use walk took a pushed `parseNumber` pair box only through rust90reParsedPairElement. */
+    this.rust90rePairAdmitted = /* @__PURE__ */ new WeakSet();
     this.rustStrNoLend = false;
     this.rustStrRuntimeBare = /* @__PURE__ */ new Set();
     this.rustBaseTypedBare = /* @__PURE__ */ new Set();
@@ -59193,6 +59195,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     let copied = 0;
     if (this.rustScalarSeeding)
       return kind;
+    this.rust90rePairAdmitted.delete(declaration);
     const previous = this.rustScalarDecisions.get(declaration);
     this.rustScalarDecisions.set(declaration, kind);
     const ok = this.rustScalarUsesAll(declaration, String(declaration.name.text), (n) => {
@@ -59230,7 +59233,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const strKind = kind === "str" || kind === "ostr";
     const handOff = nativeUses === 0 && boxed >= 1 && (copied === 0 || !strKind || !this.rustStrNoLend && (this.rustStrLendSites(declaration) || kind === "str" && this.rustClockString(this.unwrapParens(declaration.initializer)) && this.rustReaderLendBoxes(declaration) || this.rustScOwnSelfCall(declaration.initializer) && !this.rustOdExcludedCallee(declaration.initializer) && !this.rustVenueLocalHandedOn(declaration) && this.rustReaderLendBoxes(declaration))) && !this.rust66s3StrReturnedVeto(declaration, scope);
     const storeOnly = guarded && nativeUses === 0 && boxed === 1 && !handOff;
-    if (ok && nativeUses === 0 && (kind === "str" || kind === "ostr") && this.rust90reParsedPairLocal(declaration))
+    if (ok && nativeUses === 0 && this.rust90rePairAdmitted.has(declaration))
       return void 0;
     if (ok && nativeUses === 0 && kind === "ostr" && this.rust84eRecordArmTernary(declaration.initializer))
       return void 0;
@@ -61558,7 +61561,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (form === "concat" && (trial === "str" || trial === "ostr"))
         continue;
       const push = _chunkC7C726CWcjs.findAncestor.call(void 0, n, (m) => _is.isStatement.call(void 0, m) || _is.isCallExpression.call(void 0, m) && _is.isPropertyAccessExpression.call(void 0, m.expression) && m.expression.name.text === "push");
-      if (push !== void 0 && _is.isCallExpression.call(void 0, push) && !this.rustCopyPushPairElement(n, push, trial) && !this.rustPushSelfCallArgUse(n, push, trial) && !this.rust90reParsedPairElement(n, push, trial) && !r70f)
+      if (push !== void 0 && _is.isCallExpression.call(void 0, push) && !this.rustCopyPushPairElement(n, push, trial) && !this.rustPushSelfCallArgUse(n, push, trial) && !(this.rust90reParsedPairElement(n, push, trial) && this.rust90rePairAdmitted.add(declaration)) && !r70f)
         return false;
       const write = _chunkC7C726CWcjs.findAncestor.call(void 0, n, (m) => _is.isStatement.call(void 0, m) || _is.isBinaryExpression.call(void 0, m) && m.operatorToken.kind === _ast.SyntaxKind.EqualsToken);
       if (write !== void 0 && _is.isBinaryExpression.call(void 0, write) && this.isNodeInsideNode(n, write.right) && !this.rustScalarBoxedField(n, write, declaration) && !this.rustScalarFeedsElementWrite(n, write) && !this.rustScalarPreciseFeed(n, write, declaration) && !this.rustScalarCacheFieldCtor(n, write) && !this.rustScalarSumOperandWrite(n, write) && !this.rust58kDictReaderKeyWrite(n, write) && !this.rust60kBaseCallArgDictWrite(n, write) && !this.rust62pBaseCallArgKeyWrite(n, write) && !this.rust64nTypedArgWrite(n, write, form) && !this.rust68fReaderSelfArgWrite(n, write, form, declaration) && !(r70f && (form !== "targ" || this.rust70fTargLocalWrite(write))))
@@ -61700,18 +61703,6 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
    *  the array literal pushed whole (`rows.push ([ this.parseNumber (price), this.parseNumber (size) ])`): the element prints
    *  `self.parse_number(<box>, &[])` inside `Value::from(vec![..])`, a source ccxt's rustVecPushInline takes whatever its
    *  elements print (as rustCopyPushPairElement), and the box converts the very `Str` / `Null` the `Value` local held. */
-  /** ral-90re R1: some read of the local is the boxed argument of a pushed `this.parseNumber` pair (rust90reParsedPairElement). */
-  rust90reParsedPairLocal(declaration) {
-    const scope = this.rustEnclosingFunction(declaration);
-    if (scope === void 0 || !_is.isIdentifier.call(void 0, declaration.name))
-      return false;
-    return this.rustScopeNameNodes(scope, String(declaration.name.text)).some((u) => {
-      if (u === declaration.name || this.rustDeclaredNode(u) !== declaration)
-        return false;
-      const push = _chunkC7C726CWcjs.findAncestor.call(void 0, u, (m) => _is.isStatement.call(void 0, m) || _is.isCallExpression.call(void 0, m) && _is.isPropertyAccessExpression.call(void 0, m.expression) && m.expression.name.text === "push");
-      return push !== void 0 && _is.isCallExpression.call(void 0, push) && this.rust90reParsedPairElement(u, push, "ostr");
-    });
-  }
   rust90reParsedPairElement(n, push, kind) {
     if (kind !== "ostr" && kind !== "str" || push.arguments.length !== 1)
       return false;

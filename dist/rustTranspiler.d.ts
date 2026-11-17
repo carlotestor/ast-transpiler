@@ -717,6 +717,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustMarketLentLocals;
     /** ral-70f: ral-70f reader locals whose last use walk accepted every use (rustScalarLocalKindCore). */
     private rust70fWalkOk;
+    /** ral-90re R1: locals whose use walk took a pushed `parseNumber` pair box only through rust90reParsedPairElement. */
+    private rust90rePairAdmitted;
     rustScalarLocalKindUncached(declaration: any): string | undefined;
     rustScalarLocalKindCore(declaration: any): string | undefined;
     rustAnyBoolTestedLocal(declaration: any): boolean;
@@ -1126,8 +1128,6 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  the array literal pushed whole (`rows.push ([ this.parseNumber (price), this.parseNumber (size) ])`): the element prints
      *  `self.parse_number(<box>, &[])` inside `Value::from(vec![..])`, a source ccxt's rustVecPushInline takes whatever its
      *  elements print (as rustCopyPushPairElement), and the box converts the very `Str` / `Null` the `Value` local held. */
-    /** ral-90re R1: some read of the local is the boxed argument of a pushed `this.parseNumber` pair (rust90reParsedPairElement). */
-    rust90reParsedPairLocal(declaration: VariableDeclaration): boolean;
     rust90reParsedPairElement(n: Node, push: CallExpression, kind: string | undefined): boolean;
     /** 40d: a Copy number that is a direct element of the array literal pushed whole (`rows.push ([ price, amount ])`):
      *  the element prints `Value::from(x)` (the Int / Float / Null its box held, no copy) inside `Value::from(vec![..])`,
