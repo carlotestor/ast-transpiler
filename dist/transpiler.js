@@ -45001,7 +45001,7 @@ function goR92g8ProducerType(goTranspiler, node) {
     return GO_R92G8_PRODUCER_CACHE.get(node);
   }
   GO_R92G8_PRODUCER_CACHE.set(node, void 0);
-  const result = goR92g8ProducerTypeUncached(goTranspiler, node);
+  const result = goR92g8ProducerTypeUncached(goTranspiler, node) ?? (goR92g8StringListProducer(goTranspiler, node) ? "[]any" : void 0);
   GO_R92G8_PRODUCER_CACHE.set(node, result);
   return result;
 }
@@ -45218,6 +45218,36 @@ GoTranspiler.prototype.printBinaryExpression = function(node, identation) {
     }
   }
   return printBinaryExpressionBase92g8.call(this, node, identation);
+};
+function goR92g8DefaultedSafeListReturn(node) {
+  const e = goR92g8Unparen(node);
+  return e?.kind === SyntaxKind5.CallExpression && e.arguments.length === 3 && e.expression?.kind === SyntaxKind5.PropertyAccessExpression && e.expression.expression?.kind === SyntaxKind5.ThisKeyword && e.expression.name?.text === "safeList" && goR92g8Unparen(e.arguments[2])?.kind === SyntaxKind5.ArrayLiteralExpression;
+}
+function goR92g8StringListProducer(goTranspiler, node) {
+  const annotation = node?.type?.getText()?.replace(/\s+/g, "");
+  if (node?.kind !== SyntaxKind5.MethodDeclaration || node.body === void 0 || annotation !== "string[]" && annotation !== "Strings") {
+    return false;
+  }
+  const name = node.name?.text;
+  const fileName = String(node.getSourceFile?.()?.fileName ?? "");
+  if (typeof name !== "string" || /(^|[\\/])base[\\/]/.test(fileName) || goTranspiler.isAsyncFunction(node) || !ccxtGoGeneralAnnotatedMethodIsClosed(node, name) || goTranspiler.goMethodKeepsBaseSignature?.(node)) {
+    return false;
+  }
+  const reserved = ccxtGoReservedMethodNames(node);
+  if (reserved !== void 0 && (reserved.has(name) || reserved.has(name.charAt(0).toUpperCase() + name.slice(1)))) {
+    return false;
+  }
+  const returns = collectReturnStatements(node.body);
+  return returns.length > 0 && returns.every((r) => goR92g8DefaultedSafeListReturn(r.expression));
+}
+var printReturnStatementBase92g8 = GoTranspiler.prototype.printReturnStatement;
+GoTranspiler.prototype.printReturnStatement = function(node, identation) {
+  const fn = this.goEnclosingFunction(node);
+  if (fn !== void 0 && goR92g8DefaultedSafeListReturn(node.expression) && goR92g8StringListProducer(this, fn)) {
+    const args = goR92g8Unparen(node.expression).arguments.map((a) => this.printNode(a, 0).trim());
+    return this.printNodeCommentsIfAny(node, identation, this.getIden(identation) + "return SafeListTypedDefault(" + args.join(", ") + ")");
+  }
+  return printReturnStatementBase92g8.call(this, node, identation);
 };
 
 // src/javaTranspiler.ts
