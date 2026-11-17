@@ -37403,7 +37403,7 @@ export class RustTranspiler extends BaseTranspiler {
         // ral-ve: except a `url: string` parameter every caller fills with a `this.urls[..]` read (the arm decodes it once)
         const urlOnly = this.rustVenueUrlParam(method, param);
         const noArmStr = !group && /(?:^|\/)ts\/src\/pro\//.test(file) && !this.isAsyncFunction(method) && !urlOnly && this.rust63xNoArmStrMethod(method);
-        const dictBuilder = !group && /(?:^|\/)ts\/src\/pro\//.test(file) && !this.isAsyncFunction(method) && !urlOnly && !noArmStr && this.rust93raWsDictBuilder(method, param);
+        const dictBuilder = !group && /(?:^|\/)ts\/src\/pro\//.test(file) && !this.isAsyncFunction(method) && !urlOnly && !noArmStr && (this.rust93raWsDictBuilder(method, param) || this.rust93raWsLocalStrSlot(method, param));
         if (!group && /(?:^|\/)ts\/src\/pro\//.test(file) && !this.isAsyncFunction(method) && !urlOnly && !noArmStr && !dictBuilder) return undefined;
         const hidden: any = this.getMethodOverride(method);
         if (!group && hidden !== undefined && RustTranspiler.RUST_BASE_TIER_FILE.test(String(hidden.getSourceFile().fileName))) return undefined;
@@ -37495,6 +37495,21 @@ export class RustTranspiler extends BaseTranspiler {
         const name = String(param.name.text);
         if (this.rustLocalIsReassigned(param, name)) return false;
         return this.rustLocalUsesAll(param, name, true, (n: Node) => this.rust92rgLiteralValueSlot(n));
+    }
+
+    /** A required `string` slot of a sync ws method (no override, no trait slot) some caller fills with one of its own
+     *  locals: typed, so that local's hand-off reads natively (the arm decodes the text once, rustDispatch.wsArg `str`). */
+    rust93raWsLocalStrSlot(method: MethodDeclaration, param: ParameterDeclaration): boolean {
+        if (param.initializer !== undefined || param.questionToken !== undefined || param.type?.kind !== SyntaxKind.StringKeyword || !isIdentifier(param.name)) return false;
+        if (!isIdentifier(method.name) || this.toSnakeCaseName(String(method.name.text)) in (this.rustVirtualDispatch ?? {})) return false;
+        const hidden: Node | undefined = this.getMethodOverride(method);
+        if (hidden !== undefined && hidden !== method) return false;
+        const at = Array.from(method.parameters).indexOf(param);
+        return this.rustVenueStrCallSites(method).some((call: CallExpression) => {
+            const arg: Node | undefined = call.arguments[at] === undefined ? undefined : this.unwrapParens(call.arguments[at]);
+            const local: Node | undefined = arg !== undefined && isIdentifier(arg) ? this.rustDeclaredNode(arg) : undefined;
+            return local !== undefined && (isVariableDeclaration(local) || isBindingElement(local)) && local.name !== arg;
+        });
     }
 
     /** Every same-file caller passes a string literal or a checker-`string` identifier / element read at the slot. */
