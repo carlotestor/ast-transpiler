@@ -89522,7 +89522,7 @@ ${iden}}`;
       return false;
     if (!_RustTranspiler.RUST_BASE_TIER_FILE.test(file)) {
       if (!(_nullishCoalesce(method.modifiers, () => ( []))).some((m) => m.kind === _ast.SyntaxKind.OverrideKeyword))
-        return false;
+        return this.rust92rfVenueRowsParam(method, param, file);
       const overridden = this.getMethodOverride(method);
       return overridden !== void 0 && overridden !== method && this.rustParamIsLentList(_optionalChain([overridden, 'access', _12794 => _12794.parameters, 'optionalAccess', _12795 => _12795[0]]));
     }
@@ -89534,6 +89534,18 @@ ${iden}}`;
     if (record)
       return this.rustLentRecordTypeNode(type);
     return _RustTranspiler.RUST_LENT_LIST_TYPES.has(typeName) || this.rustRowListTypeNode(type) || _optionalChain([type, 'optionalAccess', _12799 => _12799.kind]) === _ast.SyntaxKind.AnyKeyword || _optionalChain([type, 'optionalAccess', _12800 => _12800.kind]) === _ast.SyntaxKind.ObjectKeyword || name === "convertTradingViewToOHLCV" && typeName === "NullableDict";
+  }
+  /** ral-92rf R4: `parseXs (rows: any[] | Dict[] | List, ..)` declared in a REST venue file (`ts/src/<id>.ts`), not async, not
+   *  overriding and not overridden by a ws subclass method of the same name: its first parameter prints `impl Into<crate::Value>`. */
+  rust92rfVenueRowsParam(method, param, file) {
+    if (file.search(/\/ts\/src\/[^/]+\.ts$/) < 0 || this.isAsyncFunction(method) || this.getMethodOverride(method) !== void 0)
+      return false;
+    if (!_is.isIdentifier.call(void 0, method.name) || !/^parse[A-Z]\w*s$/.test(String(method.name.text)))
+      return false;
+    const type = param.type;
+    const anyList = type !== void 0 && _is.isArrayTypeNode.call(void 0, type) && type.elementType.kind === _ast.SyntaxKind.AnyKeyword;
+    const typeName = type !== void 0 && _is.isTypeReferenceNode.call(void 0, type) && _is.isIdentifier.call(void 0, type.typeName) && type.typeArguments === void 0 ? String(type.typeName.text) : "";
+    return anyList || _RustTranspiler.RUST_LENT_LIST_TYPES.has(typeName) || this.rustRowListTypeNode(type);
   }
   /** `object`, `Dict` or `any`, optionally `| undefined`: the parser reads its input as a `Value` of any shape. */
   rustLentRecordTypeNode(type) {

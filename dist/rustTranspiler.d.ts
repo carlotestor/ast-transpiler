@@ -4817,6 +4817,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_LENT_LIST_TYPES;
     private static readonly RUST_LENT_RESPONSE_READERS;
     rustParamIsLentListUncached(param: any): boolean;
+    /** ral-92rf R4: `parseXs (rows: any[] | Dict[] | List, ..)` declared in a REST venue file (`ts/src/<id>.ts`), not async, not
+     *  overriding and not overridden by a ws subclass method of the same name: its first parameter prints `impl Into<crate::Value>`. */
+    rust92rfVenueRowsParam(method: MethodDeclaration, param: ParameterDeclaration, file: string): boolean;
     /** `object`, `Dict` or `any`, optionally `| undefined`: the parser reads its input as a `Value` of any shape. */
     rustLentRecordTypeNode(type: any): boolean;
     /** `Dict[]` / `object[]`, optionally `| undefined`: a list of rows, the same Value list a `List` holds. */
