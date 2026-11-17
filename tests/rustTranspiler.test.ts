@@ -25219,6 +25219,16 @@ describe('ral-90rd: safeValue / safeDict / safeList result locals', () => {
         expect(out).toContain('let mut result: crate::value::List = ');
         expect(out).not.toContain('get_value(&result');
     });
+    test('R2 binance sign: a []-defaulted safeList local joined by a literal is a typed List with a native join', () => {
+        const out = write ('ral-90rd-r2a', "    m (params: Dict, query: string) {\n        const orderidlist = this.safeList (params, 'orderidlist', []);\n        const n = orderidlist.length;\n        if (n > 0) {\n            query = query + '&' + 'orderidlist=%5B' + orderidlist.join ('%2C') + '%5D';\n        }\n        return query;\n    }\n");
+        expect(out).toContain('let mut orderidlist: crate::value::List = ');
+        expect(out).toContain('orderidlist.iter().map(crate::runtime::stringify_param).collect::<Vec<String>>().join("%2C")');
+        expect(out).not.toContain('join(&orderidlist');
+    });
+    test('R2 negative: a no-default safeList local under a null test keeps the helper join', () => {
+        const out = write ('ral-90rd-r2n', "    m (params: Dict, query: string) {\n        const ids = this.safeList (params, 'ids');\n        if (ids !== undefined) {\n            query = query + ids.join (',');\n        }\n        return query;\n    }\n");
+        expect(out).not.toContain('ids.iter().map(crate::runtime::stringify_param)');
+    });
     test('R1 negative: an untyped (Dict) map with a mutated row bind stays Value', () => {
         const out = write ('ral-90rd-r1n', "    m (result: Dict) {\n        const ledger = this.safeDict (result, 'ledger', {});\n        const keys = Object.keys (ledger);\n        const items = [];\n        for (let i = 0; i < keys.length; i++) {\n            const key = keys[i];\n            const value = ledger[key];\n            value['id'] = key;\n            items.push (value);\n        }\n        return items;\n    }\n");
         expect(out).not.toContain('let mut ledger: crate::value::Dict = ');
