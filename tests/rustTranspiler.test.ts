@@ -25245,7 +25245,7 @@ describe('ral-90rf R2: a Dict / List endpoint split also rejoins outside both ar
     const keys = "    async m (params = {}) {\n        const response = await this.privateGetLeverage (params);\n        if (Array.isArray (response)) {\n            return this.keep (response);\n        } else {\n            const ids = Object.keys (response);\n            return this.keep (ids);\n        }\n    }\n";
     test('btse fetchLeverage: a whole use after the test rejoins the answer from the half that holds it', () => {
         const out = mk ('ral-90rf-r2a', 'List', rejoin);
-        expect(out).toContain('response.map(Value::Arr).or_else(|| response__map.map(Value::Dict)).unwrap_or_default()');
+        expect(out).toContain('(match response { Some(__l) => Value::Arr(__l), None => response__map.map_or(Value::Null, Value::Dict) })');
         expect(out).not.toMatch(/let mut response: Value = /);
     });
     test('whitebit fetchMyTrades: Object.keys in the map arm reads the held map', () => {
