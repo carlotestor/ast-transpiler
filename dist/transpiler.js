@@ -42456,6 +42456,75 @@ function ccxtGo87g2ListLocal(goTranspiler, declaration, mode) {
     return verdict;
   };
 }
+{
+  const trueLocal = GoTranspiler.prototype.goHandleOptionTrueLocal;
+  const memo = /* @__PURE__ */ new WeakMap();
+  const isBoolType = (t) => t?.kind === SyntaxKind5.BooleanKeyword || t?.kind === SyntaxKind5.TypeReference && t.typeName?.kind === SyntaxKind5.Identifier && t.typeName.text === "Bool";
+  GoTranspiler.prototype.goHandleOptionTrueLocal = function(declaration) {
+    if (trueLocal.call(this, declaration)) {
+      return true;
+    }
+    if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier || declaration.parent?.parent?.kind !== SyntaxKind5.FirstStatement || declaration.type !== void 0 && !isBoolType(declaration.type)) {
+      return false;
+    }
+    if (memo.has(declaration)) {
+      return memo.get(declaration);
+    }
+    memo.set(declaration, false);
+    let call = declaration.initializer;
+    while (call?.kind === SyntaxKind5.ParenthesizedExpression || call?.kind === SyntaxKind5.AsExpression && isBoolType(call.type)) {
+      call = call.expression;
+    }
+    if (call?.kind !== SyntaxKind5.CallExpression || call.expression?.kind !== SyntaxKind5.PropertyAccessExpression || call.expression.expression?.kind !== SyntaxKind5.ThisKeyword || call.expression.name?.text !== "handleOption" || call.arguments.length < 2 || call.arguments.length > 3) {
+      return false;
+    }
+    const scope = this.goEnclosingFunction(declaration);
+    const checker = this.checkerOrUndefined();
+    const own = checker?.getSymbolAtLocation(declaration.name);
+    if (scope === void 0 || own === void 0 || this.goTypeNameIsShadowed(scope, "bool")) {
+      return false;
+    }
+    const name = declaration.name.text;
+    const block = declaration.parent.parent.parent;
+    const contains = (outer, inner) => {
+      for (let cur = inner; cur !== void 0; cur = cur.parent) {
+        if (cur === outer) {
+          return true;
+        }
+      }
+      return false;
+    };
+    let reads = 0;
+    const unsafe = this.hasNodeWhere(scope, (n) => {
+      if ((n.kind === SyntaxKind5.VariableDeclaration || n.kind === SyntaxKind5.Parameter || n.kind === SyntaxKind5.BindingElement) && n !== declaration && n.name?.kind === SyntaxKind5.Identifier && n.name.text === name) {
+        const otherBlock = n.parent?.parent?.parent;
+        return n.kind !== SyntaxKind5.VariableDeclaration || contains(otherBlock, declaration) || contains(block, n);
+      }
+      if (n.kind !== SyntaxKind5.Identifier || n.text !== name || n === declaration.name) {
+        return false;
+      }
+      const parent = n.parent;
+      if ((parent?.kind === SyntaxKind5.PropertyAccessExpression || parent?.kind === SyntaxKind5.PropertyAssignment) && parent.name === n) {
+        return false;
+      }
+      if (n.parent?.kind === SyntaxKind5.VariableDeclaration && n.parent.name === n) {
+        return false;
+      }
+      if (checker.getSymbolAtLocation(n) !== own) {
+        return false;
+      }
+      const op = parent?.operatorToken?.kind;
+      if (parent?.kind !== SyntaxKind5.BinaryExpression || op !== SyntaxKind5.EqualsEqualsEqualsToken && op !== SyntaxKind5.EqualsEqualsToken && op !== SyntaxKind5.ExclamationEqualsEqualsToken && op !== SyntaxKind5.ExclamationEqualsToken || (parent.left === n ? parent.right : parent.left)?.kind !== SyntaxKind5.TrueKeyword) {
+        return true;
+      }
+      reads++;
+      return false;
+    });
+    const verdict = !unsafe && reads > 0;
+    memo.set(declaration, verdict);
+    return verdict;
+  };
+}
 
 // src/javaTranspiler.ts
 init_esm_shims();
