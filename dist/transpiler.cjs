@@ -76355,8 +76355,10 @@ ${iden}}`;
       return void 0;
     return impl;
   }
-  /** ral-90rg R4: every `return` of `impl` (closures skipped) is an array literal or another built list (rustBuiltContainerKind). */
-  rust90rgImplReturnsList(impl, depth) {
+  /** ral-90rg R4: every `return` of `impl` (closures skipped) is an array literal (a tuple producer: `return [ v, params ]`). Only a
+   *  literal: a forwarded list pass-through (parseTrades -> filterBySymbolSinceLimit) stays with the lent-list rule, which moves
+   *  the list instead of copying it out. */
+  rust90rgImplReturnsList(impl) {
     let returns = 0;
     let ok = true;
     const visit = (node) => {
@@ -76366,7 +76368,7 @@ ${iden}}`;
         return;
       if (_is.isReturnStatement.call(void 0, node)) {
         returns++;
-        if (this.rustBuiltContainerKind(node.expression, depth + 1) !== "list")
+        if (!_is.isArrayLiteralExpression.call(void 0, this.rustSkipWrappers(node.expression)))
           ok = false;
         return;
       }
@@ -76422,7 +76424,7 @@ ${iden}}`;
         if (this.rustBuiltContainerKind(node.expression, depth + 1) === kind)
           return;
         const forward = kind === "list" ? this.rust90rgBaseTailForward(declaration, inner) : void 0;
-        if (forward === void 0 || !this.rust90rgImplReturnsList(forward, depth))
+        if (forward === void 0 || !this.rust90rgImplReturnsList(forward))
           ok = false;
         return;
       }
