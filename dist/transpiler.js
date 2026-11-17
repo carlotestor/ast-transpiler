@@ -54352,6 +54352,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustBoolSlotLineMemo = /* @__PURE__ */ new WeakMap();
     // counter identifiers printed as a `.get(i as usize)` key or a `Value::Int(i)` box while the body prints
     this.rustI64ClosedUses = /* @__PURE__ */ new WeakSet();
+    this.rust90rdJoinReads = /* @__PURE__ */ new WeakSet();
     // ── typed caught errors (ral-44h; was ccxt build/ rustTypedCaughtErrors) ──
     // A catch binding whose every read is an error-object sink prints as `crate::error::CaughtError` (ccxt's catch
     // lowering binds it with `CaughtError::from_panic`, same `[Kind] message` text): `throw e` (Display),
@@ -74980,8 +74981,25 @@ ${this.getIden(identation)}}`;
   printTrimCall(node, identation, name = void 0) {
     return this.printTrim(node, name) ?? `trim(&${name})`;
   }
+  /** ral-90rd R2: `x.join ('lit')`, a single string-literal separator, the call in a read position (not a callee, chain head
+   *  or write target). */
+  rust90rdListJoinUse(access) {
+    const call = access.parent;
+    return isCallExpression6(call) && call.expression === access && String(access.name.text) === "join" && call.arguments.length === 1 && this.rustNativeStringLiteralArg(call.arguments[0]) !== void 0 && !this.rustScalarInNestedWrite(access.expression, true);
+  }
+  /** ral-90rd R2: the join of a typed list local the borrowed-container rule admitted at this call. */
+  printBorrowedListJoin(node) {
+    if (!this.rust90rdJoinReads.has(node))
+      return void 0;
+    const access = node.expression;
+    const declaration = this.rustDeclarationOfIdentifier(access.expression);
+    if (declaration === void 0 || this.rustBorrowedLocalKind(declaration) !== "list" || this.rustOptContainerLocals.has(declaration))
+      return void 0;
+    const literal2 = this.rustNativeStringLiteralArg(node.arguments[0]);
+    return `Value::Str(${this.printNode(access.expression, 0).trim()}.iter().map(crate::runtime::stringify_param).collect::<Vec<String>>().join("${literal2}").into())`;
+  }
   printJoinCall(node, identation, name = void 0, parsedArg = void 0) {
-    return this.printOptListJoin(node) ?? this.printLentListJoin(node) ?? this.printStrVecParamJoin(node) ?? this.printVecJoin(node) ?? this.printNativeStringJoin(node, name) ?? this.printStrSliceJoin(node) ?? `join(&${name}, &${parsedArg})`;
+    return this.printBorrowedListJoin(node) ?? this.printOptListJoin(node) ?? this.printLentListJoin(node) ?? this.printStrVecParamJoin(node) ?? this.printVecJoin(node) ?? this.printNativeStringJoin(node, name) ?? this.printStrSliceJoin(node) ?? `join(&${name}, &${parsedArg})`;
   }
   /** ral-42f: `parts.join('-')` where `parts` is a never-reassigned local `this.arraySlice(<string[] local>, ..)`: every element is a
    *  `Value::Str`, so the helper's stringify is the identity (the form ccxt rustStringNatives printed after the fact). */
@@ -77560,6 +77578,7 @@ ${iden}}`;
     let paramsBoxes = 0;
     let declaredEndpointWrites = 0;
     let castLengths = 0;
+    const joinUses = [];
     let nullWrites = 0;
     let endpointBoxes = 0;
     let literal76bWrites = 0;
@@ -77682,6 +77701,11 @@ ${iden}}`;
         castLengths++;
         const use = lenAt.parent.parent;
         return use?.kind !== SyntaxKind7.PrefixUnaryExpression && use?.kind !== SyntaxKind7.PostfixUnaryExpression && !(isBinaryExpression5(use) && use.left === lenAt.parent && rustIsAssignmentOperator(use.operatorToken.kind));
+      }
+      if (from === "list" && isPropertyAccessExpression3(up) && up.expression === n && this.rust90rdListJoinUse(up)) {
+        joinUses.push(up.parent);
+        lengths++;
+        return ++reads > 0;
       }
       if (isPropertyAccessExpression3(up) && up.expression === n && String(up.name.text) === "length") {
         lengths++;
@@ -77828,6 +77852,8 @@ ${iden}}`;
       return void 0;
     const neverNullRewrites = writes > 0 && writes === sameKindWrites && from === "dict" && init !== void 0 && (this.rustContainerInitNeverNull(init, "map") || omitInitRewrites);
     const optional = nilDeclared || nullTests > 0 || writes > 0 && !neverNullRewrites || lentNullable > 0 || optionalBoxes > 0 || zgRow || elementKeyWrites > 0 || optMapInit;
+    if (joinUses.length > 0 && (optional || from !== "list"))
+      return void 0;
     if (jwtLends > 0 && optional)
       return void 0;
     if (aliasBoxes > 0 && (optional || reads === 0 && aliasBoxes === boxedElementUses.length))
@@ -77875,6 +77901,8 @@ ${iden}}`;
       return void 0;
     for (const n of indexReadUses)
       this.rustBorrowedIndexReads.add(n.parent);
+    for (const c of joinUses)
+      this.rust90rdJoinReads.add(c);
     if (optional) {
       if (from === "api" || nilDeclared && writes === 0 || !nilDeclared && !((zgRow || elementKeyWrites > 0) && this.rustDictElementSource(init)) && !optMapInit && !this.rustOptContainerSourceOk(init, from))
         return void 0;

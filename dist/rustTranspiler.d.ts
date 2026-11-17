@@ -3076,6 +3076,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     printStartsWithCall(node: any, identation: any, name?: any, parsedArg?: any): string;
     printEndsWithCall(node: any, identation: any, name?: any, parsedArg?: any): string;
     printTrimCall(node: any, identation: any, name?: any): string;
+    private rust90rdJoinReads;
+    /** ral-90rd R2: `x.join ('lit')`, a single string-literal separator, the call in a read position (not a callee, chain head
+     *  or write target). */
+    rust90rdListJoinUse(access: any): boolean;
+    /** ral-90rd R2: the join of a typed list local the borrowed-container rule admitted at this call. */
+    printBorrowedListJoin(node: any): string | undefined;
     printJoinCall(node: any, identation: any, name?: any, parsedArg?: any): string;
     /** ral-42f: `parts.join('-')` where `parts` is a never-reassigned local `this.arraySlice(<string[] local>, ..)`: every element is a
      *  `Value::Str`, so the helper's stringify is the identity (the form ccxt rustStringNatives printed after the fact). */
