@@ -25800,3 +25800,30 @@ describe('ral-92rf R2: a resolve of `stores[symbol]` over the handler\'s own sym
         expect(out).toMatch(/let mut trades: Value = /);
     });
 });
+
+describe('ral-92rf R3: a resolve of `xs[i]` over the handler\'s own pushed list in its counting loop resolves the pushed kind', () => {
+    const files: Record<string, string> = {
+        "ts/src/base/ws/Client.ts": "export default class Client {\n    resolve (result: any, messageHash: string): any { return result; }\n}\n",
+        "ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type List = any[];\nexport default class Exchange {\n    tickers: Dict = {};\n    safeString (obj: any, key: any, defaultValue: string = undefined): string { return obj[key]; }\n    safeDict (obj: any, key: any, defaultValue: Dict = undefined): Dict { return obj[key]; }\n    async watchMultiple (url: string, h: string[], r: any = undefined, s: any = undefined): Promise<any> { return url; }\n}\n",
+        "ts/src/pro/venue.ts": "import Exchange from '../base/Exchange.js';\nimport Client from '../base/ws/Client.js';\nimport type { Dict, List } from '../base/Exchange.js';\nexport default class venue extends Exchange {\n    async watchTickers (symbols: string[]) {\n        const hashes: List = [];\n        for (let i = 0; i < symbols.length; i++) {\n            hashes.push ('ticker:' + symbols[i]);\n        }\n        const ticker = await this.watchMultiple ('u', hashes);\n        const result: Dict = {};\n        const s = this.safeString (ticker, 'symbol');\n        result[s] = ticker;\n        return result;\n    }\n    handleTicker (client: Client, message: Dict) {\n        const tickers: List = [];\n        tickers.push ({ 'symbol': this.safeString (message, 's') });\n        for (let i = 0; i < tickers.length; i++) {\n            const ticker = tickers[i];\n            const symbol = this.safeString (ticker, 'symbol', '');\n            client.resolve (ticker, 'ticker:' + symbol);\n        }\n    }\n}\n",
+    };
+    const run = (venue: string) => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-92rf-r3-'));
+        for (const [rel, text] of Object.entries ({ ...files, "ts/src/pro/venue.ts": venue })) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        const out = transpiler.transpileRustByPath(path.join (root, 'ts/src/pro/venue.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+        return out;
+    };
+    test('phemex watchTickers shape: the watched ticker is the shared map, read by a lend', () => {
+        const out = run (files["ts/src/pro/venue.ts"]);
+        expect(out).toContain('let mut ticker: crate::value::Dict = ');
+        expect(out).toContain('(&ticker, "symbol"');
+    });
+    test('negative: a push inside the counting loop keeps the watched ticker boxed', () => {
+        const out = run (files["ts/src/pro/venue.ts"].replace ("client.resolve (ticker, 'ticker:' + symbol);", "client.resolve (ticker, 'ticker:' + symbol);\n            tickers.push (message);"));
+        expect(out).toMatch(/let mut ticker: Value = /);
+    });
+});
