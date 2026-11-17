@@ -34786,7 +34786,8 @@ function ral87g6ForeignOmitWrite(goTranspiler: GoTranspiler, scope, declaration)
     return goTranspiler.hasNodeWhere(scope, (n) => {
         const write = ((n.kind === SyntaxKind.BinaryExpression) && (n.operatorToken?.kind === SyntaxKind.EqualsToken)
             && (n.left?.kind === SyntaxKind.Identifier) && (n.left.text === name)) ? ral84g6OmitCall(n.right) : undefined;
-        return (write !== undefined) && (write.arguments[0].text !== name);
+        const source = write?.arguments[0];
+        return (write !== undefined) && !((source?.kind === SyntaxKind.Identifier) && (source.getText() === name));
     });
 }
 const ral84g6ShippedDictUnbox = GoTranspiler.prototype.goSafeDictLocalUnbox;
