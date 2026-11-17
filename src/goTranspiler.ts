@@ -39233,4 +39233,65 @@ GoTranspiler.prototype.goLocalStaticType = function (node) {
     this.goLocalStaticTypeCache.delete(owner);
     return answer;
 };
+// R5: a `*int64` arm the ENCLOSING code proves defined (`if (until !== undefined) { const e = (until > now) ?
+// now : until; .. }`) reads as its pointee next to an int64 / int / integer-constant arm, exactly like an arm
+// the ternary's own condition proves defined. Same admission as R2: an arithmetic / ordered use, no copy.
+const goTernaryJoin93GuardedPartsUncached = GoTranspiler.prototype.goTernaryJoinPartsUncached;
+GoTranspiler.prototype.goTernaryJoinPartsUncached = function (declaration) {
+    const known = goTernaryJoin93GuardedPartsUncached.call(this, declaration);
+    if ((known !== undefined) || this.goTernaryJoinProvisional()) {
+        return known;
+    }
+    const ternary = this.goUnwrapParenthesizedNode(declaration?.initializer);
+    if (ternary?.kind !== SyntaxKind.ConditionalExpression) {
+        return undefined;
+    }
+    const whenTrue = this.goTernaryJoinArmType(ternary.whenTrue);
+    const whenFalse = this.goTernaryJoinArmType(ternary.whenFalse);
+    const guarded = (armNode, armType: string) => {
+        const arm = this.goUnwrapParenthesizedNode(armNode);
+        return (armType === '*int64') && (arm?.kind === SyntaxKind.Identifier) && this.goTernaryJoin93StatementGuarded(declaration, arm);
+    };
+    const value = (armType: string) => (armType === 'int64') || (armType === 'int') || (armType === 'const-int');
+    const pointerTrue = guarded(ternary.whenTrue, whenTrue) && value(whenFalse);
+    const pointerFalse = guarded(ternary.whenFalse, whenFalse) && value(whenTrue);
+    if ((!pointerTrue && !pointerFalse) || this.goWithExprDepth(1, () => this.printCondition(ternary.condition, 0)).includes('\n')
+        || this.goTernaryJoinFeedsParameterCopy(declaration) || !this.goTernaryJoin90HasArithmeticUse(declaration)) {
+        return undefined;
+    }
+    return { goType: 'int64', derefTrue: pointerTrue, derefFalse: pointerFalse,
+        widenTrue: whenTrue === 'int', widenFalse: whenFalse === 'int' } as GoTernaryJoinIntParts;
+};
+export interface GoTranspiler {
+    goTernaryJoin93StatementGuarded(declaration, ident): boolean;
+}
+
+// the `if` blocks around the declaration's statement prove the never-rebound identifier non-nil
+GoTranspiler.prototype.goTernaryJoin93StatementGuarded = function (declaration, ident): boolean {
+    const checker: Checker | undefined = this.checkerOrUndefined();
+    const statement = declaration?.parent?.parent;
+    if ((checker === undefined) || (statement?.kind !== SyntaxKind.FirstStatement)
+        || this.goLocalIsRebound(this.goEnclosingFunction(declaration), ident)) {
+        return false;
+    }
+    let child = statement;
+    let parent = statement.parent;
+    while (parent !== undefined) {
+        if (parent.kind === SyntaxKind.Block) {
+            child = parent;
+            parent = parent.parent;
+            continue;
+        }
+        if (parent.kind === SyntaxKind.IfStatement) {
+            if ((child === parent.thenStatement) && this.goConditionProvesNonNil(parent.expression, ident)) {
+                return true;
+            }
+            child = parent;
+            parent = parent.parent;
+            continue;
+        }
+        return false;
+    }
+    return false;
+};
 // ===== ral-93g7 (end) =====
