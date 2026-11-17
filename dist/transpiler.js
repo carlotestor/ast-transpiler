@@ -45910,6 +45910,9 @@ function goPagedListRowsLocal(goTranspiler, list) {
     if (shipped === void 0 || !goPagedListRowsLocal(this, node?.expression) || this.goGb08BoundedListRead(node, keyNode) !== void 0 || this.goBoundedLoopListRead(node)) {
       return shipped;
     }
+    if (!goPagedListLocalOf(this, this.goDeclarationOfIdentifier(node.expression))) {
+      return `GetValue(${containerStr}, ${keyStr})`;
+    }
     const level = this.goStatementLevel;
     const body = this.getIden(level + 1);
     return `func() any {
