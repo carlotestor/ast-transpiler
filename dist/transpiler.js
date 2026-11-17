@@ -96311,7 +96311,7 @@ _RustTranspiler.RUST_LENT_HELPER_SLOTS = {
 // ── typed filter parameters (rustTypedFilterParams / printTypedFilterSignature / printTypedFilterCall) ──
 // The base `filterBy*` helpers take their optional `Int` / `Str` parameters as positional `Option<i64>` /
 // `Option<&str>` (with any optional parameter before them as a positional `Value`); the rest stay in the slice.
-_RustTranspiler.RUST_TYPED_FILTER_METHODS = /* @__PURE__ */ new Set(["filterBySinceLimit", "filterBySymbolSinceLimit", "filterBySymbolsSinceLimit", "filterByArray", "filterByValueSinceLimit"]);
+_RustTranspiler.RUST_TYPED_FILTER_METHODS = /* @__PURE__ */ new Set(["filterBySinceLimit", "filterBySymbolSinceLimit", "filterBySymbolsSinceLimit", "filterByArray", "filterByValueSinceLimit", "filterByCurrencySinceLimit"]);
 _RustTranspiler.RUST_TYPED_FILTER_TYPES = { Int: "Option<i64>", Str: "Option<&str>" };
 // ── filter rows (rustFilterRowsParamOk / rustFilterRowsArgText / printFilterRows*) ──
 // The rows argument of a typed base `filterBy*` method declared `object[]` (or a map/list union, never `any`)
