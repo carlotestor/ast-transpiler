@@ -17144,3 +17144,41 @@ describe ('ral-93g2 R1 marketIds locals joined as strings', () => {
         expect (out).not.toContain ('var ids []string');
     });
 });
+
+describe ('ral-93g2 R2 marketIds locals read by length-bounded loops', () => {
+    const PRELUDE =
+        'type Strings = string[] | undefined;\n' +
+        'export class Exchange {\n' +
+        '    marketIds (symbols: Strings = undefined): Strings { return symbols; }\n' +
+        '    safeString (a: any, k: any, d: any = undefined): any { return a; }\n';
+    const run = (members: string): string => {
+        const tmp = fs.mkdtempSync (path.join (os.tmpdir (), 'r93g2b-'));
+        try {
+            const src = path.join (tmp, 'ts', 'src');
+            fs.mkdirSync (src, { recursive: true });
+            const file = path.join (src, 'x.ts');
+            fs.writeFileSync (file, PRELUDE + members + '}\n');
+            return new Transpiler ({ verbose: false, go: { parser: { NUM_LINES_END_FILE: 0 } } }).transpileGoByPath (file).content;
+        } finally {
+            fs.rmSync (tmp, { recursive: true, force: true });
+        }
+    };
+    const body = '    f (symbols: Strings = undefined): string[] {\n' +
+        '        const out = [];\n' +
+        '        const marketIds = this.marketIds (symbols);\n' +
+        '        for (let i = 0; i < marketIds.length; i++) {\n' +
+        '            const marketId = this.safeString (marketIds, i, \'\');\n' +
+        '            out.push (marketId);\n' +
+        '        }\n' +
+        '        return out;\n' +
+        '    }\n';
+    test ('a marketIds loop list is the []any MarketIdsSlice returns, its length native', () => {
+        const out = run (body);
+        expect (out).toContain ('var marketIds []any = this.MarketIdsSlice(symbols)');
+        expect (out).toContain ('i < len(marketIds)');
+    });
+    test ('a marketIds loop list also handed on keeps the box', () => {
+        const out = run (body.replace ('return out;', 'this.marketIds (marketIds);\n        return out;'));
+        expect (out).not.toContain ('var marketIds []any');
+    });
+});
