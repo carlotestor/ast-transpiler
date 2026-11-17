@@ -4827,6 +4827,7 @@ export function ccxtGoNilDeclaredJoinType (goTranspiler, declaration) {
     }
     const copyReadTypes = [];
     let guardedArmRead = false;
+    let concatRead = false;
     // the join over every later write: all of them must be whole calls whose proven
     // Go return type is the same scalar pointer
     let joinType;
@@ -4844,7 +4845,7 @@ export function ccxtGoNilDeclaredJoinType (goTranspiler, declaration) {
         if (readUnproven) {
             return;
         }
-        if ((n.kind === ts.SyntaxKind.Identifier) && (n.text === varName) && (n !== name)) {
+        if ((n.kind === ts.SyntaxKind.Identifier) && (n.text === varName) && (n !== name) && !ccxtGo93OtherBinding (goTranspiler, n, declaration)) {
             const parent = n.parent;
             const isWrite = (parent !== undefined) && (parent.kind === ts.SyntaxKind.BinaryExpression)
                 && (parent.left === n) && (parent.operatorToken.kind === ts.SyntaxKind.EqualsToken);
@@ -4867,6 +4868,8 @@ export function ccxtGoNilDeclaredJoinType (goTranspiler, declaration) {
                     literalCompareRead = true;      // 90g1 R2: *string join only (checked below)
                 } else if (ccxtGo90StringPtrArgument (goTranspiler, n)) {
                     stringPtrArgumentRead = true;   // 90g1 R3: *string join with a native read only (checked below)
+                } else if (ccxtGo93ConcatOperand (n)) {
+                    concatRead = true;              // a `+` operand: Add derefScalars, a nil-proven deref prints `*x` (checked below)
                 } else if (ccxtGo93GuardedTernaryArm (goTranspiler, n, declaration)) {
                     guardedArmRead = true;          // the non-nil arm of `(x !== undefined) ? x : y` (checked below)
                 } else if (ccxtGo93CopyTargetType (goTranspiler, n) !== undefined) {
@@ -4899,6 +4902,9 @@ export function ccxtGoNilDeclaredJoinType (goTranspiler, declaration) {
         return undefined;
     }
     if (guardedArmRead && ((joinType === '*string') || !nilTestRead)) {
+        return undefined;
+    }
+    if (concatRead && ((joinType !== '*string') || !(nilTestRead || literalCompareRead))) {
         return undefined;
     }
     if (stringOnlyRead && (joinType !== '*string')) {
@@ -39305,5 +39311,20 @@ function ccxtGo93GuardedTernaryArm (goTranspiler: GoTranspiler, read, declaratio
     const host = outer.parent;
     return ((host?.kind === SyntaxKind.VariableDeclaration) && (host.initializer === outer))
         || ((host?.kind === SyntaxKind.PropertyAssignment) && (host.initializer === outer));
+}
+// an operand of a `+` concatenation (not a compound `+=` on the local itself)
+function ccxtGo93ConcatOperand (read): boolean {
+    let operand = read;
+    while (operand.parent?.kind === SyntaxKind.ParenthesizedExpression) {
+        operand = operand.parent;
+    }
+    const parent = operand.parent;
+    return (parent?.kind === SyntaxKind.BinaryExpression) && (parent.operatorToken.kind === SyntaxKind.PlusToken);
+}
+// a same-named identifier the checker binds to another variable (a sibling block's `const x`, never this seed)
+function ccxtGo93OtherBinding (goTranspiler: GoTranspiler, n, declaration): boolean {
+    const bound = ccxtGoParamDeclarationOf (goTranspiler, n);
+    return (bound !== undefined) && (bound !== declaration)
+        && ((bound.kind === SyntaxKind.VariableDeclaration) || (bound.kind === SyntaxKind.Parameter));
 }
 // ===== nil-seeded scalar pointers joined through plain copies (end) =====
