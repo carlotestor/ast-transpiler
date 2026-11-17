@@ -85054,7 +85054,8 @@ ${iden}}`;
     if (this.rustReadBearerKindOfDeclaration(declaration) !== false || this.rustDictLocalIsTyped(declaration) || this.rustVecLocalIsTyped(declaration) || this.rustNestedDictLocalIsTyped(declaration) || this.rustMarketLocalKind(declaration) !== false || this.rustBorrowedDictLocal(declaration) || this.rustNilLocalKind(declaration) !== void 0 || this.rustScalarLocalKind(declaration) !== void 0)
       return false;
     this.rustBuiltListCopiedElement = false;
-    if (!nilAssigned && (String(init.getText()).split("\n")[0].length > (read || guardedInit ? 240 : 120) || !(guardedInit || this.rustBuiltListWriteSource(init))))
+    const strLiteralList = init !== void 0 && _is.isArrayLiteralExpression.call(void 0, init) && init.elements.length > 0 && init.elements.every((e) => _is.isStringLiteral.call(void 0, e));
+    if (!nilAssigned && (String(init.getText()).split("\n")[0].length > (read || guardedInit || strLiteralList ? 240 : 120) || !(guardedInit || this.rustBuiltListWriteSource(init))))
       return false;
     const boxes = [];
     let natives = 0;
