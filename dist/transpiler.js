@@ -65081,7 +65081,7 @@ ${binding(plan.indent)}` : ""), head: "" };
       return expressionText;
     const marketFieldInit = this.rustMarketFieldScalar(node);
     if (marketFieldInit !== void 0)
-      return marketFieldInit.kind === kind ? marketFieldInit.text : kind === `o${marketFieldInit.kind}` && marketFieldInit.kind === "str" && this.rustNilVenueWrite(node) ? `Some(${marketFieldInit.text})` : void 0;
+      return marketFieldInit.kind === kind ? marketFieldInit.text : kind === `o${marketFieldInit.kind}` && marketFieldInit.kind === "str" && (this.rustNilVenueWrite(node) || this.rust90rcNilWriteArm(node)) ? `Some(${marketFieldInit.text})` : void 0;
     const boolText = kind === "bool" && this.literalKindOfNode(node) !== "boolean" ? this.rustBoolNativeText(node) : void 0;
     if (boolText !== void 0)
       return boolText;
@@ -70540,7 +70540,8 @@ ${i1}}`;
     while (top.parent !== void 0 && (isParenthesizedExpression3(top.parent) || top.parent.kind === SyntaxKind7.AsExpression))
       top = top.parent;
     const declInit = isVariableDeclaration3(top.parent) && top.parent.initializer === top;
-    const nilWrite = placed && !declInit && !this.rust57kMarketTernaryArm(top) && this.rustNilVenueWrite(top);
+    const nilArm = placed && !declInit && this.rust90rcNilWriteArm(top);
+    const nilWrite = placed && !declInit && !this.rust57kMarketTernaryArm(top) && (nilArm || this.rustNilVenueWrite(top));
     if (placed && !declInit && !this.rust57kMarketTernaryArm(top) && !nilWrite)
       return void 0;
     const keyReadTail = nilWrite ? ".into_opt_string()" : ".as_str().map(str::to_owned)";
@@ -70578,6 +70579,15 @@ ${i1}}`;
       return { kind: "str", text: `${recv}.${field}.clone()` };
     const optField = _RustTranspiler.RUST_MARKET_OPT_STR_FIELDS[key];
     return optField !== void 0 ? { kind: "ostr", text: `${recv}.${optField}.as_deref().map(str::to_owned)` } : void 0;
+  }
+  /** ral-90rc R1: `node` (through parens / `as`) is an arm, not the condition, of a ternary that is the whole right side of a
+   *  statement write into a nil-declared local (rustNilVenueWrite). */
+  rust90rcNilWriteArm(node) {
+    let top = node;
+    while (top?.parent !== void 0 && (isParenthesizedExpression3(top.parent) || top.parent.kind === SyntaxKind7.AsExpression))
+      top = top.parent;
+    const cond = top?.parent;
+    return cond !== void 0 && isConditionalExpression4(cond) && cond.condition !== top && this.rustNilVenueWrite(cond);
   }
   /** ral-57k: an arm of `x = c ? m['quote'] : m['base']` (a statement write into an initialised local, kucoin parseTrade
    *  `feeCurrency`) whose other arm is a field read of the same kind off the same typed market local: the ternary is that

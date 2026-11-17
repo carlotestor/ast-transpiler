@@ -2441,6 +2441,9 @@ export declare class RustTranspiler extends BaseTranspiler {
         kind: string;
         text: string;
     } | undefined;
+    /** ral-90rc R1: `node` (through parens / `as`) is an arm, not the condition, of a ternary that is the whole right side of a
+     *  statement write into a nil-declared local (rustNilVenueWrite). */
+    rust90rcNilWriteArm(node: any): boolean;
     /** ral-57k: an arm of `x = c ? m['quote'] : m['base']` (a statement write into an initialised local, kucoin parseTrade
      *  `feeCurrency`) whose other arm is a field read of the same kind off the same typed market local: the ternary is that
      *  one kind, each arm the very `key_read` the boxed form printed (`None` where it held Null). */
