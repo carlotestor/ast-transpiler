@@ -8795,6 +8795,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (kind === 'ostr' && this.rustInitKeyLocal(n) && this.rustOkeyReadUse(n)) return 'okey';
         // ral-84c R3: a nil-declared `let k: Str = undefined` keys a proven map read the same way (`None` misses, as `Null` did)
         if (kind === 'ostr' && this.rust84cNilStrKeyLocal(n) && this.rustOkeyReadUse(n)) return 'okey';
+        // ral-90rh R2: likewise under a `k as string` cast (base calculateFeeWithRate `market[key as string]`): the cast prints nothing
+        if (kind === 'ostr' && this.rust90rhCastKey(n) && this.rust84cNilStrKeyLocal(n) && this.rustOkeyReadUse(n.parent)) return 'okey';
         if (kind === 'ostr' && this.rustInitKeyLocal(n) && this.rust63eChainLinkKeyRead(n)) return 'okey';
         // ral-64k: the key of `const y = book[k]` on a typed ws order-book local is handed to `get_value` as is
         if ((kind === 'str' || kind === 'ostr') && this.rust64kBookKeyRead(n)) return 'bkey';
@@ -13537,9 +13539,18 @@ export class RustTranspiler extends BaseTranspiler {
         return `get_value(&${recv}, ${super.printIdentifier(key)}.${kind === 'str' ? 'as_str' : 'as_deref'}())`;
     }
 
+    /** ral-90rh R2: `n` is the identifier of a `n as string` that is a whole element-access key. */
+    rust90rhCastKey(n: any): boolean {
+        const cast: any = n?.parent;
+        return isIdentifier(n) && cast !== undefined && isAsExpression(cast) && cast.expression === n && cast.type?.kind === SyntaxKind.StringKeyword
+            && isElementAccessExpression(cast.parent) && cast.parent.argumentExpression === cast;
+    }
+
     /** Element-access hook: the native read of an `okey` use. */
     printOkeyRead(node: any): string | undefined {
-        const key: any = node.argumentExpression;
+        const arg: any = node.argumentExpression;
+        // ral-90rh R2: `m[k as string]` reads its `okey` key through the cast
+        const key: any = isAsExpression(arg) && this.rust90rhCastKey(arg.expression) ? arg.expression : arg;
         const keyKind = isIdentifier(key) && this.rustScalarUseForms.get(key) === 'okey' ? this.rustScalarLocalOf(key)?.kind : undefined;
         if (keyKind !== 'ostr' && keyKind !== 'str') return undefined;
         // int44 (wh x wg): a read wh lends off its held container prints there (`KeyRead::read`, boxed key)
@@ -20023,7 +20034,10 @@ export class RustTranspiler extends BaseTranspiler {
             }
             if (link === chain[0] && this.rustBorrowedIndexReads.has(link) && isIdentifier(receiver)) {
                 const borrowedKey = isIdentifier(key) && this.rustBorrowedStrElems.has(this.rustDeclarationOfIdentifier(key));
-                const typedKey = isIdentifier(key) && !borrowedKey ? this.rust62nTypedStrKey(key) : undefined;
+                // ral-90rh R2: an `okey` `Option<String>` local under `as string` boxes its payload for the by-reference read
+                const castKey: any = isAsExpression(key) && this.rust90rhCastKey(key.expression) && this.rustScalarUseForms.get(key.expression) === 'okey' ? key.expression : undefined;
+                const typedKey = castKey !== undefined ? `${super.printIdentifier(castKey)}.as_deref().map(Value::from).unwrap_or(Value::Null)`
+                    : (isIdentifier(key) && !borrowedKey ? this.rust62nTypedStrKey(key) : undefined);
                 acc = `crate::value::KeyRead::read(&&${super.printIdentifier(receiver)}, &${borrowedKey ? `Value::from(${super.printIdentifier(key)})` : (typedKey ?? this.rustI64HelperKeyText(key, node) ?? this.printNode(key, 0))})`;
                 continue;
             }

@@ -25210,3 +25210,15 @@ describe('ral-90rh R1: a parseInt local over a string parameter', () => {
         expect(out).toContain('matches!(precisionNumber, Some(__b) if (i as f64) < ((-1 - __b) as f64))');
     });
 });
+
+describe('ral-90rh R2: a nil-declared Str local read as a map key under `as string`', () => {
+    test('market[key as string] keys the map with the Option<String> local', () => {
+        const dir = path.join (rustFixtureRoot, 'r90rh-castkey');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export type Str = string | undefined;\nexport type Dict = { [key: string]: any };\nexport default class Exchange {\n    safeDict (o: any, k: any, d: any = undefined): Dict { return o; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    fee (markets: any, symbol: string, useQuote: boolean): Dict {\n        const market = this.safeDict (markets, symbol, {});\n        let key: Str = undefined;\n        if (useQuote) {\n            key = 'quote';\n        } else {\n            key = 'base';\n        }\n        return {\n            'currency': market[key as string],\n        };\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts')).content;
+        expect(out).toContain('let mut key: Option<String> = None;');
+        expect(out).toContain('key = Some(\"quote\".to_string());');
+        expect(out).toContain('crate::value::KeyRead::read(&&market, &key.as_deref().map(Value::from).unwrap_or(Value::Null))');
+    });
+});
