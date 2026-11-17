@@ -25737,3 +25737,23 @@ describe('stack-90r: a list bearer admitted by a compare-left read moves its fre
         expect(out).not.toContain('.as_array().cloned()');
     });
 });
+
+describe('ral-92rc R1: a nil-declared Str local written from literal-key this.urls reads', () => {
+    const run = (name: string, use: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: Dict | string }\nexport type Str = string | undefined;\nexport default class Exchange {\n    urls: Dict = {};\n    client (url: Str): Str { return url; }\n    hold (m: unknown, n: unknown = undefined): unknown {\n        return m;\n    }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    unWatch (spot: boolean): unknown {\n        let url: Str = undefined;\n        if (spot) {\n            url = this.urls['api']['ws']['spot'];\n        } else {\n            url = this.urls['api']['ws']['swap'];\n        }\n" + use + "    }\n}\n");
+        return new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } }).transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('a url handed to client (mexc unWatchTicker) is Option<String> lent as_deref', () => {
+        const out = run ('r92rc-r1-client', "        const client = this.client (url);\n        return this.hold (client);\n");
+        expect(out).toContain('let mut url: Option<String> = None;');
+        expect(out).toContain('"spot").as_str().map(str::to_owned);');
+        expect(out).toContain('self.client(url.as_deref())');
+    });
+    test('negative: a url only boxed into a literal stays Value', () => {
+        const out = run ('r92rc-r1-boxonly', "        return this.hold ({ 'url': url });\n");
+        expect(out).toContain('let mut url: Value = Value::Null;');
+    });
+});

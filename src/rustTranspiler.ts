@@ -3207,8 +3207,8 @@ export class RustTranspiler extends BaseTranspiler {
             if (this.rustDeclaredNode(n) !== declaration) continue;
             const rhs: any = this.unwrapParens(parent.right);
             if (!this.rustNilDecodedWrite(rhs)) writes++;
-            // ral-90rc R3: a write from a base credential field (`x = this.secret`) is admitted only for a native read (below)
-            if (this.rustBaseStrFieldRead(rhs)) baseFieldWrite = true;
+            // ral-90rc R3: a write from a base credential field (`x = this.secret`) or a literal-key `this.urls` read is admitted only for a native read (below)
+            if (this.rustBaseStrFieldRead(rhs) || this.rustWsUrlRead(rhs)) baseFieldWrite = true;
             let write = isIdentifier(rhs) && this.literalKindOfNode(rhs) !== 'null' ? (this.rustScalarIdentifierKind(rhs) ?? (this.rustNilValueStrAlias(rhs) ? 'ostr' : undefined)) : this.rustScalarValueKind(rhs, true);
             // ral-68a R1: `x = p` from an unwritten typed string parameter (`&str` / `Option<&str>` signature slot): the
             // parameter's rebinding holds that string (or Null), read back once as `Option<String>` (rustOptParamText)
@@ -5842,6 +5842,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (fresh && this.rustTernaryArm(node) && this.rustBaseStrFieldRead(node)) return 'ostr';
         // ral-90rc R3: the same field as the whole right side of `x = this.secret;` into a nil-declared local (rustNilVenueWrite)
         if (fresh && this.rustNilVenueWrite(node) && this.rustBaseStrFieldRead(node)) return 'ostr';
+        // a literal-key `this.urls[..][..]` read as the whole right side of a nil write: a url `Str` or `Null` (rustWsUrlRead)
+        if (fresh && this.rustNilVenueWrite(node) && this.rustWsUrlRead(node)) return 'ostr';
         // ral-65n: a never-written base-tier parameter declared `Str` / `string` as an arm of a ternary initializer: a `Str` or `Null`
         if (fresh && this.rustTernaryArm(node) && this.rust65nBaseStrParamArm(node)) return 'ostr';
         // ral-53k: `c['code']` of an `Option<Dict>` local (a unified string key) as an arm of a ternary initializer
@@ -11215,6 +11217,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (kind === 'oint' && this.rustListLengthInit(node) && this.rust67bCastListLengthRecv(node.expression)) return wrap(this.rustListLengthText(node));
         // ral-52k: a base credential field (`Value` in the struct, `Str` or `Null`) read once as its text
         if (kind === 'ostr' && (this.rustTernaryArm(node) || this.rustNilVenueWrite(node)) && this.rustBaseStrFieldRead(node)) return `${this.printNode(node, 0).trim()}.as_str().map(str::to_owned)`;
+        if (kind === 'ostr' && this.rustNilVenueWrite(node) && this.rustWsUrlRead(node)) return `${this.printNode(node, 0).trim()}.as_str().map(str::to_owned)`;
         if (kind === 'ostr' && this.rustTernaryArm(node) && this.rust65nBaseStrParamArm(node)) return `${super.printIdentifier(node)}.as_str().map(str::to_owned)`;
         if (kind === 'ostr' && this.rustTernaryArm(node)) { const read = this.rustOptDictStrKeyText(node); if (read !== undefined) return read; }
         if (kind === 'ostr') { const row = this.rustRowFieldStrText(node); if (row !== undefined) return row; }
