@@ -14148,7 +14148,10 @@ export class RustTranspiler extends BaseTranspiler {
                 // only a local the `-> Option<String>` signature itself held back (rustStrReturnSignature: its return use answered no form);
                 // a local other rules already type keeps the decision it had
                 const own = (inner !== undefined && isIdentifier(inner) && this.rust56xStrReturnLocal(inner, fn) && this.rustStrReturnSignature(fn, inner)
-                    && this.primitiveKindOfType(this.getCheckedTypeOf(inner)) === 'string') || this.rust61xNilStrReturnLocal(inner, fn) || this.rust76aOptStrReturnLocal(inner, fn);
+                    && this.primitiveKindOfType(this.getCheckedTypeOf(inner)) === 'string') || this.rust61xNilStrReturnLocal(inner, fn) || this.rust76aOptStrReturnLocal(inner, fn)
+                    // ral-90ra R1: a returned own literal-seeded local the scalar rule types `Option<String>` is the payload itself
+                    // (the signature already printed `-> Option<String>` while it was a `Value`: no S1 kept arm for it)
+                    || (inner !== undefined && isIdentifier(inner) && this.rust56xStrReturnLocal(inner, fn) && this.rustScalarLocalOf(inner)?.kind === 'ostr');
                 if (!own && !this.rustStrReturnValueConverts(n.expression)) { ok = false; return; }
             }
             n.forEachChild(visit);

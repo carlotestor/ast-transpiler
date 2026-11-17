@@ -25202,15 +25202,18 @@ describe('ral-90ra R1: an element of a proven string-list parameter is an Option
     const emit = (body: string): string => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-90ra1-'));
         fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
-        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    getAccountTypeFromSubscriptions (subscriptions: string[]): string { return ''; }\n    fetchOutcomes (outcomeSymbols: string[]): any { return undefined; }\n    keep (subscriptions: string[], store: Dict): any { return store; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    fetchOutcomes (outcomeSymbols: string[]): any { return undefined; }\n    keep (subscriptions: string[], store: Dict): any { return store; }\n}\n");
         fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
         const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
-        try { return t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+        try { const r = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')); lastSigs = r.rustSignatures ?? []; return r.content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
     };
+    let lastSigs: Array<{ name: string, ret: string }> = [];
     test('binance pro getAccountTypeFromSubscriptions: compared, then written into a string local', () => {
-        const out = emit("    override getAccountTypeFromSubscriptions (subscriptions: string[]): string {\n        let accountType = '';\n        for (let i = 0; i < subscriptions.length; i++) {\n            const subscription = subscriptions[i];\n            if ((subscription === 'spot') || (subscription === 'margin')) {\n                accountType = subscription;\n                break;\n            }\n        }\n        return accountType;\n    }\n");
+        const out = emit("    caller (store: Dict) {\n        const keys = Object.keys (store);\n        const t = this.getAccountTypeFromSubscriptions ([ 'spot', 'margin' ]);\n        return this.hold (t);\n    }\n    getAccountTypeFromSubscriptions (subscriptions: string[]): string {\n        let accountType = '';\n        for (let i = 0; i < subscriptions.length; i++) {\n            const subscription = subscriptions[i];\n            if ((subscription === 'spot') || (subscription === 'margin')) {\n                accountType = subscription;\n                break;\n            }\n        }\n        return accountType;\n    }\n");
         expect(out).toContain('let mut subscription: Option<String> = ');
         expect(out).toContain('subscription.as_deref() == Some("spot")');
+        // the method printed `-> Option<String>` with no by-name arm before; a typed returned accumulator keeps that arm set
+        expect(lastSigs.find((x) => x.name === 'get_account_type_from_subscriptions')?.ret).toBe('ostr');
     });
     test('kalshi fetchOutcomes: a string-method receiver copied into a Str local', () => {
         const out = emit("    override fetchOutcomes (outcomeSymbols: string[]) {\n        const tickers: string[] = [];\n        for (let i = 0; i < outcomeSymbols.length; i++) {\n            const outcomeSymbol = outcomeSymbols[i];\n            if (outcomeSymbol.indexOf (':') >= 0) {\n                continue;\n            }\n            let baseTicker: Str = outcomeSymbol;\n            if (outcomeSymbol.endsWith ('-NO')) {\n                baseTicker = outcomeSymbol.slice (0, -3);\n            }\n            tickers.push (baseTicker);\n        }\n        return this.hold (tickers);\n    }\n");
