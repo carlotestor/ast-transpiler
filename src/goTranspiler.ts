@@ -36372,3 +36372,59 @@ GoTranspiler.prototype.goNativeCompoundAssignment = function (op, leftNode, left
 };
 // ===== ral-87g8 R2 (end) =====
 
+// ===== ral-90g2: reader-result locals (continues 87g2) =====
+// J. a no-default `safeDict` / `safeDict2` local (SafeMapTyped answers nil exactly where the box held nil) may be read
+// as a map past two more nil guards than `if (x !== undefined) { .. }`: the `else` arm of `if (x === undefined || ..)`
+// and every statement after `if (x === undefined || ..) { ..; return | throw | continue | break }` in an enclosing
+// block. A no-default local is never rebound (goMapLocalUseKeepsMap refuses every write), so the guard still holds
+// at the use. Decided from the AST only.
+function ccxtGo90g2TestsNil (goTranspiler, condition, name: string): boolean {
+    const inner = goTranspiler.goUnwrapParenthesizedNode(condition);
+    if (inner?.kind !== SyntaxKind.BinaryExpression) {
+        return false;
+    }
+    const op = inner.operatorToken?.kind;
+    if (op === SyntaxKind.BarBarToken) {
+        return ccxtGo90g2TestsNil(goTranspiler, inner.left, name) || ccxtGo90g2TestsNil(goTranspiler, inner.right, name);
+    }
+    if ((op !== SyntaxKind.EqualsEqualsEqualsToken) && (op !== SyntaxKind.EqualsEqualsToken)) {
+        return false;
+    }
+    const isNil = (n): boolean => (n?.kind === SyntaxKind.NullKeyword) || ((n?.kind === SyntaxKind.Identifier) && (n.text === 'undefined'));
+    const isName = (n): boolean => (ccxtGoUnwrapTypeOnly(n)?.kind === SyntaxKind.Identifier) && (ccxtGoUnwrapTypeOnly(n).text === name);
+    return (isName(inner.left) && isNil(inner.right)) || (isNil(inner.left) && isName(inner.right));
+}
+function ccxtGo90g2ExitsBlock (statement): boolean {
+    const last = (statement?.kind === SyntaxKind.Block) ? statement.statements[statement.statements.length - 1] : statement;
+    return (last !== undefined) && ((last.kind === SyntaxKind.ReturnStatement) || (last.kind === SyntaxKind.ThrowStatement)
+        || (last.kind === SyntaxKind.ContinueStatement) || (last.kind === SyntaxKind.BreakStatement));
+}
+function ccxtGo90g2GuardedNonNil (goTranspiler, use, name: string): boolean {
+    for (let child = use, cur = use.parent; cur !== undefined; child = cur, cur = cur.parent) {
+        if ((cur.kind === SyntaxKind.IfStatement) && (cur.elseStatement === child) && ccxtGo90g2TestsNil(goTranspiler, cur.expression, name)) {
+            return true;
+        }
+        if ((cur.kind === SyntaxKind.Block) || (cur.kind === SyntaxKind.CaseClause) || (cur.kind === SyntaxKind.DefaultClause)) {
+            const statements = cur.statements;
+            const index = statements.indexOf(child);
+            for (let i = 0; i < index; i++) {
+                const s = statements[i];
+                if ((s.kind === SyntaxKind.IfStatement) && (s.elseStatement === undefined) && ccxtGo90g2TestsNil(goTranspiler, s.expression, name)
+                    && ccxtGo90g2ExitsBlock(s.thenStatement)) {
+                    return true;
+                }
+            }
+        }
+        if (isFunctionLike(cur)) {
+            return false;
+        }
+    }
+    return false;
+}
+{
+    const nonNilBlock = GoTranspiler.prototype.goInsideNonNilBlock;
+    GoTranspiler.prototype.goInsideNonNilBlock = function (use, name: string) {
+        return nonNilBlock.call(this, use, name) || ccxtGo90g2GuardedNonNil(this, use, name);
+    };
+}
+// ===== ral-90g2 (end) =====

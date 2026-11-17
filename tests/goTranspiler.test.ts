@@ -15738,3 +15738,35 @@ describe('ral-87g8 R4 int counters compared against an Int bound', () => {
         expect(out).toContain('var errors any = 0');
     });
 });
+
+describe ('ral-90g2 reader-result locals', () => {
+    const PRELUDE =
+        'type Dict = { [key: string]: any };\n' +
+        'export class Exchange {\n' +
+        '    safeDict (a: any, k: any, d: any = undefined): Dict { return a; }\n' +
+        '    safeString (a: any, k: any, d: any = undefined): string { return a; }\n';
+    const run = (members: string, dir: string): string => {
+        const tmp = fs.mkdtempSync (path.join (os.tmpdir (), 'r90g2-'));
+        try {
+            const src = path.join (tmp, dir);
+            fs.mkdirSync (src, { recursive: true });
+            const file = path.join (src, 'x.ts');
+            fs.writeFileSync (file, PRELUDE + members + '}\n');
+            return new Transpiler ({ verbose: false, go: { parser: { NUM_LINES_END_FILE: 0 } } }).transpileGoByPath (file).content;
+        } finally {
+            fs.rmSync (tmp, { recursive: true, force: true });
+        }
+    };
+    test ('J: a no-default safeDict local read in the else of its nil test is a map', () => {
+        const body = '    f (orders: Dict, id: string, reason: string): any {\n        const prev = this.safeDict (orders, id);\n        if ((prev === undefined) || (reason === "x")) {\n            return 0;\n        } else {\n            prev["cost"] = 1;\n            return this.safeString (prev, "id");\n        }\n    }\n';
+        expect (run (body, 'ts/src/pro')).toContain ('var prev map[string]any = ');
+        // outside the guarded arm the write would meet a nil map: keep the box
+        expect (run (body.replace ('return 0;', 'id = "z";').replace ('        } else {\n            prev["cost"] = 1;', '        }\n        prev["cost"] = 1;\n        {'), 'ts/src/pro')).not.toContain ('var prev map[string]any = ');
+    });
+    test ('J: a no-default safeDict local read after an early-return nil guard is a map', () => {
+        const body = '    f (orders: Dict, id: string): any {\n        const prev = this.safeDict (orders, id);\n        if (prev === undefined) {\n            return undefined;\n        }\n        prev["cost"] = 1;\n        return this.safeString (prev, "id");\n    }\n';
+        expect (run (body, 'ts/src/pro')).toContain ('var prev map[string]any = ');
+        // a guard that does not leave the block proves nothing
+        expect (run (body.replace ('return undefined;', 'id = "y";'), 'ts/src/pro')).not.toContain ('var prev map[string]any = ');
+    });
+});
