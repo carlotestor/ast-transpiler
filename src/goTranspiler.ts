@@ -39231,7 +39231,8 @@ GoTranspiler.prototype.goTypeOfInitializer = function (initializer, printedValue
         && (write.operatorToken.kind === SyntaxKind.EqualsToken) && (write.left?.kind === SyntaxKind.Identifier)) {
         const self = this.checkerOrUndefined()?.getSymbolAtLocation(write.left)?.valueDeclaration?.resolve();
         if ((self !== undefined) && (this.go92g7IsBaseSum(initializer) || (this.go92g7MinMaxName(initializer) !== undefined))
-            && !String(this.goDeclaredTypeOfIdentifier(write.left) ?? '').startsWith('*')
+            && (self.kind === SyntaxKind.VariableDeclaration) && (self.initializer !== undefined)
+            && (this.goTypeOfInitializer(self.initializer, this.printNode(self.initializer, 0)) === 'int64')
             && (this.go93g4PointerOperands(initializer, self) !== undefined)) {
             return 'int64';
         }
