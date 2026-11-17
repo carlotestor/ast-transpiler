@@ -5294,6 +5294,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-63x: `&str` parameter, every call site in the file passes a string literal at its index, and some
      *  `let x = <param>` declaration of the body reads it whole. */
     rust63xLiteralSeedStrParam(method: any, param: any, rustType: string): boolean;
+    /** A string slot of a sync ws method with no arm whose every caller passes a literal or one of its own
+     *  local (not a parameter): the slot is a typed consumer, so a string local handed to it reads natively. */
+    rust92raStrConsumerParam(method: MethodDeclaration, param: ParameterDeclaration, rustType: string): boolean;
     /** ral-63x: a sync ws method with a declared `string` return (`-> Option<String>`, no kept arm: no by-name or ws
      *  handler arm) and no override, trait slot or typed-return entry. Its string parameters may print typed; should
      *  the return still print `Value`, a string slot is one an arm decodes (rustDispatch.wsArg `str` / `optstr`). */

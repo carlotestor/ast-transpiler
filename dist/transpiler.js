@@ -73798,6 +73798,8 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     this.rustLocalUsesAll(element, String(element.name.text), true, (n) => {
       if (this.rustStrSlotConcatUses.has(n) || !this.rustStrSlotBoxUse(n) || this.rustEnclosingFunction(n) !== fn)
         return true;
+      if (this.rustVenueStrArgSlot(n))
+        return true;
       const statement = findAncestor(n.parent, (a) => isStatement(a));
       if (statement === void 0 || isBlock4(statement))
         return true;
@@ -90376,7 +90378,7 @@ ${iden}}`;
           return false;
         const form = plus ? "concat" : this.rustScalarUseForm(n, "ostr");
         this.rustScalarUseForms.set(n, form);
-        if (form === void 0 || form === "err" || form === "key" || form === "okey" || form === "bkey" || form === "targ" && !this.rustWsKeyUse(n) || form === "kin")
+        if (form === void 0 || form === "err" || form === "key" || form === "okey" || form === "bkey" || form === "targ" && !this.rustWsKeyUse(n) && !this.rustVenueStrLocalArg(n) || form === "kin")
           return false;
         const push = findAncestor(n, (m) => isStatement(m) || isCallExpression6(m) && isPropertyAccessExpression3(m.expression) && m.expression.name.text === "push");
         if (push !== void 0 && isCallExpression6(push))
@@ -93132,7 +93134,7 @@ ${this.getIden(identation)}}`;
     const rustType = optional && !declared.startsWith("Option<") ? `Option<${declared}>` : declared;
     if (rustType.includes("f64") && !this.rustVenueFloatUsesStayInside(method, param))
       return void 0;
-    if (noArmStr && !this.rust63xLiteralSeedStrParam(method, param, rustType))
+    if (noArmStr && !this.rust63xLiteralSeedStrParam(method, param, rustType) && !this.rust92raStrConsumerParam(method, param, rustType))
       return void 0;
     const at = Array.from(method.parameters).indexOf(param);
     for (const call of this.rustVenueStrCallSites(method)) {
@@ -93182,6 +93184,29 @@ ${this.getIden(identation)}}`;
     };
     method.body.forEachChild(visit);
     return seeds;
+  }
+  /** A string slot of a sync ws method with no arm whose every caller passes a literal or one of its own
+   *  local (not a parameter): the slot is a typed consumer, so a string local handed to it reads natively. */
+  rust92raStrConsumerParam(method, param, rustType) {
+    if (rustType !== "&str" && rustType !== "Option<&str>" || !isIdentifier3(param.name))
+      return false;
+    const calls = this.rustVenueStrCallSites(method);
+    if (calls.length === 0)
+      return false;
+    const at = Array.from(method.parameters).indexOf(param);
+    let locals = 0;
+    for (const call of calls) {
+      const arg = call.arguments[at] === void 0 ? void 0 : this.unwrapParens(call.arguments[at]);
+      if (arg === void 0)
+        return false;
+      if (arg.kind === SyntaxKind7.StringLiteral || arg.kind === SyntaxKind7.NoSubstitutionTemplateLiteral)
+        continue;
+      locals++;
+      const local = isIdentifier3(arg) ? this.rustDeclaredNode(arg) : void 0;
+      if (local === void 0 || !(isVariableDeclaration3(local) || isBindingElement(local)) || local.name === arg)
+        return false;
+    }
+    return locals > 0;
   }
   /** ral-63x: a sync ws method with a declared `string` return (`-> Option<String>`, no kept arm: no by-name or ws
    *  handler arm) and no override, trait slot or typed-return entry. Its string parameters may print typed; should
