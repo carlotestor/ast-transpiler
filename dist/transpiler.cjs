@@ -88661,7 +88661,7 @@ ${iden}}`;
     while (_is.isElementAccessExpression.call(void 0, root.parent) && root.parent.expression === root)
       root = root.parent;
     const up = root.parent;
-    if (up !== void 0 && (_is.isDeleteExpression.call(void 0, up) || _is.isBinaryExpression.call(void 0, up) && up.left === root || _is.isCallExpression.call(void 0, up) && up.expression === root || up.kind === _ast.SyntaxKind.PrefixUnaryExpression || up.kind === _ast.SyntaxKind.PostfixUnaryExpression))
+    if (up !== void 0 && (_is.isDeleteExpression.call(void 0, up) || _is.isBinaryExpression.call(void 0, up) && up.left === root && rustIsAssignmentOperator(up.operatorToken.kind) || _is.isCallExpression.call(void 0, up) && up.expression === root || up.kind === _ast.SyntaxKind.PrefixUnaryExpression || up.kind === _ast.SyntaxKind.PostfixUnaryExpression))
       return false;
     if (!this.isNativeAccessPositionSafe(root) || this.isNativeWriteTargetBase(root))
       return false;

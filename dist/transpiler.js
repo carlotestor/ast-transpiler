@@ -88662,7 +88662,7 @@ ${iden}}`;
     while (isElementAccessExpression4(root.parent) && root.parent.expression === root)
       root = root.parent;
     const up = root.parent;
-    if (up !== void 0 && (isDeleteExpression2(up) || isBinaryExpression5(up) && up.left === root || isCallExpression6(up) && up.expression === root || up.kind === SyntaxKind7.PrefixUnaryExpression || up.kind === SyntaxKind7.PostfixUnaryExpression))
+    if (up !== void 0 && (isDeleteExpression2(up) || isBinaryExpression5(up) && up.left === root && rustIsAssignmentOperator(up.operatorToken.kind) || isCallExpression6(up) && up.expression === root || up.kind === SyntaxKind7.PrefixUnaryExpression || up.kind === SyntaxKind7.PostfixUnaryExpression))
       return false;
     if (!this.isNativeAccessPositionSafe(root) || this.isNativeWriteTargetBase(root))
       return false;
