@@ -45025,9 +45025,6 @@ function go92g2StringListScan(goTranspiler, declaration) {
   if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier || declaration.parent?.parent?.kind !== SyntaxKind5.FirstStatement || declaration.parent.declarations.length !== 1 || go92g2ReaderCall(declaration.initializer) === void 0) {
     return void 0;
   }
-  if (!/(^|[\\/])ts[\\/]src[\\/][^\\/]+\.ts$/.test(String(declaration.getSourceFile()?.fileName ?? ""))) {
-    return void 0;
-  }
   const scope = goTranspiler.goEnclosingFunction(declaration);
   if (scope === void 0 || goTranspiler.goTypeNameIsShadowed(scope, GO_STRING_LIST_LOCAL_TYPE)) {
     return void 0;
@@ -45082,7 +45079,7 @@ function go92g2StringListScan(goTranspiler, declaration) {
     if (node?.declarations?.length === 1 && go92g2StringListLocal(this, declaration) !== void 0 && this.getGoLocalType(declaration, "") === GO_STRING_LIST_LOCAL_TYPE) {
       const found = go92g2ReaderCall(declaration.initializer);
       const args = found.call.arguments.map((a) => this.printNode(a, 0).trim()).join(", ");
-      return `${this.getIden(identation)}var ${this.printNode(declaration.name, 0)} ${GO_STRING_LIST_LOCAL_TYPE} = ${found.reader}(${args})`;
+      return `${this.getIden(identation)}var ${this.printNode(declaration.name, 0)} ${GO_STRING_LIST_LOCAL_TYPE} = this.${found.reader}(${args})`;
     }
     return printVariableDeclarationList.call(this, node, identation);
   };
