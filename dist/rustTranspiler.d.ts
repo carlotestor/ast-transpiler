@@ -920,6 +920,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBaseFunctionCall(node: any, name: string): boolean;
     /** An argument in a byte parameter (`impl Into<Value>`) of a hand-written consumer, outside the test crate. */
     rustBytesSlot(node: any): boolean;
+    /** `this.arraySlice (b, s, e)` of a byte-buffer local `b` with integer-literal bounds `0 <= s <= e`: the runtime copies
+     *  `b[min(s, len) .. min(e, len)]` into a fresh list, so the slice is itself a byte buffer. Answers `b`'s identifier. */
+    rustBytesSliceSource(node: any): Node | undefined;
     rustBytesBareText(node: any, identation?: number): string;
     /** Call hook: a producer call is the `Bytes` itself in a byte slot, boxed once anywhere else. */
     printRustBytesCall(node: any, identation: any): string | undefined;
