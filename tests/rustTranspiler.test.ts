@@ -25766,3 +25766,19 @@ describe('ral-92rg R1: a venue method returning a loaded market record it rules 
         expect(text).toMatch(/let mut loose: Value = self\.unguarded\(/);
     });
 });
+
+describe('ral-92rg R2: a venue method answering safeList with a ternary of list literals as its default', () => {
+    const ts = "class venue {\n"
+        + "    settlements (type: string, method: string): string[] {\n        const options = this.safeDict (this.options, type, {});\n        const inner = this.safeDict (options, method, {});\n        const defaultSettle = (type === 'swap') ? [ 'usdt' ] : [ 'btc' ];\n        return this.safeList (inner, 'settlementCurrencies', defaultSettle);\n    }\n"
+        + "    loose (type: string, d: any): string[] {\n        return this.safeList (this.options, type, d);\n    }\n"
+        + "    use () {\n        const currencies = this.settlements ('future', 'fetchMarkets');\n        for (let c = 0; c < currencies.length; c++) {\n            const settleId = this.safeString (currencies, c);\n        }\n        const other = this.loose ('x', undefined);\n        for (let c = 0; c < other.length; c++) {\n            const id = this.safeString (other, c);\n        }\n    }\n}\n";
+    test('the call result moves into a List bearer lent to the reader', () => {
+        const out = transpiler.transpileRust(ts).content;
+        expect(out).toContain('let mut currencies: crate::value::List = self.settlements(');
+        expect(out).toContain('c < (currencies.len() as i64)');
+    });
+    test('negative: a default the method does not prove a list keeps the Value local', () => {
+        const out = transpiler.transpileRust(ts).content;
+        expect(out).toContain('let mut other: Value = self.loose(');
+    });
+});

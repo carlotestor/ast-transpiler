@@ -22863,7 +22863,7 @@ export class RustTranspiler extends BaseTranspiler {
                 return 'map';
             }
             if (method === 'safeList' || method === 'safeListValue') {
-                return args.length < 3 || isArrayLiteralExpression(this.rustSkipWrappers(args[2])) ? 'list' : undefined;
+                return args.length < 3 || isArrayLiteralExpression(this.rustSkipWrappers(args[2])) || this.rust92rgListLiteralDefault(args[2]) ? 'list' : undefined;
             }
             // ral-54i: inside the declared-array write proof only, base `toArray` / `arrayConcat` answer a `Value::Arr` on every path
             if (this.rustDeclaredArrayProof && this.rustAlwaysListProducer(expr)) return 'list';
@@ -22879,6 +22879,18 @@ export class RustTranspiler extends BaseTranspiler {
             if (method === 'split') return 'list';
         }
         return undefined;
+    }
+
+    /** ral-92rg R2: a `safeList` default that is a never-written const of the same function initialised to a ternary whose
+     *  two arms are array literals (gate `getSettlementCurrencies`: `const d = (t === 'swap') ? [ 'usdt' ] : [ 'btc' ]`). */
+    rust92rgListLiteralDefault(arg: Node): boolean {
+        const id: Node = this.rustSkipWrappers(arg);
+        if (id === undefined || !isIdentifier(id)) return false;
+        const declaration: Node = this.rustDeclarationOfIdentifier(id);
+        if (declaration === undefined || !isVariableDeclaration(declaration) || declaration.name === id || !isVariableDeclarationList(declaration.parent)
+            || (declaration.parent.flags & NodeFlags.Const) === 0 || this.rustEnclosingFunction(declaration) !== this.rustEnclosingFunction(id)) return false;
+        const init: Node = this.rustSkipWrappers(declaration.initializer);
+        return init !== undefined && isConditionalExpression(init) && isArrayLiteralExpression(this.rustSkipWrappers(init.whenTrue)) && isArrayLiteralExpression(this.rustSkipWrappers(init.whenFalse));
     }
 
     /** True when the only writes to this local inside its own function are
@@ -23620,7 +23632,31 @@ export class RustTranspiler extends BaseTranspiler {
     rust90rMoveBearer(declaration: VariableDeclaration): boolean {
         const init: Node = this.rustSkipWrappers(declaration.initializer);
         if (init === undefined || !isCallExpression(init)) return false;
-        return this.rust90rCompareLeftBearers.has(declaration) || this.rust90rForwardListCalls.has(init);
+        return this.rust90rCompareLeftBearers.has(declaration) || this.rust90rForwardListCalls.has(init) || this.rust92rgSafeListForward(init);
+    }
+
+    /** ral-92rg R2: a call of a sync venue method whose every return is `this.safeList (o, k, d)` with `d` a
+     *  rust92rgListLiteralDefault const: the call result is a list on every path, moved into its bearer. */
+    rust92rgSafeListForward(call: CallExpression): boolean {
+        if (!isPropertyAccessExpression(call.expression) || call.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
+        const impl: Node = this.rustScalarCallee(call);
+        if (impl === undefined || !isMethodDeclaration(impl) || impl.body === undefined || this.isAsyncFunction(impl)
+            || RustTranspiler.RUST_BASE_TIER_FILE.test(String(impl.getSourceFile().fileName)) || this.getMethodOverride(impl) !== undefined) return false;
+        let returns = 0;
+        let ok = true;
+        const visit = (n: Node) => {
+            if (!ok || (n !== impl.body && isFunctionLike(n))) return;
+            if (isReturnStatement(n)) {
+                returns++;
+                const r: Node = this.rustSkipWrappers(n.expression);
+                ok = r !== undefined && isCallExpression(r) && isPropertyAccessExpression(r.expression) && r.expression.expression.kind === SyntaxKind.ThisKeyword
+                    && String(r.expression.name.text) === 'safeList' && r.arguments.length === 3 && this.rust92rgListLiteralDefault(r.arguments[2]);
+                return;
+            }
+            n.forEachChild(visit);
+        };
+        impl.body.forEachChild(visit);
+        return ok && returns > 0;
     }
 
     rustReadBearerKindUncached(declaration: any): 'list' | 'map' | false {
