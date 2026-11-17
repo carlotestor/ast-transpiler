@@ -93143,7 +93143,7 @@ ${this.getIden(identation)}}`;
       const argType = args[at] === void 0 ? void 0 : this.typeOfNodeIfAny(args[at]);
       if ((argType === void 0 || (argType.flags & (_sync.TypeFlags.Any | _sync.TypeFlags.Unknown)) !== 0) && !this.rustWsUrlReadIdent(args[at]))
         return void 0;
-      if (!this.rustVenueStrSimpleArg(args[at]) && !(rustType === "bool" && this.rustVenueNegatedArg(args[at])) && !(rustType.includes("str") && this.rustVenueStrCastOperand(args[at]) !== void 0))
+      if (!this.rustVenueStrSimpleArg(args[at]) && !(rustType === "bool" && this.rustVenueNegatedArg(args[at])) && !(rustType.includes("str") && !_RustTranspiler.RUST_HELD_ORDER_REQUEST.test(String(method.name.text)) && this.rustVenueStrCastOperand(args[at]) !== void 0))
         return void 0;
       if (!this.rustVenueScalarArgExact(args[at], rustType))
         return void 0;
@@ -96379,6 +96379,8 @@ _RustTranspiler.RUST_BASE_ASYNC_SCALAR_PARAM_METHODS = ["fetchPaginatedCallDeter
 // Trait-slot override groups typed together: method -> its first parameter, printed `&str` by the base, every
 // override, the `DerivedExchange` slot (rustDispatch.isSlotStr) and every forwarder.
 _RustTranspiler.RUST_OVERRIDE_GROUP_STR_PARAMS = { "sign": "path" };
+/** Order request builders whose amount / price slots stay as they are (held). */
+_RustTranspiler.RUST_HELD_ORDER_REQUEST = /^(?:create|edit)Orders?Request$/;
 // ── typed currencies: the `currency` slot of base `safeCurrency` / `safeCurrencyCode` (and overrides) ──
 // It prints as a lent `Option<&crate::types::Currency>`; a caller passes `None`, a slot parameter as is, or
 // decodes a `Value` currency once (until its producer is typed).

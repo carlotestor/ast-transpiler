@@ -5354,6 +5354,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustScalarBoxCopies(u: any): boolean;
     /** A literal, an identifier, a field read, or a call: the converted argument stays short. */
     rustVenueStrSimpleArg(arg: any): boolean;
+    /** Order request builders whose amount / price slots stay as they are (held). */
+    private static readonly RUST_HELD_ORDER_REQUEST;
     /** `(x as string)` over a simple operand the checker already types `string` / `Str`: a string slot takes the
      *  operand as it is (the cast changes no value), so the caller converts it once like a bare `x`. */
     rustVenueStrCastOperand(arg: any): any;
