@@ -63254,6 +63254,16 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "oint";
     return this.rustAnyStrPushElem(node) ? "ostr" : void 0;
   }
+  /** `xs[i]` of a never-written `xs: string[]` parameter (not optional): every element the checker types `string`. */
+  rust93raStrListParamElem(node) {
+    if (!isElementAccessExpression4(node) || !isIdentifier3(node.expression))
+      return false;
+    const owner = this.rustDeclaredNode(node.expression);
+    if (owner === void 0 || !isParameterDeclaration3(owner) || owner.initializer !== void 0 || owner.questionToken !== void 0 || this.rustParamWritten(owner))
+      return false;
+    const type = owner.type;
+    return type !== void 0 && isArrayTypeNode2(type) && type.elementType.kind === SyntaxKind7.StringKeyword;
+  }
   /** ral-56e: `const xs = this.m (..)` where `m` is a method of the same class declared `number[]` whose body builds
    *  one `const r: number[] = []` filled only by `r.push (i)` of a plain int for-counter and answers `return r`; a
    *  declaration's literal-index `xs[k]` is then an `Int` or (out of range) `Null`: `Option<i64>`. Non-test sources. */
@@ -67741,7 +67751,9 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (kind === "ostr" && (this.rustElementReadScalarKind(node) !== void 0 || this.rustInlineHandleStrSlot(node))) {
       const read = this.printNode(node, 0).trim();
       const tail = ".cloned().unwrap_or(Value::Null)";
-      return read.endsWith(tail) ? `${read.slice(0, -tail.length)}.and_then(Value::as_str).map(str::to_owned)` : void 0;
+      if (read.endsWith(tail))
+        return `${read.slice(0, -tail.length)}.and_then(Value::as_str).map(str::to_owned)`;
+      return this.rust93raStrListParamElem(node) ? `${read}.as_str().map(str::to_owned)` : void 0;
     }
     if (kind === "obool" && this.rustElementReadScalarKind(node) === "obool") {
       const read = this.printNode(node, 0).trim();
@@ -94212,7 +94224,8 @@ ${this.getIden(identation)}}`;
       return void 0;
     const urlOnly = this.rustVenueUrlParam(method, param);
     const noArmStr = !group && /(?:^|\/)ts\/src\/pro\//.test(file) && !this.isAsyncFunction(method) && !urlOnly && this.rust63xNoArmStrMethod(method);
-    if (!group && /(?:^|\/)ts\/src\/pro\//.test(file) && !this.isAsyncFunction(method) && !urlOnly && !noArmStr)
+    const dictBuilder = !group && /(?:^|\/)ts\/src\/pro\//.test(file) && !this.isAsyncFunction(method) && !urlOnly && !noArmStr && this.rust93raWsDictBuilder(method, param);
+    if (!group && /(?:^|\/)ts\/src\/pro\//.test(file) && !this.isAsyncFunction(method) && !urlOnly && !noArmStr && !dictBuilder)
       return void 0;
     const hidden = this.getMethodOverride(method);
     if (!group && hidden !== void 0 && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(hidden.getSourceFile().fileName)))
@@ -94231,6 +94244,8 @@ ${this.getIden(identation)}}`;
     if (rustType.includes("f64") && !this.rustVenueFloatUsesStayInside(method, param))
       return void 0;
     if (noArmStr && !this.rust63xLiteralSeedStrParam(method, param, rustType) && !this.rust92raStrConsumerParam(method, param, rustType))
+      return void 0;
+    if (dictBuilder && (rustType !== "&str" || !this.rust93raStrArgsTyped(method, param)))
       return void 0;
     const at = Array.from(method.parameters).indexOf(param);
     for (const call of this.rustVenueStrCallSites(method)) {
@@ -94303,6 +94318,39 @@ ${this.getIden(identation)}}`;
         return false;
     }
     return locals > 0;
+  }
+  /** A sync ws request builder (declared `Dict` return, no override, no trait slot) whose required `string`
+   *  parameter only seeds the request: its by-name / handler arm decodes the text once (rustDispatch.wsArg `str`). */
+  rust93raWsDictBuilder(method, param) {
+    if (param.initializer !== void 0 || param.questionToken !== void 0 || param.type?.kind !== SyntaxKind7.StringKeyword || !isIdentifier3(param.name))
+      return false;
+    if (!isIdentifier3(method.name) || this.toSnakeCaseName(String(method.name.text)) in (this.rustVirtualDispatch ?? {}))
+      return false;
+    const ret = method.type;
+    if (ret === void 0 || !isTypeReferenceNode2(ret) || !isIdentifier3(ret.typeName) || String(ret.typeName.text) !== "Dict")
+      return false;
+    const hidden = this.getMethodOverride(method);
+    if (hidden !== void 0 && hidden !== method)
+      return false;
+    const name = String(param.name.text);
+    if (this.rustLocalIsReassigned(param, name))
+      return false;
+    return this.rustLocalUsesAll(param, name, true, (n) => this.rust92rgLiteralValueSlot(n));
+  }
+  /** Every same-file caller passes a string literal or a checker-`string` identifier / element read at the slot. */
+  rust93raStrArgsTyped(method, param) {
+    const at = Array.from(method.parameters).indexOf(param);
+    const calls = this.rustVenueStrCallSites(method);
+    return calls.length > 0 && calls.every((call) => {
+      const arg = call.arguments[at] === void 0 ? void 0 : this.unwrapParens(call.arguments[at]);
+      if (arg === void 0)
+        return false;
+      if (arg.kind === SyntaxKind7.StringLiteral || arg.kind === SyntaxKind7.NoSubstitutionTemplateLiteral)
+        return true;
+      if (!isIdentifier3(arg) && !isElementAccessExpression4(arg))
+        return false;
+      return this.primitiveKindOfType(this.typeOfNodeIfAny(arg)) === "string";
+    });
   }
   /** ral-63x: a sync ws method with a declared `string` return (`-> Option<String>`, no kept arm: no by-name or ws
    *  handler arm) and no override, trait slot or typed-return entry. Its string parameters may print typed; should

@@ -986,6 +986,8 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  printed off the temp list exactly as the destructured slot 0 (`.and_then(Value::as_str).map(str::to_owned)`). */
     rustInlineHandleStrSlot(node: any): boolean;
     rustElementReadScalarKind(node: any): string | undefined;
+    /** `xs[i]` of a never-written `xs: string[]` parameter (not optional): every element the checker types `string`. */
+    rust93raStrListParamElem(node: Node): boolean;
     /** ral-56e: `const xs = this.m (..)` where `m` is a method of the same class declared `number[]` whose body builds
      *  one `const r: number[] = []` filled only by `r.push (i)` of a plain int for-counter and answers `return r`; a
      *  declaration's literal-index `xs[k]` is then an `Int` or (out of range) `Null`: `Option<i64>`. Non-test sources. */
@@ -5325,6 +5327,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A string slot of a sync ws method with no arm whose every caller passes a literal or one of its own
      *  local (not a parameter): the slot is a typed consumer, so a string local handed to it reads natively. */
     rust92raStrConsumerParam(method: MethodDeclaration, param: ParameterDeclaration, rustType: string): boolean;
+    /** A sync ws request builder (declared `Dict` return, no override, no trait slot) whose required `string`
+     *  parameter only seeds the request: its by-name / handler arm decodes the text once (rustDispatch.wsArg `str`). */
+    rust93raWsDictBuilder(method: MethodDeclaration, param: ParameterDeclaration): boolean;
+    /** Every same-file caller passes a string literal or a checker-`string` identifier / element read at the slot. */
+    rust93raStrArgsTyped(method: MethodDeclaration, param: ParameterDeclaration): boolean;
     /** ral-63x: a sync ws method with a declared `string` return (`-> Option<String>`, no kept arm: no by-name or ws
      *  handler arm) and no override, trait slot or typed-return entry. Its string parameters may print typed; should
      *  the return still print `Value`, a string slot is one an arm decodes (rustDispatch.wsArg `str` / `optstr`). */
