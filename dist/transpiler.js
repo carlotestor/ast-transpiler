@@ -58469,6 +58469,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "str";
     if (fresh && this.rustNumParamToString(node))
       return "str";
+    if (fresh && this.rust87rhToStringWrite(node))
+      return "str";
     if (fresh && this.rustIdString(node) && !this.rustIntToStringShape(node))
       return "str";
     if (fresh && this.rustSbJoinShape(node))
@@ -59405,6 +59407,27 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (this.rustStrCastCall(node) === void 0 && !this.rustClockString(node) && !this.rustSumShape(node) && !this.rustIntToStringShape(node))
       return false;
     return typedUses === 0 || copied > 0;
+  }
+  /** ral-87rh R3: `x = v.toString ()` (no radix) as a whole statement write whose target is a single-binding `let` local
+   *  seeded with a string literal, in a non-test source, and whose call the printer boxes whole as
+   *  `Value::Str(format!("{}", ..))` (decided from that very node's print, rustUnboxedFormatOf). */
+  rust87rhToStringWrite(node) {
+    if (node === void 0 || !isCallExpression6(node) || node.arguments.length !== 0 || !isPropertyAccessExpression3(node.expression) || String(node.expression.name.text) !== "toString")
+      return false;
+    if (this.rustTestTierSource(node))
+      return false;
+    const up = this.rustSkipWrappersUp(node.parent);
+    if (up === void 0 || !isBinaryExpression5(up) || up.operatorToken.kind !== SyntaxKind7.EqualsToken || up.parent?.kind !== SyntaxKind7.ExpressionStatement || !isIdentifier3(up.left))
+      return false;
+    if (this.unwrapParens(up.right) !== node)
+      return false;
+    const target = this.rustDeclaredNode(up.left);
+    if (target === void 0 || !isVariableDeclaration3(target) || target.initializer === void 0 || this.literalKindOfNode(this.unwrapParens(target.initializer)) !== "string")
+      return false;
+    const list = target.parent;
+    if (list?.kind !== SyntaxKind7.VariableDeclarationList || (list.flags & NodeFlags4.Let) === 0 || list.declarations?.length !== 1)
+      return false;
+    return this.rustUnboxedFormatOf(node) !== void 0;
   }
   /** ral-45g: `p.toString()` (no radix) of a parameter the checker types `number`: the printer already boxes
    *  `format!("{}", p)` (the decimal text `Display` gives the `Int` / `Float` box), so the local holds that String. */
@@ -63926,6 +63949,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       return wrap(`format!("{}", ${this.printNode(this.unwrapParens(clock), 0).trim()})`);
     if (clock !== void 0)
       return wrap(`format!("{}", ${this.rustScalarNativeText("int", clock)})`);
+    if (base === "str" && this.rust87rhToStringWrite(node))
+      return wrap(this.rustUnboxedFormatOf(node));
     if (base === "str" && this.rustNumParamToString(node)) {
       const boxed = text.match(/^Value::Str\((format!\(.*\))\.into\(\)\)$/s);
       return boxed !== null ? wrap(boxed[1]) : wrap(`${text}.as_str().unwrap_or_default().to_string()`);
