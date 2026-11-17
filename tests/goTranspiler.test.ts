@@ -17167,6 +17167,28 @@ describe('nil-seeded scalar pointers joined through plain copies', () => {
         expect(out).toContain('var mid *float64 = nil');
         expect(out).toContain('if bid != nil {');
     });
+    test('a pointer seed read as the guarded arm of its own nil test takes the pointer type', () => {
+        const out = run('    f (p: Dict, first: Num): Dict {\n'
+            + '        let expiry: Num = undefined;\n'
+            + "        if (p['x']) {\n"
+            + "            expiry = this.safeNumber (p, 'e');\n"
+            + '        }\n'
+            + '        const end = (expiry !== undefined) ? expiry : first;\n'
+            + "        return { 'end': end };\n"
+            + '    }\n');
+        expect(out).toContain('var expiry *float64 = nil');
+    });
+    test('a string seed in a guarded arm keeps the box', () => {
+        const out = run('    f (p: Dict): Dict {\n'
+            + '        let body: Str = undefined;\n'
+            + "        if (p['x']) {\n"
+            + "            body = this.safeString (p, 'b');\n"
+            + '        }\n'
+            + "        const payload = (body === undefined) ? '' : body;\n"
+            + "        return { 'payload': payload };\n"
+            + '    }\n');
+        expect(out).toContain('var body any = nil');
+    });
     test('a copy-linked component with a foreign write keeps the box', () => {
         const out = run('    f (p: Dict): Dict {\n'
             + '        let a: Str = undefined;\n'

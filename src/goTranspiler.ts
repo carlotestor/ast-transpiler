@@ -4826,6 +4826,7 @@ export function ccxtGoNilDeclaredJoinType (goTranspiler, declaration) {
         return copyComponent;
     }
     const copyReadTypes = [];
+    let guardedArmRead = false;
     // the join over every later write: all of them must be whole calls whose proven
     // Go return type is the same scalar pointer
     let joinType;
@@ -4866,6 +4867,8 @@ export function ccxtGoNilDeclaredJoinType (goTranspiler, declaration) {
                     literalCompareRead = true;      // 90g1 R2: *string join only (checked below)
                 } else if (ccxtGo90StringPtrArgument (goTranspiler, n)) {
                     stringPtrArgumentRead = true;   // 90g1 R3: *string join with a native read only (checked below)
+                } else if (ccxtGo93GuardedTernaryArm (goTranspiler, n, declaration)) {
+                    guardedArmRead = true;          // the non-nil arm of `(x !== undefined) ? x : y` (checked below)
                 } else if (ccxtGo93CopyTargetType (goTranspiler, n) !== undefined) {
                     copyReadTypes.push (ccxtGo93CopyTargetType (goTranspiler, n)); // a copy into a member of the same component
                 } else {
@@ -4893,6 +4896,9 @@ export function ccxtGoNilDeclaredJoinType (goTranspiler, declaration) {
         return undefined;
     }
     if (copyReadTypes.some ((t) => t !== joinType)) {
+        return undefined;
+    }
+    if (guardedArmRead && ((joinType === '*string') || !nilTestRead)) {
         return undefined;
     }
     if (stringOnlyRead && (joinType !== '*string')) {
@@ -39266,4 +39272,38 @@ GoTranspiler.prototype.goTypeOfInitializer = function (initializer, printedValue
     }
     return goTypeOfInitializerBase93Copy.call (this, initializer, printedValue);
 };
+// `(x !== undefined) ? x : y` / `(x === undefined) ? y : x`: the arm only runs with x non-nil, so it hands on a
+// non-nil pointer; admitted where the whole conditional is a local's initializer or an object-literal value
+function ccxtGo93GuardedTernaryArm (goTranspiler: GoTranspiler, read, declaration): boolean {
+    let arm = read;
+    while ((arm.parent?.kind === SyntaxKind.ParenthesizedExpression) || (arm.parent?.kind === SyntaxKind.AsExpression)) {
+        arm = arm.parent;
+    }
+    const conditional = arm.parent;
+    if ((conditional?.kind !== SyntaxKind.ConditionalExpression) || (conditional.condition === arm)) {
+        return false;
+    }
+    let test = conditional.condition;
+    while (test?.kind === SyntaxKind.ParenthesizedExpression) {
+        test = test.expression;
+    }
+    if ((test?.kind !== SyntaxKind.BinaryExpression) || (COMPARISON_TOKENS.indexOf (test.operatorToken.kind) < 0)) {
+        return false;
+    }
+    const tested = isUndefinedLiteral (test.right) ? test.left : (isUndefinedLiteral (test.left) ? test.right : undefined);
+    if ((tested?.kind !== SyntaxKind.Identifier) || (ccxtGoParamDeclarationOf (goTranspiler, tested) !== declaration)) {
+        return false;
+    }
+    const negated = (test.operatorToken.kind === SyntaxKind.ExclamationEqualsEqualsToken) || (test.operatorToken.kind === SyntaxKind.ExclamationEqualsToken);
+    if ((negated ? conditional.whenTrue : conditional.whenFalse) !== arm) {
+        return false;
+    }
+    let outer = conditional;
+    while (outer.parent?.kind === SyntaxKind.ParenthesizedExpression) {
+        outer = outer.parent;
+    }
+    const host = outer.parent;
+    return ((host?.kind === SyntaxKind.VariableDeclaration) && (host.initializer === outer))
+        || ((host?.kind === SyntaxKind.PropertyAssignment) && (host.initializer === outer));
+}
 // ===== nil-seeded scalar pointers joined through plain copies (end) =====
