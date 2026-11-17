@@ -38142,3 +38142,120 @@ GoTranspiler.prototype.printCallExpression = function (node, identation) {
     return printCallExpressionBase90g8.call(this, node, identation);
 };
 // ===== ral-90g8 R3 (end), R4 inside =====
+
+// ===== ral-92g7 (begin): native this.sum / Math.min / Math.max over int64 operands =====
+// `this.sum (a, b)` with both operands proven Go int64 (or one an int constant): BaseExchange.Sum folds
+// Add from a float64 0 and answers the same int64, so the call prints the native `a + b`.
+// `Math.min (a, b)` / `Math.max (a, b)` over the same operands print Go's builtin `min` / `max`
+// (mathMin boxed the integral float64 of the same value). A declaration initialised that way names
+// `int64` (Sum) or, for min / max, only when the local also has an arithmetic, ordered or sum use.
+export interface GoTranspiler {
+    go92g7Int64Operands(call): Node[] | undefined;
+    go92g7MinMaxName(call): string | undefined;
+    go92g7OperandText(operand, index: number): string;
+    go92g7HasNumericUse(declaration): boolean;
+}
+
+GoTranspiler.prototype.go92g7Int64Operands = function (call): Node[] | undefined {
+    if ((call?.kind !== SyntaxKind.CallExpression) || (call.arguments?.length !== 2)) {
+        return undefined;
+    }
+    const kinds = call.arguments.map((operand) => {
+        if (operand.kind === SyntaxKind.SpreadElement) {
+            return undefined;
+        }
+        if ((operand.kind === SyntaxKind.NumericLiteral) && !this.goLiteralFitsKind(operand, 'int')) {
+            return undefined;
+        }
+        return this.goOperandStaticType(operand, this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(operand, 0)));
+    });
+    const ok = kinds.every((k) => (k === 'int64') || (k === 'const-int')) && kinds.includes('int64');
+    return ok ? [ call.arguments[0], call.arguments[1] ] : undefined;
+};
+
+GoTranspiler.prototype.go92g7MinMaxName = function (call): string | undefined {
+    const callee = call?.expression;
+    if ((call?.kind !== SyntaxKind.CallExpression) || (callee?.kind !== SyntaxKind.PropertyAccessExpression)
+        || (callee.expression?.kind !== SyntaxKind.Identifier) || (callee.expression.text !== 'Math')
+        || !['min', 'max'].includes(callee.name?.text)) {
+        return undefined;
+    }
+    const name = callee.name.text;
+    // a binding named like the Go builtin in the enclosing function would shadow it
+    const scope = this.goEnclosingFunction(call);
+    const shadows = (n) => (n.kind === SyntaxKind.Identifier) && (n.text === name)
+        && !((n.parent?.kind === SyntaxKind.PropertyAccessExpression) && (n.parent.name === n));
+    return ((scope !== undefined) && !this.hasNodeWhere(scope, shadows)) ? name : undefined;
+};
+
+GoTranspiler.prototype.go92g7OperandText = function (operand, index: number): string {
+    const printed = this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(operand, 0)).trim();
+    const operator = this.goNativeBinaryOperator(operand);
+    const precedence = (operator === undefined) ? 6 : this.goOperatorPrecedence(operator);
+    return (((precedence < 4) || ((index === 1) && (precedence === 4))) && (operand.kind !== SyntaxKind.ParenthesizedExpression))
+        ? '(' + printed + ')' : printed;
+};
+
+GoTranspiler.prototype.go92g7HasNumericUse = function (declaration): boolean {
+    if (this.goTernaryJoin90HasArithmeticUse(declaration)) {
+        return true;
+    }
+    const scope = this.goEnclosingFunction(declaration);
+    const checker: Checker | undefined = this.checkerOrUndefined();
+    if ((scope === undefined) || (checker === undefined) || (declaration?.name?.kind !== SyntaxKind.Identifier)) {
+        return false;
+    }
+    return this.hasNodeWhere(scope, (n) => {
+        if ((n.kind !== SyntaxKind.Identifier) || (n.text !== declaration.name.text) || (n === declaration.name)
+            || (checker.getSymbolAtLocation(n)?.valueDeclaration?.resolve() !== declaration)) {
+            return false;
+        }
+        const call = n.parent;
+        if ((call?.kind !== SyntaxKind.CallExpression) || (call.arguments.indexOf(n) < 0)) {
+            return false;
+        }
+        return ((this.goInt64SumOperands(call) !== undefined) || (this.go92g7MinMaxName(call) !== undefined))
+            && (this.go92g7Int64Operands(call) !== undefined);
+    });
+};
+
+const printCallExpressionBase92g7 = GoTranspiler.prototype.printCallExpression;
+GoTranspiler.prototype.printCallExpression = function (node, identation) {
+    const minMax = this.go92g7MinMaxName(node);
+    const operands = ((minMax !== undefined) || (this.goInt64SumOperands(node) !== undefined)) ? this.go92g7Int64Operands(node) : undefined;
+    if (operands === undefined) {
+        return printCallExpressionBase92g7.call(this, node, identation);
+    }
+    if (minMax !== undefined) {
+        const [ a, b ] = operands.map((operand) => this.printNode(operand, 0).trim());
+        return `${minMax}(${a}, ${b})`;
+    }
+    const text = operands.map((operand, index) => this.go92g7OperandText(operand, index)).join(' + ');
+    const up = node.parent;
+    // only a bare operand position drops the grouping parens
+    const bare = (up?.kind === SyntaxKind.VariableDeclaration) || (up?.kind === SyntaxKind.ReturnStatement) || (up?.kind === SyntaxKind.ParenthesizedExpression)
+        || (up?.kind === SyntaxKind.PropertyAssignment) || (up?.kind === SyntaxKind.ElementAccessExpression)
+        || ((up?.kind === SyntaxKind.CallExpression) && (up.expression !== node))
+        || ((up?.kind === SyntaxKind.BinaryExpression) && (up.operatorToken.kind === SyntaxKind.EqualsToken) && (up.right === node));
+    return bare ? text : `(${text})`;
+};
+
+const goTypeOfInitializerBase92g7 = GoTranspiler.prototype.goTypeOfInitializer;
+GoTranspiler.prototype.goTypeOfInitializer = function (initializer, printedValue: string) {
+    const declaration = initializer?.parent;
+    if ((initializer?.kind === SyntaxKind.CallExpression) && (declaration?.kind === SyntaxKind.VariableDeclaration)
+        && (declaration.initializer === initializer) && (declaration.name?.kind === SyntaxKind.Identifier)) {
+        const printed = (printedValue ?? '').trim();
+        const minMax = this.go92g7MinMaxName(initializer);
+        if ((minMax !== undefined) && printed.startsWith(minMax + '(') && (this.go92g7Int64Operands(initializer) !== undefined)
+            && this.go92g7HasNumericUse(declaration)) {
+            return 'int64';
+        }
+        if ((minMax === undefined) && !printed.startsWith('this.Sum(') && (this.goInt64SumOperands(initializer) !== undefined)
+            && (this.go92g7Int64Operands(initializer) !== undefined)) {
+            return 'int64';
+        }
+    }
+    return goTypeOfInitializerBase92g7.call(this, initializer, printedValue);
+};
+// ===== ral-92g7 (end) =====
