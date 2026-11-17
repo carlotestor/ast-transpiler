@@ -59245,6 +59245,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (nativeUses === 0 && kind === "str" && this.rustReaderCaseStrRecv(this.unwrapParens(declaration.initializer)) !== void 0)
       return void 0;
+    if (nativeUses === 0 && this.rust90rgParseNumberOfNumParam(this.unwrapParens(declaration.initializer)))
+      return void 0;
     const init84h = this.unwrapParens(declaration.initializer);
     if (nativeUses === 0 && init84h !== void 0 && isConditionalExpression4(init84h) && [init84h.whenTrue, init84h.whenFalse].some((arm) => this.rust84hDefaultedStrParamArm(this.unwrapParens(arm))))
       return void 0;
@@ -59271,7 +59273,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (typedUses === 0 && this.rustParamAliasSeedKind(declaration) !== void 0 && !_RustTranspiler.RUST_COPY_SCALAR_KINDS.has(kind) && !(strKind && copied === 0 && nativeUses > 0 && !this.rust76fSourceMethodWrite(declaration, scope)))
       return void 0;
-    if ((boxed > 0 && !this.rustNumParamBoxesOnly(declaration) || expressionUses && !this.rustCompareOnlyNumUses(declaration)) && this.rustReaderIntDefaultNum(declaration.initializer))
+    if ((boxed > 0 && !this.rustNumParamBoxesOnly(declaration) || expressionUses && !this.rustCompareOnlyNumUses(declaration)) && this.rustReaderIntDefaultNum(declaration.initializer) && !this.rust90rgFloatOnlyUses(declaration, 0))
       return void 0;
     const readerTouched = this.rustReaderDefaultTouched(declaration);
     const readerLent = readerTouched && strKind && boxed > 0 && copied > 0 && !this.rustStrNoLend && (this.rustReaderLendBoxes(declaration) || kind === "ostr" && !this.rustTestTierSource(declaration) && this.rustReaderLendBoxes(declaration, true, false, true) || kind === "ostr" && !this.rustTestTierSource(declaration) && this.rustSafeCurrencyCodeInit(declaration.initializer) && this.rustReaderLendBoxes(declaration, true));
@@ -60672,7 +60674,18 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     const arg = this.unwrapParens(call.arguments[0]);
     const kind = isIdentifier3(arg) ? this.rustScalarIdentifierKind(arg) : this.rustScalarValueKind(arg, true);
-    return kind === "str" || kind === "ostr" || this.rustVenueStrCall(arg);
+    return kind === "str" || kind === "ostr" || this.rustVenueStrCall(arg) || this.rust90rgParseNumberOfNumParam(call);
+  }
+  /** ral-87rg R2 (ral-90rg: split out): `this.parseNumber (p)` of an unwritten parameter whose typed signature slot is `f64` /
+   *  `Option<f64>` (rustOptParamKind). Its result local is typed only for a native use (rustScalarNeedsNativeUse): boxed
+   *  straight back it stays the `Value` it is handed as. */
+  rust90rgParseNumberOfNumParam(call) {
+    if (call === void 0 || !isCallExpression6(call) || call.arguments.length !== 1)
+      return false;
+    const arg = this.unwrapParens(call.arguments[0]);
+    if (!isIdentifier3(arg) || this.rustScalarIdentifierKind(arg) !== void 0)
+      return false;
+    return ["num", "onum"].includes(this.rustOptParamKind(arg) ?? "");
   }
   // Any other callee: a base one whose checker return is a string, or one declaring `string`/`Str`/`int`/`Int`
   // (a bare `number` may hold a float, which `as_i64` would drop).
@@ -61464,6 +61477,43 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (p === void 0 || p.type === void 0 || p.dotDotDotToken !== void 0)
       return false;
     return p.type.kind === SyntaxKind7.NumberKeyword;
+  }
+  /** ral-90rg R2b: every use of a number local reads it only as an `f64`: a nullish test (`x === undefined`), an argument of
+   *  `Math.floor|round|ceil|pow` (the runtime helpers convert through `as_f64` and answer `Float`), or an arm of the ternary
+   *  initializer of another `const` whose own uses are the same (two levels at most). An `Int` default and its `Float`
+   *  spelling then give the same result, so a `safeNumber (.., <int literal>)` reader local may be typed `Option<f64>`.
+   *  Decided from the TypeScript AST only. */
+  rust90rgFloatOnlyUses(declaration, depth) {
+    if (depth > 2 || declaration === void 0 || !isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name))
+      return false;
+    const list = declaration.parent;
+    if (list === void 0 || (list.flags & NodeFlags4.Const) === 0)
+      return false;
+    let uses = 0;
+    const ok = this.rustScalarUsesAll(declaration, String(declaration.name.text), (n) => {
+      uses++;
+      let top = n;
+      while (top.parent !== void 0 && isParenthesizedExpression3(top.parent))
+        top = top.parent;
+      const up = top.parent;
+      if (up === void 0)
+        return false;
+      if (isBinaryExpression5(up) && this.isEqualityOp(up.operatorToken.kind)) {
+        const other = up.left === top ? up.right : up.left;
+        return this.literalKindOfNode(this.unwrapParens(other)) === "null";
+      }
+      if (isCallExpression6(up) && up.expression !== top && this.rustMathFloatShape(up) && String(up.expression.name.text) !== "abs")
+        return true;
+      if (isConditionalExpression4(up) && (up.whenTrue === top || up.whenFalse === top)) {
+        let init = up;
+        while (init.parent !== void 0 && isParenthesizedExpression3(init.parent))
+          init = init.parent;
+        const owner = init.parent;
+        return owner !== void 0 && isVariableDeclaration3(owner) && owner.initializer === init && this.rust90rgFloatOnlyUses(owner, depth + 1);
+      }
+      return false;
+    });
+    return ok && uses > 0;
   }
   /** A number reader whose default may be an `Int` (an int literal, or anything not proven a float). */
   rustReaderIntDefaultNum(init) {

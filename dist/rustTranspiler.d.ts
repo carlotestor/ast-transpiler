@@ -948,6 +948,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-68f: a base safeString-family reader call (not safeCurrencyCode) with no default argument (rust64bReaderLocal's call test). */
     rust68fNoDefaultReader(init: any): boolean;
     rustParseNumberStrCall(call: any): boolean;
+    /** ral-87rg R2 (ral-90rg: split out): `this.parseNumber (p)` of an unwritten parameter whose typed signature slot is `f64` /
+     *  `Option<f64>` (rustOptParamKind). Its result local is typed only for a native use (rustScalarNeedsNativeUse): boxed
+     *  straight back it stays the `Value` it is handed as. */
+    rust90rgParseNumberOfNumParam(call: Node): boolean;
     rustDerivedScalarKind(call: any): string | undefined;
     rustListLengthInit(node: any): boolean;
     /** ral-67b: `(x as T[]).length` (any array type T): the receiver is a local or parameter cast to an array type in the
@@ -1068,6 +1072,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustNumParamBoxesOnly(declaration: any): boolean;
     /** The parameter `arg` binds in `call` is declared `number` (not `int`), so it prints as an `f64`. */
     rustNumParamArg(call: any, arg: any): boolean;
+    /** ral-90rg R2b: every use of a number local reads it only as an `f64`: a nullish test (`x === undefined`), an argument of
+     *  `Math.floor|round|ceil|pow` (the runtime helpers convert through `as_f64` and answer `Float`), or an arm of the ternary
+     *  initializer of another `const` whose own uses are the same (two levels at most). An `Int` default and its `Float`
+     *  spelling then give the same result, so a `safeNumber (.., <int literal>)` reader local may be typed `Option<f64>`.
+     *  Decided from the TypeScript AST only. */
+    rust90rgFloatOnlyUses(declaration: Node, depth: number): boolean;
     /** A number reader whose default may be an `Int` (an int literal, or anything not proven a float). */
     rustReaderIntDefaultNum(init: any): boolean;
     rustScalarUsesAll(declaration: any, name: string, acceptUse: (n: any) => boolean): boolean;
