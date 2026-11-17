@@ -35819,11 +35819,20 @@ export class RustTranspiler extends BaseTranspiler {
             if (callee === 'arrayConcat') return n.arguments.length === 2 && this.rustCalleeIsBase(n);
             if (callee === 'sortBy' || callee === 'sortBy2') {
                 const first: any = this.rustStripWrappers(n.arguments[0]);
+                // ral-87rg R4: a base `aggregate (x)` operand: the runtime (exchange_stubs.rs `aggregate`) answers `Value::Array` on every path
+                if (first !== undefined && this.rust87rgAggregateCall(first)) return this.rustCalleeIsBase(n);
                 return first !== undefined && isIdentifier(first) && this.rustCalleeIsBase(n) && this.arrAlias(first);
             }
             return false;
         }
         return isIdentifier(n) && String(n.text) !== 'undefined' && this.arrAlias(n);
+    }
+
+    /** ral-87rg R4: `this.aggregate (x)` bound to the base helper (a hand-written runtime stub that returns `Value::Array(..)` for
+     *  every input: the non-list case answers `[]`), so a `sortBy` over it hands a list back. */
+    rust87rgAggregateCall(n: any): boolean {
+        return n !== undefined && isCallExpression(n) && isPropertyAccessExpression(n.expression) && n.expression.expression.kind === SyntaxKind.ThisKeyword
+            && String(n.expression.name.text) === 'aggregate' && n.arguments.length === 1 && this.rustCalleeIsBase(n) && !this.rustTestTierSource(n);
     }
 
     arrAlias(ident: any): boolean {

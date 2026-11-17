@@ -24751,3 +24751,22 @@ describe('ral-87rg R2: parseNumber of a typed float parameter is an Option<f64>'
         expect(out).toMatch(/let mut other: Value = /);
     });
 });
+
+describe('ral-87rg R4: sortBy of a base aggregate result is a list', () => {
+    test('`this.sortBy (this.aggregate (x), 0)` types the local as a List; sortBy of an any stays boxed', () => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-87rg4-'));
+        const files: Record<string, string> = {
+            'ts/src/base/Exchange.ts': "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    aggregate (x: any[]): any[] { return x; }\n    sortBy (x: any[], k: any, d = false): any[] { return x; }\n    safeList (o: any, k: any, d: any = undefined): any[] { return o; }\n    hold (x: any): any { return x; }\n}\n",
+            'ts/src/venue.ts': "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n    m (book: any, raw: any) {\n        const bids = this.sortBy (this.aggregate (book['bids']), 0);\n        const best = this.safeList (bids, 0, []);\n        const other = this.sortBy (raw, 0);\n        const first = this.safeList (other, 0, []);\n        return this.hold ([ best, first ]);\n    }\n}\n",
+        };
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        t.transpileRustByPath(path.join (root, 'ts/src/base/Exchange.ts'));
+        const out = t.transpileRustByPath(path.join (root, 'ts/src/venue.ts')).content;
+        expect(out).toMatch(/let mut bids: crate::value::List = /);
+        expect(out).toMatch(/let mut other: Value = /);
+    });
+});
