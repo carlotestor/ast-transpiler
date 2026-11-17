@@ -45250,7 +45250,7 @@ function go92g2LoopListLocal(goTranspiler, declaration) {
   const call = declaration.initializer;
   const callee = call?.expression;
   const method = String(callee?.name?.text ?? "");
-  const nilExact = method === "safeListN" && call?.arguments?.length === 2;
+  const nilExact = method === "safeListN" && call?.arguments?.length === 2 || method === "marketIds" && call?.arguments?.length === 1;
   if (call?.kind !== SyntaxKind5.CallExpression || callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword || call.arguments.some((a) => a.kind === SyntaxKind5.SpreadElement) || !(nilExact || method === "safeList" && call.arguments.length === 3 && ![SyntaxKind5.ArrayLiteralExpression, SyntaxKind5.ObjectLiteralExpression].includes(call.arguments[2].kind))) {
     return false;
   }
@@ -45300,7 +45300,7 @@ function go92g2LoopListLocal(goTranspiler, declaration) {
   GoTranspiler.prototype.goSafeListUnboxValue = function(declaration, identation) {
     if (listType.call(this, declaration) === void 0 && go92g2LoopListLocal(this, declaration)) {
       const args = declaration.initializer.arguments.map((a, i) => this.printNode(a, i === 0 ? identation : 0).trim());
-      const reader = declaration.initializer.expression.name.text === "safeListN" ? "SafeListNSlice" : "SafeListSlice";
+      const reader = GO93G2_LOOP_LIST_READERS[declaration.initializer.expression.name.text] ?? "SafeListSlice";
       return `this.${reader}(${args.join(", ")})`;
     }
     return listValue.call(this, declaration, identation);
@@ -45801,6 +45801,7 @@ GoTranspiler.prototype.printReturnStatement = function(node, identation) {
   return printReturnStatementBaseTypedVenue.call(this, node, identation);
 };
 GO92G2_STRING_LIST_READERS["marketIds"] = ["MarketIdsStrings", 1];
+var GO93G2_LOOP_LIST_READERS = { "safeListN": "SafeListNSlice", "marketIds": "MarketIdsSlice" };
 
 // src/javaTranspiler.ts
 init_esm_shims();
