@@ -15582,6 +15582,7 @@ function ccxtGoNilDeclaredJoinType(goTranspiler, declaration) {
   }
   const copyReadTypes = [];
   let guardedArmRead = false;
+  let concatRead = false;
   let joinType;
   let writeCount = 0;
   let readUnproven = false;
@@ -15597,7 +15598,7 @@ function ccxtGoNilDeclaredJoinType(goTranspiler, declaration) {
     if (readUnproven) {
       return;
     }
-    if (n.kind === ts.SyntaxKind.Identifier && n.text === varName && n !== name) {
+    if (n.kind === ts.SyntaxKind.Identifier && n.text === varName && n !== name && !ccxtGo93OtherBinding(goTranspiler, n, declaration)) {
       const parent = n.parent;
       const isWrite = parent !== void 0 && parent.kind === ts.SyntaxKind.BinaryExpression && parent.left === n && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken;
       if (isWrite) {
@@ -15619,6 +15620,8 @@ function ccxtGoNilDeclaredJoinType(goTranspiler, declaration) {
           literalCompareRead = true;
         } else if (ccxtGo90StringPtrArgument(goTranspiler, n)) {
           stringPtrArgumentRead = true;
+        } else if (ccxtGo93ConcatOperand(n)) {
+          concatRead = true;
         } else if (ccxtGo93GuardedTernaryArm(goTranspiler, n, declaration)) {
           guardedArmRead = true;
         } else if (ccxtGo93CopyTargetType(goTranspiler, n) !== void 0) {
@@ -15649,6 +15652,9 @@ function ccxtGoNilDeclaredJoinType(goTranspiler, declaration) {
     return void 0;
   }
   if (guardedArmRead && (joinType === "*string" || !nilTestRead)) {
+    return void 0;
+  }
+  if (concatRead && (joinType !== "*string" || !(nilTestRead || literalCompareRead))) {
     return void 0;
   }
   if (stringOnlyRead && joinType !== "*string") {
@@ -45978,6 +45984,18 @@ function ccxtGo93GuardedTernaryArm(goTranspiler, read, declaration) {
   }
   const host = outer.parent;
   return host?.kind === SyntaxKind5.VariableDeclaration && host.initializer === outer || host?.kind === SyntaxKind5.PropertyAssignment && host.initializer === outer;
+}
+function ccxtGo93ConcatOperand(read) {
+  let operand = read;
+  while (operand.parent?.kind === SyntaxKind5.ParenthesizedExpression) {
+    operand = operand.parent;
+  }
+  const parent = operand.parent;
+  return parent?.kind === SyntaxKind5.BinaryExpression && parent.operatorToken.kind === SyntaxKind5.PlusToken;
+}
+function ccxtGo93OtherBinding(goTranspiler, n, declaration) {
+  const bound = ccxtGoParamDeclarationOf(goTranspiler, n);
+  return bound !== void 0 && bound !== declaration && (bound.kind === SyntaxKind5.VariableDeclaration || bound.kind === SyntaxKind5.Parameter);
 }
 
 // src/javaTranspiler.ts
