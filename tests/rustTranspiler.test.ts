@@ -25225,9 +25225,14 @@ describe('ral-90rd: safeValue / safeDict / safeList result locals', () => {
         expect(out).toContain('orderidlist.iter().map(crate::runtime::stringify_param).collect::<Vec<String>>().join("%2C")');
         expect(out).not.toContain('join(&orderidlist');
     });
-    test('R2 negative: a no-default safeList local under a null test keeps the helper join', () => {
-        const out = write ('ral-90rd-r2n', "    m (params: Dict, query: string) {\n        const ids = this.safeList (params, 'ids');\n        if (ids !== undefined) {\n            query = query + ids.join (',');\n        }\n        return query;\n    }\n");
+    test('R2 negative: a join by a non-literal separator keeps the helper join', () => {
+        const out = write ('ral-90rd-r2n', "    m (params: Dict, sep: string) {\n        const ids = this.safeList (params, 'ids', []);\n        return ids.join (sep);\n    }\n");
         expect(out).not.toContain('ids.iter().map(crate::runtime::stringify_param)');
+    });
+    test('R2b woofipro cancelOrders: a no-default safeList local joined under a null test joins its optional slice', () => {
+        const out = write ('ral-90rd-r2b', "    m (params: Dict, request: Dict) {\n        const clientOrderIds = this.safeList (params, 'clientOrderIds');\n        if (clientOrderIds !== undefined) {\n            request['client_order_ids'] = clientOrderIds.join (',');\n        }\n        return request;\n    }\n");
+        expect(out).toContain('let mut clientOrderIds: Option<crate::value::List> = ');
+        expect(out).toContain('clientOrderIds.as_deref().map(Vec::as_slice).unwrap_or_default().iter().map(crate::runtime::stringify_param)');
     });
     test('R1 negative: an untyped (Dict) map with a mutated row bind stays Value', () => {
         const out = write ('ral-90rd-r1n', "    m (result: Dict) {\n        const ledger = this.safeDict (result, 'ledger', {});\n        const keys = Object.keys (ledger);\n        const items = [];\n        for (let i = 0; i < keys.length; i++) {\n            const key = keys[i];\n            const value = ledger[key];\n            value['id'] = key;\n            items.push (value);\n        }\n        return items;\n    }\n");
