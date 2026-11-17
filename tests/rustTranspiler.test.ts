@@ -24767,3 +24767,27 @@ describe('ral-87rd R1 fix: a pushed safeList local with a same-named sibling bin
         expect(out).toContain('if let Value::Arr(__a) = &mut grouped');
     });
 });
+describe('ral-87rd R3: an Array.isArray-guarded ternary of a list read is a typed list local', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    safeList (o: any, k: any, d: any = undefined): any[] { return o; }\n    keep (o: any): any { return o; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        transpiler.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts'));
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('polymarket fetchTrades: guarded ternary read by index in a counter loop', () => {
+        const out = write ('ral-87rd-r3a', "    m (response: any) {\n        const rawTrades: Dict[] = Array.isArray (response) ? response : this.safeList (response, 'data', []);\n        for (let i = 0; i < rawTrades.length; i++) {\n            this.keep (rawTrades[i]);\n        }\n    }\n");
+        expect(out).toContain('let mut rawTrades: crate::value::List = ');
+        expect(out).not.toContain('let mut rawTrades: Value');
+    });
+    test('myriad: the test held in a const flag', () => {
+        const out = write ('ral-87rd-r3b', "    m (response: any) {\n        const responseIsArray = Array.isArray (response);\n        const rows = (responseIsArray) ? response : this.safeList (response, 'data', []);\n        for (let i = 0; i < rows.length; i++) {\n            this.keep (rows[i]);\n        }\n    }\n");
+        expect(out).toContain('let mut rows: crate::value::List = ');
+    });
+    test('negative: the guard tests another local', () => {
+        const out = write ('ral-87rd-r3n', "    m (response: any, other: any) {\n        const rows = Array.isArray (other) ? response : this.safeList (response, 'data', []);\n        for (let i = 0; i < rows.length; i++) {\n            this.keep (rows[i]);\n        }\n    }\n");
+        expect(out).not.toContain('let mut rows: crate::value::List');
+    });
+});

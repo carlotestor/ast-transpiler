@@ -27345,6 +27345,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (this.rustBuiltListConcatInit(init) && isIdentifier(declaration.name) && this.rustLocalIsReassigned(declaration, String(declaration.name.text))) return this.rustBuiltListLocal(declaration);
         // ral-65i: a reassigned base `filterBy (..)` initializer (the runtime table's list answer) whose every write is a list producer
         if (this.rust65iFilterByCall(init) && isIdentifier(declaration.name) && this.rustLocalIsReassigned(declaration, String(declaration.name.text))) return this.rustBuiltListLocal(declaration);
+        // ral-87rd R3: `Array.isArray (r) ? r : this.safeList (r, 'k', [])` (rustArrayGuardedTernary): a `Value::Arr` on every path
+        if (this.rustArrayGuardedTernary(init) && isIdentifier(declaration.name)) return this.rustBuiltListLocal(declaration);
         if (!this.rustLentListSource(init)) return false;
         // a defaulted read boxes its shared handle only when it also has a length or index read
         const defaulted = this.rustDefaultedListRead(init);
@@ -30414,9 +30416,11 @@ export class RustTranspiler extends BaseTranspiler {
         const nilAssigned = this.rustNilListAssignedFirst(declaration);
         // ral-56s: a base `arrayConcat (a, b)` initializer answers a `Value::Arr` on every path, like a `[]`-defaulted read
         const read = init !== undefined && (this.rustDefaultedListRead(this.rustSkipWrappers(init)) || this.rustBuiltListConcatInit(this.rustSkipWrappers(init)) || this.rust65iFilterByCall(this.rustSkipWrappers(init)));
-        if (!nilAssigned && (init === undefined || !read && (!isArrayLiteralExpression(init) || init.elements.some((e: any) => e.kind === SyntaxKind.SpreadElement)))) return false;
-        const type: any = nilAssigned ? undefined : this.typeOfNodeIfAny(read ? init : declaration.name);
-        if (!nilAssigned && (type === undefined || !this.getChecker().isArrayType(type))) return false;
+        // ral-87rd R3: the Array.isArray-guarded ternary of a list read (a list on every path, as its write form already proves)
+        const guardedInit = init !== undefined && this.rustArrayGuardedTernary(init);
+        if (!nilAssigned && !guardedInit && (init === undefined || !read && (!isArrayLiteralExpression(init) || init.elements.some((e: any) => e.kind === SyntaxKind.SpreadElement)))) return false;
+        const type: any = nilAssigned || guardedInit ? undefined : this.typeOfNodeIfAny(read ? init : declaration.name);
+        if (!nilAssigned && !guardedInit && (type === undefined || !this.getChecker().isArrayType(type))) return false;
         const name = String(declaration.name.text);
         const fn: any = this.rustEnclosingFunction(declaration);
         if (fn === undefined || isSourceFile(fn)) return false;
@@ -30424,7 +30428,7 @@ export class RustTranspiler extends BaseTranspiler {
             || this.rustNestedDictLocalIsTyped(declaration) || this.rustMarketLocalKind(declaration) !== false || this.rustBorrowedDictLocal(declaration)
             || this.rustNilLocalKind(declaration) !== undefined || this.rustScalarLocalKind(declaration) !== undefined) return false;
         this.rustBuiltListCopiedElement = false;
-        if (!nilAssigned && (String(init.getText()).split('\n')[0].length > (read ? 240 : 120) || !this.rustBuiltListWriteSource(init))) return false;
+        if (!nilAssigned && (String(init.getText()).split('\n')[0].length > (read || guardedInit ? 240 : 120) || !(guardedInit || this.rustBuiltListWriteSource(init)))) return false;
         const boxes: [any, 'clone' | 'move' | 'lend'][] = [];
         let natives = 0;
         let handOffs = 0;
