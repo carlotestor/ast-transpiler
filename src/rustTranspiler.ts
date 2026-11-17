@@ -5243,7 +5243,7 @@ export class RustTranspiler extends BaseTranspiler {
                 boxed++;
                 if (form === 'err' ? !this.rustErrMsgMoves(n, declaration) : !(isReturnStatement(n.parent) || this.rustLocalLastUse(n, declaration))) copied++;
             } else if (form !== undefined && !this.rustIdentifierIsPropertyName(n)) nativeUses++;
-            if (form === 'test' || form === 'cond' || form === 'concat' || form === 'native' || form === 'targ' || form === 'lwrite' || form === 'okey' || form === 'fin' || form === 'frd' || form === 'fok' || form === 'kin' || form === 'nkey' || form === 'ukey' || form === 'parg' || form === 'dkey' || form === 'bkey' || (form === 'key' && this.rustOkeyLocal(n) && this.rustElemInsertKey(n))
+            if (form === 'test' || form === 'cond' || form === 'concat' || form === 'native' || form === 'targ' || form === 'lwrite' || form === 'okey' || form === 'fin' || form === 'frd' || form === 'fok' || form === 'kin' || form === 'nkey' || form === 'ukey' || form === 'parg' || form === 'dkey' || form === 'bkey' || (form === 'key' && this.rustOkeyLocal(n) && (this.rustElemInsertKey(n) || this.rust90raLitMapReadKey(n)))
                 // ral-63k: the last key of a nested write on a plain-Dict parameter is the native insert's typed key text
                 || (form === 'mkey' && this.rust63kDictParamNestedKey(n))) typedUses++;
             if (form === 'xbox' || form === 'native' || form === 'targ' || form === 'err') expressionUses = true;
@@ -7075,6 +7075,19 @@ export class RustTranspiler extends BaseTranspiler {
             return true;
         });
         return foreign;
+    }
+
+    /** ral-90ra R3: `n` (an element-read key local) is the whole key of a plain READ `m[n]` (never a write target, update or
+     *  delete) on a local map declared from an object literal: the bearer read prints `m.get(n.as_deref()..)`, a native use. */
+    rust90raLitMapReadKey(n: any): boolean {
+        const keyNode: any = this.rustKeyWrapped(n);
+        const access: any = keyNode?.parent;
+        if (!isElementAccessExpression(access) || access.argumentExpression !== keyNode || !isIdentifier(access.expression) || this.rust70fWriteTargetKey(access)) return false;
+        const declaration: any = this.rustDeclarationOfIdentifier(access.expression);
+        const init: any = declaration !== undefined && isVariableDeclaration(declaration) && declaration.initializer !== undefined ? this.rustSkipWrappers(declaration.initializer) : undefined;
+        // the same structural conditions as rustBearerTypedStrReadKey (the key's own decision is still open while it solves)
+        return init !== undefined && isObjectLiteralExpression(init) && keyNode === n && access.argumentExpression === n && !this.isWriteBackBindRead(access)
+            && !this.rustNodeIsKeyUnsafePlace(String(n.text));
     }
 
     /** Some statement of the parameter's function assigns the parameter itself. */
