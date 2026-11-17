@@ -59434,7 +59434,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     const arg = this.unwrapParens(call.arguments[0]);
     const kind = isIdentifier3(arg) ? this.rustScalarIdentifierKind(arg) : this.rustScalarValueKind(arg, true);
-    return kind === "str" || kind === "ostr" || this.rustVenueStrCall(arg);
+    return kind === "str" || kind === "ostr" || this.rustVenueStrCall(arg) || kind === void 0 && ["num", "onum"].includes(this.rustOptParamKind(arg) ?? "");
   }
   // Any other callee: a base one whose checker return is a string, or one declaring `string`/`Str`/`int`/`Int`
   // (a bare `number` may hold a float, which `as_i64` would drop).
@@ -85295,6 +85295,8 @@ ${iden}}`;
     const at = list.elements.indexOf(n);
     if (/^handle\w*AndParams\d*$/.test(String(call.expression.name.text)) && list.elements.length === 2 && at === 1)
       return true;
+    if (list.elements.length === 2 && at === 1 && this.rust87rgParamSlotCall(call, n))
+      return true;
     if (!this.rustNativeListSource(call))
       return false;
     const declaration = this.rustCalleeDeclaration(call);
@@ -85303,6 +85305,14 @@ ${iden}}`;
     if (named(type, "Promise") && type.typeArguments?.length === 1)
       type = type.typeArguments[0];
     return type?.kind === SyntaxKind7.TupleType && named(type.elements?.[at], "Dict") && type.elements[at].typeArguments === void 0;
+  }
+  /** ral-87rg R1: `[ v, x ] = this.handleParamBool|String|Integer[2] (x, ..)` on the base runtime helper, whose first argument
+   *  is the very local the slot writes back (so slot 1 is that map, or its omit, on every path). */
+  rust87rgParamSlotCall(call, n) {
+    if (!this.rustBaseCallNamed(call, _RustTranspiler.RUST_87RG_PARAM_SLOT_HELPERS) || this.rustTestTierSource(call) || !isIdentifier3(n))
+      return false;
+    const head = this.rustSkipWrappers(call.arguments[0]);
+    return head !== void 0 && isIdentifier3(head) && this.rustDeclaredNode(head) === this.rustDeclaredNode(n) && this.rustDeclaredNode(n) !== void 0;
   }
   rustNilSlotDictCandidateUncached(declaration) {
     const list = declaration.parent;
@@ -92643,6 +92653,7 @@ _RustTranspiler.RUST_HANDED_DICT_SOURCES = /* @__PURE__ */ new Set(["extend", "o
 // (a `params: Value` that may carry a list body) never qualifies.
 _RustTranspiler.RUST_ALWAYS_MAP_HELPERS = /* @__PURE__ */ new Set(["extend", "indexBy", "groupBy"]);
 _RustTranspiler.RUST_84G_GROUP_HELPERS = /* @__PURE__ */ new Set(["indexBy", "groupBy"]);
+_RustTranspiler.RUST_87RG_PARAM_SLOT_HELPERS = /* @__PURE__ */ new Set(["handleParamBool", "handleParamBool2", "handleParamString", "handleParamString2", "handleParamInteger", "handleParamInteger2"]);
 _RustTranspiler.RUST_HANDED_DICT_OMIT = /* @__PURE__ */ new Set(["omit"]);
 _RustTranspiler.RUST_HANDED_DICT_EXTEND = /* @__PURE__ */ new Set(["extend", "deepExtend"]);
 _RustTranspiler.RUST_OPT_EXTEND = /* @__PURE__ */ new Set(["extend"]);

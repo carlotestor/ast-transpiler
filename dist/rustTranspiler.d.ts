@@ -4591,6 +4591,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustNilSlotDictCandidate(declaration: any): boolean;
     /** The element `n` of `[ .., n, .. ] = <call>` sits at a map slot of the call's tuple. */
     rustDictSlotOfWrite(n: any): boolean;
+    private static readonly RUST_87RG_PARAM_SLOT_HELPERS;
+    /** ral-87rg R1: `[ v, x ] = this.handleParamBool|String|Integer[2] (x, ..)` on the base runtime helper, whose first argument
+     *  is the very local the slot writes back (so slot 1 is that map, or its omit, on every path). */
+    rust87rgParamSlotCall(call: any, n: any): boolean;
     rustNilSlotDictCandidateUncached(declaration: any): boolean;
     rustNilSlotLineOk(n: any): boolean;
     rustShortDestrHeads: WeakSet<any>;
