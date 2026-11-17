@@ -45800,6 +45800,90 @@ GoTranspiler.prototype.printReturnStatement = function(node, identation) {
   }
   return printReturnStatementBaseTypedVenue.call(this, node, identation);
 };
+GoTranspiler.prototype.go93g4PointerOperands = function(call, self = void 0) {
+  if (call?.kind !== SyntaxKind5.CallExpression || call.arguments?.length !== 2 || !this.go92g7IsBaseSum(call) && this.go92g7MinMaxName(call) === void 0) {
+    return void 0;
+  }
+  const parts = call.arguments.map((operand) => {
+    if (operand.kind === SyntaxKind5.SpreadElement) {
+      return void 0;
+    }
+    const printed = this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(operand, 0)).trim();
+    if (self !== void 0 && operand.kind === SyntaxKind5.Identifier && this.checkerOrUndefined()?.getSymbolAtLocation(operand)?.valueDeclaration?.resolve() === self) {
+      return { "pointer": false, "text": printed };
+    }
+    const kind = this.goOperandStaticType(operand, printed);
+    if (kind === "int64" || kind === "const-int" && Number.isSafeInteger(this.goNumericConstantValue(operand))) {
+      return { "pointer": false, "text": this.go92g7OperandText(operand, 0) };
+    }
+    const inner = this.goUnwrapPrintedAssertions(operand);
+    if (inner?.kind !== SyntaxKind5.Identifier && !this.goDefaultedSafeIntegerCall(inner)) {
+      return void 0;
+    }
+    return this.goInt64Operand(inner, printed);
+  });
+  if (parts.some((p) => p === void 0) || !parts.some((p) => p.pointer)) {
+    return void 0;
+  }
+  return parts.map((p) => p.text);
+};
+GoTranspiler.prototype.go93g4HasNumericUse = function(declaration) {
+  if (this.go92g7HasNumericUse(declaration)) {
+    return true;
+  }
+  const scope = this.goEnclosingFunction(declaration);
+  const checker = this.checkerOrUndefined();
+  if (scope === void 0 || checker === void 0 || declaration?.name?.kind !== SyntaxKind5.Identifier) {
+    return false;
+  }
+  return this.hasNodeWhere(scope, (n) => {
+    if (n.kind !== SyntaxKind5.Identifier || n.text !== declaration.name.text || n === declaration.name || checker.getSymbolAtLocation(n)?.valueDeclaration?.resolve() !== declaration) {
+      return false;
+    }
+    const call = n.parent;
+    if (call?.kind !== SyntaxKind5.CallExpression || call.arguments?.length !== 2 || call.arguments.indexOf(n) < 0 || !this.go92g7IsBaseSum(call) && this.go92g7MinMaxName(call) === void 0) {
+      return false;
+    }
+    const other = this.goUnwrapPrintedAssertions(call.arguments[1 - call.arguments.indexOf(n)]);
+    if (other?.kind !== SyntaxKind5.Identifier && !this.goDefaultedSafeIntegerCall(other)) {
+      return false;
+    }
+    return this.goInt64Operand(other, this.printNode(other, 0))?.pointer === true;
+  });
+};
+var printCallExpressionBase93g4 = GoTranspiler.prototype.printCallExpression;
+GoTranspiler.prototype.printCallExpression = function(node, identation) {
+  const texts = this.go93g4PointerOperands(node);
+  if (texts === void 0) {
+    return printCallExpressionBase93g4.call(this, node, identation);
+  }
+  const minMax = this.go92g7MinMaxName(node);
+  if (minMax !== void 0) {
+    return `${minMax}(${texts[0]}, ${texts[1]})`;
+  }
+  const up = node.parent;
+  if (up?.kind === SyntaxKind5.BinaryExpression && up.operatorToken.kind === SyntaxKind5.EqualsToken && up.right === node && up.left?.kind === SyntaxKind5.Identifier && !["int64", "int"].includes(this.goDeclaredTypeOfIdentifier(up.left))) {
+    return printCallExpressionBase93g4.call(this, node, identation);
+  }
+  const text = texts.join(" + ");
+  const bare2 = up?.kind === SyntaxKind5.VariableDeclaration || up?.kind === SyntaxKind5.ReturnStatement || up?.kind === SyntaxKind5.ParenthesizedExpression || up?.kind === SyntaxKind5.PropertyAssignment || up?.kind === SyntaxKind5.ElementAccessExpression || up?.kind === SyntaxKind5.CallExpression && up.expression !== node || up?.kind === SyntaxKind5.BinaryExpression && up.operatorToken.kind === SyntaxKind5.EqualsToken && up.right === node;
+  return bare2 ? text : `(${text})`;
+};
+var goTypeOfInitializerBase93g4 = GoTranspiler.prototype.goTypeOfInitializer;
+GoTranspiler.prototype.goTypeOfInitializer = function(initializer, printedValue) {
+  const declaration = initializer?.parent;
+  if (initializer?.kind === SyntaxKind5.CallExpression && declaration?.kind === SyntaxKind5.VariableDeclaration && declaration.initializer === initializer && declaration.name?.kind === SyntaxKind5.Identifier && !(printedValue ?? "").trim().startsWith("this.Sum(") && !(printedValue ?? "").trim().startsWith("mathM") && this.go93g4PointerOperands(initializer) !== void 0 && this.go93g4HasNumericUse(declaration)) {
+    return "int64";
+  }
+  const write = initializer?.parent;
+  if (initializer?.kind === SyntaxKind5.CallExpression && write?.kind === SyntaxKind5.BinaryExpression && write.right === initializer && write.operatorToken.kind === SyntaxKind5.EqualsToken && write.left?.kind === SyntaxKind5.Identifier) {
+    const self = this.checkerOrUndefined()?.getSymbolAtLocation(write.left)?.valueDeclaration?.resolve();
+    if (self !== void 0 && this.go93g4PointerOperands(initializer, self) !== void 0) {
+      return "int64";
+    }
+  }
+  return goTypeOfInitializerBase93g4.call(this, initializer, printedValue);
+};
 
 // src/javaTranspiler.ts
 init_esm_shims();
