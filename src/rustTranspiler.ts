@@ -33636,7 +33636,9 @@ export class RustTranspiler extends BaseTranspiler {
         const typeName = type?.kind === SyntaxKind.TypeReference && isIdentifier(type.typeName) && type.typeArguments === undefined ? String(type.typeName.text) : '';
         // ral-46e: a `string[]` slot every caller fills with an `Object.keys (..)` local (a list of strings, read-only here)
         const keysList = !RustTranspiler.RUST_LENT_HASH_LIST_METHODS.has(name) && type?.kind === SyntaxKind.ArrayType && type.elementType?.kind === SyntaxKind.StringKeyword;
-        const kind: 'dict' | 'list' | undefined = RustTranspiler.RUST_LENT_LIST_TYPES.has(typeName) || this.rustRowListTypeNode(type) || (RustTranspiler.RUST_LENT_HASH_LIST_METHODS.has(name) && this.rustScalarListTypeNode(type)) || keysList ? 'list' : (this.rustLentRecordTypeNode(type) ? 'dict' : undefined);
+        // an `any[]` slot holds a list of values like `List` does (read whole, by index or length)
+        const anyList = type?.kind === SyntaxKind.ArrayType && type.elementType?.kind === SyntaxKind.AnyKeyword;
+        const kind: 'dict' | 'list' | undefined = RustTranspiler.RUST_LENT_LIST_TYPES.has(typeName) || this.rustRowListTypeNode(type) || (RustTranspiler.RUST_LENT_HASH_LIST_METHODS.has(name) && this.rustScalarListTypeNode(type)) || keysList || anyList ? 'list' : (this.rustLentRecordTypeNode(type) ? 'dict' : undefined);
         if (kind === undefined) return undefined;
         // read-only in the body: a written / re-bound parameter belongs to the owned-map rules
         const pname = String(param.name.text);

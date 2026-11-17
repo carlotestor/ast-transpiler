@@ -25763,3 +25763,25 @@ describe('ral-92rb R1: a `(x as string)` caller fills a per-venue string slot', 
         expect(out).toContain('fn createOrderRequest(&self, symbol: &str, amount: Value)');
     });
 });
+
+describe('ral-92rb R2: a required per-venue `any[]` parameter is a lent list slot', () => {
+    const files: Record<string, string> = {
+        'ts/src/base/Exchange.ts': "export default class Exchange {\n    safeValue (o: any, k: any, d: any = undefined): any { return o[k]; }\n}\n",
+        'ts/src/venue.ts': "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n    frame (msg: any) {\n        const data = this.safeValue (msg, 'data');\n        let rows = [];\n        if (Array.isArray (data)) {\n            rows = data;\n        } else {\n            rows = [ data ];\n        }\n        this.handleRows (rows);\n        this.handleMore (rows);\n    }\n    handleRows (rows: any[]) {\n        return rows.length;\n    }\n    handleMore (rows: any[]) {\n        return rows[0];\n    }\n}\n",
+    };
+    let out: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-92rb2-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = transpiler.transpileRustByPath(path.join (root, 'ts/src/venue.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test('the slot takes impl Into<crate::Value> and the list local is lent', () => {
+        expect(out).toContain('fn handleRows(&self, rows: impl Into<crate::Value>)');
+        expect(out).toContain('let mut rows: crate::value::List = ');
+        expect(out).toContain('self.handleRows(&rows)');
+    });
+});
