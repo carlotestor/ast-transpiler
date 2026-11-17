@@ -18463,7 +18463,7 @@ export class RustTranspiler extends BaseTranspiler {
      *  source's own write-back at the same receiver and key text, so a cloned element read writes the same element back. */
     /** ral-90rd R1: the bind `const v = m[k]` is itself a typed container local (its own decision, re-entrancy guarded), so it never
      *  prints the `let mut v: Value = ..` line ccxt's write-back pass keys on: a mutation of `v` adds no write-back to `m`. */
-    rust90rdTypedRowBind(bind: any): boolean {
+    rust90rdTypedRowBind(bind: Node): boolean {
         return isVariableDeclaration(bind) && !this.rustBorrowedPending.has(bind) && this.rustBorrowedLocalKind(bind) === 'dict';
     }
 
@@ -20958,14 +20958,14 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** ral-90rd R2: `x.join ('lit')`, a single string-literal separator, the call in a read position (not a callee, chain head
      *  or write target). */
-    rust90rdListJoinUse(access: any): boolean {
-        const call: any = access.parent;
-        return isCallExpression(call) && call.expression === access && String(access.name.text) === 'join' && call.arguments.length === 1
+    rust90rdListJoinUse(access: Expression): boolean {
+        const call: Node = access.parent;
+        return isPropertyAccessExpression(access) && isCallExpression(call) && call.expression === access && String(access.name.text) === 'join' && call.arguments.length === 1
             && this.rustNativeStringLiteralArg(call.arguments[0]) !== undefined && !this.rustScalarInNestedWrite(access.expression, true);
     }
 
     /** ral-90rd R2: the join of a typed list local the borrowed-container rule admitted at this call. */
-    printBorrowedListJoin(node: any): string | undefined {
+    printBorrowedListJoin(node: CallExpression): string | undefined {
         if (!this.rust90rdJoinReads.has(node)) return undefined;
         const access: any = node.expression;
         const declaration: any = this.rustDeclarationOfIdentifier(access.expression);
