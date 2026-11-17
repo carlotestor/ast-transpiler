@@ -45885,7 +45885,7 @@ GoTranspiler.prototype.printCallExpression = function(node, identation) {
 var goTypeOfInitializerBase93g4 = GoTranspiler.prototype.goTypeOfInitializer;
 GoTranspiler.prototype.goTypeOfInitializer = function(initializer, printedValue) {
   const declaration = initializer?.parent;
-  if (initializer?.kind === SyntaxKind5.CallExpression && declaration?.kind === SyntaxKind5.VariableDeclaration && declaration.initializer === initializer && declaration.name?.kind === SyntaxKind5.Identifier && !(printedValue ?? "").trim().startsWith("this.Sum(") && !(printedValue ?? "").trim().startsWith("mathM") && this.go93g4PointerOperands(initializer) !== void 0 && this.go93g4HasNumericUse(declaration)) {
+  if (initializer?.kind === SyntaxKind5.CallExpression && declaration?.kind === SyntaxKind5.VariableDeclaration && declaration.initializer === initializer && declaration.name?.kind === SyntaxKind5.Identifier && !(printedValue ?? "").trim().startsWith("this.Sum(") && !(printedValue ?? "").trim().startsWith("mathM") && (this.go93g4PointerOperands(initializer) !== void 0 && (this.go92g7IsBaseSum(initializer) || this.go93g4HasNumericUse(declaration)) || this.go92g7IsBaseSum(initializer) && this.go92g7Int64Operands(initializer) !== void 0)) {
     return "int64";
   }
   const write = initializer?.parent;
