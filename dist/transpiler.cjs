@@ -67411,16 +67411,16 @@ ${binding(plan.indent)}` : ""), head: "" };
     const method = _optionalChain([param, 'optionalAccess', _11239 => _11239.parent]);
     return _optionalChain([param, 'optionalAccess', _11240 => _11240.kind]) === _ast.SyntaxKind.Parameter && _is.isMethodDeclaration.call(void 0, method) && method.body !== void 0 && _is.isIdentifier.call(void 0, method.name) && String(method.name.text) === "safeDict" && _optionalChain([method, 'access', _11241 => _11241.parameters, 'optionalAccess', _11242 => _11242[1]]) === param && _is.isIdentifier.call(void 0, param.name) && param.initializer === void 0 && param.questionToken === void 0 && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(_nullishCoalesce(_optionalChain([param, 'access', _11243 => _11243.getSourceFile, 'optionalCall', _11244 => _11244(), 'optionalAccess', _11245 => _11245.fileName]), () => ( "")))) && !this.rustMethodReferencedAsValue(method);
   }
-  /** The `price` parameter (slot 1) of a `priceToPrecision` body (base or venue override): prints `impl Into<crate::Value>`
+  /** The value parameter (slot 1) of a `price|amount|costToPrecision` body (base or venue override): prints `impl Into<crate::Value>`
    *  and binds `let mut price: Value = price.into();` (every `Value` argument still passes; a number local passes unboxed). */
   rustPriceSlotParam(param) {
     const method = _optionalChain([param, 'optionalAccess', _11246 => _11246.parent]);
-    return param !== void 0 && _is.isParameterDeclaration.call(void 0, param) && method !== void 0 && _is.isMethodDeclaration.call(void 0, method) && method.body !== void 0 && _is.isIdentifier.call(void 0, method.name) && String(method.name.text) === "priceToPrecision" && _optionalChain([method, 'access', _11247 => _11247.parameters, 'optionalAccess', _11248 => _11248.length]) === 2 && method.parameters[1] === param && _is.isIdentifier.call(void 0, param.name) && param.initializer === void 0 && param.questionToken === void 0 && param.dotDotDotToken === void 0 && _is.isClassDeclaration.call(void 0, method.parent) && !this.rustTestTierSource(param) && !this.rustMethodReferencedAsValue(method);
+    return param !== void 0 && _is.isParameterDeclaration.call(void 0, param) && method !== void 0 && _is.isMethodDeclaration.call(void 0, method) && method.body !== void 0 && _is.isIdentifier.call(void 0, method.name) && _RustTranspiler.RUST_LENT_PRECISION_SLOTS.has(String(method.name.text)) && _optionalChain([method, 'access', _11247 => _11247.parameters, 'optionalAccess', _11248 => _11248.length]) === 2 && method.parameters[1] === param && _is.isIdentifier.call(void 0, param.name) && param.initializer === void 0 && param.questionToken === void 0 && param.dotDotDotToken === void 0 && _is.isClassDeclaration.call(void 0, method.parent) && !this.rustTestTierSource(param) && !this.rustMethodReferencedAsValue(method);
   }
-  /** `n` is the price (argument 1) of `this.priceToPrecision (s, n)` whose resolved body takes the lent price slot. */
+  /** `n` is the value (argument 1) of `this.price|amount|costToPrecision (s, n)` whose resolved body takes the lent price slot. */
   rustPriceSlotArg(n) {
     const call = _optionalChain([n, 'optionalAccess', _11249 => _11249.parent]);
-    if (n === void 0 || call === void 0 || this.rustTestTierSource(n) || !_is.isCallExpression.call(void 0, call) || call.arguments.length !== 2 || call.arguments[1] !== n || !_is.isPropertyAccessExpression.call(void 0, call.expression) || call.expression.expression.kind !== _ast.SyntaxKind.ThisKeyword || String(call.expression.name.text) !== "priceToPrecision")
+    if (n === void 0 || call === void 0 || this.rustTestTierSource(n) || !_is.isCallExpression.call(void 0, call) || call.arguments.length !== 2 || call.arguments[1] !== n || !_is.isPropertyAccessExpression.call(void 0, call.expression) || call.expression.expression.kind !== _ast.SyntaxKind.ThisKeyword || !_RustTranspiler.RUST_LENT_PRECISION_SLOTS.has(String(call.expression.name.text)))
       return false;
     const declaration = this.rustScalarCallee(call);
     return declaration !== void 0 && _is.isMethodDeclaration.call(void 0, declaration) && this.rustPriceSlotParam(_optionalChain([declaration, 'access', _11250 => _11250.parameters, 'optionalAccess', _11251 => _11251[1]]));
@@ -96500,6 +96500,7 @@ _RustTranspiler.RUST_CLIENT_HANDLE_MARK = "client-handle";
 /** ExchangeOps methods (rust/tests/src/test_helpers.rs) whose argument is not a plain `Value`. */
 _RustTranspiler.RUST_TEST_NATIVE_SLOT_METHODS = /* @__PURE__ */ new Set(["safeValue", "safeString", "safeBool", "safeDict", "safeList", "safeNumber", "safeInteger", "safeStringN", "market", "setSandboxMode", "sleep"]);
 _RustTranspiler.RUST_BORROW_STR_METHODS = /* @__PURE__ */ new Set(["split", "replace", "toUpperCase", "toLowerCase", "startsWith", "endsWith", "indexOf", "includes", "trim"]);
+_RustTranspiler.RUST_LENT_PRECISION_SLOTS = /* @__PURE__ */ new Set(["priceToPrecision", "amountToPrecision", "costToPrecision"]);
 // Expression-shaped scalar locals: aliases, ternaries, arithmetic/comparisons over typed operands,
 // string-method and `.length` results of typed strings, and `Precise.string*` results.
 _RustTranspiler.RUST_SCALAR_ARITH_OPS = /* @__PURE__ */ new Set([

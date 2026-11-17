@@ -67412,16 +67412,16 @@ ${binding(plan.indent)}` : ""), head: "" };
     const method = param?.parent;
     return param?.kind === SyntaxKind7.Parameter && isMethodDeclaration5(method) && method.body !== void 0 && isIdentifier3(method.name) && String(method.name.text) === "safeDict" && method.parameters?.[1] === param && isIdentifier3(param.name) && param.initializer === void 0 && param.questionToken === void 0 && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(param.getSourceFile?.()?.fileName ?? "")) && !this.rustMethodReferencedAsValue(method);
   }
-  /** The `price` parameter (slot 1) of a `priceToPrecision` body (base or venue override): prints `impl Into<crate::Value>`
+  /** The value parameter (slot 1) of a `price|amount|costToPrecision` body (base or venue override): prints `impl Into<crate::Value>`
    *  and binds `let mut price: Value = price.into();` (every `Value` argument still passes; a number local passes unboxed). */
   rustPriceSlotParam(param) {
     const method = param?.parent;
-    return param !== void 0 && isParameterDeclaration3(param) && method !== void 0 && isMethodDeclaration5(method) && method.body !== void 0 && isIdentifier3(method.name) && String(method.name.text) === "priceToPrecision" && method.parameters?.length === 2 && method.parameters[1] === param && isIdentifier3(param.name) && param.initializer === void 0 && param.questionToken === void 0 && param.dotDotDotToken === void 0 && isClassDeclaration4(method.parent) && !this.rustTestTierSource(param) && !this.rustMethodReferencedAsValue(method);
+    return param !== void 0 && isParameterDeclaration3(param) && method !== void 0 && isMethodDeclaration5(method) && method.body !== void 0 && isIdentifier3(method.name) && _RustTranspiler.RUST_LENT_PRECISION_SLOTS.has(String(method.name.text)) && method.parameters?.length === 2 && method.parameters[1] === param && isIdentifier3(param.name) && param.initializer === void 0 && param.questionToken === void 0 && param.dotDotDotToken === void 0 && isClassDeclaration4(method.parent) && !this.rustTestTierSource(param) && !this.rustMethodReferencedAsValue(method);
   }
-  /** `n` is the price (argument 1) of `this.priceToPrecision (s, n)` whose resolved body takes the lent price slot. */
+  /** `n` is the value (argument 1) of `this.price|amount|costToPrecision (s, n)` whose resolved body takes the lent price slot. */
   rustPriceSlotArg(n) {
     const call = n?.parent;
-    if (n === void 0 || call === void 0 || this.rustTestTierSource(n) || !isCallExpression6(call) || call.arguments.length !== 2 || call.arguments[1] !== n || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(call.expression.name.text) !== "priceToPrecision")
+    if (n === void 0 || call === void 0 || this.rustTestTierSource(n) || !isCallExpression6(call) || call.arguments.length !== 2 || call.arguments[1] !== n || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword || !_RustTranspiler.RUST_LENT_PRECISION_SLOTS.has(String(call.expression.name.text)))
       return false;
     const declaration = this.rustScalarCallee(call);
     return declaration !== void 0 && isMethodDeclaration5(declaration) && this.rustPriceSlotParam(declaration.parameters?.[1]);
@@ -96501,6 +96501,7 @@ _RustTranspiler.RUST_CLIENT_HANDLE_MARK = "client-handle";
 /** ExchangeOps methods (rust/tests/src/test_helpers.rs) whose argument is not a plain `Value`. */
 _RustTranspiler.RUST_TEST_NATIVE_SLOT_METHODS = /* @__PURE__ */ new Set(["safeValue", "safeString", "safeBool", "safeDict", "safeList", "safeNumber", "safeInteger", "safeStringN", "market", "setSandboxMode", "sleep"]);
 _RustTranspiler.RUST_BORROW_STR_METHODS = /* @__PURE__ */ new Set(["split", "replace", "toUpperCase", "toLowerCase", "startsWith", "endsWith", "indexOf", "includes", "trim"]);
+_RustTranspiler.RUST_LENT_PRECISION_SLOTS = /* @__PURE__ */ new Set(["priceToPrecision", "amountToPrecision", "costToPrecision"]);
 // Expression-shaped scalar locals: aliases, ternaries, arithmetic/comparisons over typed operands,
 // string-method and `.length` results of typed strings, and `Precise.string*` results.
 _RustTranspiler.RUST_SCALAR_ARITH_OPS = /* @__PURE__ */ new Set([
