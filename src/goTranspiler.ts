@@ -36449,9 +36449,10 @@ GoTranspiler.prototype.go90g3ComputedSideLocal = function (declaration) {
             const sides = this.go90g3SideKeys(init.argumentExpression);
             const scope = this.goEnclosingFunction(declaration);
             const name = declaration.name.text;
-            const bindings = (scope === undefined) ? [] : this.goDescendantsOf(scope).filter((n) => ((n.kind === SyntaxKind.VariableDeclaration)
-                || (n.kind === SyntaxKind.Parameter)) && (n.name?.kind === SyntaxKind.Identifier) && (n.name.text === name));
-            if ((sides !== undefined) && (scope !== undefined) && (bindings.length === 1) && !this.goTypeNameIsShadowed(scope, cfg.sideType)) {
+            // R4: sibling-block bindings of the same name are separate Go variables; every use is resolved through the checker
+            const checker: Checker | undefined = this.checkerOrUndefined();
+            const own: TsSymbol | undefined = checker?.getSymbolAtLocation(declaration.name);
+            if ((sides !== undefined) && (scope !== undefined) && (own !== undefined) && !this.goTypeNameIsShadowed(scope, cfg.sideType)) {
                 let uses = 0;
                 const foreign = this.hasNodeWhere(scope, (n) => {
                     if ((n.kind !== SyntaxKind.Identifier) || (n.text !== name) || (n === declaration.name)) {
@@ -36460,6 +36461,9 @@ GoTranspiler.prototype.go90g3ComputedSideLocal = function (declaration) {
                     const parent = n.parent;
                     if (((parent?.kind === SyntaxKind.PropertyAccessExpression) || (parent?.kind === SyntaxKind.PropertyAssignment)) && (parent.name === n)) {
                         return false; // a member name, not the local
+                    }
+                    if (checker.getSymbolAtLocation(n) !== own) {
+                        return false; // another binding of the name (its own declaration decides for it)
                     }
                     const store = go90g3StoreCall(parent?.parent);
                     if ((store !== undefined) && (store.receiver === n) && (parent.parent.expression === parent)) {
