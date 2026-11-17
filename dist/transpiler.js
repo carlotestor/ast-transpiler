@@ -45084,6 +45084,91 @@ function go92g2StringListScan(goTranspiler, declaration) {
     return printVariableDeclarationList.call(this, node, identation);
   };
 }
+function go92g2LoopIndexOver(goTranspiler, index, declaration, use) {
+  if (index?.kind !== SyntaxKind5.Identifier) {
+    return false;
+  }
+  const indexDecl = goTranspiler.goDeclarationOfIdentifier(index);
+  const loop = indexDecl?.parent?.parent;
+  if (loop?.kind !== SyntaxKind5.ForStatement || loop.initializer !== indexDecl.parent) {
+    return false;
+  }
+  const cond = loop.condition;
+  if (cond?.kind !== SyntaxKind5.BinaryExpression || cond.operatorToken?.kind !== SyntaxKind5.LessThanToken || cond.left?.kind !== SyntaxKind5.Identifier || goTranspiler.goDeclarationOfIdentifier(cond.left) !== indexDecl || cond.right?.kind !== SyntaxKind5.PropertyAccessExpression || cond.right.name?.text !== "length" || cond.right.expression?.kind !== SyntaxKind5.Identifier || !goTranspiler.goIdentifierRefersToDeclaration(cond.right.expression, declaration)) {
+    return false;
+  }
+  for (let up = use; up !== void 0; up = up.parent) {
+    if (up === loop.statement) {
+      return true;
+    }
+    if (up === loop) {
+      return false;
+    }
+  }
+  return false;
+}
+var go92g2LoopListVerdicts = /* @__PURE__ */ new WeakMap();
+function go92g2LoopListLocal(goTranspiler, declaration) {
+  if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier || declaration.parent?.parent?.kind !== SyntaxKind5.FirstStatement || declaration.parent.declarations.length !== 1) {
+    return false;
+  }
+  if (go92g2LoopListVerdicts.has(declaration)) {
+    return go92g2LoopListVerdicts.get(declaration);
+  }
+  go92g2LoopListVerdicts.set(declaration, false);
+  const call = declaration.initializer;
+  const callee = call?.expression;
+  if (call?.kind !== SyntaxKind5.CallExpression || callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword || callee.name?.text !== "safeList" || call.arguments.length !== 3 || [SyntaxKind5.ArrayLiteralExpression, SyntaxKind5.ObjectLiteralExpression, SyntaxKind5.SpreadElement].includes(call.arguments[2].kind) || call.arguments.some((a) => a.kind === SyntaxKind5.SpreadElement)) {
+    return false;
+  }
+  const scope = goTranspiler.goEnclosingFunction(declaration);
+  if (scope === void 0 || goTranspiler.goTypeNameIsShadowed(scope, GO_SAFE_LIST_LOCAL_TYPE)) {
+    return false;
+  }
+  const name = declaration.name.text;
+  let lengths = 0;
+  const unsafe = goTranspiler.hasNodeWhere(scope, (n) => {
+    if ((n.kind === SyntaxKind5.VariableDeclaration || n.kind === SyntaxKind5.Parameter || n.kind === SyntaxKind5.BindingElement) && n !== declaration && n.name?.kind === SyntaxKind5.Identifier && n.name.text === name) {
+      return true;
+    }
+    if (n.kind !== SyntaxKind5.Identifier || n.text !== name || n === declaration.name) {
+      return false;
+    }
+    const parent = n.parent;
+    if (parent?.kind === SyntaxKind5.PropertyAccessExpression && parent.name === n) {
+      return false;
+    }
+    if (!goTranspiler.goIdentifierRefersToDeclaration(n, declaration)) {
+      return true;
+    }
+    if (parent?.kind === SyntaxKind5.PropertyAccessExpression && parent.expression === n && parent.name?.text === "length") {
+      lengths++;
+      return false;
+    }
+    const reader = parent?.expression;
+    if (parent?.kind === SyntaxKind5.CallExpression && parent.arguments[0] === n && parent.arguments.length >= 2 && reader?.kind === SyntaxKind5.PropertyAccessExpression && reader.expression?.kind === SyntaxKind5.ThisKeyword && /^safe(Dict|String|Integer|Number|Value|Bool|Float|Timestamp)$/.test(String(reader.name?.text ?? "")) && go92g2LoopIndexOver(goTranspiler, parent.arguments[1], declaration, parent)) {
+      return false;
+    }
+    return true;
+  });
+  const ok = !unsafe && lengths > 0;
+  go92g2LoopListVerdicts.set(declaration, ok);
+  return ok;
+}
+{
+  const listType = GoTranspiler.prototype.goSafeListLocalUnbox;
+  GoTranspiler.prototype.goSafeListLocalUnbox = function(declaration) {
+    return listType.call(this, declaration) ?? (go92g2LoopListLocal(this, declaration) ? GO_SAFE_LIST_LOCAL_TYPE : void 0);
+  };
+  const listValue = GoTranspiler.prototype.goSafeListUnboxValue;
+  GoTranspiler.prototype.goSafeListUnboxValue = function(declaration, identation) {
+    if (listType.call(this, declaration) === void 0 && go92g2LoopListLocal(this, declaration)) {
+      const args = declaration.initializer.arguments.map((a, i) => this.printNode(a, i === 0 ? identation : 0).trim());
+      return `this.SafeListSlice(${args.join(", ")})`;
+    }
+    return listValue.call(this, declaration, identation);
+  };
+}
 
 // src/javaTranspiler.ts
 init_esm_shims();
