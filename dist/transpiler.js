@@ -43609,21 +43609,35 @@ function go90g8SumOfSelf(goTranspiler, right, declaration) {
   if (!go87g8IsOwnRef(goTranspiler, a, declaration)) {
     return false;
   }
-  if (go87g8IntLiteral(b)) {
-    return true;
-  }
-  if (b?.kind !== SyntaxKind5.Identifier || b.text === declaration.name.text) {
+  return go87g8IntLiteral(b) || go90g8OtherIntLocal(goTranspiler, b, declaration);
+}
+function go90g8OtherIntLocal(goTranspiler, node, declaration) {
+  node = go90g8Unparen(node);
+  if (node?.kind !== SyntaxKind5.Identifier || node.text === declaration.name.text) {
     return false;
   }
-  const other = goTranspiler.goDeclarationOfIdentifier(b);
+  const other = goTranspiler.goDeclarationOfIdentifier(node);
   if (other === void 0 || other === declaration) {
     return false;
   }
-  return goTranspiler.goDeclaredTypeOfIdentifier(b) === "int";
+  if (goTranspiler.goDeclaredTypeOfIdentifier(node) === "int") {
+    return true;
+  }
+  return other.parent?.kind === SyntaxKind5.VariableDeclarationList && other.parent.parent?.kind === SyntaxKind5.ForStatement && other.parent.parent.initializer === other.parent && other.type === void 0 && go87g8IntLiteral(other.initializer);
+}
+function go90g8IntAnnotation(declaration) {
+  const type = declaration.type;
+  if (type === void 0) {
+    return true;
+  }
+  if (type.kind === SyntaxKind5.NumberKeyword) {
+    return true;
+  }
+  return type.kind === SyntaxKind5.TypeReference && type.typeName?.kind === SyntaxKind5.Identifier && type.typeName.text === "int";
 }
 var go90g8SumCounterCache = /* @__PURE__ */ new WeakMap();
 function go90g8IsSumCounter(goTranspiler, declaration) {
-  if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier || !go87g8IntLiteral(declaration.initializer) || declaration.type !== void 0 || (declaration.parent?.flags & ts.NodeFlags.Let) === 0) {
+  if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier || !go87g8IntLiteral(declaration.initializer) || !go90g8IntAnnotation(declaration) || (declaration.parent?.flags & ts.NodeFlags.Let) === 0) {
     return false;
   }
   if (go90g8SumCounterCache.has(declaration)) {
@@ -43654,7 +43668,7 @@ function go90g8IsSumCounter(goTranspiler, declaration) {
       if (parent.operatorToken.kind !== SyntaxKind5.EqualsToken) {
         return true;
       }
-      if (go87g8IntLiteral(parent.right)) {
+      if (go87g8IntLiteral(parent.right) || go90g8OtherIntLocal(goTranspiler, parent.right, declaration)) {
         return false;
       }
       if (go90g8SumOfSelf(goTranspiler, parent.right, declaration)) {
