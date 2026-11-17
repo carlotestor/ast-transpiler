@@ -58801,7 +58801,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const rhs = this.unwrapParens(parent.right);
       if (!this.rustNilDecodedWrite(rhs))
         writes++;
-      if (this.rustBaseStrFieldRead(rhs) || this.rustWsUrlRead(rhs))
+      if (this.rustBaseStrFieldRead(rhs) || this.rustWsUrlRead(rhs) || this.rustVenueTypedCall(rhs) === "ostr")
         baseFieldWrite = true;
       let write = _is.isIdentifier.call(void 0, rhs) && this.literalKindOfNode(rhs) !== "null" ? _nullishCoalesce(this.rustScalarIdentifierKind(rhs), () => ( (this.rustNilValueStrAlias(rhs) ? "ostr" : void 0))) : this.rustScalarValueKind(rhs, true);
       if (write === void 0 && _is.isIdentifier.call(void 0, rhs) && this.rust68aStrParamWrite(rhs))
@@ -61320,6 +61320,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (fresh && this.rustNilVenueWrite(node) && this.rustBaseStrFieldRead(node))
       return "ostr";
     if (fresh && this.rustNilVenueWrite(node) && this.rustWsUrlRead(node))
+      return "ostr";
+    if (fresh && this.rustNilVenueWrite(node) && this.rustVenueTypedCall(node) === "ostr")
       return "ostr";
     if (fresh && this.rustTernaryArm(node) && this.rust65nBaseStrParamArm(node))
       return "ostr";
