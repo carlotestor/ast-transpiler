@@ -25240,3 +25240,17 @@ describe('ral-90ra R3: an element-read key whose only use is a plain read of a l
         expect(out).toContain('outcomesByMarket.get(key.as_deref().unwrap_or(""))');
     });
 });
+
+describe('ral-90ra R1c: an annotated literal-seeded Str accumulator keeps its kept by-name arm', () => {
+    test('nado createOrderAppendix: `let appendix: Str = lit` rewritten by Precise and returned keeps keptostr', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-90ra1c-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeBool (o: any, k: any, d: any = undefined): any { return o; }\n    safeString (o: any, k: any, d: any = undefined): any { return o; }\n    numberToString (x: any): string { return String (x); }\n    hold (x: any): any { return x; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/base/Precise.ts'), "export class Precise {\n    static stringAdd (a: any, b: any): any { return a; }\n    static stringMul (a: any, b: any): any { return a; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nimport { Precise } from './base/Precise.js';\nexport default class venue extends Exchange {\n    caller (params: Dict = {}) {\n        return this.hold (this.createOrderAppendix (true, params));\n    }\n    createOrderAppendix (isTriggerOrder: boolean, params: Dict = {}): Str {\n        const reduceOnly = this.safeBool (params, 'reduceOnly', false);\n        let orderType = 0;\n        let appendix: Str = '1';\n        if (orderType !== 0) {\n            appendix = Precise.stringAdd (appendix, Precise.stringMul (this.numberToString (orderType), '512'));\n        }\n        if (reduceOnly) {\n            appendix = Precise.stringAdd (appendix, '2048');\n        }\n        if (isTriggerOrder) {\n            appendix = Precise.stringAdd (appendix, '4096');\n        }\n        return appendix;\n    }\n}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        let sigs: Array<{ name: string, ret: string }> = [];
+        try { sigs = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).rustSignatures ?? []; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+        expect(sigs.find((x) => x.name === 'create_order_appendix')?.ret).toBe('keptostr');
+    });
+});

@@ -14145,7 +14145,9 @@ export class RustTranspiler extends BaseTranspiler {
                     && this.primitiveKindOfType(this.getCheckedTypeOf(inner)) === 'string') || this.rust61xNilStrReturnLocal(inner, fn) || this.rust76aOptStrReturnLocal(inner, fn)
                     // ral-90ra R1: a returned own literal-seeded local the scalar rule types `Option<String>` is the payload itself
                     // (the signature already printed `-> Option<String>` while it was a `Value`: no S1 kept arm for it)
-                    || (inner !== undefined && isIdentifier(inner) && this.rust56xStrReturnLocal(inner, fn) && this.rustScalarLocalOf(inner)?.kind === 'ostr');
+                    // (an unannotated `let x = 'lit'` only: an annotated `let x: Str = 'lit'` was typed before and keeps its S1 arm)
+                    || (inner !== undefined && isIdentifier(inner) && this.rust56xStrReturnLocal(inner, fn) && (this.rustDeclaredNode(inner) as VariableDeclaration).type === undefined
+                        && this.rustScalarLocalOf(inner)?.kind === 'ostr');
                 if (!own && !this.rustStrReturnValueConverts(n.expression)) { ok = false; return; }
             }
             n.forEachChild(visit);
