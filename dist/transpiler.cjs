@@ -68427,8 +68427,9 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
     const inner = this.unwrapParens(node);
     if (inner === void 0 || !_is.isPropertyAccessExpression.call(void 0, inner) || !_is.isIdentifier.call(void 0, inner.name) || inner.name.text !== "length")
       return void 0;
-    const kind = _nullishCoalesce(this.rustScalarIdentifierKind(inner.expression), () => ( (params ? _optionalChain([this, 'access', _11336 => _11336.rustScalarParamRead, 'call', _11337 => _11337(inner.expression), 'optionalAccess', _11338 => _11338.kind]) : void 0)));
-    return kind === "str" || kind === "ostr" ? inner.expression : void 0;
+    const recv = _nullishCoalesce(this.rustStrCastLocal(inner.expression), () => ( inner.expression));
+    const kind = _nullishCoalesce(this.rustScalarIdentifierKind(recv), () => ( (params ? _optionalChain([this, 'access', _11336 => _11336.rustScalarParamRead, 'call', _11337 => _11337(recv), 'optionalAccess', _11338 => _11338.kind]) : void 0)));
+    return kind === "str" || kind === "ostr" ? recv : void 0;
   }
   /** Non-optional numeric operand kind (`int|num`), optional (`oint|onum`), or undefined. */
   rustScalarNumericKind(node) {
@@ -71015,7 +71016,7 @@ ${ind}];`;
       const outer = this.rustScalarUseForm(parent, kind);
       if (kind === "ostr" && this.rust64nOptSplitDelimUse(n))
         return "native";
-      return outer === "box" || outer === "xbox" || outer === "native" && (_is.isParenthesizedExpression.call(void 0, parent) || this.rustCastSplitRecv(parent)) ? outer : void 0;
+      return outer === "box" || outer === "xbox" || outer === "native" && (_is.isParenthesizedExpression.call(void 0, parent) || this.rustCastSplitRecv(parent) || this.rust93reCastLengthRecv(parent)) ? outer : void 0;
     }
     if (_is.isBinaryExpression.call(void 0, parent)) {
       const op = parent.operatorToken.kind;
@@ -71083,6 +71084,14 @@ ${ind}];`;
     if (_is.isVariableDeclaration.call(void 0, parent) && parent.initializer === n && _is.isIdentifier.call(void 0, parent.name) && kind !== "bool")
       return "xbox";
     return void 0;
+  }
+  /** `(x as string).length` (through parentheses) on a string local: the length prints from the local itself. */
+  rust93reCastLengthRecv(cast) {
+    let top = cast;
+    while (_is.isParenthesizedExpression.call(void 0, top.parent))
+      top = top.parent;
+    const access = top.parent;
+    return access !== void 0 && _is.isPropertyAccessExpression.call(void 0, access) && access.expression === top && this.rustScalarLengthRecv(access) !== void 0;
   }
   /** `(x as string).split(..)` on a string local: the split prints from the local itself (`rustStrLocalSplitText`). */
   rustCastSplitRecv(cast) {

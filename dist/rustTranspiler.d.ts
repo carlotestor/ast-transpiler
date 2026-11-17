@@ -2174,6 +2174,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** Use forms of the expression shapes: `native` (operand / receiver printed by the shape), `targ`
      *  (typed-signature argument), `err` (error message) or `box` (alias, key, push, initializer). */
     rustScalarExpressionUseForm(n: any, kind: string): string | undefined;
+    /** `(x as string).length` (through parentheses) on a string local: the length prints from the local itself. */
+    rust93reCastLengthRecv(cast: Node): boolean;
     /** `(x as string).split(..)` on a string local: the split prints from the local itself (`rustStrLocalSplitText`). */
     rustCastSplitRecv(cast: any): boolean;
     /** 42b: the `(x as string).indexOf("lit") >= 0` call of a scalar contains test. */
