@@ -15537,7 +15537,7 @@ function ccxtGoNilDeclaredStringArgumentRead(goTranspiler, node) {
     const text = String(goTranspiler.getChecker().typeToString(type) ?? "");
     return /^(?:ArrayCache\w*|ArrayCacheBy\w+)(?:\s*\|\s*undefined)?$/.test(text);
   }
-  return ccxtGoNilJoinArgumentSeesAbsent(goTranspiler, call, index);
+  return ccxtGoNilJoinArgumentSeesAbsent(goTranspiler, call, index) || ccxtGo87SafeReaderArgument(goTranspiler, node);
 }
 function installNilDeclaredJoin(goTranspiler) {
   const upstream = goTranspiler.printVariableDeclarationList;
@@ -42606,6 +42606,59 @@ GoNilDeclaredValueAssignmentScan.prototype.classifyIdentifier = function(node, a
   }
   return goNilValueClassify87.call(this, node, assigned);
 };
+var CCXT_GO_87_SAFE_READER = /^safe(?:String|StringLower|StringUpper|Value|Integer|Number|Bool|Dict|List)(?:2|N)?$/;
+function ccxtGo87ParamOnlyFeedsSafeReaders(goTranspiler, call, index) {
+  let declaration;
+  try {
+    declaration = goTranspiler.getChecker().getResolvedSignature(call)?.declaration?.resolve();
+  } catch (e) {
+    return false;
+  }
+  const param = declaration?.parameters?.[index];
+  if (declaration?.kind !== SyntaxKind5.MethodDeclaration || declaration.body === void 0 || param === void 0 || !ts.isIdentifier(param.name) || param.dotDotDotToken !== void 0 || param.initializer !== void 0 || param.questionToken !== void 0 || /[\\/]base[\\/]/.test(declaration.getSourceFile?.()?.fileName ?? "/base/") || declaration.getSourceFile() !== call.getSourceFile()) {
+    return false;
+  }
+  if (goTranspiler.goNativeParameterType?.(param) !== void 0) {
+    return false;
+  }
+  const name = param.name.text;
+  let ok = true;
+  let reads = 0;
+  const visit = (n) => {
+    if (!ok) {
+      return;
+    }
+    if (n !== param && (n.kind === SyntaxKind5.VariableDeclaration || n.kind === SyntaxKind5.Parameter || n.kind === SyntaxKind5.BindingElement) && bindingMentionsName(n.name, name)) {
+      ok = false;
+      return;
+    }
+    if (n.kind === SyntaxKind5.Identifier && n.text === name && n !== param.name) {
+      let arg = n;
+      while (arg.parent?.kind === SyntaxKind5.AsExpression || arg.parent?.kind === SyntaxKind5.ParenthesizedExpression) {
+        arg = arg.parent;
+      }
+      const parent = arg.parent;
+      const callee = parent?.expression;
+      if (parent?.kind === SyntaxKind5.CallExpression && parent.expression !== arg && parent.arguments.includes(arg) && callee?.kind === SyntaxKind5.PropertyAccessExpression && callee.expression?.kind === SyntaxKind5.ThisKeyword && CCXT_GO_87_SAFE_READER.test(String(callee.name?.text ?? ""))) {
+        reads += 1;
+      } else {
+        ok = false;
+      }
+      return;
+    }
+    n.forEachChild(visit);
+  };
+  declaration.body.forEachChild(visit);
+  return ok && reads > 0;
+}
+function ccxtGo87SafeReaderArgument(goTranspiler, node) {
+  const call = node?.parent;
+  const callee = call?.expression;
+  if (call?.kind !== SyntaxKind5.CallExpression || call.expression === node || callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword) {
+    return false;
+  }
+  return ccxtGo87ParamOnlyFeedsSafeReaders(goTranspiler, call, call.arguments.indexOf(node));
+}
 
 // src/javaTranspiler.ts
 init_esm_shims();
