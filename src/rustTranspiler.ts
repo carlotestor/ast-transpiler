@@ -2947,10 +2947,13 @@ export class RustTranspiler extends BaseTranspiler {
         return undefined;
     }
 
-    /** ral-90rh R1: a declaration initializer `parseInt (s)` (one argument, checker type `string`; no multiply form). */
+    /** ral-90rh R1: a declaration initializer `parseInt (s)` (one bare identifier argument, checker type `string`; no multiply form). */
     rust90rhParseIntInit(expr: any): boolean {
         const node: any = this.unwrapParens(expr);
-        return node !== undefined && isCallExpression(node) && this.rustDeclInitPosition(node) && this.rust68bParseIntWrite(node);
+        // a bare identifier argument only: a method-call argument (`parseInt (s.replace (..))`) re-prints the receiver
+        // local's use inside the new form and moved grvt `size` back to `Value` (gate 15711)
+        return node !== undefined && isCallExpression(node) && node.arguments?.length === 1 && isIdentifier(this.unwrapParens(node.arguments[0]))
+            && this.rustDeclInitPosition(node) && this.rust68bParseIntWrite(node);
     }
 
     /** ral-68b: `parseInt (s)` with one argument whose checker type is `string`, or that call times an integer literal. */
