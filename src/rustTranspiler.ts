@@ -18461,6 +18461,12 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** ral-52e: `const e = xs[k]; e['f'] = v; ..; xs[k] = e;` -- the bind is followed only by top-level writes on `e` and then the
      *  source's own write-back at the same receiver and key text, so a cloned element read writes the same element back. */
+    /** ral-90rd R1: the bind `const v = m[k]` is itself a typed container local (its own decision, re-entrancy guarded), so it never
+     *  prints the `let mut v: Value = ..` line ccxt's write-back pass keys on: a mutation of `v` adds no write-back to `m`. */
+    rust90rdTypedRowBind(bind: any): boolean {
+        return isVariableDeclaration(bind) && !this.rustBorrowedPending.has(bind) && this.rustBorrowedLocalKind(bind) === 'dict';
+    }
+
     rustExplicitWriteBackBind(read: any): boolean {
         const declaration: any = read.parent;
         if (!isIdentifier(declaration.name) || !isElementAccessExpression(read) || !isIdentifier(read.expression)) return false;
@@ -24144,10 +24150,11 @@ export class RustTranspiler extends BaseTranspiler {
             if (isBinaryExpression(at) && at.operatorToken.kind === SyntaxKind.EqualsToken && isElementAccessExpression(at.left) && isIdentifier(at.left.expression)
                 && at.left.expression.text === n.text && this.isNodeInsideNode(up, at.right) && this.rustListIndexLiteralWrite(at.left.expression)) ownWrite = at;
         }
-        // ral-90rd R1: a bind `const v = m[k]` of a record element (checker type a declared record, `Dictionary<Dict>`) keyed by an
-        // element of `m`'s own `Object.keys (m)` list prints its held `Option<Dict>` form, which ccxt's Value-bind write-back
-        // pass never matches (ral-49e), so a mutation of the bind after it changes no write-back
-        const ownKeysRowBind = top === up && this.rustOwnKeysElementKey(n, this.rustSkipWrappers(up.argumentExpression)) && this.rustOwnKeysTypedRowRead(up);
+        // ral-90rd R1: a bind `const v = m[k]` whose checker type is a declared record (`Dictionary<Dict>` / `Dict[]` receiver)
+        // prints its held `Option<Dict>` form, which ccxt's Value-bind write-back pass never matches (ral-49e), so a mutation of
+        // the bind after it changes no write-back whatever the receiver's form
+        const ownKeysRowBind = top === up && isVariableDeclaration(use) && use.initializer === top && isIdentifier(use.name) && this.rustOwnKeysTypedRowRead(up)
+            && (this.rustOwnKeysElementKey(n, this.rustSkipWrappers(up.argumentExpression)) || this.rust90rdTypedRowBind(use));
         if ((this.isWriteBackBindRead(up) && !(top === up && (this.rustExplicitWriteBackBind(up) || ownKeysRowBind))) || !this.isNativeAccessPositionSafe(up, ownWrite) || (top !== up && (this.isWriteBackBindRead(top) || !this.isNativeAccessPositionSafe(top, ownWrite)))) return false;
         const key: any = this.rustSkipWrappers(up.argumentExpression);
         if (key === undefined || isStringLiteralLikeNode(key)) return false;

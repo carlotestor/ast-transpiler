@@ -17552,7 +17552,8 @@ describe('ral-49e: an element of a map local\'s own Object.keys list keys that m
     test('kraken fetchLedger: the key borrows off the list and reads the Dictionary<Dict> row', () => {
         const out = run(body(': Dictionary<Dict>'));
         expect(out).toContain('let mut key: Option<&str> = keys.get(i as usize).and_then(Value::as_str);');
-        expect(out).toContain('get_value(&ledger, key.as_deref())');
+        // ral-90rd R1: the Dictionary<Dict> map is now a typed Dict, so the row reads off it natively
+        expect(out).toContain('crate::value::KeyRead::read(&&ledger, &Value::from(key))');
     });
     test('guard: an untyped row read (a Value bind ccxt writes back) keeps the Value key', () => {
         const out = run(body(': Dict'));
@@ -25212,6 +25213,11 @@ describe('ral-90rd: safeValue / safeDict / safeList result locals', () => {
         expect(out).toContain('let mut ledger: crate::value::Dict = ');
         expect(out).toContain('Value::Array(ledger.keys().cloned().map(Value::from).collect())');
         expect(out).not.toContain('get_value(&ledger');
+    });
+    test('R1 htx fetchFundingRateHistory: a Dict[] list whose typed row bind is mutated is a typed List', () => {
+        const out = write ('ral-90rd-r1b', "    m (data: Dict, flag: boolean) {\n        const rates = [];\n        if (flag) {\n            const rows = this.safeValue (data, 'data');\n            for (let i = 0; i < rows.length; i++) {\n                const entry = rows[i];\n                rates.push ({ 'info': entry, 'symbol': this.safeString (entry, 'contract_code') });\n            }\n        } else {\n            const cursor = this.safeValue (data, 'current_page');\n            const result: Dict[] = this.safeList (data, 'data', []);\n            for (let i = 0; i < result.length; i++) {\n                const entry = result[i];\n                entry['current_page'] = cursor;\n                rates.push ({ 'info': entry, 'symbol': this.safeString (entry, 'contract_code') });\n            }\n        }\n        return rates;\n    }\n");
+        expect(out).toContain('let mut result: crate::value::List = ');
+        expect(out).not.toContain('get_value(&result');
     });
     test('R1 negative: an untyped (Dict) map with a mutated row bind stays Value', () => {
         const out = write ('ral-90rd-r1n', "    m (result: Dict) {\n        const ledger = this.safeDict (result, 'ledger', {});\n        const keys = Object.keys (ledger);\n        const items = [];\n        for (let i = 0; i < keys.length; i++) {\n            const key = keys[i];\n            const value = ledger[key];\n            value['id'] = key;\n            items.push (value);\n        }\n        return items;\n    }\n");
