@@ -56080,7 +56080,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (kind === "ostr" && isBinaryExpression5(n.parent) && n.parent.operatorToken.kind === SyntaxKind7.PlusToken && !this.rustNilOptStrConcatUse(n))
         return false;
       const optConcat = kind === "ostr" && this.rustNilOptStrConcatUse(n);
-      const form = this.rustNilSlotWrite(n) ? "slot" : optConcat ? "concat" : this.rustScalarUseForm(n, kind);
+      const ownLength = kind === "ostr" && isPropertyAccessExpression3(n.parent) && n.parent.expression === n && isIdentifier3(n.parent.name) && n.parent.name.text === "length";
+      const form = this.rustNilSlotWrite(n) ? "slot" : optConcat ? "concat" : ownLength ? "native" : this.rustScalarUseForm(n, kind);
       this.rustScalarUseForms.set(n, form);
       if (form === "box" || form === "xbox" || form === "err")
         boxed.push(n);
