@@ -65207,6 +65207,11 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       const [o, s] = lk === "ostr" ? [left, right] : [right, left];
       return `${text("ostr", o)}.as_deref() ${sign} Some(${text("str", s)}.as_str())`;
     }
+    if (equality && (lk === "bool" || rk === "bool") && (lk === "obool" || rk === "obool") && (op === SyntaxKind7.EqualsEqualsEqualsToken || op === SyntaxKind7.ExclamationEqualsEqualsToken)) {
+      const [o, b] = lk === "obool" ? [left, right] : [right, left];
+      if (isIdentifier3(b) && this.rustScalarLocalOf(b)?.kind === "bool")
+        return `(${text("obool", o)} ${sign} Some(${text("bool", b)}))`;
+    }
     if (lk === "bool" || rk === "bool" || base(lk) === "str" || base(rk) === "str")
       return void 0;
     const lo = lk.startsWith("o");
