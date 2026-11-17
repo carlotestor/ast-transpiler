@@ -45812,6 +45812,16 @@ GoTranspiler.prototype.go93g4PointerOperands = function(call, self = void 0) {
     if (self !== void 0 && operand.kind === SyntaxKind5.Identifier && this.checkerOrUndefined()?.getSymbolAtLocation(operand)?.valueDeclaration?.resolve() === self) {
       return { "pointer": false, "text": printed };
     }
+    if (operand.kind === SyntaxKind5.Identifier) {
+      const declared = this.goDeclaredTypeOfIdentifier(operand);
+      if (declared === "int64") {
+        return { "pointer": false, "text": printed };
+      }
+      return declared === "*int64" && this.goPointerNumberIsNonNil(operand) ? { "pointer": true, "text": "*" + printed } : void 0;
+    }
+    if (operand.kind === SyntaxKind5.BinaryExpression || operand.kind === SyntaxKind5.ParenthesizedExpression) {
+      return void 0;
+    }
     const kind = this.goOperandStaticType(operand, printed);
     if (kind === "int64" || kind === "const-int" && Number.isSafeInteger(this.goNumericConstantValue(operand))) {
       return { "pointer": false, "text": this.go92g7OperandText(operand, 0) };
@@ -45845,10 +45855,10 @@ GoTranspiler.prototype.go93g4HasNumericUse = function(declaration) {
       return false;
     }
     const other = this.goUnwrapPrintedAssertions(call.arguments[1 - call.arguments.indexOf(n)]);
-    if (other?.kind !== SyntaxKind5.Identifier && !this.goDefaultedSafeIntegerCall(other)) {
-      return false;
+    if (other?.kind === SyntaxKind5.Identifier) {
+      return this.goDeclaredTypeOfIdentifier(other) === "*int64" && this.goPointerNumberIsNonNil(other);
     }
-    return this.goInt64Operand(other, this.printNode(other, 0))?.pointer === true;
+    return this.goDefaultedSafeIntegerCall(other);
   });
 };
 var printCallExpressionBase93g4 = GoTranspiler.prototype.printCallExpression;
