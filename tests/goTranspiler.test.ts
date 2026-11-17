@@ -17125,7 +17125,7 @@ describe('an async venue Str parameter fed pointers and unwritten string paramet
             + '    async one (side: string) {\n        return await this.req (side);\n    }\n'
             + '    async two (o: object) {\n' + caller + '    }\n'
             + "    async req (side: Str) {\n        const sideStr: string = side;\n        if (sideStr === 'sell') {\n            return 1;\n        }\n        return 2;\n    }\n}\n");
-        const inst: any = new Transpiler({ verbose: false, go: { parser: { NUM_LINES_END_FILE: 0 }, asyncMethodSuffix: 'Async' } });
+        const inst = new Transpiler({ verbose: false, go: { parser: { NUM_LINES_END_FILE: 0 }, asyncMethodSuffix: 'Async' } });
         installCcxtGoLocalTypes(inst.goTranspiler);
         const cwd = process.cwd();
         process.chdir(tmp);
