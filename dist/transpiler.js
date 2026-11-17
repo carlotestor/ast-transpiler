@@ -42356,6 +42356,106 @@ ${iden}} else {
 ${iden}	${name} = ${whenFalse}
 ${iden}}`;
 };
+var CCXT_GO_87G2_LIST_PARSERS = [
+  "parseOrders",
+  "parseTrades",
+  "parseAccounts",
+  "parseTickers",
+  "parseTransactions",
+  "parseTransfers",
+  "parsePositions",
+  "parseOHLCVs",
+  "parseIncomes",
+  "parseLiquidations",
+  "parseConversions",
+  "parseDepositAddresses",
+  "parseFundingRateHistories",
+  "parseMarkets"
+];
+function ccxtGo87g2BaseListParser(goTranspiler, call, outer) {
+  if (call?.kind !== SyntaxKind5.CallExpression || call.arguments[0] !== outer || call.expression?.kind !== SyntaxKind5.PropertyAccessExpression || call.expression.expression?.kind !== SyntaxKind5.ThisKeyword || CCXT_GO_87G2_LIST_PARSERS.indexOf(call.expression.name?.text) < 0) {
+    return false;
+  }
+  try {
+    const symbol = goTranspiler.checkerOrUndefined()?.getSymbolAtLocation(call.expression.name);
+    const decls = symbol?.declarations ?? [];
+    return decls.length > 0 && decls.every((d) => /(^|[\\/])ts[\\/]src[\\/]base[\\/]Exchange(\.nooverloads\.\d+)?\.ts$/.test(String(d?.resolve?.()?.getSourceFile?.()?.fileName ?? "")));
+  } catch (e) {
+    return false;
+  }
+}
+function ccxtGo87g2ListLocal(goTranspiler, declaration, mode) {
+  if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier || declaration.parent?.parent?.kind !== SyntaxKind5.FirstStatement || goTranspiler.goSafeListLocalArgs(declaration.initializer) === void 0 || /(^|[\\/])ts[\\/]src[\\/]base[\\/]/.test(String(declaration.getSourceFile?.()?.fileName ?? ""))) {
+    return void 0;
+  }
+  const scope = goTranspiler.goEnclosingFunction(declaration);
+  if (scope === void 0) {
+    return void 0;
+  }
+  const noDefault = declaration.initializer.arguments.length === 2;
+  let natives = 0;
+  let feature = 0;
+  const reads = (n) => {
+    const outer = ccxtGoSafeCollectionTypeOnlyWrapper(n);
+    const parent = outer.parent;
+    if (parent?.kind === SyntaxKind5.BinaryExpression && parent.left === outer && parent.operatorToken?.kind === SyntaxKind5.EqualsToken) {
+      if (mode === "F" && ccxtGoUnwrapTypeOnly(parent.right)?.kind === SyntaxKind5.ArrayLiteralExpression && !ccxtGoUnwrapTypeOnly(parent.right).elements.some((e) => e.kind === SyntaxKind5.SpreadElement)) {
+        feature++;
+        return true;
+      }
+      return false;
+    }
+    if (goTranspiler.goIsNilComparisonOperand(outer, parent)) {
+      return noDefault;
+    }
+    if (mode === "G") {
+      if (parent?.kind === SyntaxKind5.ElementAccessExpression && parent.expression === outer && parent.parent?.kind === SyntaxKind5.BinaryExpression && parent.parent.left === parent && parent.parent.operatorToken?.kind === SyntaxKind5.EqualsToken) {
+        feature++;
+        return true;
+      }
+      if (ccxtGo87g2BaseListParser(goTranspiler, parent, outer)) {
+        feature++;
+        return true;
+      }
+    }
+    if (parent?.kind === SyntaxKind5.PropertyAccessExpression && parent.expression === outer && parent.name?.text === "length" || parent?.kind === SyntaxKind5.ElementAccessExpression && parent.expression === outer && !goTranspiler.isGoElementAccessAssignmentTarget(parent)) {
+      if (!ccxtGoSafeCollectionUseReads(goTranspiler, outer, "list", true) && !goTranspiler.goSafeListUseReadsTheList(n)) {
+        return false;
+      }
+      natives++;
+      return true;
+    }
+    return goTranspiler.goSafeListUseReadsTheList(n) || ccxtGoSafeCollectionUseReads(goTranspiler, outer, "list", true);
+  };
+  const typed = goTranspiler.goDeclaredLocalTypeIfSafe(
+    declaration,
+    GO_SAFE_LIST_LOCAL_TYPE,
+    reads,
+    (n) => n.parent?.kind === SyntaxKind5.PropertyAccessExpression && n.parent.name === n || n.parent?.kind === SyntaxKind5.PropertyAssignment && n.parent.name === n
+  );
+  const elementRead = goTranspiler.hasNodeWhere(scope, (n) => n.kind === SyntaxKind5.ElementAccessExpression && ccxtGoUnwrapTypeOnly(n.expression)?.kind === SyntaxKind5.Identifier && ccxtGoUnwrapTypeOnly(n.expression).text === declaration.name.text && !goTranspiler.isGoElementAccessAssignmentTarget(n));
+  if (typed === void 0 || natives === 0 || feature === 0 || elementRead && !ccxtGoListElementReadsAreBare(goTranspiler, scope, declaration)) {
+    return void 0;
+  }
+  return typed;
+}
+{
+  const listUnbox = GoTranspiler.prototype.goSafeListLocalUnbox;
+  const memo = /* @__PURE__ */ new WeakMap();
+  GoTranspiler.prototype.goSafeListLocalUnbox = function(declaration) {
+    const shipped = listUnbox.call(this, declaration);
+    if (shipped !== void 0 || declaration === void 0 || declaration === null) {
+      return shipped;
+    }
+    if (memo.has(declaration)) {
+      return memo.get(declaration);
+    }
+    memo.set(declaration, void 0);
+    const verdict = ccxtGo87g2ListLocal(this, declaration, "F") ?? ccxtGo87g2ListLocal(this, declaration, "G");
+    memo.set(declaration, verdict);
+    return verdict;
+  };
+}
 
 // src/javaTranspiler.ts
 init_esm_shims();
