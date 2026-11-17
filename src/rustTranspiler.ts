@@ -5274,6 +5274,8 @@ export class RustTranspiler extends BaseTranspiler {
         const clientOnce = nativeUses === 0 && boxed === 1 && this.rustWsClientOnlyUse(declaration);
         // ral-51n: an any-list length typed only for its native uses (a box-only length stays the `Value` it is handed as)
         if (anyLength && typedUses === 0) return undefined;
+        // ral-87re: a comparison seed reading another local (cex `deposit`, only boxed into a literal) is typed for a native use only
+        if (kind === 'bool' && typedUses === 0 && this.rust87reLocalSeeds.has(declaration)) return undefined;
         // ral-61p: a handleOption local typed from its default literal only for its native uses (boxed-straight-back stays `Value`)
         if (optionDefault && typedUses === 0) return undefined;
         // ral-62p: likewise a bool-default handleOption local, annotated or cast (boxed-straight-back stays `Value`)
@@ -7617,7 +7619,10 @@ export class RustTranspiler extends BaseTranspiler {
         const form = this.rustScalarUseForms.get(n);
         // vd lends a typed operand of a lent entry point as is ('parg'); the written text is still the Precise call
         // ral-76h: a lent operand ('parg') prints `&x` for the boxed and the typed local alike and moves nothing, so any use qualifies
-        if ((form !== 'box' && form !== 'parg') || !this.rustPreciseStringCall(declaration.initializer) || (form === 'box' && !this.rustLocalLastUse(n, declaration))) return false;
+        // ral-87re: a lent operand ('parg') of a `Precise` chain written back into this very local (`x = Precise.stringMul ('-1', x)`)
+        // is that write's own text whatever the initializer: the write prints the local's own conversion of the call
+        const selfWrite = form === 'parg' && isIdentifier(this.unwrapParens(write.left)) && this.rustDeclaredNode(this.unwrapParens(write.left)) === declaration;
+        if ((form !== 'box' && form !== 'parg') || (!selfWrite && !this.rustPreciseStringCall(declaration.initializer)) || (form === 'box' && !this.rustLocalLastUse(n, declaration))) return false;
         let top: any = n;
         for (;;) {
             while (isParenthesizedExpression(top.parent)) top = top.parent;
@@ -16216,25 +16221,34 @@ export class RustTranspiler extends BaseTranspiler {
         return this.nativeEqualityText(node) !== undefined ? 'bool' : undefined;
     }
 
+    private rust87reLocalSeeds = new WeakSet<Node>();
+
     /** A `const x = <comparison>` initializer whose native text exists and whose local's checker type is `boolean`. */
     rustBoolCompareSeed(node: any): boolean {
         let top: any = node;
         while (top.parent !== undefined && isParenthesizedExpression(top.parent)) top = top.parent;
         if (!isVariableDeclaration(top.parent) || top.parent.initializer !== top || !isIdentifier(top.parent.name)) return false;
         if (this.primitiveKindOfType(this.typeOfNodeIfAny(top.parent.name)) !== 'boolean') return false;
-        // printing an operand that reads another local would decide that local while this one is open: params and members only
+        // printing an operand that reads another local would decide that local while this one is open: params and members only;
+        // ral-87re: a seed reading a local of the same function is kept, but only for a native use (rustScalarLocalKindCore)
         let readsLocal = false;
+        let localRead = false;
         const visit = (n: any) => {
             if (readsLocal) return;
             if (isIdentifier(n) && !this.rustIdentifierIsPropertyName(n)) {
                 const d: any = this.rustDeclaredNode(n);
-                if (d !== undefined && !isParameterDeclaration(d)) readsLocal = true;
+                if (d !== undefined && !isParameterDeclaration(d)) {
+                    if (isVariableDeclaration(d) && d !== top.parent && this.rustEnclosingFunction(d) === this.rustEnclosingFunction(node)) localRead = true; else readsLocal = true;
+                }
                 return;
             }
             n.forEachChild(visit);
         };
         visit(node);
-        return !readsLocal && this.rustBoolNativeText(node) !== undefined;
+        if (readsLocal || this.rustBoolNativeText(node) === undefined) return false;
+        // ral-87re: a seed over another local is kept only for a native use (rustScalarLocalKindCore)
+        if (localRead) this.rust87reLocalSeeds.add(top.parent); else this.rust87reLocalSeeds.delete(top.parent);
+        return true;
     }
 
     // ── string fields of a typed market local as scalar seeds (rustMarketFieldScalar) ──
