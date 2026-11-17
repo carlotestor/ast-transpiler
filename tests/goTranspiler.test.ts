@@ -16529,6 +16529,7 @@ describe('base Str precision / network helpers return *string', () => {
         + 'export default class Exchange {\n'
         + '    currencyToPrecision (code: Str, fee: number, networkCode: Str = undefined): Str { return code; }\n'
         + '    networkCodeToId (networkCode: Str, currencyCode: Str = undefined): Str { return networkCode; }\n'
+        + '    handleTimeInForce (params: object = {}): Str { return undefined; }\n'
         + '}\n';
     const run = (members: string): string => {
         const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'g92-'));
@@ -16575,6 +16576,18 @@ describe('base Str precision / network helpers return *string', () => {
         expect(out).toContain('amountStringValue := "0"');
         expect(out).toContain('amountString = &amountStringValue');
         expect(out).toContain('if derefPtr := this.NetworkCodeToId(net, code); derefPtr != nil {');
+    });
+    test('handleTimeInForce results compare natively against literals', () => {
+        const out = run('    f (params: object, postOnly: boolean) {\n'
+            + '        let timeInForce = this.handleTimeInForce (params);\n'
+            + '        if (postOnly) {\n'
+            + "            timeInForce = 'poc';\n"
+            + '        }\n'
+            + "        return (timeInForce === 'IOC');\n"
+            + '    }\n');
+        expect(out).toContain('var timeInForce *string = this.HandleTimeInForce(params)');
+        expect(out).toContain('timeInForce = &timeInForceValue');
+        expect(out).toContain('timeInForce != nil && *timeInForce == "IOC"');
     });
     test('the family base method prints *string with bare / address / nil returns', () => {
         const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'g92b-'));

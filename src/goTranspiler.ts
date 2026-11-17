@@ -1145,7 +1145,8 @@ export const CCXT_GO_BOOL_METHOD_NAMES = [
 // string or undefined on every path; its hand-written Go twin (exchange_generic.go) returns *string
 // currencyToPrecision / networkCodeToId are `: Str` in base/Exchange.ts; every return is a string, a
 // Safe* string or undefined, and the htx override answers the same (its interface line is *string too)
-export const CCXT_GO_STRING_PTR_METHOD_NAMES = [ 'NetworkIdToCode', 'FindTimeframe', 'AmountToPrecision', 'PriceToPrecision', 'CurrencyToPrecision', 'NetworkCodeToId', 'OmitZero' ];
+// handleTimeInForce (Str) returns a safeString result or undefined on every path
+export const CCXT_GO_STRING_PTR_METHOD_NAMES = [ 'NetworkIdToCode', 'FindTimeframe', 'AmountToPrecision', 'PriceToPrecision', 'CurrencyToPrecision', 'NetworkCodeToId', 'HandleTimeInForce', 'OmitZero' ];
 
 export const CCXT_GO_HELPER_RETURN_TYPES = {
     // Typed twins of GetArg (go/v4/exchange_helpers.go) -- the `var x <T> = GetArg<T>(...)`
@@ -38237,7 +38238,7 @@ GoTranspiler.prototype.printReturnStatement = function (node, identation) {
 };
 // `x = this.currencyToPrecision|networkCodeToId (..)` into a local that stays `any`: the box held the
 // plain string before these returned *string, so store the pointee (nil for a nil pointer)
-const STR_PTR_FAMILY_NEW = [ 'currencyToPrecision', 'networkCodeToId' ];
+const STR_PTR_FAMILY_NEW = [ 'currencyToPrecision', 'networkCodeToId', 'handleTimeInForce' ];
 const strPtrFamilyExpressionStatement = GoTranspiler.prototype.printExpressionStatement;
 GoTranspiler.prototype.printExpressionStatement = function (node, identation) {
     const write = node?.expression;
