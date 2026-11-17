@@ -8988,7 +8988,7 @@ describe ('goTupleFirstResultBinds', () => {
         'type Bool = boolean | undefined;',
         'class BaseExchange {',
         '    options: Dict = {};',
-        '    handleMarketTypeAndParams (methodName: string, market: any = undefined, params: Dict = {}, defaultValue: Str = undefined): [Str, Dict] { return [ false, params ]; }',
+        '    handleMarketTypeAndParams (methodName: string, market: any = undefined, params: Dict = {}, defaultValue: Str = undefined): [Str, Dict] { return [ undefined, params ]; }',
         '    handleOptionBoolAndParams (params: Dict, methodName: Str, optionName: string, defaultValue: Bool = undefined): [Bool, Dict] { return [ true, params ]; }',
         '    handleUntilOption (key: string, request: Dict, params: Dict, multiplier: number = 1): [Dict, Dict] { return [ request, params ]; }',
         '}',
@@ -9018,7 +9018,7 @@ describe ('goTupleFirstResultBinds', () => {
     ].join ('\n');
     const STP = BASE + '\n' + [
         'class Ex extends BaseExchange {',
-        '    handleOptionStringAndParams (params: Dict, methodName: Str, optionName: string, defaultValue: Str = undefined): [Str, Dict] { return [ false, params ]; }',
+        '    handleOptionStringAndParams (params: Dict, methodName: Str, optionName: string, defaultValue: Str = undefined): [Str, Dict] { return [ undefined, params ]; }',
         '    f (params: Dict) {',
         '        let stp: Str = undefined;',
         '        [ stp, params ] = this.handleOptionStringAndParams (params, "createOrder", "stp");',
@@ -11982,11 +11982,11 @@ describe ('goPointerHelperTupleSlots', () => {
     const PRELUDE = 'type Dict = { [key: string]: any };\n'
         + 'type Str = string | undefined;\ntype Int = number | undefined;\ntype Bool = boolean | undefined;\n'
         + 'class Base {\n'
-        + '    handleParamString (params: Dict, name: string, d?: string): [Str, Dict] { return [ false, params ]; }\n'
-        + '    handleParamBool (params: Dict, name: string, d?: boolean): [Bool, Dict] { return [ false, params ]; }\n'
-        + '    handleParamInteger (params: Dict, name: string, d?: number): [Int, Dict] { return [ false, params ]; }\n'
-        + '    handleOptionBoolAndParams (params: Dict, m: string, o: string, d?: boolean): [Bool, Dict] { return [ false, params ]; }\n'
-        + '    handleOptionIntegerAndParams (params: Dict, m: string, o: string, d?: number): [Int, Dict] { return [ false, params ]; }\n'
+        + '    handleParamString (params: Dict, name: string, d?: string): [Str, Dict] { return [ undefined, params ]; }\n'
+        + '    handleParamBool (params: Dict, name: string, d?: boolean): [Bool, Dict] { return [ undefined, params ]; }\n'
+        + '    handleParamInteger (params: Dict, name: string, d?: number): [Int, Dict] { return [ undefined, params ]; }\n'
+        + '    handleOptionBoolAndParams (params: Dict, m: string, o: string, d?: boolean): [Bool, Dict] { return [ undefined, params ]; }\n'
+        + '    handleOptionIntegerAndParams (params: Dict, m: string, o: string, d?: number): [Int, Dict] { return [ undefined, params ]; }\n'
         + '    checkAddress (a: any, c?: any, t?: any): any { return a; }\n'
         + '    other (a: any): any { return a; }\n'
         + '}\n';
