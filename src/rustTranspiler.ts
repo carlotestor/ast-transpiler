@@ -5183,6 +5183,8 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** ral-70f: ral-70f reader locals whose last use walk accepted every use (rustScalarLocalKindCore). */
     private rust70fWalkOk = new WeakSet<Node>();
+    /** ral-90re R1: locals whose use walk took a pushed `parseNumber` pair box only through rust90reParsedPairElement. */
+    private rust90rePairAdmitted = new WeakSet<Node>();
 
     rustScalarLocalKindUncached(declaration): string | undefined {
         this.rust70fWalkOk.delete(declaration);
@@ -5232,6 +5234,7 @@ export class RustTranspiler extends BaseTranspiler {
         let copied = 0;
         // uses that read the local itself (`.length`, compares) see the candidate kind
         if (this.rustScalarSeeding) return kind;
+        this.rust90rePairAdmitted.delete(declaration);
         const previous = this.rustScalarDecisions.get(declaration);
         this.rustScalarDecisions.set(declaration, kind);
         const ok = this.rustScalarUsesAll(declaration, String(declaration.name.text), (n) => {
@@ -5272,7 +5275,7 @@ export class RustTranspiler extends BaseTranspiler {
             && !this.rust66s3StrReturnedVeto(declaration, scope);
         const storeOnly = guarded && nativeUses === 0 && boxed === 1 && !handOff;
         // ral-90re R1: a string local boxed into a pushed `this.parseNumber` pair is typed only for a native use elsewhere (a box alone moves the conversion)
-        if (ok && nativeUses === 0 && (kind === 'str' || kind === 'ostr') && this.rust90reParsedPairLocal(declaration)) return undefined;
+        if (ok && nativeUses === 0 && this.rust90rePairAdmitted.has(declaration)) return undefined;
         // ral-84e: a record-arm ternary string is typed only for a native use (boxed straight back it stays the `Value` it is handed as)
         if (ok && nativeUses === 0 && kind === 'ostr' && this.rust84eRecordArmTernary(declaration.initializer)) return undefined;
         const unused = typedUses === 0 && !handOff && this.rustScalarNeedsNativeUse(declaration.initializer) && !this.rustVenueIntReboxed(declaration, kind, boxed);
@@ -7542,7 +7545,7 @@ export class RustTranspiler extends BaseTranspiler {
             if (form === 'concat' && (trial === 'str' || trial === 'ostr')) continue;
             // a `.push(..)` argument: ccxt's native-push pass keys on the boxed operand text
             const push: any = findAncestor(n, (m: any) => isStatement(m) || (isCallExpression(m) && isPropertyAccessExpression(m.expression) && m.expression.name.text === 'push'));
-            if (push !== undefined && isCallExpression(push) && !this.rustCopyPushPairElement(n, push, trial) && !this.rustPushSelfCallArgUse(n, push, trial) && !this.rust90reParsedPairElement(n, push, trial) && !r70f) return false;
+            if (push !== undefined && isCallExpression(push) && !this.rustCopyPushPairElement(n, push, trial) && !this.rustPushSelfCallArgUse(n, push, trial) && !(this.rust90reParsedPairElement(n, push, trial) && this.rust90rePairAdmitted.add(declaration)) && !r70f) return false;
             // nor when it feeds a write to another local (ccxt passes read that write's printed source)
             const write: any = findAncestor(n, (m: any) => isStatement(m) || (isBinaryExpression(m) && m.operatorToken.kind === SyntaxKind.EqualsToken));
             if (write !== undefined && isBinaryExpression(write) && this.isNodeInsideNode(n, write.right) && !this.rustScalarBoxedField(n, write, declaration)
@@ -7679,17 +7682,6 @@ export class RustTranspiler extends BaseTranspiler {
      *  the array literal pushed whole (`rows.push ([ this.parseNumber (price), this.parseNumber (size) ])`): the element prints
      *  `self.parse_number(<box>, &[])` inside `Value::from(vec![..])`, a source ccxt's rustVecPushInline takes whatever its
      *  elements print (as rustCopyPushPairElement), and the box converts the very `Str` / `Null` the `Value` local held. */
-    /** ral-90re R1: some read of the local is the boxed argument of a pushed `this.parseNumber` pair (rust90reParsedPairElement). */
-    rust90reParsedPairLocal(declaration: VariableDeclaration): boolean {
-        const scope = this.rustEnclosingFunction(declaration);
-        if (scope === undefined || !isIdentifier(declaration.name)) return false;
-        return (this.rustScopeNameNodes(scope, String(declaration.name.text)) as Node[]).some((u: Node) => {
-            if (u === declaration.name || this.rustDeclaredNode(u) !== declaration) return false;
-            const push: Node | undefined = findAncestor(u, (m: Node) => isStatement(m) || (isCallExpression(m) && isPropertyAccessExpression(m.expression) && m.expression.name.text === 'push'));
-            return push !== undefined && isCallExpression(push) && this.rust90reParsedPairElement(u, push, 'ostr');
-        });
-    }
-
     rust90reParsedPairElement(n: Node, push: CallExpression, kind: string | undefined): boolean {
         if ((kind !== 'ostr' && kind !== 'str') || push.arguments.length !== 1) return false;
         const call: Node = n.parent;
