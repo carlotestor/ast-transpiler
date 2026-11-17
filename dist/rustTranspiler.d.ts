@@ -4159,6 +4159,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustWsUrlVenueSlot(n: any): boolean;
     /** `this.urls[k1][k2]..` (through parens / `as` casts) with literal keys: a url string, or Null when absent. */
     rustWsUrlRead(init: any): boolean;
+    /** A never-written `const d = this.safeDict (<this.urls[..] read>, '<lit>', {})` of the same function: its literal-key
+     *  entries are the url strings (or Null) the `this.urls[..]['<lit>'][..]` chain reads. */
+    rustWsUrlsDictAlias(node: Node): boolean;
     rustWsUrlDeclTooLong(declaration: any): boolean;
     rustWsUrlLocalOf(node: any): boolean;
     printWsUrlLocalDeclaration(declaration: any, varName: string, indent: string): string | undefined;

@@ -84156,7 +84156,23 @@ ${iden}}`;
       node = this.rustSkipWrappers(node.expression);
       depth++;
     }
+    if (depth > 0 && node !== void 0 && isIdentifier3(node) && this.rustWsUrlsDictAlias(node))
+      return true;
     return depth > 0 && node !== void 0 && isPropertyAccessExpression3(node) && node.expression.kind === SyntaxKind7.ThisKeyword && isIdentifier3(node.name) && node.name.text === "urls";
+  }
+  /** A never-written `const d = this.safeDict (<this.urls[..] read>, '<lit>', {})` of the same function: its literal-key
+   *  entries are the url strings (or Null) the `this.urls[..]['<lit>'][..]` chain reads. */
+  rustWsUrlsDictAlias(node) {
+    const declaration = this.rustDeclaredNode(node);
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.name === node || declaration.initializer === void 0 || (declaration.parent?.flags & NodeFlags4.Const) === 0 || this.rustEnclosingFunction(declaration) !== this.rustEnclosingFunction(node))
+      return false;
+    const init = this.unwrapParens(declaration.initializer);
+    if (!isCallExpression6(init) || !isPropertyAccessExpression3(init.expression) || init.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(init.expression.name.text) !== "safeDict" || init.arguments.length < 2 || !isStringLiteral3(init.arguments[1]))
+      return false;
+    const fallback = init.arguments[2];
+    if (fallback !== void 0 && !(isObjectLiteralExpression4(fallback) && fallback.properties.length === 0))
+      return false;
+    return this.rustWsUrlRead(init.arguments[0]);
   }
   rustWsUrlDeclTooLong(declaration) {
     let depth = 0;
