@@ -60449,7 +60449,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
    *  way (the `&Value` operand takes the moved string), so the receiver's decision does not read this local's type. */
   rustScalarPreciseFeed(n, write, declaration) {
     const form = this.rustScalarUseForms.get(n);
-    if (form !== "box" && form !== "parg" || !this.rustPreciseStringCall(declaration.initializer) || form === "box" && !this.rustLocalLastUse(n, declaration))
+    if (form !== "box" && form !== "parg" || form === "box" && (!this.rustPreciseStringCall(declaration.initializer) || !this.rustLocalLastUse(n, declaration)))
       return false;
     let top = n;
     for (; ; ) {
@@ -60486,7 +60486,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const left = write.left;
     if (!isElementAccessExpression4(left))
       return false;
-    const recv = this.unwrapParens(left.expression);
+    let recv = this.unwrapParens(left.expression);
+    while (isElementAccessExpression4(recv))
+      recv = this.unwrapParens(recv.expression);
     if (!isIdentifier3(recv) && !(isPropertyAccessExpression3(recv) && recv.expression.kind === SyntaxKind7.ThisKeyword))
       return false;
     return !this.isNodeInsideNode(n, left);
