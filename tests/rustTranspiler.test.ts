@@ -25772,3 +25772,31 @@ describe('ral-92rf R1: a split endpoint answer lends its held list to a lent par
         expect(out).toMatch(/let mut response: Value = /);
     });
 });
+
+describe('ral-92rf R2: a resolve of `stores[symbol]` over the handler\'s own symbol-keyed cache map resolves that cache', () => {
+    const files: Record<string, string> = {
+        "ts/src/base/ws/Cache.ts": "export class ArrayCache {\n    constructor (maxSize: any = undefined) {}\n    append (item: any) {}\n    getLimit (symbol: any, limit: any): any { return limit; }\n}\n",
+        "ts/src/base/ws/Client.ts": "export default class Client {\n    resolve (result: any, messageHash: string): any { return result; }\n}\n",
+        "ts/src/base/Exchange.ts": "import { ArrayCache } from './ws/Cache.js';\nexport interface Dictionary<T> { [key: string]: T }\nexport interface Dict { [key: string]: any }\nexport default class Exchange {\n    options: Dict = {};\n    newUpdates: boolean = true;\n    trades: Dictionary<ArrayCache>;\n    safeValue (obj: any, key: any, defaultValue: any = undefined): any { return obj[key]; }\n    safeString (obj: any, key: any, defaultValue: string = undefined): string { return obj[key]; }\n    async watch (url: string, h: string, r: any = undefined, s: any = undefined): Promise<any> { return url; }\n    filterBySinceLimit (a: any, since: any = undefined, limit: any = undefined): any[] { return a; }\n}\n",
+        "ts/src/pro/venue.ts": "import Exchange from '../base/Exchange.js';\nimport Client from '../base/ws/Client.js';\nimport { ArrayCache } from '../base/ws/Cache.js';\nexport default class venue extends Exchange {\n    async watchTrades (symbol: string, since: any = undefined, limit: any = undefined) {\n        const trades = await this.watch ('u', 'trades:' + symbol);\n        let limitResolved = limit;\n        if (this.newUpdates) {\n            limitResolved = trades.getLimit (symbol, limit);\n        }\n        return this.filterBySinceLimit (trades, since, limitResolved);\n    }\n    handleTrades (client: Client, rows: any[]) {\n        const stores: Dict = {};\n        for (let i = 0; i < rows.length; i++) {\n            const symbol = this.safeString (rows[i], 's');\n            let stored = this.safeValue (this.trades, symbol);\n            if (stored === undefined) {\n                stored = new ArrayCache (10);\n                this.trades[symbol] = stored;\n            }\n            stored.append (rows[i]);\n            stores[symbol] = stored;\n        }\n        const symbols = Object.keys (stores);\n        for (let i = 0; i < symbols.length; i++) {\n            const symbol = symbols[i];\n            const store = stores[symbol];\n            client.resolve (store, 'trades:' + symbol);\n        }\n    }\n}\ntype Dict = { [key: string]: any };\n",
+    };
+    const run = (venue: string) => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-92rf-r2-'));
+        for (const [rel, text] of Object.entries ({ ...files, "ts/src/pro/venue.ts": venue })) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        const out = transpiler.transpileRustByPath(path.join (root, 'ts/src/pro/venue.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+        return out;
+    };
+    test('gemini watchTrades shape: the watched result is an optional cache handle with a native getLimit', () => {
+        const out = run (files["ts/src/pro/venue.ts"]);
+        expect(out).toContain('let mut trades: Option<crate::pro::cache::Cache> = ');
+        expect(out).not.toMatch(/let mut trades: Value = /);
+    });
+    test('negative: a store map that also takes a non-cache value keeps the watched result boxed', () => {
+        const out = run (files["ts/src/pro/venue.ts"].replace ("stores[symbol] = stored;", "stores[symbol] = stored;\n            stores['x'] = rows[i];"));
+        expect(out).toMatch(/let mut trades: Value = /);
+    });
+});

@@ -29800,6 +29800,8 @@ export class RustTranspiler extends BaseTranspiler {
             if (declaration !== undefined && isVariableDeclaration(declaration) && !this.rustLocalReassigned(declaration) && this.rustBorrowedLocalKind(declaration) === 'dict') return 'dict';
         }
         if (this.rustWsCacheFieldDictRead(n)) return 'dict';
+        const keyed = this.rust92rfKeyedLocalElementKind(n);
+        if (keyed !== undefined) return keyed;
         if (isIdentifier(n)) {
             const declaration: any = this.rustDeclarationOfIdentifier(n);
             // a local left boxed whose only write is its book / cache source still holds that kind (or nothing)
@@ -29811,6 +29813,59 @@ export class RustTranspiler extends BaseTranspiler {
             }
         }
         return undefined;
+    }
+
+    /** ral-92rf R2: a resolved `d[k]` (or an unreassigned local bound to it) where `d` is a handler's own `{}` map local whose
+     *  every write is `d[x] = v` with v one resolved kind (cache or dict), read only by `d[..]` and one `Object.keys (d)`,
+     *  and `k` an element of that keys list: the element is present and holds that kind. Decided from the AST. */
+    rust92rfKeyedLocalElementKind(x: Node, depth = 0): 'cache' | 'dict' | undefined {
+        let n: Node | undefined = this.rustStripWrappers(x);
+        if (n === undefined || depth > 2) return undefined;
+        const constLocal = (id: Node | undefined): VariableDeclaration | undefined => {
+            const d: Node | undefined = id !== undefined && isIdentifier(id) ? this.rustDeclarationOfIdentifier(id) : undefined;
+            return d !== undefined && isVariableDeclaration(d) && isIdentifier(d.name) && d.initializer !== undefined && !this.rustLocalReassigned(d)
+                && isVariableDeclarationList(d.parent) && d.parent.declarations.length === 1 ? d : undefined;
+        };
+        if (isIdentifier(n)) {
+            const d = constLocal(n);
+            return d === undefined ? undefined : this.rust92rfKeyedLocalElementKind(d.initializer, depth + 1);
+        }
+        if (!isElementAccessExpression(n)) return undefined;
+        const map = constLocal(this.rustStripWrappers(n.expression));
+        const mapInit: Node | undefined = map === undefined ? undefined : this.rustStripWrappers(map.initializer);
+        if (map === undefined || mapInit === undefined || !isObjectLiteralExpression(mapInit) || mapInit.properties.length !== 0) return undefined;
+        // the key: `const k = ks[i]` with `const ks = Object.keys (d)`
+        const keyDecl = constLocal(this.rustStripWrappers(n.argumentExpression));
+        const keyInit: Node | undefined = keyDecl === undefined ? undefined : this.rustStripWrappers(keyDecl.initializer);
+        if (keyInit === undefined || !isElementAccessExpression(keyInit)) return undefined;
+        const keysDecl = constLocal(this.rustStripWrappers(keyInit.expression));
+        const keysInit: Node | undefined = keysDecl === undefined ? undefined : this.rustStripWrappers(keysDecl.initializer);
+        const isKeysOfMap = (c: Node | undefined): boolean => c !== undefined && isCallExpression(c) && c.arguments.length === 1 && isPropertyAccessExpression(c.expression)
+            && isIdentifier(c.expression.expression) && c.expression.expression.text === 'Object' && c.expression.name.text === 'keys'
+            && isIdentifier(this.rustStripWrappers(c.arguments[0])) && this.rustDeclarationOfIdentifier(this.rustStripWrappers(c.arguments[0])) === map;
+        if (!isKeysOfMap(keysInit)) return undefined;
+        const fn: Node | undefined = findAncestor(map, isFunctionLike);
+        if (fn === undefined || findAncestor(n, isFunctionLike) !== fn) return undefined;
+        let kind: 'cache' | 'dict' | undefined;
+        let ok = true;
+        for (const r of this.rustScopeNameNodes(fn, String((map.name as Identifier).text)) as Node[]) {
+            if (r === map.name || !isIdentifier(r) || this.rustIdentifierIsPropertyName(r)) continue;
+            if (this.rustDeclarationOfIdentifier(r) !== map || findAncestor(r, isFunctionLike) !== fn) { ok = false; break; }
+            const up: Node = r.parent;
+            if (isCallExpression(up) && isKeysOfMap(up)) continue;
+            if (!isElementAccessExpression(up) || up.expression !== r) { ok = false; break; }
+            const w: Node = up.parent;
+            if (isBinaryExpression(w) && w.left === up) {
+                if (w.operatorToken.kind !== SyntaxKind.EqualsToken || w.parent?.kind !== SyntaxKind.ExpressionStatement) { ok = false; break; }
+                const k = this.rustWsResolvedKind(w.right);
+                if ((k !== 'cache' && k !== 'dict') || (kind !== undefined && kind !== k)) { ok = false; break; }
+                kind = k;
+                continue;
+            }
+            // a plain read (no write target, no delete)
+            if (this.isNativeWriteTargetBase(up) || isDeleteExpression(w)) { ok = false; break; }
+        }
+        return ok ? kind : undefined;
     }
 
     /** ral-ye: a read of a plain base cache field the class keeps as a map, typed by the field's declaration:
