@@ -22287,7 +22287,8 @@ describe('ral-65b: build-pass locals typed by the printer (second round)', () =>
     test('gate handleErrorMessage `id`: a safeStringN local keying a client `in` test the handle does not print is Option<String>', () => {
         expect(out).toContain('let mut id: Option<String> = self.safe_string_n_opt(message.clone(), Value::from(vec![Value::Str("id".into()), Value::Str("requestId".into()), Value::Str("request_id".into())]), &[]);');
         expect(out).toContain('let mut messageHash: Option<String> = self.safe_string_opt(__ch.subscriptions.clone(), id.clone().map(Value::from).unwrap_or(Value::Null), &[]);');
-        expect(out).toContain('if (id.is_some()) && (matches!((&get_value(&client, &Value::Str("subscriptions".into())), &id.clone().map(Value::from).unwrap_or(Value::Null)), (Value::Dict(__d), Value::Str(__k)) if __d.contains_key(__k.as_ref()))) {');
+        // ral-90rb R1: every write of client.subscriptions in the method is a handle statement, so the later test reads the handle
+        expect(out).toContain('if (id.is_some()) && (__ch.has_subscription((&id).as_deref())) {');
         expect(out).toContain('__ch.remove_subscription(id.as_deref());');
         expect(out).not.toContain('let mut id: Value');
     });
@@ -24147,7 +24148,8 @@ describe('ral-80b: a string key tested against client.subscriptions after the ha
     });
     test('paradex watchOrderBookForSymbols snapshotChannel: no boxed typed key for the unserved in-test', () => {
         expect(out).toContain('let mut deltasHash: String = ');
-        expect(out).not.toMatch(/let mut snapshotChannel: (?:String|Option<String>) = /);
+        // ral-90rb R1: the only write is the handle's add_subscription statement, so the later in-test is served by the handle
+        expect(out).toContain('if deltas && (__ch.has_subscription(snapshotChannel.as_deref())) {');
     });
 });
 
