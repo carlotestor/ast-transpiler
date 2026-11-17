@@ -45051,6 +45051,60 @@ GoTranspiler.prototype.goNilInitLocalTypeScan = function(declaration) {
   const result = ral92g1UpstreamNilInitScan.call(this, declaration);
   return (result === "*float64" || result === "*int64") && ccxtGo92NumParseWrittenWithoutNilTest(this, declaration) ? void 0 : result;
 };
+var RAL92G1_STRING_PAIR_PRODUCERS = {
+  "handleNetworkCodeAndParams": { "goType": "*string", "safe": "SafeStringPtr" },
+  "handleMarginModeAndParams": { "goType": "*string", "safe": "SafeStringPtr" },
+  "handleOptionStringAndParams": { "goType": "*string", "safe": "SafeStringPtr" },
+  "handleOptionStringAndParams2": { "goType": "*string", "safe": "SafeStringPtr" }
+};
+var ral92g1PairProbing = false;
+var ral92g1PairVerdicts = /* @__PURE__ */ new WeakMap();
+function ral92g1PairEntry(call) {
+  const callee = call?.kind === SyntaxKind5.CallExpression ? call.expression : void 0;
+  if (callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword) {
+    return void 0;
+  }
+  const name = String(callee.name?.text);
+  return Object.prototype.hasOwnProperty.call(RAL92G1_STRING_PAIR_PRODUCERS, name) ? RAL92G1_STRING_PAIR_PRODUCERS[name] : void 0;
+}
+function ral92g1PairHasNativeRead(goTranspiler, declaration) {
+  const scope = goTranspiler.goEnclosingFunction(declaration);
+  return scope !== void 0 && goTranspiler.hasNodeWhere(scope, (n) => n.kind === SyntaxKind5.Identifier && n !== declaration.name && ccxtGoParamDeclarationOf(goTranspiler, n) === declaration && (ccxtGo90IsNilTest(n) || ccxtGo90StringLiteralCompare(n)));
+}
+var ral92g1UpstreamSlotEntry = GoTranspiler.prototype.goTuplePointerSlotCallEntry;
+GoTranspiler.prototype.goTuplePointerSlotCallEntry = function(call) {
+  const known = ral92g1UpstreamSlotEntry.call(this, call);
+  const entry = known === void 0 ? ral92g1PairEntry(call) : void 0;
+  if (entry === void 0) {
+    return known;
+  }
+  if (ral92g1PairProbing) {
+    return entry;
+  }
+  const assign = call.parent;
+  const target = assign?.kind === SyntaxKind5.BinaryExpression && assign.right === call && assign.left?.kind === SyntaxKind5.ArrayLiteralExpression ? assign.left.elements[0] : void 0;
+  const declaration = target?.kind === SyntaxKind5.Identifier ? ccxtGoParamDeclarationOf(this, target) : void 0;
+  return declaration !== void 0 && ral92g1PairVerdicts.get(declaration) === true ? entry : void 0;
+};
+var ral92g1UpstreamSlotNilInit = GoTranspiler.prototype.goTuplePointerSlotNilInitType;
+GoTranspiler.prototype.goTuplePointerSlotNilInitType = function(declaration) {
+  const known = ral92g1UpstreamSlotNilInit.call(this, declaration);
+  if (known !== void 0 || ral92g1PairProbing || declaration?.kind !== SyntaxKind5.VariableDeclaration) {
+    return known;
+  }
+  if (!ral92g1PairVerdicts.has(declaration)) {
+    ral92g1PairVerdicts.set(declaration, false);
+    ral92g1PairProbing = true;
+    let probed;
+    try {
+      probed = ral92g1UpstreamSlotNilInit.call(this, declaration);
+    } finally {
+      ral92g1PairProbing = false;
+    }
+    ral92g1PairVerdicts.set(declaration, probed === "*string" && ral92g1PairHasNativeRead(this, declaration));
+  }
+  return ral92g1PairVerdicts.get(declaration) ? "*string" : void 0;
+};
 
 // src/javaTranspiler.ts
 init_esm_shims();
