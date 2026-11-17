@@ -25754,6 +25754,11 @@ describe('pass-through venue string helpers: `fromEp (ep: Str, market): Str` pri
         expect(t).toContain('last.is_some()');
         expect(t).toContain('let mut open: Value = ');
     });
+    test('the helper keeps the by-name dispatch arm it had as `-> Value`', () => {
+        const dir = path.join (rustFixtureRoot, 'r92-pass-through-str');
+        const r: any = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } }).transpileRustByPath (path.join (dir, 'ts/src/phemex.ts'));
+        expect((r.rustSignatures ?? []).find((s: { name: string }) => s.name === 'from_ep')?.ret).toBe('keptostr');
+    });
 });
 
 describe('string-list ternaries: `c ? this.symbols : symbols` / `c ? [] : outcomes` are optional lists when every use is native', () => {
