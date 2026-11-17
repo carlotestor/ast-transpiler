@@ -1225,6 +1225,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustVenueLocalHandedOn(declaration: any): boolean;
     /** ral-wa: the whole right side of an `x = <call>;` statement writing a nil-declared (`let x;`) local: the
      *  venue result moves into the `Option<String>` local as printed (no box, no copy). */
+    /** A same-function identifier as the whole right side of a nil write whose narrowed checker type is `never`. */
+    rustNilNeverWrite(node: Node | undefined): boolean;
     rustNilVenueWrite(node: any): boolean;
     private static readonly RUST_NIL_ELEM_STR_KEYS;
     /** ral-xa: `m['symbol']` as the whole right side of `x = m['k'];` into a nil-declared local, printed as an owned

@@ -59614,6 +59614,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         baseFieldWrite = true;
       if (this.rustPassThroughStrCallIn(rhs))
         passThroughWrite = true;
+      if (this.rustNilNeverWrite(rhs))
+        continue;
       let write = _is.isIdentifier.call(void 0, rhs) && this.literalKindOfNode(rhs) !== "null" ? _nullishCoalesce(this.rustScalarIdentifierKind(rhs), () => ( (this.rustNilValueStrAlias(rhs) ? "ostr" : void 0))) : this.rustScalarValueKind(rhs, true);
       if (write === void 0 && _is.isIdentifier.call(void 0, rhs) && this.rust68aStrParamWrite(rhs))
         write = "ostr";
@@ -64498,6 +64500,13 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   /** ral-wa: the whole right side of an `x = <call>;` statement writing a nil-declared (`let x;`) local: the
    *  venue result moves into the `Option<String>` local as printed (no box, no copy). */
+  /** A same-function identifier as the whole right side of a nil write whose narrowed checker type is `never`. */
+  rustNilNeverWrite(node) {
+    if (node === void 0 || !_is.isIdentifier.call(void 0, node) || node.text === "undefined" || !this.rustNilVenueWrite(node))
+      return false;
+    const type = this.typeOfNodeIfAny(node);
+    return type !== void 0 && (type.flags & _sync.TypeFlags.Never) !== 0;
+  }
   rustNilVenueWrite(node) {
     let current = node;
     while (_is.isParenthesizedExpression.call(void 0, current.parent))
@@ -66969,6 +66978,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       return this.rustScalarWriteOk(kind, this.rustScalarAsWrite(node), 0);
     if (this.rustOptParamWriteOk(kind, node))
       return true;
+    if (depth === 0 && kind.startsWith("o") && this.rustNilNeverWrite(node))
+      return true;
     if (kind === "oint" && this.rustLimitCall(node))
       return true;
     if (kind === "obool" && depth === 0 && this.rust67bBoolLogicalWrite(node))
@@ -67645,7 +67656,7 @@ ${binding(plan.indent)}` : ""), head: "" };
     const optional = kind.startsWith("o");
     const base = optional ? kind.slice(1) : kind;
     const wrap = (t) => optional ? `Some(${t})` : t;
-    if (this.literalKindOfNode(node) === "null")
+    if (this.literalKindOfNode(node) === "null" || optional && this.rustNilNeverWrite(node))
       return optional ? "None" : void 0;
     if (kind === "str" && this.rustSbJoinShape(node))
       return this.rustSbJoinText(node);
@@ -67874,7 +67885,7 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       return typedDecl ? this.printRustScalarLocalWrite(left, this.rustScalarAsWrite(right)) : void 0;
     }
     const alias = this.unwrapParens(right);
-    if (local !== void 0 && local.kind.startsWith("o") && _is.isIdentifier.call(void 0, alias) && this.literalKindOfNode(alias) === "null")
+    if (local !== void 0 && local.kind.startsWith("o") && _is.isIdentifier.call(void 0, alias) && (this.literalKindOfNode(alias) === "null" || this.rustNilNeverWrite(alias)))
       return `${super.printIdentifier(left)} = None`;
     if (local !== void 0 && _is.isIdentifier.call(void 0, alias) && this.rustNilAliasMoves.has(alias) && this.rustScalarIdentifierKind(alias) === local.kind)
       return `${super.printIdentifier(left)} = ${super.printIdentifier(alias)}.take()`;
