@@ -1674,9 +1674,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustSafeDictKeyParam(param: any): boolean;
     /** The `price` parameter (slot 1) of a `priceToPrecision` body (base or venue override): prints `impl Into<crate::Value>`
      *  and binds `let mut price: Value = price.into();` (every `Value` argument still passes; a number local passes unboxed). */
-    rustPriceSlotParam(param: any): boolean;
+    rustPriceSlotParam(param: Node | undefined): boolean;
     /** `n` is the price (argument 1) of `this.priceToPrecision (s, n)` whose resolved body takes the lent price slot. */
-    rustPriceSlotArg(n: any): boolean;
+    rustPriceSlotArg(n: Node | undefined): boolean;
     /** ral-50e: a local read only as base `safeDict` keys (its `any` checker type comes from an `any` operand such as
      *  `response.length`): an `i64` the printer proved passes there as the Int its box held, so the checker's `any` is moot. */
     rustSafeDictKeyOnlyLocal(declaration: any): boolean;

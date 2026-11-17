@@ -67416,12 +67416,12 @@ ${binding(plan.indent)}` : ""), head: "" };
    *  and binds `let mut price: Value = price.into();` (every `Value` argument still passes; a number local passes unboxed). */
   rustPriceSlotParam(param) {
     const method = param?.parent;
-    return param?.kind === SyntaxKind7.Parameter && isMethodDeclaration5(method) && method.body !== void 0 && isIdentifier3(method.name) && String(method.name.text) === "priceToPrecision" && method.parameters?.length === 2 && method.parameters[1] === param && isIdentifier3(param.name) && param.initializer === void 0 && param.questionToken === void 0 && param.dotDotDotToken === void 0 && isClassDeclaration4(method.parent) && !this.rustTestTierSource(param) && !this.rustMethodReferencedAsValue(method);
+    return param !== void 0 && isParameterDeclaration3(param) && method !== void 0 && isMethodDeclaration5(method) && method.body !== void 0 && isIdentifier3(method.name) && String(method.name.text) === "priceToPrecision" && method.parameters?.length === 2 && method.parameters[1] === param && isIdentifier3(param.name) && param.initializer === void 0 && param.questionToken === void 0 && param.dotDotDotToken === void 0 && isClassDeclaration4(method.parent) && !this.rustTestTierSource(param) && !this.rustMethodReferencedAsValue(method);
   }
   /** `n` is the price (argument 1) of `this.priceToPrecision (s, n)` whose resolved body takes the lent price slot. */
   rustPriceSlotArg(n) {
     const call = n?.parent;
-    if (this.rustTestTierSource(n) || !isCallExpression6(call) || call.arguments.length !== 2 || call.arguments[1] !== n || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(call.expression.name.text) !== "priceToPrecision")
+    if (n === void 0 || call === void 0 || this.rustTestTierSource(n) || !isCallExpression6(call) || call.arguments.length !== 2 || call.arguments[1] !== n || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(call.expression.name.text) !== "priceToPrecision")
       return false;
     const declaration = this.rustScalarCallee(call);
     return declaration !== void 0 && isMethodDeclaration5(declaration) && this.rustPriceSlotParam(declaration.parameters?.[1]);
