@@ -4321,6 +4321,9 @@ function ccxtGoAnnotatedReturnTypes (goTranspiler, node) {
     if ((key === 'Str') || (key === 'Dict') || (key === 'ExchangeOptions') || (key === 'Market') || (key === 'List') || (key === 'Bool')) {
         return CCXT_GO_ANNOTATED_RETURN_NATIVE[key];
     }
+    if ((key === 'Num') && ccxtGo92NumParseMethod (node)) {
+        return [ '*float64' ]; // 92g1 R1: a parse* `Num` is ParseNumber's pointer or nil
+    }
     const general = ccxtGoGeneralAnnotatedReturnTypes (node, type, key);
     if (general !== undefined) {
         return general;
@@ -4824,6 +4827,7 @@ export function ccxtGoNilDeclaredJoinType (goTranspiler, declaration) {
     let literalCompareRead = false;    // 90g1
     let stringPtrArgumentRead = false; // 90g1
     let nilTestRead = false;           // 90g1
+    let numParseWrite = false;         // 92g1
     const visit = (n) => {
         if (readUnproven) {
             return;
@@ -4841,6 +4845,7 @@ export function ccxtGoNilDeclaredJoinType (goTranspiler, declaration) {
                     return;
                 }
                 joinType = written;
+                numParseWrite = numParseWrite || ccxtGo92IsNumParseCall (goTranspiler, parent.right); // 92g1
             } else if (!nilDeclaredReadIsSafe (goTranspiler, n)) {
                 if (ccxtGoNilDeclaredStringArgumentRead (goTranspiler, n)) {
                     stringOnlyRead = true;          // 84g1: admitted for a *string join only (checked below)
@@ -4883,6 +4888,9 @@ export function ccxtGoNilDeclaredJoinType (goTranspiler, declaration) {
     }
     if (literalCompareRead && (joinType !== '*string')) {
         return undefined;
+    }
+    if (numParseWrite && !nilTestRead) {
+        return undefined; // 92g1 R1: only a local the pointer is tested on natively
     }
     if (stringPtrArgumentRead && ((joinType !== '*string') || !(nilTestRead || literalCompareRead))) {
         return undefined;
@@ -38142,3 +38150,64 @@ GoTranspiler.prototype.printCallExpression = function (node, identation) {
     return printCallExpressionBase90g8.call(this, node, identation);
 };
 // ===== ral-90g8 R3 (end), R4 inside =====
+
+// ===== ral-92g1 R1 (begin): venue parse* methods annotated `Num` return *float64 =====
+// `parseX (v: Str): Num` whose every path is `undefined` or `this.parseNumber (..)` (base ParseNumber returns
+// *float64) prints `*float64` instead of `any`; parse* signatures already carry pointers. A local initialised
+// from such a call is typed only when it has a native nil test; the others keep the box they had.
+function ccxtGo92NumParseMethod (node): boolean {
+    const name = node?.name?.text;
+    if ((typeof name !== 'string') || !CCXT_GO_PARSE_METHOD.test (name) || (node.type?.getText () !== 'Num')) {
+        return false;
+    }
+    const fileName = String (node.getSourceFile?. ()?.fileName ?? '');
+    return /(^|[\\/])ts[\\/]src[\\/]/.test (fileName) && !/(^|[\\/])ts[\\/]src[\\/](base|test)[\\/]/.test (fileName);
+}
+function ccxtGo92IsNumParseCall (goTranspiler: GoTranspiler, expression): boolean {
+    while (expression?.kind === SyntaxKind.ParenthesizedExpression) {
+        expression = expression.expression;
+    }
+    if ((expression?.kind !== SyntaxKind.CallExpression) || (expression.expression?.kind !== SyntaxKind.PropertyAccessExpression)
+        || (expression.expression.expression?.kind !== SyntaxKind.ThisKeyword)) {
+        return false;
+    }
+    let declaration;
+    try {
+        declaration = goTranspiler.getChecker ().getResolvedSignature (expression)?.declaration?.resolve ();
+    } catch (e) {
+        return false;
+    }
+    return ccxtGo92NumParseMethod (declaration) && (ccxtGoAnnotatedMethodReturnType (goTranspiler, declaration) === '*float64');
+}
+function ccxtGo92HasNilTest (goTranspiler: GoTranspiler, declaration): boolean {
+    const scope = goTranspiler.goEnclosingFunction (declaration);
+    return (scope !== undefined) && goTranspiler.hasNodeWhere (scope, (n) => (n.kind === SyntaxKind.Identifier) && (n !== declaration.name)
+        && (ccxtGoParamDeclarationOf (goTranspiler, n) === declaration) && ccxtGo90IsNilTest (n));
+}
+const ral92g1UpstreamLocalType = GoTranspiler.prototype.getGoLocalType;
+GoTranspiler.prototype.getGoLocalType = function (declaration, parsedValue: string) {
+    const known = ral92g1UpstreamLocalType.call (this, declaration, parsedValue);
+    if ((known === '*float64') && (declaration?.kind === SyntaxKind.VariableDeclaration) && (declaration.initializer !== undefined)
+        && ccxtGo92IsNumParseCall (this, declaration.initializer) && !ccxtGo92HasNilTest (this, declaration)) {
+        return 'any';
+    }
+    return known;
+};
+// a nil-seeded local written from such a call (pointer-write scan) needs the same native nil test
+function ccxtGo92NumParseWrittenWithoutNilTest (goTranspiler: GoTranspiler, declaration): boolean {
+    const scope = goTranspiler.goEnclosingFunction (declaration);
+    const name = declaration?.name?.text;
+    if ((scope === undefined) || (typeof name !== 'string')) {
+        return false;
+    }
+    const written = goTranspiler.hasNodeWhere (scope, (n) => (n.kind === SyntaxKind.BinaryExpression)
+        && (n.operatorToken.kind === SyntaxKind.EqualsToken) && isIdentifierNamed (n.left, name)
+        && (ccxtGoParamDeclarationOf (goTranspiler, n.left) === declaration) && ccxtGo92IsNumParseCall (goTranspiler, n.right));
+    return written && !ccxtGo92HasNilTest (goTranspiler, declaration);
+}
+const ral92g1UpstreamNilInitScan = GoTranspiler.prototype.goNilInitLocalTypeScan;
+GoTranspiler.prototype.goNilInitLocalTypeScan = function (declaration): string | undefined {
+    const result = ral92g1UpstreamNilInitScan.call (this, declaration);
+    return ((result === '*float64') && ccxtGo92NumParseWrittenWithoutNilTest (this, declaration)) ? undefined : result;
+};
+// ===== ral-92g1 R1 (end) =====

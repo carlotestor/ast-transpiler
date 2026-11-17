@@ -16523,3 +16523,58 @@ describe('ral-90g8 R4 annotated int counters and loop-index writes', () => {
         expect(out).toContain('page = page + 1');
     });
 });
+
+describe('92g1 parse* Num consumers', () => {
+    const BASE = 'export type Dict = { [key: string]: unknown };\n'
+        + 'export type Str = string | undefined;\n'
+        + 'export type Num = number | undefined;\n'
+        + 'export default class Exchange {\n'
+        + '    safeString (a: Dict, k: string, d: Str = undefined): Str { return d; }\n'
+        + '    parseNumber (v: Str, d: Num = undefined): Num { return d; }\n'
+        + '}\n';
+    const run = (members: string): string => {
+        const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'g92-'));
+        try {
+            fs.mkdirSync(path.join(tmp, 'ts/src/base'), { recursive: true });
+            fs.writeFileSync(path.join(tmp, 'ts/src/base/Exchange.ts'), BASE);
+            const file = path.join(tmp, 'ts/src/x.ts');
+            fs.writeFileSync(file, "import Exchange, { Dict, Str, Num } from './base/Exchange.js';\nclass X extends Exchange {\n"
+                + '    parseScaled (value: Str): Num {\n'
+                + '        if (value === undefined) {\n'
+                + '            return undefined;\n'
+                + '        }\n'
+                + '        return this.parseNumber (value);\n'
+                + '    }\n'
+                + members + '}\n');
+            const t = new Transpiler({ verbose: false, go: { parser: { NUM_LINES_END_FILE: 0 } } });
+            installCcxtGoHooks(t.goTranspiler);
+            return t.transpileGoByPath(file).content;
+        } finally {
+            fs.rmSync(tmp, { recursive: true, force: true });
+        }
+    };
+    test('R1: a parse* Num method returns *float64 and a nil-seeded local tested for nil follows', () => {
+        const out = run('    f (trade: Dict): Dict {\n'
+            + '        let feeCost = undefined;\n'
+            + "        if (trade['x']) {\n"
+            + "            feeCost = this.parseScaled (this.safeString (trade, 'fee'));\n"
+            + '        }\n'
+            + '        let fee = undefined;\n'
+            + '        if (feeCost !== undefined) {\n'
+            + "            fee = { 'cost': feeCost };\n"
+            + '        }\n'
+            + '        return fee;\n'
+            + '    }\n');
+        expect(out).toMatch(/ParseScaled\(value [^)]*\) \*float64 \{/);
+        expect(out).toContain('var feeCost *float64 = nil');
+        expect(out).toContain('if feeCost != nil {');
+    });
+    test('R1: a parse* Num result with no nil test keeps the box', () => {
+        const out = run('    f (trade: Dict): Dict {\n'
+            + "        const amount = this.parseScaled (this.safeString (trade, 'amount'));\n"
+            + "        return { 'amount': amount };\n"
+            + '    }\n');
+        expect(out).toMatch(/ParseScaled\(value [^)]*\) \*float64 \{/);
+        expect(out).toContain('var amount any = this.ParseScaled(');
+    });
+});
