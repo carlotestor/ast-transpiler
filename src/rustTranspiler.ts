@@ -1,6 +1,6 @@
 import { BaseTranspiler } from "./baseTranspiler.js";
-import { NodeFlags, SyntaxKind, type BinaryExpression, type BindingElement, type Block, type CallExpression, type ClassDeclaration, type Declaration, type DeleteExpression, type ElementAccessExpression, type Expression, type ExpressionWithTypeArguments, type Identifier, type MethodDeclaration, type Node, type NodeArray, type ParameterDeclaration, type SourceFile, type TypeNode, type VariableDeclaration } from "typescript/unstable/ast";
-import { isArrayBindingPattern, isArrayLiteralExpression, isArrayTypeNode, isArrowFunction, isAsExpression, isBinaryExpression, isBindingElement, isBlock, isCallExpression, isClassDeclaration, isClassExpression, isConditionalExpression, isDeleteExpression, isElementAccessExpression, isForInStatement, isForOfStatement, isIdentifier, isIfStatement, isMethodDeclaration, isNewExpression, isNoSubstitutionTemplateLiteral, isNonNullExpression, isNumericLiteral, isObjectLiteralExpression, isParameterDeclaration, isParenthesizedExpression, isPostfixUnaryExpression, isPrefixUnaryExpression, isPropertyAccessExpression, isPropertyDeclaration, isPropertyAssignment, isReturnStatement, isShorthandPropertyAssignment, isSourceFile, isStatement, isStringLiteral, isStringLiteralLikeNode, isTypeAssertion, isTypeReferenceNode, isVariableDeclaration, isVariableDeclarationList } from "typescript/unstable/ast/is";
+import { NodeFlags, SyntaxKind, type BinaryExpression, type BindingElement, type Block, type CallExpression, type ClassDeclaration, type Declaration, type DeleteExpression, type ElementAccessExpression, type Expression, type ExpressionWithTypeArguments, type Identifier, type MethodDeclaration, type Node, type NodeArray, type ParameterDeclaration, type SourceFile, type Statement, type TypeNode, type VariableDeclaration } from "typescript/unstable/ast";
+import { isArrayBindingPattern, isArrayLiteralExpression, isArrayTypeNode, isArrowFunction, isAsExpression, isBinaryExpression, isBindingElement, isBlock, isCallExpression, isClassDeclaration, isClassExpression, isConditionalExpression, isDeleteExpression, isElementAccessExpression, isForInStatement, isForOfStatement, isIdentifier, isIfStatement, isMethodDeclaration, isNewExpression, isNoSubstitutionTemplateLiteral, isNonNullExpression, isNumericLiteral, isObjectLiteralExpression, isParameterDeclaration, isParenthesizedExpression, isPostfixUnaryExpression, isPrefixUnaryExpression, isPropertyAccessExpression, isPropertyDeclaration, isPropertyAssignment, isReturnStatement, isShorthandPropertyAssignment, isSourceFile, isStatement, isStringLiteral, isStringLiteralLikeNode, isTypeAssertion, isThrowStatement, isTypeReferenceNode, isUnionTypeNode, isVariableDeclaration, isVariableDeclarationList } from "typescript/unstable/ast/is";
 import { IndexKind, ObjectFlags, SignatureKind, SymbolFlags, TypeFlags, type Symbol as TsSymbol, type Type } from "typescript/unstable/sync";
 import { findAncestor, getAllSuperTypeNodes, isFunctionLike, signatureDeclaration, symbolDeclarations, symbolValueDeclaration, typeParts, typeTarget } from "./tsUtils.js";
 import * as fs from 'fs';
@@ -31721,7 +31721,7 @@ export class RustTranspiler extends BaseTranspiler {
 
     private rustOptListDecisions = new WeakMap<any, boolean>();
 
-    private rustOptListBoxes = new WeakMap<any, 'clone' | 'move' | 'lend' | 'map' | 'take' | 'takeClone'>();
+    private rustOptListBoxes = new WeakMap<any, 'clone' | 'move' | 'lend' | 'map' | 'take' | 'takeClone' | 'mapBox' | 'mapBoxMove'>();
 
     /** ral-80d: optional list locals held in the split list-vs-map-vs-null form (a second `<name>__map` binding). */
     private rust80dSplitLocals = new WeakSet<any>();
@@ -31789,6 +31789,7 @@ export class RustTranspiler extends BaseTranspiler {
         let writes = 0;
         let mapReads = 0;
         let isArrayTests = 0;
+        const mapBoxes: Node[] = [];
         const safe = this.rustLocalUsesAll(declaration, name, false, (n: any) => {
             if (split && !this.rustIdentifierIsPropertyName(n) && this.rustIdentifierRefersToDeclaration(n, declaration) && this.rustEnclosingFunction(n) === fn) {
                 const use: any = n.parent;
@@ -31797,7 +31798,13 @@ export class RustTranspiler extends BaseTranspiler {
                 if (this.rustSafeValueKeyReaderUse(n)) { mapReads++; this.rustOptListBoxes.set(n, 'map'); return true; }
                 // every other use reads the list, so it must sit where `Array.isArray (x)` held
                 const endpointSplit = this.rust87rfEndpointSplitSource(declaration, init);
-                if (!this.rust80dInListArm(n, declaration, fn, endpointSplit)) return false;
+                // ral-90rf R1: where `Array.isArray (x)` failed (an else arm, or after an exiting `if (isArray) { .. }`), an endpoint
+                // declared to answer only a map or a list holds its map there: a whole hand-off boxes that map back (`Value::Dict`)
+                if (endpointSplit && this.rust90rfArmOf(n, declaration, fn) === 'map' && this.rust90rfMapOrListEndpoint(init) && this.rust90rfWholeBoxUse(n)) {
+                    mapBoxes.push(n);
+                    return true;
+                }
+                if (!this.rust80dInListArm(n, declaration, fn, endpointSplit) && !(endpointSplit && this.rust90rfArmOf(n, declaration, fn) === 'list')) return false;
                 // ral-87rf R2: in the list arm `x` is `Some`: a ternary arm (`c ? x : ..`) or a whole write into a plain local
                 // takes the shared list back as the `Value::Arr` it was (moved at the last use)
                 if (endpointSplit && ((isConditionalExpression(use) && use.whenTrue === n && use.condition !== n)
@@ -31874,7 +31881,8 @@ export class RustTranspiler extends BaseTranspiler {
         // D11: a list that is only handed on is held too (the handle box replaces the Value box).
         if (!safe || (nil && (writes === 0 || natives === 0)) || (split && isArrayTests === 0)) return false;
         // with no string-key read the list alone is kept (`into_opt_list`), else the map is split off as well
-        if (split && mapReads > 0) this.rust80dSplitLocals.add(declaration);
+        if (split && (mapReads > 0 || mapBoxes.length > 0)) this.rust80dSplitLocals.add(declaration);
+        for (const n of mapBoxes) this.rustOptListBoxes.set(n, this.rustLocalLastUse(n, declaration) ? 'mapBoxMove' : 'mapBox');
         // The only read inside a `return` statement moves the list (nothing runs after it).
         const finals = new Map<any, number>();
         for (const [n] of boxes) {
@@ -31898,6 +31906,75 @@ export class RustTranspiler extends BaseTranspiler {
         const awaited: Node | undefined = this.rustSkipWrappers((declaration as VariableDeclaration).initializer);
         if (awaited === undefined || awaited.kind !== SyntaxKind.AwaitExpression || !isCallExpression(init) || this.rustTestTierSource(init)) return false;
         return this.rustBorrowedSourceKind(init) === 'api';
+    }
+
+    /** ral-90rf R1: the implicit endpoint is declared (ts/src/abstract) to answer `Promise<Dict>`, `Promise<List>` or
+     *  `Promise<Dict | List>`: outside its list arm the answer is the map the split holds (`__map`). */
+    rust90rfMapOrListEndpoint(init: Node): boolean {
+        if (!isCallExpression(init)) return false;
+        const declaration: Node | undefined = this.rustScalarCallee(init);
+        if (declaration === undefined || !isMethodDeclaration(declaration) || !/ts[\\/]src[\\/]abstract[\\/]/.test(String(declaration.getSourceFile().fileName))) return false;
+        const ret: TypeNode | undefined = declaration.type;
+        if (ret === undefined || !isTypeReferenceNode(ret) || !isIdentifier(ret.typeName) || ret.typeName.text !== 'Promise' || ret.typeArguments?.length !== 1) return false;
+        const arg: TypeNode = ret.typeArguments[0];
+        const parts: readonly TypeNode[] = isUnionTypeNode(arg) ? arg.types : [ arg ];
+        return parts.every((t) => isTypeReferenceNode(t) && isIdentifier(t.typeName) && t.typeArguments === undefined && (t.typeName.text === 'Dict' || t.typeName.text === 'List'));
+    }
+
+    /** ral-90rf R1: a whole read of the local: a `this.m (..)` argument at a `Value` slot, `return x`, an object-literal value
+     *  or a list-literal element. */
+    rust90rfWholeBoxUse(n: Node): boolean {
+        const up: Node = n.parent;
+        if (isCallExpression(up) && up.expression !== n && up.arguments.some((a) => a === n)) {
+            const callee: Node = up.expression;
+            return isPropertyAccessExpression(callee) && callee.expression.kind === SyntaxKind.ThisKeyword && this.rustNilBoxSlotOk(up, Array.from(up.arguments).indexOf(n as Expression)) && this.rustBoxLineOk(n);
+        }
+        if (isReturnStatement(up) && up.expression === n) return true;
+        if (isPropertyAssignment(up) && up.initializer === n && isObjectLiteralExpression(up.parent)) return this.rustBoxLineOk(n);
+        return isArrayLiteralExpression(up) && this.rustBoxLineOk(n);
+    }
+
+    /** ral-90rf R1: which arm of an `Array.isArray (x)` test (or its negation) a use of `x` sits in: inside the if / ternary
+     *  branch, or after an `if` with no else whose branch always exits (the rest of the block is the other arm). */
+    rust90rfArmOf(n: Node, declaration: VariableDeclaration, fn: Node): 'list' | 'map' | undefined {
+        const test = (e: Node | undefined): boolean | undefined => {
+            e = this.rustSkipWrappers(e);
+            if (e !== undefined && isPrefixUnaryExpression(e) && e.operator === SyntaxKind.ExclamationToken) {
+                const inner = test(e.operand);
+                return inner === undefined ? undefined : !inner;
+            }
+            if (e === undefined || !isCallExpression(e) || !this.rustIsArrayIsArrayCallee(e) || e.arguments.length !== 1) return undefined;
+            const arg: Node = this.rustSkipWrappers(e.arguments[0]);
+            return isIdentifier(arg) && this.rustIdentifierRefersToDeclaration(arg, declaration) ? true : undefined;
+        };
+        const exits = (st: Node | undefined): boolean => {
+            if (st === undefined) return false;
+            if (isReturnStatement(st) || isThrowStatement(st)) return true;
+            if (isBlock(st)) return st.statements.length > 0 && exits(st.statements[st.statements.length - 1]);
+            if (isIfStatement(st)) return st.elseStatement !== undefined && exits(st.thenStatement) && exits(st.elseStatement);
+            return false;
+        };
+        for (let child: Node = n, at: Node = n.parent; at !== undefined && at !== fn; child = at, at = at.parent) {
+            if (isFunctionLike(at)) return undefined;
+            if (isIfStatement(at) && child !== at.expression) {
+                const held = test(at.expression);
+                if (held !== undefined) return (at.thenStatement === child) === held ? 'list' : 'map';
+            }
+            if (isConditionalExpression(at) && child !== at.condition) {
+                const held = test(at.condition);
+                if (held !== undefined) return (at.whenTrue === child) === held ? 'list' : 'map';
+            }
+            if (isBlock(at)) {
+                const statements = Array.from(at.statements);
+                for (let i = statements.indexOf(child as Statement) - 1; i >= 0; i--) {
+                    const prev: Statement = statements[i];
+                    if (!isIfStatement(prev) || prev.elseStatement !== undefined || !exits(prev.thenStatement)) continue;
+                    const held = test(prev.expression);
+                    if (held !== undefined) return held ? 'map' : 'list';
+                }
+            }
+        }
+        return undefined;
     }
 
     /** ral-80c R1: an unwritten method parameter whose typed signature slot is a string list (decided from the signature table). */
@@ -32073,6 +32150,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (form === undefined || form === 'take' || form === 'takeClone' || this.rustOptListOf(node) === undefined) return undefined;
         if (form === 'lend') return `&${text}`;
         if (form === 'map') return `&${text}__map`;
+        if (form === 'mapBox' || form === 'mapBoxMove') return `${text}__map${form === 'mapBox' ? '.clone()' : ''}.map_or(Value::Null, Value::Dict)`;
         return form === 'move' ? `${text}.map_or(Value::Null, Value::Arr)` : `${text}.clone().map_or(Value::Null, Value::Arr)`;
     }
 
