@@ -39196,3 +39196,167 @@ GoTranspiler.prototype.goOrderBookCacheLocal = function (declaration) {
     };
 }
 // ===== end orderbook delta cache =====
+
+// ===== *string seeds rebound by a literal concat =====
+// `let x = this.safeString (o, k)` whose only writes are `x = <chain>`, the chain a `+` of string literals and x itself
+// (once): Add(..) answered nil for a nil x and the concatenation otherwise, so the write prints
+// `if x != nil { xValue := "lit" + *x; x = &xValue }` and the local is declared *string. Every other use must be a nil
+// test, a string-literal compare, an object-literal value, the receiver of `.indexOf (literal)` or the first argument of
+// `this.watch` / `this.watchMultiple` / `this.client` (each derefs it); decided from the AST and the checker.
+const goConcatSeedVerdicts = new WeakMap<object, boolean>();
+const goConcatSeedWriteTemps = new WeakMap<object, string>();
+function goConcatSeedUnwrap(n) {
+    let current = n;
+    while ((current?.kind === SyntaxKind.ParenthesizedExpression) || (current?.kind === SyntaxKind.AsExpression)) {
+        current = current.expression;
+    }
+    return current;
+}
+function goConcatSeedIsLiteral(n): boolean {
+    const u = goConcatSeedUnwrap(n);
+    return (u?.kind === SyntaxKind.StringLiteral) || (u?.kind === SyntaxKind.NoSubstitutionTemplateLiteral);
+}
+// the leaves of a `+` chain, or undefined when another operator is in it
+function goConcatSeedLeaves(n, out: Node[]): Node[] | undefined {
+    const u = goConcatSeedUnwrap(n);
+    if ((u?.kind === SyntaxKind.BinaryExpression) && (u.operatorToken.kind === SyntaxKind.PlusToken)) {
+        return (goConcatSeedLeaves(u.left, out) !== undefined) && (goConcatSeedLeaves(u.right, out) !== undefined) ? out : undefined;
+    }
+    out.push(u);
+    return out;
+}
+function goConcatSeedIsSelf(checker: Checker, n, declaration): boolean {
+    return (n?.kind === SyntaxKind.Identifier) && (checker.getSymbolAtLocation(n)?.valueDeclaration?.resolve?.() === declaration);
+}
+function goConcatSeedWriteOk(checker: Checker, right, declaration): boolean {
+    const leaves = goConcatSeedLeaves(right, []);
+    return (leaves !== undefined) && (leaves.length >= 2)
+        && (leaves.filter((l) => goConcatSeedIsSelf(checker, l, declaration)).length === 1)
+        && leaves.every((l) => goConcatSeedIsSelf(checker, l, declaration) || goConcatSeedIsLiteral(l));
+}
+function goConcatSeed(goTranspiler: GoTranspiler, declaration): boolean {
+    if ((declaration?.kind !== SyntaxKind.VariableDeclaration) || (declaration.name?.kind !== SyntaxKind.Identifier) || (declaration.type !== undefined)
+        || (declaration.parent?.parent?.kind !== SyntaxKind.FirstStatement) || (declaration.parent.declarations?.length !== 1)) {
+        return false;
+    }
+    const call = goConcatSeedUnwrap(declaration.initializer);
+    if ((call?.kind !== SyntaxKind.CallExpression) || (call.expression?.kind !== SyntaxKind.PropertyAccessExpression)
+        || (call.expression.expression?.kind !== SyntaxKind.ThisKeyword) || (call.expression.name?.text !== 'safeString') || (call.arguments?.length !== 2)) {
+        return false;
+    }
+    if (goConcatSeedVerdicts.has(declaration)) {
+        return goConcatSeedVerdicts.get(declaration);
+    }
+    goConcatSeedVerdicts.set(declaration, false);
+    const checker = goTranspiler.checkerOrUndefined();
+    const scope = goTranspiler.goOutermostFunction(declaration);
+    if ((checker === undefined) || (scope === undefined) || goTranspiler.goTypeNameIsShadowed(scope, '*string')) {
+        return false;
+    }
+    const name = declaration.name.text;
+    const tempSpelled = new RegExp('^' + name + 'Value\\d*$');
+    const writes: Node[] = [];
+    let unsafe = false;
+    goTranspiler.hasNodeWhere(scope, (n) => {
+        if (unsafe || (n.kind !== SyntaxKind.Identifier)) {
+            return false;
+        }
+        if (tempSpelled.test(n.text)) {
+            unsafe = true;
+            return false;
+        }
+        if ((n.text !== name) || (n === declaration.name)) {
+            return false;
+        }
+        const p = n.parent;
+        if (((p?.kind === SyntaxKind.PropertyAccessExpression) || (p?.kind === SyntaxKind.PropertyAssignment)) && (p.name === n)) {
+            return false;
+        }
+        const target = checker.getSymbolAtLocation(n)?.valueDeclaration?.resolve?.();
+        if (target !== declaration) {
+            if ((target !== undefined) && (target.kind !== SyntaxKind.PropertyDeclaration) && (target.kind !== SyntaxKind.MethodDeclaration)) {
+                unsafe = true;
+            }
+            return false;
+        }
+        let current = n;
+        while ((current.parent?.kind === SyntaxKind.ParenthesizedExpression) || (current.parent?.kind === SyntaxKind.AsExpression)) {
+            current = current.parent;
+        }
+        const parent = current.parent;
+        if ((parent?.kind === SyntaxKind.BinaryExpression) && (parent.left === current)
+            && (parent.operatorToken.kind >= ASSIGNMENT_KIND_MIN) && (parent.operatorToken.kind <= ASSIGNMENT_KIND_MAX)) {
+            if ((current === n) && (parent.operatorToken.kind === SyntaxKind.EqualsToken) && (parent.parent?.kind === SyntaxKind.ExpressionStatement)
+                && goConcatSeedWriteOk(checker, parent.right, declaration)) {
+                writes.push(parent);
+            } else {
+                unsafe = true;
+            }
+            return false;
+        }
+        // the x leaf of an admitted write chain
+        for (let up = parent; up !== undefined; up = up.parent) {
+            if (writes.indexOf(up) >= 0) {
+                return false;
+            }
+            if ((up.kind !== SyntaxKind.BinaryExpression) && (up.kind !== SyntaxKind.ParenthesizedExpression)) {
+                break;
+            }
+        }
+        if ((parent?.kind === SyntaxKind.BinaryExpression) && (COMPARISON_TOKENS.indexOf(parent.operatorToken.kind) >= 0)) {
+            const other = goConcatSeedUnwrap((parent.left === current) ? parent.right : parent.left);
+            if (!ral90g5IsNil(other) && !goConcatSeedIsLiteral(other)) {
+                unsafe = true;
+            }
+            return false;
+        }
+        if ((parent?.kind === SyntaxKind.PropertyAssignment) && (parent.initializer === current) && (parent.parent?.kind === SyntaxKind.ObjectLiteralExpression)) {
+            return false;
+        }
+        if ((parent?.kind === SyntaxKind.PropertyAccessExpression) && (parent.expression === current) && (parent.name?.text === 'indexOf')
+            && (parent.parent?.kind === SyntaxKind.CallExpression) && (parent.parent.expression === parent)
+            && (parent.parent.arguments.length === 1) && goConcatSeedIsLiteral(parent.parent.arguments[0])) {
+            return false;
+        }
+        if ((parent?.kind === SyntaxKind.CallExpression) && (parent.arguments[0] === current) && (parent.expression?.kind === SyntaxKind.PropertyAccessExpression)
+            && (parent.expression.expression?.kind === SyntaxKind.ThisKeyword) && ['watch', 'watchMultiple', 'client'].includes(parent.expression.name?.text)) {
+            return false;
+        }
+        unsafe = true;
+        return false;
+    });
+    // a write a closure makes is still a write the scan saw; the native concat is the use this rule needs
+    const writesWaitForAllRefs = writes.every((w) => goTranspiler.goEnclosingFunction(w) === goTranspiler.goEnclosingFunction(declaration));
+    const ok = !unsafe && (writes.length > 0) && writesWaitForAllRefs;
+    if (ok) {
+        const printedName = goTranspiler.printNode(declaration.name, 0);
+        writes.sort((x, y) => x.pos - y.pos).forEach((w, i) => goConcatSeedWriteTemps.set(w, printedName + 'Value' + ((i === 0) ? '' : String(i + 1))));
+    }
+    goConcatSeedVerdicts.set(declaration, ok);
+    return ok;
+}
+{
+    const goLocalIsSafeToTypeConcatSeed = GoTranspiler.prototype.goLocalIsSafeToType;
+    GoTranspiler.prototype.goLocalIsSafeToType = function (scope, declaration, varName: string, goType: string, stringWriteProven = false): boolean {
+        if (goLocalIsSafeToTypeConcatSeed.call(this, scope, declaration, varName, goType, stringWriteProven)) {
+            return true;
+        }
+        return (goType === '*string') && goConcatSeed(this, declaration);
+    };
+    const goPointerWriteTextConcatSeed = GoTranspiler.prototype.goPointerWriteText;
+    GoTranspiler.prototype.goPointerWriteText = function (node, identation) {
+        const temp = goConcatSeedWriteTemps.get(node);
+        const left = node?.left;
+        const checker = this.checkerOrUndefined();
+        const declaration = (left?.kind === SyntaxKind.Identifier) ? checker?.getSymbolAtLocation(left)?.valueDeclaration?.resolve?.() : undefined;
+        if ((temp === undefined) || (declaration === undefined) || (goConcatSeedVerdicts.get(declaration) !== true)
+            || (this.goDeclaredTypeOfIdentifier(left) !== '*string')) {
+            return goPointerWriteTextConcatSeed.call(this, node, identation);
+        }
+        const name = this.printNode(left, 0).trim();
+        const parts = goConcatSeedLeaves(node.right, []).map((leaf) => goConcatSeedIsSelf(checker, leaf, declaration) ? ('*' + name) : this.printNode(leaf, 0).trim());
+        const inner = this.getIden(identation + 1);
+        return `if ${name} != nil {\n${inner}${temp} := ${parts.join(' + ')}\n${inner}${name} = &${temp}\n${this.getIden(identation)}}`;
+    };
+}
+// ===== end *string concat seeds =====
