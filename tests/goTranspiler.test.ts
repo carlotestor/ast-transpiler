@@ -17182,3 +17182,41 @@ describe ('ral-93g2 R2 marketIds locals read by length-bounded loops', () => {
         expect (out).not.toContain ('var marketIds []any');
     });
 });
+
+describe ('ral-93g2 R3 string-list locals also read through safeString', () => {
+    const PRELUDE =
+        'type Strings = string[] | undefined;\n' +
+        'export class Exchange {\n' +
+        '    marketIds (symbols: Strings = undefined): Strings { return symbols; }\n' +
+        '    safeString (a: any, k: any, d: any = undefined): any { return a; }\n';
+    const run = (members: string): string => {
+        const tmp = fs.mkdtempSync (path.join (os.tmpdir (), 'r93g2c-'));
+        try {
+            const src = path.join (tmp, 'ts', 'src');
+            fs.mkdirSync (src, { recursive: true });
+            const file = path.join (src, 'x.ts');
+            fs.writeFileSync (file, PRELUDE + members + '}\n');
+            return new Transpiler ({ verbose: false, go: { parser: { NUM_LINES_END_FILE: 0 } } }).transpileGoByPath (file).content;
+        } finally {
+            fs.rmSync (tmp, { recursive: true, force: true });
+        }
+    };
+    const body = '    f (symbols: string[]): string[] {\n' +
+        '        const out = [];\n' +
+        '        const marketIds = this.marketIds (symbols);\n' +
+        '        out.push (marketIds.join (\',\'));\n' +
+        '        for (let i = 0; i < symbols.length; i++) {\n' +
+        '            out.push (this.safeString (marketIds, i, \'\'));\n' +
+        '        }\n' +
+        '        return out;\n' +
+        '    }\n';
+    test ('a joined string list also indexed through safeString is a []string', () => {
+        const out = run (body);
+        expect (out).toContain ('var marketIds []string = this.MarketIdsStrings(symbols)');
+        expect (out).toContain ('strings.Join(marketIds, ",")');
+    });
+    test ('another reader of the list keeps the box', () => {
+        const out = run (body.replace ('this.safeString (marketIds, i,', 'this.safeValue (marketIds, i,').replace ('safeString (a: any', 'safeValue (a: any, k: any, d: any = undefined): any { return a; }\n    safeString (a: any'));
+        expect (out).not.toContain ('var marketIds []string');
+    });
+});
