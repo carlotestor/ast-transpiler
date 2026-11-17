@@ -42430,16 +42430,25 @@ GoTranspiler.prototype.goTernaryJoinPartsUncached = function(declaration) {
   }
   const whenTrue = this.goTernaryJoinArmType(ternary.whenTrue);
   const whenFalse = this.goTernaryJoinArmType(ternary.whenFalse);
-  const pairs = whenTrue === "string" && whenFalse === "*string" || whenTrue === "*string" && whenFalse === "string";
+  const nilWithString = whenTrue === "nil" && (whenFalse === "string" || whenFalse === "*string") || whenFalse === "nil" && (whenTrue === "string" || whenTrue === "*string");
+  const pairs = nilWithString || whenTrue === "string" && whenFalse === "*string" || whenTrue === "*string" && whenFalse === "string";
   if (!pairs || this.goWithExprDepth(1, () => this.printCondition(ternary.condition, 0)).includes("\n") || !this.goTernaryJoinR87HasNativeRead(declaration, "string")) {
     return void 0;
   }
-  return { goType: "*string", derefTrue: false, derefFalse: false, addressTrue: whenTrue === "string", addressFalse: whenFalse === "string" };
+  return {
+    goType: "*string",
+    derefTrue: false,
+    derefFalse: false,
+    addressTrue: whenTrue === "string",
+    addressFalse: whenFalse === "string",
+    nilTrue: whenTrue === "nil",
+    nilFalse: whenFalse === "nil"
+  };
 };
 var goTernaryJoinR87Declaration = GoTranspiler.prototype.goTernaryJoinDeclaration;
 GoTranspiler.prototype.goTernaryJoinDeclaration = function(statement, declaration, identation) {
   const parts = goTernaryJoinOwner(_optionalChain([declaration, 'optionalAccess', _7877 => _7877.initializer])) === declaration ? this.goTernaryJoinParts(declaration) : void 0;
-  if (parts === void 0 || !(parts.emptyTrue || parts.emptyFalse || parts.addressTrue || parts.addressFalse)) {
+  if (parts === void 0 || !(parts.emptyTrue || parts.emptyFalse || parts.addressTrue || parts.addressFalse || parts.nilTrue || parts.nilFalse)) {
     return goTernaryJoinR87Declaration.call(this, statement, declaration, identation);
   }
   if (_optionalChain([statement, 'optionalAccess', _7878 => _7878.parent, 'optionalAccess', _7879 => _7879.kind]) !== _ast.SyntaxKind.FirstStatement || _optionalChain([statement, 'access', _7880 => _7880.declarations, 'optionalAccess', _7881 => _7881.length]) !== 1 || this.getGoLocalType(declaration, this.printNode(declaration.initializer, identation)) !== parts.goType) {
@@ -42450,16 +42459,19 @@ GoTranspiler.prototype.goTernaryJoinDeclaration = function(statement, declaratio
   const name = this.printNode(declaration.name, 0);
   const iden = this.getIden(identation);
   const temp = name + "Value";
-  const branch = (node, empty, address) => {
+  const branch = (node, empty, address, absent) => {
     if (empty) {
       return `${iden}	${name} = []string{}`;
+    }
+    if (absent) {
+      return `${iden}	${name} = nil`;
     }
     const printed = this.goPrintTernaryBranch(node, 1).trim();
     return address ? `${iden}	${temp} := ${printed}
 ${iden}	${name} = &${temp}` : `${iden}	${name} = ${printed}`;
   };
-  const whenTrue = branch(ternary.whenTrue, parts.emptyTrue === true, parts.addressTrue === true);
-  const whenFalse = branch(ternary.whenFalse, parts.emptyFalse === true, parts.addressFalse === true);
+  const whenTrue = branch(ternary.whenTrue, parts.emptyTrue === true, parts.addressTrue === true, parts.nilTrue === true);
+  const whenFalse = branch(ternary.whenFalse, parts.emptyFalse === true, parts.addressFalse === true, parts.nilFalse === true);
   return `${iden}var ${name} ${parts.goType}
 ${iden}if ${this.goStripControlClauseParens(condition)} {
 ${whenTrue}
