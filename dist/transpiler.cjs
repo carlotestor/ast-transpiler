@@ -80785,7 +80785,7 @@ ${iden}}`;
   }
   /** ral-61i: `let x = undefined` / `let x: T;` (a statement, one declarator) written only as statements `x = await this.<endpoint> (..)`
    *  of REST endpoints declared `Promise<Dict>` (or `x = undefined`): the optional map the declared-endpoint rule holds. */
-  rustDeclaredDictEndpointLet(d) {
+  rustDeclaredDictEndpointLet(d, comparisonsRead = false) {
     const init = this.rustSkipWrappers(d.initializer);
     if (init !== void 0 && this.literalKindOfNode(init) !== "null")
       return false;
@@ -80802,6 +80802,8 @@ ${iden}}`;
         return;
       if (_is.isIdentifier.call(void 0, n) && String(n.text) === name && n !== d.name && !this.rustIdentifierIsPropertyName(n) && this.rustIdentifierRefersToDeclaration(n, d)) {
         const up = n.parent;
+        if (comparisonsRead && _is.isBinaryExpression.call(void 0, up) && up.left === n && this.isEqualityOp(up.operatorToken.kind))
+          return;
         if (_is.isBinaryExpression.call(void 0, up) && up.left === n) {
           if (up.operatorToken.kind !== _ast.SyntaxKind.EqualsToken || _optionalChain([up, 'access', _12300 => _12300.parent, 'optionalAccess', _12301 => _12301.kind]) !== _ast.SyntaxKind.ExpressionStatement) {
             ok = false;
@@ -82968,7 +82970,7 @@ ${iden}}`;
     const declaration = this.rustDeclarationOfIdentifier(recv);
     if (declaration === void 0 || declaration !== this.rustDeclarationOfIdentifier(dflt))
       return false;
-    return _is.isVariableDeclaration.call(void 0, declaration) && this.rustDeclaredDictEndpointLet(declaration);
+    return _is.isVariableDeclaration.call(void 0, declaration) && this.rustDeclaredDictEndpointLet(declaration, true);
   }
   /** A base `safeDict*` / `safeList*` call (default absent, nullish or an empty literal of its kind), or a base `extend`/`omit`. */
   rustOptContainerSourceOk(call, kind) {

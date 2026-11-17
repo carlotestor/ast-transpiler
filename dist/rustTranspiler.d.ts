@@ -3567,7 +3567,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustOptAliasSourceKind(rhs: any, fn: any): 'dict' | 'list' | undefined;
     /** ral-61i: `let x = undefined` / `let x: T;` (a statement, one declarator) written only as statements `x = await this.<endpoint> (..)`
      *  of REST endpoints declared `Promise<Dict>` (or `x = undefined`): the optional map the declared-endpoint rule holds. */
-    rustDeclaredDictEndpointLet(d: any): boolean;
+    rustDeclaredDictEndpointLet(d: any, comparisonsRead?: boolean): boolean;
     /** ral-65i: a statement `x = this.extend (x, {..})`: base runtime `extend`, two arguments, the head the local itself, the
      *  operand an object literal that does not name x (decided from the call node and the callee declaration). */
     rust65iSelfExtendLiteral(up: any, d: any): boolean;
