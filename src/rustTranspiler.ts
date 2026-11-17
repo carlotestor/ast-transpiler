@@ -12038,6 +12038,9 @@ export class RustTranspiler extends BaseTranspiler {
         if (isIdentifier(node) && this.rustOptParamKind(node) === kind) return true;
         // ral-68a R1: a required `&str` parameter into an `Option<String>` local (rustOptParamText prints `p.as_str().map(..)`)
         if (kind === 'ostr' && isIdentifier(node) && this.rustOptParamKind(node) === 'str') return true;
+        // ral-90re R2: a required `f64` / `i64` parameter into an `Option<f64>` / `Option<i64>` local (rustOptParamText's ral-62x arm
+        // prints `p.as_f64()` / `p.as_i64()`: the rebinding of a required typed parameter always holds that variant)
+        if ((kind === 'onum' || kind === 'oint') && isIdentifier(node) && this.rustOptParamKind(node) === kind.slice(1)) return true;
         return kind === 'bool' && this.rustBoolNativeText(node) !== undefined;
     }
 

@@ -25215,3 +25215,19 @@ describe('ral-90re R1: a string reader local handed to a base parseNumber inside
         expect(out).toContain('let mut sizeStr: Option<String> = ');
     });
 });
+
+describe('ral-90re R2: a required number parameter written into an optional number reader local', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Num = number | undefined;\nexport type OrderType = string;\nexport type OrderSide = string;\nexport default class Exchange {\n    safeNumber (o: any, k: any, d: Num = undefined): Num { return o; }\n    costToPrecision (s: string, c: any): string { return s; }\n    hold (m: any): any { return m; }\n    async createOrder (symbol: string, type: OrderType, side: OrderSide, amount: number, price: Num = undefined, params: Dict = {}): Promise<Dict> { return {}; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Num, OrderType, OrderSide } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        const typed = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['createOrder'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        return typed.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('phemex createOrder cost = (cost === undefined) ? amount : cost', () => {
+        const out = write ('ral-90re-r2', "    async createOrder (symbol: string, type: OrderType, side: OrderSide, amount: number, price: Num = undefined, params: Dict = {}): Promise<Dict> {\n        let cost = this.safeNumber (params, 'cost');\n        if (cost === undefined) {\n            cost = amount;\n        }\n        cost = (cost === undefined) ? amount : cost;\n        const request: Dict = { 'cost': this.costToPrecision (symbol, cost) };\n        return request;\n    }\n");
+        expect(out).toContain('let mut cost: Option<f64> = ');
+    });
+});
