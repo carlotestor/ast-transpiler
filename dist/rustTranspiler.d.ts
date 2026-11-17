@@ -5358,7 +5358,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_HELD_ORDER_REQUEST;
     /** `(x as string)` over a simple operand the checker already types `string` / `Str`: a string slot takes the
      *  operand as it is (the cast changes no value), so the caller converts it once like a bare `x`. */
-    rustVenueStrCastOperand(arg: any): any;
+    rustVenueStrCastOperand(arg: Node | undefined): Expression | undefined;
     /** The argument node lands in a per-venue string slot of its call. */
     rustVenueStrArgSlot(arg: any): boolean;
     /** Argument text for a per-venue string slot: a typed local or literal natively, any other value read once. */
