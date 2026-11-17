@@ -4083,7 +4083,14 @@ export class RustTranspiler extends BaseTranspiler {
 
     rustLocalUsesAcceptBool(declaration, sourceName: string): boolean {
         return this.rustLocalUsesAll(declaration, sourceName, false, (n) =>
-            this.rustIdentifierUseIsCondition(n) || this.rustBoolParamUseAccepted(n));
+            this.rustIdentifierUseIsCondition(n) || this.rustBoolParamUseAccepted(n) || this.rustBoolTypedReturnUse(n));
+    }
+
+    /** `return x` in a method the typed-return table prints `-> bool`: the local is that return as is. */
+    rustBoolTypedReturnUse(n: Node): boolean {
+        const parent: Node | undefined = n?.parent;
+        if (parent === undefined || !isReturnStatement(parent) || parent.expression !== n) return false;
+        return this.rustMethodTypedReturnKind(findAncestor(parent.parent, isFunctionLike)) === 'bool';
     }
 
     // ── native `bool` parameters ──────────────────────────────────────────────
@@ -6292,6 +6299,7 @@ export class RustTranspiler extends BaseTranspiler {
         parseToInt: [ 'number', 'oint' ], incrementingNonce: [ 'int', 'int' ], symbol: [ 'string', 'str' ],
         findTimeframe: [ 'Str', 'ostr' ], networkIdToCode: [ 'Str', 'ostr' ], requestId: [ 'int', 'int' ],
         isPostOnly: [ 'boolean', 'bool' ],
+        usesPrivateKey: [ 'boolean', 'bool' ],
         // pg: the precision formatters answer `Str` (overrides may spell `string`); every return is a string or undefined
         amountToPrecision: [ 'Str|string', 'ostr' ], priceToPrecision: [ 'Str|string', 'ostr' ], costToPrecision: [ 'Str|string', 'ostr' ],
         feeToPrecision: [ 'Str|string', 'ostr' ], currencyToPrecision: [ 'Str|string', 'ostr' ],
@@ -6488,6 +6496,10 @@ export class RustTranspiler extends BaseTranspiler {
         const local = isIdentifier(inner) ? this.rustScalarLocalOf(inner)?.kind : undefined;
         if (local === kind) return super.printIdentifier(inner);
         if (local !== undefined && `o${local}` === kind) return `Some(${super.printIdentifier(inner)})`;
+        if (kind === 'bool' && local === undefined && this.rustBoolTypedReturnUse(inner)) {
+            const declaration: any = this.rustDeclaredNode(inner);
+            if (declaration !== undefined && isVariableDeclaration(declaration) && this.rustDeclarationPrintsNativeBool(declaration)) return super.printIdentifier(inner);
+        }
         const callKind = this.rustBaseTypedReturnKind(inner);
         if (callKind !== undefined && `o${kind}` === callKind) return `${this.rustBaseTypedBareText(this.unwrapParens(inner))}.unwrap_or_default()`;
         const native = this.rustBaseTypedText(kind, inner) ?? (local === undefined ? this.rustScalarNativeText(kind, inner) : undefined);

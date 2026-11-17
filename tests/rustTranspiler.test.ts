@@ -26142,3 +26142,24 @@ describe('rust typed filterByCurrencySinceLimit', () => {
         expect(base).toMatch(/self\.filterByCurrencySinceLimit\([^;]*code\.as_deref\(\)/);
     });
 });
+
+describe('rust venue usesPrivateKey prints -> bool', () => {
+    const base = "export default class Exchange {\n    privateKey: string = '';\n    apiKey: string = '';\n}\n";
+    const venue = "import Exchange from './base/Exchange.js';\n"
+        + "export default class venue extends Exchange {\n"
+        + "    usesPrivateKey (): boolean {\n        const privateKeyDefined = this.privateKey !== undefined && this.privateKey !== '';\n        const apiKeyDefined = this.apiKey !== undefined && this.apiKey !== '';\n        if (privateKeyDefined && apiKeyDefined) {\n            throw new Error ('x');\n        }\n        return privateKeyDefined;\n    }\n"
+        + "    signIt (): string {\n        const usesPrivKey = this.usesPrivateKey ();\n        return usesPrivKey ? this.privateKey : this.apiKey;\n    }\n}\n";
+    test('the returned local is a native bool and the caller reads the bool as is', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-93rb1-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), venue);
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        let out = '';
+        try { out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+        expect(out).toContain('pub fn usesPrivateKey(&self) -> bool {');
+        expect(out).toMatch(/let mut privateKeyDefined: bool = /);
+        expect(out).toContain('return privateKeyDefined;');
+        expect(out).not.toContain('self.usesPrivateKey().as_bool()');
+    });
+});
