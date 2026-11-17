@@ -42177,7 +42177,8 @@ function ral87g6ForeignOmitWrite(goTranspiler, scope, declaration) {
   const name = declaration.name.text;
   return goTranspiler.hasNodeWhere(scope, (n) => {
     const write = n.kind === SyntaxKind5.BinaryExpression && n.operatorToken?.kind === SyntaxKind5.EqualsToken && n.left?.kind === SyntaxKind5.Identifier && n.left.text === name ? ral84g6OmitCall(n.right) : void 0;
-    return write !== void 0 && write.arguments[0].text !== name;
+    const source = write?.arguments[0];
+    return write !== void 0 && !(source?.kind === SyntaxKind5.Identifier && source.getText() === name);
   });
 }
 var ral84g6ShippedDictUnbox = GoTranspiler.prototype.goSafeDictLocalUnbox;
