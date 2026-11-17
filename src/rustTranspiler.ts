@@ -31530,7 +31530,16 @@ export class RustTranspiler extends BaseTranspiler {
                 // a string-key read answers Null for a list, Null and scalars exactly as the absent map does
                 if (this.rustSafeValueKeyReaderUse(n)) { mapReads++; this.rustOptListBoxes.set(n, 'map'); return true; }
                 // every other use reads the list, so it must sit where `Array.isArray (x)` held
-                if (!this.rust80dInListArm(n, declaration, fn)) return false;
+                const endpointSplit = this.rust87rfEndpointSplitSource(declaration, init);
+                if (!this.rust80dInListArm(n, declaration, fn, endpointSplit)) return false;
+                // ral-87rf R2: in the list arm `x` is `Some`: a ternary arm (`c ? x : ..`) or a whole write into a plain local
+                // takes the shared list back as the `Value::Arr` it was (moved at the last use)
+                if (endpointSplit && ((isConditionalExpression(use) && use.whenTrue === n && use.condition !== n)
+                    || (isBinaryExpression(use) && use.right === n && use.operatorToken.kind === SyntaxKind.EqualsToken && use.parent?.kind === SyntaxKind.ExpressionStatement
+                        && isIdentifier(use.left) && use.left.text !== n.text && this.rustOptListAliasTarget(use.left) && this.rustBuiltListOf(use.left) === undefined))) {
+                    boxes.push([n, 'clone']);
+                    return true;
+                }
                 // ral-87rf R1: `t = x` (a statement) handing the held list to a built list local `t`: the list moves out of `Some`
                 if (isBinaryExpression(use) && use.right === n && use.operatorToken.kind === SyntaxKind.EqualsToken && use.parent?.kind === SyntaxKind.ExpressionStatement
                     && isIdentifier(use.left) && this.rust87rfEndpointSplitSource(declaration, init) && this.rustBuiltListOf(use.left) !== undefined) {
@@ -31683,9 +31692,15 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** ral-80d: `n` sits in the arm where `Array.isArray (x)` held: the then-branch / true arm of `Array.isArray (x)`, or the
      *  else-branch / false arm of `!Array.isArray (x)` (an `if` statement or a conditional expression inside `fn`). */
-    rust80dInListArm(n: any, declaration: any, fn: any): boolean {
+    rust80dInListArm(n: any, declaration: any, fn: any, flags = false): boolean {
         const test = (e: any): boolean | undefined => {
             e = this.rustSkipWrappers(e);
+            // ral-87rf R2: a `const f = Array.isArray (x)` flag of the same function reads as the test itself
+            if (flags && e !== undefined && isIdentifier(e)) {
+                const flag: Node | undefined = this.rustDeclarationOfIdentifier(e);
+                if (flag !== undefined && isVariableDeclaration(flag) && flag.name !== e && (flag.parent.flags & NodeFlags.Const) !== 0
+                    && this.rustEnclosingFunction(flag) === fn && flag.initializer !== undefined) return test(flag.initializer);
+            }
             if (e !== undefined && e.kind === SyntaxKind.PrefixUnaryExpression && e.operator === SyntaxKind.ExclamationToken) {
                 const inner = test(e.operand);
                 return inner === undefined ? undefined : !inner;
