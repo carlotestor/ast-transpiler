@@ -46000,6 +46000,19 @@ function goConcatSeed(goTranspiler, declaration) {
     if (parent?.kind === SyntaxKind5.CallExpression && parent.arguments[0] === current && parent.expression?.kind === SyntaxKind5.PropertyAccessExpression && parent.expression.expression?.kind === SyntaxKind5.ThisKeyword && ["watch", "watchMultiple", "client"].includes(parent.expression.name?.text)) {
       return false;
     }
+    if (parent?.kind === SyntaxKind5.CallExpression && parent.arguments.indexOf(current) >= 1 && parent.expression?.kind === SyntaxKind5.PropertyAccessExpression && (parent.expression.expression?.kind === SyntaxKind5.ThisKeyword && /^safe(Value|Dict|List|String|Integer|Number|Bool)2?$/.test(parent.expression.name?.text ?? "") || parent.expression.name?.text === "resolve" && parent.arguments.indexOf(current) === 1 && parent.expression.expression?.kind === SyntaxKind5.Identifier && parent.expression.expression.text === "client")) {
+      return false;
+    }
+    if (parent?.kind === SyntaxKind5.BinaryExpression && parent.operatorToken.kind === SyntaxKind5.PlusToken) {
+      let top = parent;
+      while (top.parent?.kind === SyntaxKind5.BinaryExpression && top.parent.operatorToken.kind === SyntaxKind5.PlusToken) {
+        top = top.parent;
+      }
+      const leaves = goConcatSeedLeaves(top, []);
+      if (leaves !== void 0 && leaves.every((l) => goConcatSeedIsSelf(checker, l, declaration) || goConcatSeedIsLiteral(l))) {
+        return false;
+      }
+    }
     unsafe = true;
     return false;
   });
@@ -46037,6 +46050,26 @@ function goConcatSeed(goTranspiler, declaration) {
 ${inner}${temp} := ${parts.join(" + ")}
 ${inner}${name} = &${temp}
 ${this.getIden(identation)}}`;
+  };
+  const goDerefableConcatSeed = GoTranspiler.prototype.goDerefableStringOperand;
+  GoTranspiler.prototype.goDerefableStringOperand = function(node) {
+    if (node?.kind === SyntaxKind5.Identifier) {
+      const declaration = this.checkerOrUndefined()?.getSymbolAtLocation(node)?.valueDeclaration?.resolve?.();
+      if (declaration !== void 0 && goConcatSeedVerdicts.get(declaration) === true) {
+        return false;
+      }
+    }
+    return goDerefableConcatSeed.call(this, node);
+  };
+  const goNilProvenConcatSeed = GoTranspiler.prototype.goNilProvenStringDeref;
+  GoTranspiler.prototype.goNilProvenStringDeref = function(node) {
+    if (node?.kind === SyntaxKind5.Identifier) {
+      const declaration = this.checkerOrUndefined()?.getSymbolAtLocation(node)?.valueDeclaration?.resolve?.();
+      if (declaration !== void 0 && goConcatSeedVerdicts.get(declaration) === true) {
+        return false;
+      }
+    }
+    return goNilProvenConcatSeed.call(this, node);
   };
   const printCustomBinaryConcatSeed = GoTranspiler.prototype.printCustomBinaryExpressionIfAny;
   GoTranspiler.prototype.printCustomBinaryExpressionIfAny = function(node, identation) {
