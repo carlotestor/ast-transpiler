@@ -4324,8 +4324,11 @@ function ccxtGoAnnotatedReturnTypes (goTranspiler, node) {
     if ((key === 'Str') || (key === 'Dict') || (key === 'ExchangeOptions') || (key === 'Market') || (key === 'List') || (key === 'Bool')) {
         return CCXT_GO_ANNOTATED_RETURN_NATIVE[key];
     }
-    if (((key === 'Num') || (key === 'Int')) && ccxtGo92NumParseMethod (node)) {
-        return [ CCXT_GO_92_PARSE_POINTER[key] ]; // 92g1 R1 / R2: a parse* `Num` / `Int` is a scalar pointer or nil
+    if ((key === 'Num') && ccxtGo92NumParseMethod (node)) {
+        return ccxtGoNumReturnsAreParseNumber (node) ? [ '*float64' ] : undefined; // a parse* `Num`: *float64 or nil
+    }
+    if ((key === 'Int') && ccxtGo92NumParseMethod (node)) {
+        return [ CCXT_GO_92_PARSE_POINTER[key] ]; // a parse* `Int` is a scalar pointer or nil
     }
     const general = ccxtGoGeneralAnnotatedReturnTypes (node, type, key);
     if (general !== undefined) {
@@ -38866,11 +38869,19 @@ function goTypedVenueProducerTypeUncached (goTranspiler, node): string | undefin
     if ((alias !== 'Num') || (annotation !== 'Num')) {
         return undefined;
     }
+    return ccxtGoNumReturnsAreParseNumber (node) ? '*float64' : undefined;
+}
+// a `Num` method whose every return is absent or `this.parseNumber (..)` (base ParseNumber returns *float64),
+// with at least one value path: the one proof both the parse* `Num` mapping and the venue Num producer use
+function ccxtGoNumReturnsAreParseNumber (node): boolean {
+    if (node?.body === undefined) {
+        return false;
+    }
     let sawValue = false;
-    for (const r of returns) {
+    for (const r of collectReturnStatements (node.body)) {
         const e = r.expression;
         if (e === undefined) {
-            return undefined;
+            return false;
         }
         if (isAbsentExpression (e)) {
             continue;
@@ -38878,11 +38889,11 @@ function goTypedVenueProducerTypeUncached (goTranspiler, node): string | undefin
         const callee = (e.kind === SyntaxKind.CallExpression) ? e.expression : undefined;
         if ((callee?.kind !== SyntaxKind.PropertyAccessExpression) || (callee.expression?.kind !== SyntaxKind.ThisKeyword)
             || (callee.name?.text !== 'parseNumber')) {
-            return undefined;
+            return false;
         }
         sawValue = true;
     }
-    return sawValue ? '*float64' : undefined;
+    return sawValue;
 }
 // the retyped producer a `this.m (..)` call binds to, with its Go type
 function goTypedVenueCallType (goTranspiler, call): string | undefined {
