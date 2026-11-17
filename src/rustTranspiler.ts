@@ -38338,15 +38338,19 @@ export class RustTranspiler extends BaseTranspiler {
         let forwards = 0;
         let reads = 0;
         let others = 0;
+        let literalSlots = 0;
         const ok = this.rustLocalUsesAll(param, name, true, (n: any) => {
             if (this.isNativeWriteTargetBase(n) || isDeleteExpression(n.parent?.parent)) return false;
             if (this.rustMarketSlotUse(n)) forwards++;
             else if (this.rustMarketReaderArg(n) || this.rustIsNullTestOf(n) || this.rustDictKeyReadUse(n)) reads++;
+            else if (this.rust92rgLiteralValueSlot(n)) literalSlots++;
             else others++;
             return true;
         });
         // a helper that only reads the record (key readers, null tests) borrows it as well as one that forwards it
-        if (!ok || (forwards === 0 && (reads === 0 || others > 0))) return false;
+        // ral-92rg R3: a required slot read by key readers whose only other uses box the record once into a literal value
+        const readsAndBoxes = forwards === 0 && reads > 0 && others === 0 && literalSlots > 0 && param.initializer === undefined;
+        if (!ok || (forwards === 0 && (reads === 0 || others > 0 || (literalSlots > 0 && !readsAndBoxes)))) return false;
         // a REST helper is also called from the venue's ws class: those callers must lend too (the ws file is a root of
         // this program); a ws class this program does not load keeps the helper boxed
         const sibling = this.rustWsSiblingCallSites(method);
@@ -38357,6 +38361,14 @@ export class RustTranspiler extends BaseTranspiler {
             if (args.some((a: any) => a.kind === SyntaxKind.SpreadElement)) return false;
             return args[at] === undefined ? param.initializer !== undefined : this.rustMarketArgLends(args[at]);
         });
+    }
+
+    /** ral-92rg R3: `n` is the whole value of a property of an object literal (`{ 'info': market }`): one box of the record. */
+    rust92rgLiteralValueSlot(n: Node): boolean {
+        let top: Node = n;
+        while (top.parent !== undefined && (isParenthesizedExpression(top.parent) || isAsExpression(top.parent))) top = top.parent;
+        const up: Node = top.parent;
+        return up !== undefined && isPropertyAssignment(up) && up.initializer === top && isObjectLiteralExpression(up.parent);
     }
 
     /** The calls of REST method `m` from `ts/src/pro/<id>.ts` (checker-resolved to `m`): none when the ws class does

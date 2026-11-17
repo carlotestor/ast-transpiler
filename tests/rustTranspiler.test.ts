@@ -25782,3 +25782,31 @@ describe('ral-92rg R2: a venue method answering safeList with a ternary of list 
         expect(out).toContain('let mut other: Value = self.loose(');
     });
 });
+
+describe('ral-92rg R3: a venue market slot read by key readers and boxed once into a literal value', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface MarketInterface { symbol: string; id: string }\nexport type Market = MarketInterface | undefined;\n"
+        + "export default class Exchange {\n    market (symbol: string): MarketInterface { return undefined; }\n    safeDict (o: any, k: any, d: any = undefined): Dict { return o; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return d; }\n}\n";
+    const venue = "import Exchange from './base/Exchange.js';\nimport type { Dict, Str, Market } from './base/Exchange.js';\n"
+        + "export default class venue extends Exchange {\n"
+        + "    fromMarket (market: Market): Dict {\n        const limits = this.safeDict (market, 'limits', {});\n        return { 'info': market, 'symbol': this.safeString (market, 'symbol'), 'limits': limits };\n    }\n"
+        + "    handedOn (market: Market): Dict {\n        return { 'info': market, 'other': [ market ] };\n    }\n"
+        + "    fetchIt (symbol: string): Dict {\n        const market = this.market (symbol);\n        return this.fromMarket (market);\n    }\n"
+        + "    fetchOther (symbol: string): Dict {\n        const market = this.market (symbol);\n        return this.handedOn (market);\n    }\n}\n";
+    const out = () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-92rg3-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), venue);
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': [ 'market' ], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        try { return t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+    };
+    test('the slot is a lent Option<&Market>; the caller holds the struct and lends it', () => {
+        const text = out();
+        expect(text).toMatch(/pub fn fromMarket\(&self, market: Option<&crate::types::Market>\)/);
+        expect(text).toContain('self.fromMarket(Some(&market))');
+    });
+    test('negative: a slot handed on whole into a list literal keeps Value', () => {
+        const text = out();
+        expect(text).toMatch(/pub fn handedOn\(&self, market: Value\)/);
+    });
+});
