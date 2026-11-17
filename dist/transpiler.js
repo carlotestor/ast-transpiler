@@ -45178,7 +45178,7 @@ function go92g2StringListScan(goTranspiler, declaration) {
       writes.push(parent.right);
       return false;
     }
-    return true;
+    return !go93g2StringListElementRead(n, parent);
   });
   return unsafe || joins === 0 ? void 0 : writes;
 }
@@ -45801,6 +45801,10 @@ GoTranspiler.prototype.printReturnStatement = function(node, identation) {
   return printReturnStatementBaseTypedVenue.call(this, node, identation);
 };
 GO92G2_STRING_LIST_READERS["marketIds"] = ["MarketIdsStrings", 1];
+function go93g2StringListElementRead(n, parent) {
+  const reader = parent?.expression;
+  return parent?.kind === SyntaxKind5.CallExpression && parent.arguments[0] === n && parent.arguments.length >= 2 && parent.arguments.length <= 3 && reader?.kind === SyntaxKind5.PropertyAccessExpression && reader.expression?.kind === SyntaxKind5.ThisKeyword && reader.name?.text === "safeString";
+}
 var GO93G2_LOOP_LIST_READERS = { "safeListN": "SafeListNSlice", "marketIds": "MarketIdsSlice" };
 
 // src/javaTranspiler.ts
