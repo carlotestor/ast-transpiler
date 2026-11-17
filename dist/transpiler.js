@@ -43475,6 +43475,7 @@ GoTranspiler.prototype.goNativeCompoundAssignment = function(op, leftNode, leftT
   }
   return `${leftText.trim()} ${op === SyntaxKind5.PlusEqualsToken ? "+=" : "-="} ${rightText.trim()}`;
 };
+var ccxtGo90g2State = { on: false };
 function ccxtGo90g2TestsNil(goTranspiler, condition, name) {
   const inner = goTranspiler.goUnwrapParenthesizedNode(condition);
   if (inner?.kind !== SyntaxKind5.BinaryExpression) {
@@ -43519,7 +43520,7 @@ function ccxtGo90g2GuardedNonNil(goTranspiler, use, name) {
 {
   const nonNilBlock = GoTranspiler.prototype.goInsideNonNilBlock;
   GoTranspiler.prototype.goInsideNonNilBlock = function(use, name) {
-    return nonNilBlock.call(this, use, name) || ccxtGo90g2GuardedNonNil(this, use, name);
+    return nonNilBlock.call(this, use, name) || ccxtGo90g2State.on && ccxtGo90g2GuardedNonNil(this, use, name);
   };
 }
 var CCXT_GO_90G2_FILL_CALLS = ["account", "extend", "deepExtend"];
@@ -43570,7 +43571,7 @@ function ccxtGo90g2FilledBefore(goTranspiler, use, name) {
 {
   const nonNilBlock = GoTranspiler.prototype.goInsideNonNilBlock;
   GoTranspiler.prototype.goInsideNonNilBlock = function(use, name) {
-    return nonNilBlock.call(this, use, name) || ccxtGo90g2FilledBefore(this, use, name);
+    return nonNilBlock.call(this, use, name) || ccxtGo90g2State.on && ccxtGo90g2FilledBefore(this, use, name);
   };
   const keepsMap = GoTranspiler.prototype.goMapLocalUseKeepsMap;
   GoTranspiler.prototype.goMapLocalUseKeepsMap = function(ref, rebinds, noDefault, ws, name) {
@@ -43578,7 +43579,72 @@ function ccxtGo90g2FilledBefore(goTranspiler, use, name) {
       return true;
     }
     const write = ref.parent;
-    return noDefault && write?.kind === SyntaxKind5.BinaryExpression && write.left === ref && write.operatorToken?.kind === SyntaxKind5.EqualsToken && write.parent?.kind === SyntaxKind5.ExpressionStatement && ccxtGo90g2NeverNilMap(this, write.right);
+    return ccxtGo90g2State.on && noDefault && write?.kind === SyntaxKind5.BinaryExpression && write.left === ref && write.operatorToken?.kind === SyntaxKind5.EqualsToken && write.parent?.kind === SyntaxKind5.ExpressionStatement && ccxtGo90g2NeverNilMap(this, write.right);
+  };
+}
+function ccxtGo90g2MapVerdictOk(goTranspiler, declaration) {
+  const scope = goTranspiler.goTopFunction(declaration);
+  const checker = goTranspiler.checkerOrUndefined();
+  const own = checker?.getSymbolAtLocation(declaration.name);
+  if (scope === void 0 || own === void 0) {
+    return false;
+  }
+  let natives = 0;
+  const escapes = goTranspiler.hasNodeWhere(scope, (n) => {
+    if (n.kind !== SyntaxKind5.Identifier || n === declaration.name || n.text !== declaration.name.text || (n.parent?.kind === SyntaxKind5.PropertyAccessExpression || n.parent?.kind === SyntaxKind5.PropertyAssignment) && n.parent.name === n) {
+      return false;
+    }
+    if (checker.getSymbolAtLocation(n) !== own) {
+      return false;
+    }
+    let outer = n;
+    while (outer.parent !== void 0 && (outer.parent.kind === SyntaxKind5.ParenthesizedExpression || outer.parent.kind === SyntaxKind5.AsExpression || outer.parent.kind === SyntaxKind5.NonNullExpression) && outer.parent.expression === outer) {
+      outer = outer.parent;
+    }
+    const parent = outer.parent;
+    if (parent?.kind === SyntaxKind5.BinaryExpression && parent.right === outer && parent.operatorToken?.kind === SyntaxKind5.EqualsToken && ccxtGoUnwrapTypeOnly(parent.left)?.kind === SyntaxKind5.ElementAccessExpression && ccxtGoUnwrapTypeOnly(ccxtGoUnwrapTypeOnly(parent.left).expression)?.kind !== SyntaxKind5.PropertyAccessExpression) {
+      return true;
+    }
+    if (parent?.kind === SyntaxKind5.ElementAccessExpression && parent.expression === outer) {
+      const store = parent.parent;
+      if (store?.kind === SyntaxKind5.BinaryExpression && store.left === parent && store.operatorToken?.kind === SyntaxKind5.EqualsToken) {
+        const value = ccxtGoUnwrapTypeOnly(store.right);
+        if (value?.kind === SyntaxKind5.Identifier && value.text === "undefined") {
+          natives++;
+        } else if (value !== void 0 && goTranspiler.goMapWriteValueIsNotPointer(value)) {
+          natives++;
+        }
+      } else if (!goTranspiler.isGoElementAccessAssignmentTarget(parent)) {
+        natives++;
+      }
+    } else if (parent?.kind === SyntaxKind5.BinaryExpression && parent.right === outer && parent.operatorToken?.kind === SyntaxKind5.InKeyword) {
+      natives++;
+    }
+    return false;
+  });
+  return !escapes && natives > 0;
+}
+{
+  const uncached = GoTranspiler.prototype.goSafeDictMapLocalUncached;
+  GoTranspiler.prototype.goSafeDictMapLocalUncached = function(declaration) {
+    const previous = ccxtGo90g2State.on;
+    ccxtGo90g2State.on = false;
+    try {
+      const shipped = uncached.call(this, declaration);
+      if (shipped !== void 0) {
+        return shipped;
+      }
+      ccxtGo90g2State.on = true;
+      const extended = uncached.call(this, declaration);
+      ccxtGo90g2State.on = false;
+      if (extended === void 0 || !ccxtGo90g2MapVerdictOk(this, declaration)) {
+        this.goMapLocalRebindWrites.delete(declaration);
+        return void 0;
+      }
+      return extended;
+    } finally {
+      ccxtGo90g2State.on = previous;
+    }
   };
 }
 
