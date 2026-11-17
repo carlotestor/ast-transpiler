@@ -2411,10 +2411,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-84e: an equality arm (`m['inverse'] === true`, `t === 'inverse'`) of a ternary initializer of a `boolean` local whose
      *  native text exists: the arm prints that `bool` (rustScalarNativeText's ternary arm), the very `Bool` its box held. */
     rust84eBoolArmKind(arm: Node): string | undefined;
-    /** ral-87re: a `const` local whose checker type is an object record (`Dict` / `Market` / a list): no scalar solve decides it,
-     *  so reading it while a comparison seed is open prints the same text it prints later. */
-    private rust87reRecordSeeds;
-    rust87reRecordLocal(d: Node): boolean;
+    private rust87reLocalSeeds;
     /** A `const x = <comparison>` initializer whose native text exists and whose local's checker type is `boolean`. */
     rustBoolCompareSeed(node: any): boolean;
     /** `m['symbol']` / `m.id` off a loaded `crate::types::Market` local: the field's own `String` / `Option<String>`
