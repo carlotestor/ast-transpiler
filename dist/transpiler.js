@@ -42384,6 +42384,17 @@ function ccxtGo87g2BaseListParser(goTranspiler, call, outer) {
     return false;
   }
 }
+var CCXT_GO_87G2_LIST_TRANSFORMS = ["sortBy", "sortBy2", "filterBy", "arraySlice"];
+function ccxtGo87g2ListTransform(goTranspiler, call, name, noDefault) {
+  if (call?.kind !== SyntaxKind5.CallExpression || call.expression?.kind !== SyntaxKind5.PropertyAccessExpression || call.expression.expression?.kind !== SyntaxKind5.ThisKeyword || CCXT_GO_87G2_LIST_TRANSFORMS.indexOf(call.expression.name?.text) < 0) {
+    return false;
+  }
+  const first = ccxtGoUnwrapTypeOnly(call.arguments[0]);
+  if (first?.kind !== SyntaxKind5.Identifier || first.text !== name) {
+    return false;
+  }
+  return !noDefault || goTranspiler.goInsideNonNilBlock(call, name);
+}
 function ccxtGo87g2ListLocal(goTranspiler, declaration, mode) {
   if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier || declaration.parent?.parent?.kind !== SyntaxKind5.FirstStatement || goTranspiler.goSafeListLocalArgs(declaration.initializer) === void 0 || /(^|[\\/])ts[\\/]src[\\/]base[\\/]/.test(String(declaration.getSourceFile?.()?.fileName ?? ""))) {
     return void 0;
@@ -42399,6 +42410,10 @@ function ccxtGo87g2ListLocal(goTranspiler, declaration, mode) {
     const outer = ccxtGoSafeCollectionTypeOnlyWrapper(n);
     const parent = outer.parent;
     if (parent?.kind === SyntaxKind5.BinaryExpression && parent.left === outer && parent.operatorToken?.kind === SyntaxKind5.EqualsToken) {
+      if (mode === "I" && ccxtGo87g2ListTransform(goTranspiler, ccxtGoUnwrapTypeOnly(parent.right), declaration.name.text, noDefault)) {
+        feature++;
+        return true;
+      }
       if (mode === "F" && ccxtGoUnwrapTypeOnly(parent.right)?.kind === SyntaxKind5.ArrayLiteralExpression && !ccxtGoUnwrapTypeOnly(parent.right).elements.some((e) => e.kind === SyntaxKind5.SpreadElement)) {
         feature++;
         return true;
@@ -42407,6 +42422,9 @@ function ccxtGo87g2ListLocal(goTranspiler, declaration, mode) {
     }
     if (goTranspiler.goIsNilComparisonOperand(outer, parent)) {
       return noDefault;
+    }
+    if (mode === "I" && parent?.kind === SyntaxKind5.CallExpression && parent.arguments[0] === outer && parent.parent?.kind === SyntaxKind5.BinaryExpression && parent.parent.right === parent && ccxtGo87g2ListTransform(goTranspiler, parent, declaration.name.text, noDefault)) {
+      return true;
     }
     if (mode === "G") {
       if (parent?.kind === SyntaxKind5.ElementAccessExpression && parent.expression === outer && parent.parent?.kind === SyntaxKind5.BinaryExpression && parent.parent.left === parent && parent.parent.operatorToken?.kind === SyntaxKind5.EqualsToken) {
@@ -42451,7 +42469,7 @@ function ccxtGo87g2ListLocal(goTranspiler, declaration, mode) {
       return memo.get(declaration);
     }
     memo.set(declaration, void 0);
-    const verdict = ccxtGo87g2ListLocal(this, declaration, "F") ?? ccxtGo87g2ListLocal(this, declaration, "G");
+    const verdict = ccxtGo87g2ListLocal(this, declaration, "F") ?? ccxtGo87g2ListLocal(this, declaration, "G") ?? ccxtGo87g2ListLocal(this, declaration, "I");
     memo.set(declaration, verdict);
     return verdict;
   };
