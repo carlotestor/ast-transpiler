@@ -79138,7 +79138,8 @@ ${iden}}`;
     const d = this.rustDeclarationOfIdentifier(head);
     if (d === void 0 || d === head || d.name === head)
       return this.rustProvenMapParam(d);
-    return this.rustProvenMapParam(d) || this.rustHandedDictLocal(d) || this.rustBorrowedLocalKind(d) === "dict" && !this.rustOptContainerLocals.has(d);
+    const typedMap = isVariableDeclaration3(d) && !this.rustLocalIsReassigned(d, String(head.text)) && this.rustDictLocalIsTyped(d);
+    return this.rustProvenMapParam(d) || this.rustHandedDictLocal(d) || this.rustBorrowedLocalKind(d) === "dict" && !this.rustOptContainerLocals.has(d) || typedMap;
   }
   /** ral-50a: `t[1]` read off a `const t = this.handle*AndParams (m, ..)` tuple (base helper, PARAMS_SLOT_ARG) whose params
    *  argument is a proven map (a typed / helper-proven params parameter, a handed slot map or a settled Dict local): the
