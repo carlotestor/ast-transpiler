@@ -45862,7 +45862,7 @@ function goMapRowElementLocal(goTranspiler, declaration, list) {
     return false;
   }
   const uses = goMapRowIdentifierUses(goTranspiler, declaration);
-  return uses !== void 0 && uses.length > 0 && uses.some((n) => goMapRowSafeReaderUse(goTranspiler, n) || goMapRowKeyRead(goTranspiler, n)) && uses.every((n) => goMapRowSafeReaderUse(goTranspiler, n) || goMapRowKeyRead(goTranspiler, n) || list.type !== void 0 && _optionalChain([n, 'access', _9160 => _9160.parent, 'optionalAccess', _9161 => _9161.kind]) === _ast.SyntaxKind.PropertyAssignment && n.parent.initializer === n);
+  return uses !== void 0 && uses.length > 0 && uses.some((n) => goMapRowKeyRead(goTranspiler, n)) && uses.every((n) => goMapRowSafeReaderUse(goTranspiler, n) || goMapRowKeyRead(goTranspiler, n) || list.type !== void 0 && _optionalChain([n, 'access', _9160 => _9160.parent, 'optionalAccess', _9161 => _9161.kind]) === _ast.SyntaxKind.PropertyAssignment && n.parent.initializer === n);
 }
 function goMapRowListAnnotationIsRows(type) {
   if (type === void 0) {
