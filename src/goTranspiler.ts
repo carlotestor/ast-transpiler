@@ -39157,7 +39157,17 @@ function goMapRowElementLocal (goTranspiler, declaration, list): boolean {
         return false;
     }
     const uses = goMapRowIdentifierUses (goTranspiler, declaration);
-    return (uses !== undefined) && (uses.length > 0) && uses.every ((n) => goMapRowSafeReaderUse (goTranspiler, n));
+    return (uses !== undefined) && (uses.length > 0) && uses.some ((n) => goMapRowSafeReaderUse (goTranspiler, n))
+        && uses.every ((n) => goMapRowSafeReaderUse (goTranspiler, n)
+            || ((list.type !== undefined) && (n.parent?.kind === SyntaxKind.PropertyAssignment) && (n.parent.initializer === n)));
+}
+// no annotation, or a list of dictionaries (`Dict[]`, `any[]`, `object[]`)
+function goMapRowListAnnotationIsRows (type): boolean {
+    if (type === undefined) {
+        return true;
+    }
+    const element = (type.kind === SyntaxKind.ArrayType) ? type.elementType : undefined;
+    return (element?.kind === SyntaxKind.TypeReference) && (element.typeName?.text === 'Dict');
 }
 function goMapRowList (goTranspiler, declaration): boolean {
     if (goMapRowListVerdicts.has (declaration)) {
@@ -39167,7 +39177,7 @@ function goMapRowList (goTranspiler, declaration): boolean {
     let verdict = false;
     const file = String (declaration?.getSourceFile?.()?.fileName ?? '');
     const args = (declaration?.kind === SyntaxKind.VariableDeclaration) && (declaration.name?.kind === SyntaxKind.Identifier)
-        && (declaration.type === undefined) && (declaration.parent?.declarations?.length === 1) && !/(^|[\\/])base[\\/]/.test (file)
+        && goMapRowListAnnotationIsRows (declaration.type) && (declaration.parent?.declarations?.length === 1) && !/(^|[\\/])base[\\/]/.test (file)
         ? goTranspiler.goSafeListLocalArgs (declaration.initializer) : undefined;
     if (args !== undefined) {
         const uses = goMapRowIdentifierUses (goTranspiler, declaration);

@@ -17156,3 +17156,48 @@ describe('map-row lists read through string-keyed safe readers', () => {
         expect(out).not.toContain('SafeListMapsTyped');
     });
 });
+
+describe('map-row lists: annotated Dict[] list with an empty default and an info row', () => {
+    test('prints the typed rows', () => {
+        const out = goTranspileMapRows('type Dict = { [key: string]: unknown };\n'
+            + 'class base {\n'
+            + '    safeList (d: unknown, k: unknown, x: unknown = undefined): unknown[] { return []; }\n'
+            + '    safeString (d: unknown, k: unknown, x: unknown = undefined): string { return \'\'; }\n'
+            + '}\n'
+            + 'export class ex extends base {\n'
+            + '    f (response: Dict) {\n'
+            + '        const rows: Dict[] = this.safeList (response, \'data\', []);\n'
+            + '        const result = [];\n'
+            + '        for (let i = 0; i < rows.length; i++) {\n'
+            + '            const entry = rows[i];\n'
+            + '            result.push ({ \'info\': entry, \'id\': this.safeString (entry, \'id\') });\n'
+            + '        }\n'
+            + '        return result;\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('var rows []map[string]any = this.SafeListMapsTyped(response, "data")');
+        expect(out).toContain('var entry map[string]any = rows[i]');
+    });
+});
+
+describe('map-row lists: an unannotated list whose row is stored keeps the box', () => {
+    test('keeps []any', () => {
+        const out = goTranspileMapRows('type Dict = { [key: string]: unknown };\n'
+            + 'class base {\n'
+            + '    safeList (d: unknown, k: unknown, x: unknown = undefined): unknown[] { return []; }\n'
+            + '    safeString (d: unknown, k: unknown, x: unknown = undefined): string { return \'\'; }\n'
+            + '}\n'
+            + 'export class ex extends base {\n'
+            + '    f (response: Dict) {\n'
+            + '        const rows = this.safeList (response, \'data\');\n'
+            + '        const result = [];\n'
+            + '        for (let i = 0; i < rows.length; i++) {\n'
+            + '            const entry = rows[i];\n'
+            + '            result.push ({ \'info\': entry, \'id\': this.safeString (entry, \'id\') });\n'
+            + '        }\n'
+            + '        return result;\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).not.toContain('SafeListMapsTyped');
+    });
+});
