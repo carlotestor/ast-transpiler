@@ -578,6 +578,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-52i: `other` (a variable declaration) and `declaration` sit in two blocks of one function, neither inside the other. */
     rustDisjointBinding(other: any, declaration: any): boolean;
     rustLocalUsesAcceptBool(declaration: any, sourceName: string): boolean;
+    /** `return x` in a method the typed-return table prints `-> bool`: the local is that return as is. */
+    rustBoolTypedReturnUse(n: Node): boolean;
     private rustBoolParamDecisions;
     rustParamPrintsBool(param: any): boolean;
     rustParamPrintsBoolUncached(param: any): boolean;

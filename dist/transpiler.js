@@ -60489,7 +60489,14 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     return a.end <= b.pos || b.end <= a.pos;
   }
   rustLocalUsesAcceptBool(declaration, sourceName) {
-    return this.rustLocalUsesAll(declaration, sourceName, false, (n) => this.rustIdentifierUseIsCondition(n) || this.rustBoolParamUseAccepted(n));
+    return this.rustLocalUsesAll(declaration, sourceName, false, (n) => this.rustIdentifierUseIsCondition(n) || this.rustBoolParamUseAccepted(n) || this.rustBoolTypedReturnUse(n));
+  }
+  /** `return x` in a method the typed-return table prints `-> bool`: the local is that return as is. */
+  rustBoolTypedReturnUse(n) {
+    const parent = n?.parent;
+    if (parent === void 0 || !isReturnStatement4(parent) || parent.expression !== n)
+      return false;
+    return this.rustMethodTypedReturnKind(findAncestor(parent.parent, isFunctionLike)) === "bool";
   }
   rustParamPrintsBool(param) {
     if (param?.kind !== SyntaxKind7.Parameter) {
@@ -62774,6 +62781,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return super.printIdentifier(inner);
     if (local !== void 0 && `o${local}` === kind)
       return `Some(${super.printIdentifier(inner)})`;
+    if (kind === "bool" && local === void 0 && this.rustBoolTypedReturnUse(inner)) {
+      const declaration = this.rustDeclaredNode(inner);
+      if (declaration !== void 0 && isVariableDeclaration3(declaration) && this.rustDeclarationPrintsNativeBool(declaration))
+        return super.printIdentifier(inner);
+    }
     const callKind = this.rustBaseTypedReturnKind(inner);
     if (callKind !== void 0 && `o${kind}` === callKind)
       return `${this.rustBaseTypedBareText(this.unwrapParens(inner))}.unwrap_or_default()`;
@@ -96392,6 +96404,7 @@ _RustTranspiler.RUST_BASE_TYPED_METHODS = {
   networkIdToCode: ["Str", "ostr"],
   requestId: ["int", "int"],
   isPostOnly: ["boolean", "bool"],
+  usesPrivateKey: ["boolean", "bool"],
   // pg: the precision formatters answer `Str` (overrides may spell `string`); every return is a string or undefined
   amountToPrecision: ["Str|string", "ostr"],
   priceToPrecision: ["Str|string", "ostr"],
