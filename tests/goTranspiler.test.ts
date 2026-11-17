@@ -17173,3 +17173,22 @@ describe('ral-93g4 sum writes into a *int64 local', () => {
         expect(out).toContain('this.Sum(now, delta)');
     });
 });
+
+describe('ral-93g4 a native sum declaration keeps int64', () => {
+    test('an int64 local plus one declares int64 without a numeric use', () => {
+        const out = goTranspile87g8('type Int = number | undefined;\n'
+            + 'class BaseExchange {\n'
+            + '    sum (a: number, b: number): number { return a + b; }\n'
+            + '    parseToInt (x: number): number { return x; }\n'
+            + '}\n'
+            + 'export class ex extends BaseExchange {\n'
+            + '    f (options = {}, n: number = 0) {\n'
+            + '        const previousValue = this.parseToInt (n);\n'
+            + '        const newValue = this.sum (previousValue, 1);\n'
+            + '        options[\'id\'] = newValue;\n'
+            + '        return newValue;\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toMatch(/var newValue int64 = previousValue \+ 1/);
+    });
+});

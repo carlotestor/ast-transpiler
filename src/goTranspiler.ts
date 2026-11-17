@@ -39223,7 +39223,9 @@ GoTranspiler.prototype.goTypeOfInitializer = function (initializer, printedValue
     if ((initializer?.kind === SyntaxKind.CallExpression) && (declaration?.kind === SyntaxKind.VariableDeclaration)
         && (declaration.initializer === initializer) && (declaration.name?.kind === SyntaxKind.Identifier)
         && !(printedValue ?? '').trim().startsWith('this.Sum(') && !(printedValue ?? '').trim().startsWith('mathM')
-        && (this.go93g4PointerOperands(initializer) !== undefined) && this.go93g4HasNumericUse(declaration)) {
+        && (((this.go93g4PointerOperands(initializer) !== undefined) && (this.go92g7IsBaseSum(initializer) || this.go93g4HasNumericUse(declaration)))
+            || (this.go92g7IsBaseSum(initializer) && (this.go92g7Int64Operands(initializer) !== undefined)))) {
+        // a native sum is the int64 the boxed call held (the ccxt pass typed `this.Sum(..).(int64)` the same way)
         return 'int64';
     }
     const write = initializer?.parent;
