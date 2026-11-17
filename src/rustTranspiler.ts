@@ -5390,7 +5390,8 @@ export class RustTranspiler extends BaseTranspiler {
             const aliasLent = kind === 'ostr' && !this.rustTestTierSource(declaration) && this.rustReaderLendBoxes(declaration, false, false, true);
             // ral-76c R1: an element of a local `string[]` (checker-proven, rustElementReadScalarKind) is a copied `Option<String>`
             // like a reader string: its copying boxes lend at lending slots (`Value::from(x.as_deref())`: the copy the `Value` clone made)
-            const strElem = kind === 'ostr' && this.rust76cLocalStrListElement(declaration.initializer);
+            // ral-90ra R1: likewise an element of a proven `string[]` / `Strings` parameter (rustStrListParamElement)
+            const strElem = kind === 'ostr' && (this.rust76cLocalStrListElement(declaration.initializer) || this.rustStrListParamElement(declaration.initializer));
             if (this.rustStrNoLend || !(this.rustUdReaderStr(declaration.initializer) || strElem) || this.rustStrReturnedLocal(declaration, scope) || !(this.rustReaderLendBoxes(declaration) || aliasLent)) return undefined;
             this.rustStrLentLocals.add(declaration);
         }
@@ -5399,7 +5400,8 @@ export class RustTranspiler extends BaseTranspiler {
         // ral-42g: an element of a `string[]` / `Strings` parameter proven a string list (rustStrListParam) is a string or Null in
         // every row: its copying boxes copy exactly what the `Value` clone copied; it still never feeds another local's write
         const strParamElem = this.rustListParamElement(declaration.initializer) && this.rustStrListParamElement(declaration.initializer);
-        if (this.rustListParamElement(declaration.initializer) && (strParamElem ? this.rustScalarFeedsWrite(declaration) : (copied > 0 || (boxed > 0 && typedUses === 0) || this.rustScalarFeedsWrite(declaration)))) return undefined;
+        // ral-90ra R1: a proven string-list parameter element may feed a write whose target is a string local of the same function
+        if (this.rustListParamElement(declaration.initializer) && (strParamElem ? this.rust90raFeedsForeignWrite(declaration, scope) : (copied > 0 || (boxed > 0 && typedUses === 0) || this.rustScalarFeedsWrite(declaration)))) return undefined;
         if (this.rustListParamElement(declaration.initializer) && boxed > 0) this.rustScalarGuarded.add(declaration);
         // a non-element local admitted by a map-key read or `in` test must not copy where the `Value` moved
         // ral-52i: unless the key-admitted local is lent at every copying box (keyLent: the one copy the `Value` clone made)
@@ -7047,6 +7049,32 @@ export class RustTranspiler extends BaseTranspiler {
             return true;
         });
         return feeds;
+    }
+
+    /** ral-90ra R1: `rustScalarFeedsWrite`, except that a plain `y = x;` statement or a `let y: Str = x;` declaration whose
+     *  target `y` is a local (one declarator, same function) the checker types `string` is allowed: that target is decided by
+     *  the same scalar solve (a string local copied from an `Option<String>` reads the same Str / Null the `Value` held). */
+    rust90raFeedsForeignWrite(declaration: any, scope: any): boolean {
+        let foreign = false;
+        this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n: any) => {
+            let at: any = n;
+            while (at.parent !== undefined && (isParenthesizedExpression(at.parent) || at.parent.kind === SyntaxKind.AsExpression || isConditionalExpression(at.parent))) at = at.parent;
+            const up: any = at.parent;
+            let target: any;
+            if (isBinaryExpression(up) && up.operatorToken.kind === SyntaxKind.EqualsToken && up.left !== at) {
+                if (at !== n || !isIdentifier(up.left) || up.parent?.kind !== SyntaxKind.ExpressionStatement) { foreign = true; return true; }
+                target = this.rustDeclaredNode(up.left);
+            } else if (isVariableDeclaration(up) && up.initializer !== undefined) {
+                if (at !== n) { foreign = true; return true; }
+                target = up;
+            } else return true;
+            const list: any = target?.parent;
+            if (target === undefined || !isVariableDeclaration(target) || !isIdentifier(target.name) || list?.kind !== SyntaxKind.VariableDeclarationList
+                || list.declarations.length !== 1 || this.rustEnclosingFunction(target) !== scope
+                || this.primitiveKindOfType(this.typeOfNodeIfAny(target.name)) !== 'string') foreign = true;
+            return true;
+        });
+        return foreign;
     }
 
     /** Some statement of the parameter's function assigns the parameter itself. */
