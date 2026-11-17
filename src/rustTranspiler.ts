@@ -20964,17 +20964,14 @@ export class RustTranspiler extends BaseTranspiler {
             && this.rustNativeStringLiteralArg(call.arguments[0]) !== undefined && !this.rustScalarInNestedWrite(access.expression, true);
     }
 
-    /** ral-90rd R2: the join of a typed list local the borrowed-container rule admitted at this call (the optional form joins its
-     *  slice, empty for `None`: the runtime `join` answered "" for a non-list). */
+    /** ral-90rd R2: the join of a typed list local the borrowed-container rule admitted at this call. */
     printBorrowedListJoin(node: any): string | undefined {
         if (!this.rust90rdJoinReads.has(node)) return undefined;
         const access: any = node.expression;
         const declaration: any = this.rustDeclarationOfIdentifier(access.expression);
-        if (declaration === undefined || this.rustBorrowedLocalKind(declaration) !== 'list') return undefined;
+        if (declaration === undefined || this.rustBorrowedLocalKind(declaration) !== 'list' || this.rustOptContainerLocals.has(declaration)) return undefined;
         const literal = this.rustNativeStringLiteralArg(node.arguments[0]);
-        const name = this.printNode(access.expression, 0).trim();
-        const list = this.rustOptContainerLocals.has(declaration) ? `${name}.as_deref().map(Vec::as_slice).unwrap_or_default()` : name;
-        return `Value::Str(${list}.iter().map(crate::runtime::stringify_param).collect::<Vec<String>>().join("${literal}").into())`;
+        return `Value::Str(${this.printNode(access.expression, 0).trim()}.iter().map(crate::runtime::stringify_param).collect::<Vec<String>>().join("${literal}").into())`;
     }
 
     printJoinCall(node, identation, name = undefined, parsedArg = undefined) {
@@ -23710,6 +23707,7 @@ export class RustTranspiler extends BaseTranspiler {
             // element's `stringify_param` text, the per-element text the runtime `join` helper takes off the boxed list
             if (from === 'list' && isPropertyAccessExpression(up) && up.expression === n && this.rust90rdListJoinUse(up)) {
                 joinUses.push(up.parent);
+                lengths++;
                 return ++reads > 0;
             }
             if (isPropertyAccessExpression(up) && up.expression === n && String(up.name.text) === 'length') {
@@ -23923,8 +23921,8 @@ export class RustTranspiler extends BaseTranspiler {
         if ((selfOmitWrites > 0 || omitInitRewrites) && this.rustHandedDictLocal(declaration)) return undefined;
         const neverNullRewrites = writes > 0 && writes === sameKindWrites && from === 'dict' && init !== undefined && (this.rustContainerInitNeverNull(init, 'map') || omitInitRewrites);
         const optional = nilDeclared || nullTests > 0 || (writes > 0 && !neverNullRewrites) || lentNullable > 0 || optionalBoxes > 0 || zgRow || elementKeyWrites > 0 || optMapInit;
-        // ral-90rd R2: the native join reads a list (the optional form joins its slice: `None` joins to "", as the helper's non-list arm)
-        if (joinUses.length > 0 && from !== 'list') return undefined;
+        // ral-90rd R2: the native join reads a never-null list only
+        if (joinUses.length > 0 && (optional || from !== 'list')) return undefined;
         if (jwtLends > 0 && optional) return undefined;
         // ral-40h: an alias takes the plain container only (an optional one would copy at the box)
         if (aliasBoxes > 0 && (optional || reads === 0 && aliasBoxes === boxedElementUses.length)) return undefined;
