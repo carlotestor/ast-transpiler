@@ -417,7 +417,7 @@ export declare class RustTranspiler extends BaseTranspiler {
         name: string;
         text: string;
     } | undefined;
-    /** ral-90rh R1: a declaration initializer `parseInt (s)` (one argument, checker type `string`; no multiply form). */
+    /** ral-90rh R1: a declaration initializer `parseInt (s)` (one bare identifier argument, checker type `string`; no multiply form). */
     rust90rhParseIntInit(expr: any): boolean;
     /** ral-68b: `parseInt (s)` with one argument whose checker type is `string`, or that call times an integer literal. */
     rust68bParseIntWrite(expr: any): boolean;
@@ -2049,6 +2049,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rust65kTypedResultKey(n: any): boolean;
     /** ral-64k: the read of a `bkey` use: `get_value(&<book box>, k.as_str() | k.as_deref())`. */
     print64kBookKeyRead(node: any): string | undefined;
+    /** ral-90rh R2: `n` is the identifier of a `n as string` that is a whole element-access key. */
+    rust90rhCastKey(n: any): boolean;
     /** Element-access hook: the native read of an `okey` use. */
     printOkeyRead(node: any): string | undefined;
     private static readonly RUST_SCALAR_VALUE_OPERAND_OPS;

@@ -57009,10 +57009,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return { name: super.printIdentifier(right), text: `${this.rustScalarIntLiteral(left)} - __b` };
     return void 0;
   }
-  /** ral-90rh R1: a declaration initializer `parseInt (s)` (one argument, checker type `string`; no multiply form). */
+  /** ral-90rh R1: a declaration initializer `parseInt (s)` (one bare identifier argument, checker type `string`; no multiply form). */
   rust90rhParseIntInit(expr) {
     const node = this.unwrapParens(expr);
-    return node !== void 0 && isCallExpression6(node) && this.rustDeclInitPosition(node) && this.rust68bParseIntWrite(node);
+    return node !== void 0 && isCallExpression6(node) && node.arguments?.length === 1 && isIdentifier3(this.unwrapParens(node.arguments[0])) && this.rustDeclInitPosition(node) && this.rust68bParseIntWrite(node);
   }
   /** ral-68b: `parseInt (s)` with one argument whose checker type is `string`, or that call times an integer literal. */
   rust68bParseIntWrite(expr) {
@@ -62839,6 +62839,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "okey";
     if (kind === "ostr" && this.rust84cNilStrKeyLocal(n) && this.rustOkeyReadUse(n))
       return "okey";
+    if (kind === "ostr" && this.rust90rhCastKey(n) && this.rust84cNilStrKeyLocal(n) && this.rustOkeyReadUse(n.parent))
+      return "okey";
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rust63eChainLinkKeyRead(n))
       return "okey";
     if ((kind === "str" || kind === "ostr") && this.rust64kBookKeyRead(n))
@@ -67920,9 +67922,15 @@ ${ind}];`;
     const recv = this.printNode(node.expression, 0).trim();
     return `get_value(&${recv}, ${super.printIdentifier(key)}.${kind === "str" ? "as_str" : "as_deref"}())`;
   }
+  /** ral-90rh R2: `n` is the identifier of a `n as string` that is a whole element-access key. */
+  rust90rhCastKey(n) {
+    const cast = n?.parent;
+    return isIdentifier3(n) && cast !== void 0 && isAsExpression3(cast) && cast.expression === n && cast.type?.kind === SyntaxKind7.StringKeyword && isElementAccessExpression4(cast.parent) && cast.parent.argumentExpression === cast;
+  }
   /** Element-access hook: the native read of an `okey` use. */
   printOkeyRead(node) {
-    const key = node.argumentExpression;
+    const arg = node.argumentExpression;
+    const key = isAsExpression3(arg) && this.rust90rhCastKey(arg.expression) ? arg.expression : arg;
     const keyKind = isIdentifier3(key) && this.rustScalarUseForms.get(key) === "okey" ? this.rustScalarLocalOf(key)?.kind : void 0;
     if (keyKind !== "ostr" && keyKind !== "str")
       return void 0;
@@ -74112,7 +74120,8 @@ ${ind}let ${view}: &${map} = &${arc};
       }
       if (link === chain[0] && this.rustBorrowedIndexReads.has(link) && isIdentifier3(receiver)) {
         const borrowedKey = isIdentifier3(key) && this.rustBorrowedStrElems.has(this.rustDeclarationOfIdentifier(key));
-        const typedKey = isIdentifier3(key) && !borrowedKey ? this.rust62nTypedStrKey(key) : void 0;
+        const castKey = isAsExpression3(key) && this.rust90rhCastKey(key.expression) && this.rustScalarUseForms.get(key.expression) === "okey" ? key.expression : void 0;
+        const typedKey = castKey !== void 0 ? `${super.printIdentifier(castKey)}.as_deref().map(Value::from).unwrap_or(Value::Null)` : isIdentifier3(key) && !borrowedKey ? this.rust62nTypedStrKey(key) : void 0;
         acc = `crate::value::KeyRead::read(&&${super.printIdentifier(receiver)}, &${borrowedKey ? `Value::from(${super.printIdentifier(key)})` : typedKey ?? this.rustI64HelperKeyText(key, node) ?? this.printNode(key, 0)})`;
         continue;
       }
