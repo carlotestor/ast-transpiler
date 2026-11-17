@@ -42222,6 +42222,7 @@ GoTranspiler.prototype.goLocalIsSafeToType = function(scope, declaration, varNam
     return false;
   }
   let rebinds = 0;
+  let pairWrites = 0;
   const unsafe = this.hasNodeWhere(scope, (n) => {
     if (n.kind !== SyntaxKind5.Identifier || n.text !== varName || n === declaration.name) {
       return false;
@@ -42242,13 +42243,17 @@ GoTranspiler.prototype.goLocalIsSafeToType = function(scope, declaration, varNam
     if (ral87g6PairMapWrite(n) && ral87g6ForeignOmitWrite(this, scope, declaration)) {
       return true;
     }
-    if (ral84g6MapWriteIsMap(this, declaration, n, parent) || ral87g6PairMapWrite(n)) {
+    if (ral84g6MapWriteIsMap(this, declaration, n, parent)) {
       rebinds += 1;
+      return false;
+    }
+    if (ral87g6PairMapWrite(n)) {
+      pairWrites += 1;
       return false;
     }
     return ccxtGoProducerUseRebinds(n) || isDestructuringTarget(n) || ccxtGoWriteSiteShippedVeto(this, n, parent, goType);
   });
-  return !unsafe && rebinds > 0;
+  return !unsafe && (rebinds > 0 || pairWrites > 0 && ral84g6HasNativeUse(this, scope, declaration));
 };
 GoTranspiler.prototype.goTernaryJoinProvisional = function() {
   return (this.goGetArgTypeComputing?.size ?? 0) > 0;
