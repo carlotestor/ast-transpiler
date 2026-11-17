@@ -17150,3 +17150,26 @@ describe('ral-93g4 native sum / min over nil-guarded *int64 operands', () => {
         expect(out).toContain('this.Sum(since, 1000)');
     });
 });
+
+describe('ral-93g4 sum writes into a *int64 local', () => {
+    test('a sum written into a pointer local keeps the boxed call', () => {
+        const out = goTranspile87g8('type Int = number | undefined;\n'
+            + 'class BaseExchange {\n'
+            + '    sum (a: number, b: number): number { return a + b; }\n'
+            + '    seconds (): number { return 0; }\n'
+            + '    safeInteger (o: object, k: string, d: Int = undefined): Int { return d; }\n'
+            + '}\n'
+            + 'export class ex extends BaseExchange {\n'
+            + '    f (params = {}) {\n'
+            + '        const delta = this.safeInteger (params, \'delta\', 3600);\n'
+            + '        let expiration = this.safeInteger (params, \'expiration\');\n'
+            + '        if (expiration === undefined) {\n'
+            + '            const now = this.seconds ();\n'
+            + '            expiration = this.sum (now, delta);\n'
+            + '        }\n'
+            + '        return { \'expiration\': expiration };\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('this.Sum(now, delta)');
+    });
+});

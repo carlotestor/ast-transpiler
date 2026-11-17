@@ -39195,11 +39195,16 @@ GoTranspiler.prototype.printCallExpression = function (node, identation) {
     if (texts === undefined) {
         return printCallExpressionBase93g4.call(this, node, identation);
     }
+    const up = node.parent;
+    // a write into a pointer local keeps the box: the pointer write form wraps a boxed value only
+    if ((up?.kind === SyntaxKind.BinaryExpression) && (up.operatorToken.kind === SyntaxKind.EqualsToken) && (up.right === node)
+        && (up.left?.kind === SyntaxKind.Identifier) && String(this.goDeclaredTypeOfIdentifier(up.left) ?? '').startsWith('*')) {
+        return printCallExpressionBase93g4.call(this, node, identation);
+    }
     const minMax = this.go92g7MinMaxName(node);
     if (minMax !== undefined) {
         return `${minMax}(${texts[0]}, ${texts[1]})`;
     }
-    const up = node.parent;
     if ((up?.kind === SyntaxKind.BinaryExpression) && (up.operatorToken.kind === SyntaxKind.EqualsToken) && (up.right === node)
         && (up.left?.kind === SyntaxKind.Identifier) && !['int64', 'int'].includes(this.goDeclaredTypeOfIdentifier(up.left))) {
         return printCallExpressionBase93g4.call(this, node, identation);
@@ -39225,7 +39230,9 @@ GoTranspiler.prototype.goTypeOfInitializer = function (initializer, printedValue
     if ((initializer?.kind === SyntaxKind.CallExpression) && (write?.kind === SyntaxKind.BinaryExpression) && (write.right === initializer)
         && (write.operatorToken.kind === SyntaxKind.EqualsToken) && (write.left?.kind === SyntaxKind.Identifier)) {
         const self = this.checkerOrUndefined()?.getSymbolAtLocation(write.left)?.valueDeclaration?.resolve();
-        if ((self !== undefined) && (this.go93g4PointerOperands(initializer, self) !== undefined)) {
+        if ((self !== undefined) && (this.go92g7IsBaseSum(initializer) || (this.go92g7MinMaxName(initializer) !== undefined))
+            && !String(this.goDeclaredTypeOfIdentifier(write.left) ?? '').startsWith('*')
+            && (this.go93g4PointerOperands(initializer, self) !== undefined)) {
             return 'int64';
         }
     }
