@@ -39132,6 +39132,18 @@ GoTranspiler.prototype.go93g4PointerOperands = function (call, self = undefined)
             && (this.checkerOrUndefined()?.getSymbolAtLocation(operand)?.valueDeclaration?.resolve() === self)) {
             return { 'pointer': false, 'text': printed };
         }
+        // a local reads by the type its declaration printed, never by a verdict still in flight
+        if (operand.kind === SyntaxKind.Identifier) {
+            const declared = this.goDeclaredTypeOfIdentifier(operand);
+            if (declared === 'int64') {
+                return { 'pointer': false, 'text': printed };
+            }
+            return ((declared === '*int64') && this.goPointerNumberIsNonNil(operand)) ? { 'pointer': true, 'text': '*' + printed } : undefined;
+        }
+        // a nested arithmetic operand may print as a helper box in this position: keep the boxed sum
+        if ((operand.kind === SyntaxKind.BinaryExpression) || (operand.kind === SyntaxKind.ParenthesizedExpression)) {
+            return undefined;
+        }
         const kind = this.goOperandStaticType(operand, printed);
         // an int constant converts to the int64 partner exactly while it is a safe integer
         if ((kind === 'int64') || ((kind === 'const-int') && Number.isSafeInteger(this.goNumericConstantValue(operand)))) {
@@ -39170,10 +39182,10 @@ GoTranspiler.prototype.go93g4HasNumericUse = function (declaration): boolean {
             return false;
         }
         const other = this.goUnwrapPrintedAssertions(call.arguments[1 - call.arguments.indexOf(n)]);
-        if ((other?.kind !== SyntaxKind.Identifier) && !this.goDefaultedSafeIntegerCall(other)) {
-            return false;
+        if (other?.kind === SyntaxKind.Identifier) {
+            return (this.goDeclaredTypeOfIdentifier(other) === '*int64') && this.goPointerNumberIsNonNil(other);
         }
-        return this.goInt64Operand(other, this.printNode(other, 0))?.pointer === true;
+        return this.goDefaultedSafeIntegerCall(other);
     });
 };
 
