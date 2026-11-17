@@ -1469,6 +1469,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-70f: a non-test local declared `this.safeString (o, k)` (any key) or `this.safeStringLower|Upper (o, 'lit')`, two
      *  arguments, base reader (rust64bReaderLocal): the boxed reader is `Str` or `Null`, exactly its `_opt` twin. */
     rust70fReaderLocal(declaration: Node, cast?: boolean): boolean;
+    /** ral-90rg R2: a `const x = this.safeCurrencyCode (id)` (one argument, the base method: printed `-> Option<String>`) that is
+     *  never written after its declaration. */
+    rust90rgCurrencyCodeLocal(declaration: Node): boolean;
     rust70fWritten(declaration: VariableDeclaration): boolean;
     /** ral-64b: a local declared from a base safeString-family reader with no default argument (its box is `Str` or `Null`). */
     rust64bReaderLocal(declaration: any): boolean;

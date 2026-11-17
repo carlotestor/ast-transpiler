@@ -62757,6 +62757,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const other = parent.left === n ? parent.right : parent.left;
       if (this.rustScalarLiteralTest(kind, other) !== void 0)
         return "test";
+      if (kind === "ostr" && this.rust90rgCurrencyCodeLocal(this.rustDeclaredNode(n)) && (parent.operatorToken.kind === _ast.SyntaxKind.EqualsEqualsEqualsToken || parent.operatorToken.kind === _ast.SyntaxKind.ExclamationEqualsEqualsToken) && this.primitiveKindOfType(this.typeOfNodeIfAny(this.unwrapParens(other))) === "string" && this.printsValueExpression(this.unwrapParens(other)) && this.rustScalarLocalOf(this.unwrapParens(other)) === void 0)
+        return "native";
     }
     if ((kind === "bool" || kind === "obool") && this.rustIdentifierUseIsCondition(n))
       return "cond";
@@ -63875,6 +63877,16 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (init.arguments.length !== 2 || name !== "safeString" && name !== "safeStringLower" && name !== "safeStringUpper")
       return false;
     if (name !== "safeString" && _optionalChain([this, 'access', _10298 => _10298.rustOptReaderName, 'call', _10299 => _10299(init), 'optionalAccess', _10300 => _10300.key]) === void 0)
+      return false;
+    return !this.rust70fWritten(declaration);
+  }
+  /** ral-90rg R2: a `const x = this.safeCurrencyCode (id)` (one argument, the base method: printed `-> Option<String>`) that is
+   *  never written after its declaration. */
+  rust90rgCurrencyCodeLocal(declaration) {
+    if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || this.rustTestTierSource(declaration))
+      return false;
+    const init = this.unwrapParens(declaration.initializer);
+    if (!this.rustUdReaderStr(init) || !_is.isCallExpression.call(void 0, init) || !_is.isPropertyAccessExpression.call(void 0, init.expression) || String(init.expression.name.text) !== "safeCurrencyCode" || init.arguments.length !== 1)
       return false;
     return !this.rust70fWritten(declaration);
   }
@@ -66420,7 +66432,7 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       return partnerTest;
     if (lk === void 0 !== (rk === void 0) && equality && partnerTest === void 0 && (op === _ast.SyntaxKind.EqualsEqualsEqualsToken || op === _ast.SyntaxKind.ExclamationEqualsEqualsToken)) {
       const [typed, other, k] = lk === void 0 ? [right, left, rk] : [left, right, lk];
-      if (k === "ostr" && _is.isIdentifier.call(void 0, typed) && this.rust70fReaderLocal(this.rustDeclaredNode(typed), true) && this.primitiveKindOfType(this.typeOfNodeIfAny(other)) === "string" && this.printsValueExpression(other)) {
+      if (k === "ostr" && _is.isIdentifier.call(void 0, typed) && (this.rust70fReaderLocal(this.rustDeclaredNode(typed), true) || this.rust90rgCurrencyCodeLocal(this.rustDeclaredNode(typed))) && this.primitiveKindOfType(this.typeOfNodeIfAny(other)) === "string" && this.printsValueExpression(other)) {
         if (dry)
           return "_";
         const mine = `${super.printIdentifier(typed)}.as_deref()`;
