@@ -69679,7 +69679,14 @@ ${ind}];`;
     });
   }
   rustPassThroughStrMethod(method) {
-    if (method === void 0 || !isMethodDeclaration5(method) || method.body === void 0 || _RustTranspiler.RUST_BASE_TIER_FILE.test(String(method.getSourceFile().fileName)))
+    if (method === void 0 || !isMethodDeclaration5(method) || method.body === void 0 || !isIdentifier3(method.name) || !isClassDeclaration4(method.parent))
+      return false;
+    const file = String(method.getSourceFile().fileName).replace(/\\/g, "/");
+    const at = file.lastIndexOf("/ts/src/");
+    const cls = method.parent.name;
+    if (at < 0 || cls === void 0)
+      return false;
+    if (!(_RustTranspiler.RUST_PASS_THROUGH_STR_HELPERS[`${file.slice(at + "/ts/src/".length)}#${String(cls.text)}`] ?? []).includes(String(method.name.text)))
       return false;
     const params = new Set(method.parameters);
     const body = method.body;
@@ -95396,6 +95403,12 @@ _RustTranspiler.RUST_PARAM_READ = {
 };
 // ral-59n: base readers whose generated Rust answers a plain `Value` of one primitive family (or `Null`)
 _RustTranspiler.RUST_59N_VALUE_READERS = /* @__PURE__ */ new Set(["safeString", "safeString2", "safeStringLower", "safeStringUpper", "safeInteger", "safeInteger2", "safeNumber", "safeNumber2", "safeBool", "safeBool2"]);
+// venue string helpers whose `: Str` return was spelled with their callers already typed elsewhere: only their results need
+// the native-use proof (other pass-through `Str` helpers keep the decisions they had)
+_RustTranspiler.RUST_PASS_THROUGH_STR_HELPERS = {
+  "phemex.ts#phemex": ["fromEp", "fromEv", "fromEr"],
+  "pro/phemex.ts#phemex": ["fromEp", "fromEv", "fromEr"]
+};
 _RustTranspiler.RUST_SCALAR_VALUE_OPERAND_OPS = /* @__PURE__ */ new Set([
   SyntaxKind7.PlusToken,
   SyntaxKind7.MinusToken,

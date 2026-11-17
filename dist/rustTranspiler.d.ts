@@ -2084,6 +2084,7 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  call itself, a reader / parse call taking it whole (not `omitZero`, whose result was typed before), or a call taking
      *  a local initialised from it. */
     rustPassThroughStrCallIn(node: Node, depth?: number): boolean;
+    private static readonly RUST_PASS_THROUGH_STR_HELPERS;
     rustPassThroughStrMethod(method: Node | undefined): boolean;
     /** ral-90re R3: a ternary initializer one of whose arms is a field read of an owned `safeMarket` (`smkt`) local. */
     rust90reSmktArmTernary(init: Node): boolean;
