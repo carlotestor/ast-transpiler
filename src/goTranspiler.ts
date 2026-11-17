@@ -38326,3 +38326,80 @@ GoTranspiler.prototype.goAnyLocalHoldsPointer = function (decl): boolean {
     return holds;
 };
 // ===== ral-92g8 R1/R2 (end) =====
+
+// ===== ral-92g8 R3 (begin): list seeds rebound through a defaulted safeList =====
+// `let types = [ 'spot', 'swap' ]; .. types = this.safeList (o, 'types', types)`: the reader's default is the
+// local itself (or a list literal), so SafeListTypedDefault answers a non-nil []any on every path and the
+// local types `[]any`; the write prints `types = SafeListTypedDefault(o, "types", types)`. Requires an
+// index or `.length` read so the type has a native use.
+function goR92g8DefaultedSafeListWrite (goTranspiler, write, declaration): boolean {
+    const right = goR92g8Unparen (write?.right);
+    if ((right?.kind !== SyntaxKind.CallExpression) || (right.arguments.length !== 3)
+        || (right.expression?.kind !== SyntaxKind.PropertyAccessExpression) || (right.expression.expression?.kind !== SyntaxKind.ThisKeyword)
+        || (right.expression.name?.text !== 'safeList')) {
+        return false;
+    }
+    const fallback = goR92g8Unparen (right.arguments[2]);
+    if (fallback?.kind === SyntaxKind.ArrayLiteralExpression) {
+        return true;
+    }
+    return (fallback?.kind === SyntaxKind.Identifier) && (ccxtGoParamDeclarationOf (goTranspiler, fallback) === declaration);
+}
+function goR92g8Unparen (node) {
+    while ((node?.kind === SyntaxKind.ParenthesizedExpression) || (node?.kind === SyntaxKind.AsExpression)) {
+        node = node.expression;
+    }
+    return node;
+}
+function goR92g8ListSeedIsSafe (goTranspiler, scope, declaration, varName: string): boolean {
+    const init = goR92g8Unparen (declaration?.initializer);
+    // ccxt source trees only (an in-memory program keeps its shipped box)
+    if (!/(^|[\\/])ts[\\/]src[\\/]/.test (String (declaration?.getSourceFile?.()?.fileName ?? ''))) {
+        return false;
+    }
+    if ((declaration?.kind !== SyntaxKind.VariableDeclaration) || (init?.kind !== SyntaxKind.ArrayLiteralExpression) || (init.elements.length === 0)
+        || ((declaration.type !== undefined) && (declaration.type.getText ().replace (/\s+/g, '') !== 'string[]')) || (scope === undefined)) {
+        return false;
+    }
+    let writes = 0;
+    const unsafe = goTranspiler.hasNodeWhere (scope, (n) => {
+        if ((n.kind !== SyntaxKind.Identifier) || (n.text !== varName) || (n === declaration.name)
+            || (ccxtGoParamDeclarationOf (goTranspiler, n) !== declaration)) {
+            return false;
+        }
+        const parent = n.parent;
+        if ((parent?.kind === SyntaxKind.BinaryExpression) && (parent.left === n) && (parent.operatorToken?.kind === SyntaxKind.EqualsToken)) {
+            if (goR92g8DefaultedSafeListWrite (goTranspiler, parent, declaration)) {
+                writes += 1;
+                return false;
+            }
+            return true;
+        }
+        if ((parent?.kind === SyntaxKind.CallExpression) && (parent.arguments.indexOf (n) === 2) && (parent.parent?.kind === SyntaxKind.BinaryExpression)
+            && goR92g8DefaultedSafeListWrite (goTranspiler, parent.parent, declaration)) {
+            return false; // the reader default slot of its own write
+        }
+        return ccxtGoWriteSiteShippedVeto (goTranspiler, n, parent, '[]any');
+    });
+    return !unsafe && (writes > 0) && goR92g8HasNativeUse (goTranspiler, declaration, '[]any');
+}
+const goLocalIsSafeToTypeBase92g8 = GoTranspiler.prototype.goLocalIsSafeToType;
+GoTranspiler.prototype.goLocalIsSafeToType = function (scope, declaration, varName: string, goType: string, stringWriteProven = false): boolean {
+    return goLocalIsSafeToTypeBase92g8.call (this, scope, declaration, varName, goType, stringWriteProven)
+        || ((goType === '[]any') && goR92g8ListSeedIsSafe (this, scope, declaration, varName));
+};
+const printBinaryExpressionBase92g8 = GoTranspiler.prototype.printBinaryExpression;
+GoTranspiler.prototype.printBinaryExpression = function (node, identation) {
+    const right = goR92g8Unparen (node?.right);
+    if ((node?.operatorToken?.kind === SyntaxKind.EqualsToken) && (node.left?.kind === SyntaxKind.Identifier)
+        && (right?.kind === SyntaxKind.CallExpression) && (right.expression?.name?.text === 'safeList')) {
+        const declaration = ccxtGoParamDeclarationOf (this, node.left);
+        if ((declaration?.kind === SyntaxKind.VariableDeclaration) && goR92g8DefaultedSafeListWrite (this, node, declaration)
+            && (this.goDeclaredTypeOfIdentifier (node.left) === '[]any')) {
+            const args = goR92g8Unparen (node.right).arguments.map ((a) => this.printNode (a, 0).trim ());
+            return this.printNode (node.left, 0) + ' = SafeListTypedDefault(' + args.join (', ') + ')';
+        }
+    }
+    return printBinaryExpressionBase92g8.call (this, node, identation);
+};
+// ===== ral-92g8 R3 (end) =====

@@ -16606,3 +16606,43 @@ describe('ral-92g8 R1/R2 venue Num and Market[] producers print typed returns', 
         expect(out).not.toContain('*float64 {');
     });
 });
+
+describe('ral-92g8 R3 list seeds rebound through a defaulted safeList', () => {
+    const head = 'type Dict = { [key: string]: unknown };\n'
+        + 'type List = unknown[];\n'
+        + 'class base {\n'
+        + '    options: Dict = {};\n'
+        + '    safeList (o: unknown, k: string, d: unknown = undefined): List { return d as List; }\n'
+        + '    safeDict (o: unknown, k: string): Dict { return undefined; }\n'
+        + '    safeString (o: unknown, k: unknown): string { return undefined; }\n'
+        + '    run (t: string): number { return 0; }\n'
+        + '}\n'
+        + 'export class ex extends base {\n';
+    test('a seed read by index whose writes default to itself types []any', () => {
+        const out = goTranspile92g8(head
+            + '    f () {\n'
+            + '        let types: string[] = [ \'spot\', \'swap\' ];\n'
+            + '        const o = this.safeDict (this.options, \'fetchMarkets\');\n'
+            + '        if (o !== undefined) {\n'
+            + '            types = this.safeList (o, \'types\', types) as List;\n'
+            + '        }\n'
+            + '        for (let i = 0; i < types.length; i++) {\n'
+            + '            this.run (this.safeString (types, i));\n'
+            + '        }\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('var types []any = []any{"spot", "swap"}');
+        expect(out).toContain('types = SafeListTypedDefault(o, "types", types)');
+        expect(out).toContain('i < len(types)');
+    });
+    test('a seed with a write defaulting to something else keeps the box', () => {
+        const out = goTranspile92g8(head
+            + '    g (other: List) {\n'
+            + '        let types = [ \'spot\' ];\n'
+            + '        types = this.safeList (this.options, \'types\', other);\n'
+            + '        return types.length;\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('var types any = []any{"spot"}');
+    });
+});
