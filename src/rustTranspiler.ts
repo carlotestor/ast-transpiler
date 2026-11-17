@@ -26571,6 +26571,19 @@ export class RustTranspiler extends BaseTranspiler {
         return call !== undefined && isCallExpression(call) && this.rustBorrowedSourceKind(call) === 'api' && this.rustDeclaredEndpointKind(call) !== undefined;
     }
 
+    /** `this.safeDict (x, k, x)` whose default is its own receiver, a `let` filled only by endpoints declared `Promise<Dict>`
+     *  (ral-61i, a syntactic proof): the answer is the map read at k or x itself, so a map or Null on every path. */
+    rustSelfDefaultedRead(call: any, kind: 'dict' | 'list' | 'api'): boolean {
+        if (kind !== 'dict' || !isCallExpression(call) || call.arguments.length !== 3 || this.rustTestTierSource(call)) return false;
+        if (String((call.expression as any)?.name?.text ?? '') !== 'safeDict') return false;
+        const recv: any = this.rustSkipWrappers(call.arguments[0]);
+        const dflt: any = this.rustSkipWrappers(call.arguments[2]);
+        if (!isIdentifier(recv) || !isIdentifier(dflt) || String(recv.text) !== String(dflt.text)) return false;
+        const declaration: any = this.rustDeclarationOfIdentifier(recv);
+        if (declaration === undefined || declaration !== this.rustDeclarationOfIdentifier(dflt)) return false;
+        return isVariableDeclaration(declaration) && this.rustDeclaredDictEndpointLet(declaration);
+    }
+
     /** A base `safeDict*` / `safeList*` call (default absent, nullish or an empty literal of its kind), or a base `extend`/`omit`. */
     rustOptContainerSourceOk(call: any, kind: 'dict' | 'list' | 'api'): boolean {
         if (kind === 'api' || !isCallExpression(call)) return false;
@@ -26581,6 +26594,7 @@ export class RustTranspiler extends BaseTranspiler {
         const at = name.endsWith('2') ? 3 : 2;
         const dflt: any = call.arguments.length > at ? this.rustSkipWrappers(call.arguments[at]) : undefined;
         if (dflt === undefined || this.literalKindOfNode(dflt) === 'null') return true;
+        if (this.rustSelfDefaultedRead(call, kind)) return true;
         return kind === 'dict' ? isObjectLiteralExpression(dflt) && dflt.properties.length === 0 : isArrayLiteralExpression(dflt) && dflt.elements.length === 0;
     }
 
