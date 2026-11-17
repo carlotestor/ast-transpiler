@@ -24751,3 +24751,25 @@ describe("ral-87rb R2: a numberToString string lent into a Precise write is an O
         expect(out).toContain('let mut amountString: Option<String> = self.numberToString(amount.clone());');
     });
 });
+
+describe("ral-87rb R3: a slot-written bool compared === true is a bool", () => {
+    const files: Record<string, string> = {
+        "ts/src/base/Exchange.ts": "export type Bool = boolean | undefined;\nexport interface Dict { [key: string]: any }\nexport default class Exchange {\n    handleParamBool2 (params: Dict, a: string, b: string, d: Bool = undefined): [Bool, Dict] { return [ d, params ]; }\n    hold (x: any): any { return x; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n",
+        "ts/src/pro/venue.ts": "import Exchange from '../base/Exchange.js';\nimport type { Bool, Dict } from '../base/Exchange.js';\nexport default class venue extends Exchange {\n    watchOrders (typeId: string, params: Dict = {}) {\n        let query = params;\n        let isTrigger: Bool = false;\n        [ isTrigger, query ] = this.handleParamBool2 (query, 'trigger', 'stop', false);\n        if ((isTrigger === true) && (typeId === 'options')) {\n            return this.hold (query);\n        }\n        if (isTrigger === true) {\n            return 1;\n        }\n        return 0;\n    }\n}\n",
+    };
+    let out: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), "astfx-rs-87rb3-"));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = transpiler.transpileRustByPath(path.join (root, "ts/src/pro/venue.ts")).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test("gate pro watchOrders isTrigger: bool from the destructured slot, === true reads it natively", () => {
+        expect(out).toContain('let mut isTrigger: bool = false;');
+        expect(out).toContain('if (isTrigger == true) {');
+        expect(out).not.toContain('let mut isTrigger: Value');
+    });
+});

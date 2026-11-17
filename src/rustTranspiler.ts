@@ -20142,7 +20142,7 @@ export class RustTranspiler extends BaseTranspiler {
         const boxes: any[] = [];
         this.rustLocalUsesAll(declaration, String(declaration.name.text), true, (n: any) => {
             const form = this.rustScalarUseForms.get(n);
-            if (form === 'bslot') { slots++; writes.add(n.parent.parent); if (this.rustBoolSlotLineLong(n)) others = false; } else if (form === 'box') boxes.push(n); else if (form !== 'cond' && form !== 'write') others = false;
+            if (form === 'bslot') { slots++; writes.add(n.parent.parent); if (this.rustBoolSlotLineLong(n)) others = false; } else if (form === 'box') boxes.push(n); else if (form !== 'cond' && form !== 'write' && !(form === 'test' && this.rust87rbTrueTest(n))) others = false;
             return true;
         });
         // od: a `Value::Bool(x)` box inside the right side of the local's first slot write runs before any slot
@@ -20153,6 +20153,15 @@ export class RustTranspiler extends BaseTranspiler {
             if (up?.parent === undefined || [ ...writes ].some((w: any) => w.pos < up.parent.pos)) others = false;
         }
         return slots === 0 || others;
+    }
+
+    /** ral-87rb R3: `x === true` / `x !== true` reads a slot-written bool exactly: the slot prints `.as_bool() == Some(true)`,
+     *  which is `true` for the very values the boxed `is_equal(x, true)` matched (a `false` / `null` compare would not agree on a Null slot). */
+    rust87rbTrueTest(n: Node): boolean {
+        const parent: Node = n.parent;
+        if (!isBinaryExpression(parent) || !this.isEqualityOp(parent.operatorToken.kind)) return false;
+        const other: Node = this.unwrapParens(parent.left === n ? parent.right : parent.left);
+        return other?.kind === SyntaxKind.TrueKeyword;
     }
 
     /** The destructuring statement keeps the 400-char line budget with the slot's bool read.
