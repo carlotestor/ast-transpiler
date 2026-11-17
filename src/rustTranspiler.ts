@@ -29558,12 +29558,19 @@ export class RustTranspiler extends BaseTranspiler {
                 const p: any = (r as any).parent;
                 if (isIdentifier(r) && isBinaryExpression(p) && p.left === r && rustIsAssignmentOperator(p.operatorToken.kind)) {
                     if (this.rustDeclarationOfIdentifier(r) !== declaration) return any;
-                    if (p.operatorToken.kind === SyntaxKind.PlusEqualsToken) {
+                    // `x = x + s` is `x += s`
+                    const selfLeft: Node[] | undefined = p.operatorToken.kind === SyntaxKind.EqualsToken ? this.rust93rfSelfAppendTail(p, declaration) : undefined;
+                    if (p.operatorToken.kind === SyntaxKind.PlusEqualsToken || selfLeft !== undefined) {
                         // `x += s` outside a loop appends s to every value the local can hold at that point (writes in order)
                         for (let a: any = p.parent; a !== undefined && a !== scope; a = a.parent) {
                             if (a.kind === SyntaxKind.ForStatement || a.kind === SyntaxKind.WhileStatement || a.kind === SyntaxKind.DoStatement || isForInStatement(a) || isForOfStatement(a)) return any;
                         }
-                        const tail = this.rustWsHashPatterns(p.right, depth + 1, seen);
+                        let tail: Array<Array<string | null>> = selfLeft === undefined ? this.rustWsHashPatterns(p.right, depth + 1, seen) : [[]];
+                        for (const part of selfLeft ?? []) {
+                            const next: Array<Array<string | null>> = [];
+                            for (const x of tail) for (const y of this.rustWsHashPatterns(part, depth + 1, seen)) if (next.length < 16) next.push([ ...x, ...y ]);
+                            tail = next;
+                        }
                         const grown: Array<Array<string | null>> = [];
                         for (const x of out) for (const y of tail) if (grown.length < 16) grown.push([ ...x, ...y ]);
                         out.push(...grown);
@@ -29577,6 +29584,18 @@ export class RustTranspiler extends BaseTranspiler {
         } finally {
             seen.delete(declaration);
         }
+    }
+
+    /** The appended parts of `x = x + a + b` (x the local `declaration` names, left-nested `+`), in order; undefined for
+     *  any other right side. */
+    rust93rfSelfAppendTail(assign: BinaryExpression, declaration: VariableDeclaration): Node[] | undefined {
+        const parts: Node[] = [];
+        let e: Node | undefined = this.rustStripWrappers(assign.right);
+        while (e !== undefined && isBinaryExpression(e) && e.operatorToken.kind === SyntaxKind.PlusToken) {
+            parts.unshift(e.right);
+            e = this.rustStripWrappers(e.left);
+        }
+        return e === undefined || !isIdentifier(e) || this.rustDeclarationOfIdentifier(e) !== declaration || parts.length === 0 ? undefined : parts;
     }
 
     /** ral-47h: the dispatch keys a handler local `const x = this.safeString (message, 'f')` can hold, or undefined.
