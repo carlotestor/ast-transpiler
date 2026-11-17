@@ -25233,3 +25233,17 @@ describe('ral-90rh R3: an indexOf local over an untyped string parameter', () =>
         expect(out).toContain('if colonIndex >= 0 {');
     });
 });
+
+describe('ral-90rh R4: nil-declared locals compared with a typed market struct field', () => {
+    test('market[\'type\'] !== marketType and market[\'linear\'] !== isLinearSubType compare the fields natively', () => {
+        const dir = path.join (rustFixtureRoot, 'r90rh-mktfield');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export type Str = string | undefined;\nexport type Bool = boolean | undefined;\nexport interface MarketInterface { symbol: string; type: string; spot: boolean; linear: Bool; }\nexport type Market = MarketInterface | undefined;\nexport default class Exchange {\n    market (symbol: string): MarketInterface { return undefined; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeBool (o: any, k: any, d: Bool = undefined): Bool { return o; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    sameKind (symbols: string[]): string[] {\n        const result: string[] = [];\n        let marketType: Str = undefined;\n        let isLinearSubType: Bool = undefined;\n        for (let i = 0; i < symbols.length; i++) {\n            const market = this.market (symbols[i]);\n            if (marketType !== undefined) {\n                if (market['type'] !== marketType) {\n                    throw new Error ('mixed ' + marketType);\n                }\n            }\n            if (isLinearSubType !== undefined) {\n                if (market['linear'] !== isLinearSubType) {\n                    throw new Error ('mixed subType');\n                }\n            }\n            marketType = this.safeString (market, 'type');\n            if (!this.safeBool (market, 'spot', false)) {\n                isLinearSubType = this.safeBool (market, 'linear');\n            }\n            result.push (market['symbol']);\n        }\n        return result;\n    }\n}\n");
+        const fresh = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': [ 'market' ], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const out = fresh.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts')).content;
+        expect(out).toContain('let mut marketType: Option<String> = None;');
+        expect(out).toContain('let mut isLinearSubType: Option<bool> = None;');
+        expect(out).toContain('(Some((market).market_type.as_str()) != marketType.as_deref())');
+        expect(out).toContain('((market).linear != isLinearSubType)');
+    });
+});

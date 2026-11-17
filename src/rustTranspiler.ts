@@ -2935,6 +2935,20 @@ export class RustTranspiler extends BaseTranspiler {
         return undefined;
     }
 
+    /** ral-90rh R4: `m['k']` off a typed (`struct`) market local whose field is a `String` (kind `ostr`) or an `Option<bool>`
+     *  (kind `obool`): the field text (`(m).market_type`, `(m).linear`), else undefined. */
+    rust90rhMarketFieldPartner(partner: any, kind: string): string | undefined {
+        if (partner === undefined || !(isElementAccessExpression(partner) || isPropertyAccessExpression(partner))) return undefined;
+        const declaration = this.rustTypedMarketLocalOf(partner.expression);
+        if (declaration === undefined || this.rustMarketLocalKind(declaration) !== 'struct') return undefined;
+        const key = this.rustMarketReadKey(partner.expression);
+        if (key === undefined) return undefined;
+        const recv = `(${this.printNode(declaration.name, 0)})`;
+        if (kind === 'ostr' && RustTranspiler.RUST_MARKET_STR_FIELDS[key] !== undefined) return `${recv}.${RustTranspiler.RUST_MARKET_STR_FIELDS[key]}`;
+        if (kind === 'obool' && RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS.has(key)) return `${recv}.${key}`;
+        return undefined;
+    }
+
     /** ral-90rh R3: a declaration initializer `s.indexOf ('<non-empty literal>')`, `s` a bare identifier the checker types
      *  `string` and no scalar rule types (it prints as `Value`). */
     rust90rhValueIndexOf(expr: any): boolean {
@@ -12324,6 +12338,14 @@ export class RustTranspiler extends BaseTranspiler {
             return `(${kind === 'int' ? `Some(${name} as f64)` : `Value::from(${name}).as_f64()`} ${sign} ${this.printNode(partner, 0).trim()}.as_f64())`;
         }
         if (!isIdentifier(self) || this.rustScalarIdentifierKind(self) === undefined) return undefined;
+        // ral-90rh R4: a field read off a typed market struct local (`m['type']`, `m['linear']`): the boxed side printed
+        // `Value::from(field)` (`Str` of the `String`, `Bool` / `Null` of the `Option<bool>`), so the field itself compares
+        const field = this.rust90rhMarketFieldPartner(partner, kind);
+        if (field !== undefined) {
+            if (dry) return '_';
+            const name = super.printIdentifier(self);
+            return kind === 'ostr' ? `(Some(${field}.as_str()) ${sign} ${name}.as_deref())` : `(${field} ${sign} ${name})`;
+        }
         // ral-59n: a base `safe*` scalar reader partner (a `Value`) compares through its payload accessor
         // (not for a local that also keys an element read: typing that key changes how the receiver map local is decided)
         if (!isIdentifier(partner)) return this.rust59nValueReaderPartner(partner) ? this.rustScalarPayloadPartnerTest(self, partner, kind, sign, dry) : undefined;
