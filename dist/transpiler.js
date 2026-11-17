@@ -12674,7 +12674,7 @@ var CCXT_GO_BOOL_METHOD_NAMES = [
   "IsEmptyString",
   "IsTickPrecision"
 ];
-var CCXT_GO_STRING_PTR_METHOD_NAMES = ["NetworkIdToCode", "FindTimeframe", "AmountToPrecision", "PriceToPrecision", "OmitZero", "CurrencyToPrecision", "NetworkCodeToId"];
+var CCXT_GO_STRING_PTR_METHOD_NAMES = ["NetworkIdToCode", "FindTimeframe", "AmountToPrecision", "PriceToPrecision", "CurrencyToPrecision", "NetworkCodeToId", "OmitZero"];
 var CCXT_GO_HELPER_RETURN_TYPES = {
   // Typed twins of GetArg (go/v4/exchange_helpers.go) -- the `var x <T> = GetArg<T>(...)`
   // locals the printer declares for a provable optional argument
@@ -16263,6 +16263,9 @@ function ccxtGoWriteSiteAssignment(goTranspiler, node, identation) {
   const goType = ccxtGoWriteSiteLocalGoType(goTranspiler, node.left);
   if (goType === void 0 || ral90g5OwnsWrite(node)) {
     return void 0;
+  }
+  if (goType === "*string" && strPtrFamilyLiteralTemp(goTranspiler, node) !== void 0) {
+    return goTranspiler.goPointerWriteText(node, identation);
   }
   const nilJoin = ccxtGoNilJoinDeclarationType(goTranspiler, node.left) === goType;
   const conversion = ccxtGoWriteSiteConversion(goTranspiler, goType, node.right, nilJoin);
@@ -44991,6 +44994,146 @@ GoTranspiler.prototype.printCallExpression = function(node, identation) {
     }
   }
   return printCallExpressionBase90g8.call(this, node, identation);
+};
+var strPtrFamilyVerdicts = /* @__PURE__ */ new WeakMap();
+function strPtrFamilyVerdict(goTranspiler, method) {
+  if (method?.kind !== SyntaxKind5.MethodDeclaration || method.body?.kind !== SyntaxKind5.Block || goTranspiler.isAsyncFunction(method)) {
+    return void 0;
+  }
+  if (strPtrFamilyVerdicts.has(method)) {
+    return strPtrFamilyVerdicts.get(method) ?? void 0;
+  }
+  strPtrFamilyVerdicts.set(method, null);
+  const name = String(method.name?.text ?? "");
+  const goName = name.charAt(0).toUpperCase() + name.slice(1);
+  if (!CCXT_GO_STRING_PTR_METHOD_NAMES.includes(goName)) {
+    return void 0;
+  }
+  const kinds = /* @__PURE__ */ new Map();
+  for (const statement of collectReturnStatements(method.body)) {
+    for (let up = statement.parent; up !== void 0 && up !== method.body; up = up.parent) {
+      if (up.kind === SyntaxKind5.TryStatement) {
+        return void 0;
+      }
+    }
+    const expression = statement.expression;
+    if (expression === void 0) {
+      return void 0;
+    }
+    if (isAbsentExpression(expression)) {
+      kinds.set(statement, "nil");
+      continue;
+    }
+    const callee = expression.kind === SyntaxKind5.CallExpression ? expression.expression : void 0;
+    const familyCall = callee?.kind === SyntaxKind5.PropertyAccessExpression && (callee.expression?.kind === SyntaxKind5.ThisKeyword || callee.expression?.kind === SyntaxKind5.SuperKeyword) && CCXT_GO_STRING_PTR_METHOD_NAMES.includes(String(callee.name?.text ?? "").charAt(0).toUpperCase() + String(callee.name?.text ?? "").slice(1));
+    const goType = familyCall ? "*string" : ccxtGoReturnExpressionType(goTranspiler, expression);
+    if (goType === "*string") {
+      kinds.set(statement, "bare");
+    } else if (goType === "string" && expression.kind === SyntaxKind5.Identifier) {
+      kinds.set(statement, "addr");
+    } else {
+      kinds.set(statement, "wrap");
+    }
+  }
+  if (kinds.size === 0) {
+    return void 0;
+  }
+  strPtrFamilyVerdicts.set(method, kinds);
+  return kinds;
+}
+function strPtrFamilyEnclosingMethod(node) {
+  for (let up = node?.parent; up !== void 0; up = up.parent) {
+    switch (up.kind) {
+      case SyntaxKind5.MethodDeclaration:
+        return up;
+      case SyntaxKind5.FunctionDeclaration:
+      case SyntaxKind5.FunctionExpression:
+      case SyntaxKind5.ArrowFunction:
+      case SyntaxKind5.Constructor:
+        return void 0;
+    }
+  }
+  return void 0;
+}
+var strPtrFamilyMethodDefinition = GoTranspiler.prototype.printMethodDefinition;
+GoTranspiler.prototype.printMethodDefinition = function(node, identation) {
+  const printed = strPtrFamilyMethodDefinition.call(this, node, identation);
+  if (typeof printed !== "string" || strPtrFamilyVerdict(this, node) === void 0) {
+    return printed;
+  }
+  return printed.replace(/(\)\s+)any(\s*)$/, "$1*string$2");
+};
+var strPtrFamilyReturnStatement = GoTranspiler.prototype.printReturnStatement;
+GoTranspiler.prototype.printReturnStatement = function(node, identation) {
+  const method = strPtrFamilyEnclosingMethod(node);
+  const kind = method !== void 0 ? strPtrFamilyVerdict(this, method)?.get(node) : void 0;
+  if (kind === void 0) {
+    return strPtrFamilyReturnStatement.call(this, node, identation);
+  }
+  const value = kind === "nil" ? "nil" : this.printNode(node.expression, identation).trim();
+  const text = kind === "addr" ? "&" + value : kind === "wrap" ? "SafeStringPtr(" + value + ")" : value;
+  return this.printNodeCommentsIfAny(node, identation, this.getIden(identation) + "return " + text);
+};
+var STR_PTR_FAMILY_NEW = ["currencyToPrecision", "networkCodeToId"];
+var strPtrFamilyExpressionStatement = GoTranspiler.prototype.printExpressionStatement;
+GoTranspiler.prototype.printExpressionStatement = function(node, identation) {
+  const write = node?.expression;
+  const call = write?.right;
+  const callee = call?.expression;
+  if (write?.kind !== SyntaxKind5.BinaryExpression || write.operatorToken?.kind !== SyntaxKind5.EqualsToken || write.left?.kind !== SyntaxKind5.Identifier || call?.kind !== SyntaxKind5.CallExpression || callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword || !STR_PTR_FAMILY_NEW.includes(String(callee.name?.text ?? ""))) {
+    return strPtrFamilyExpressionStatement.call(this, node, identation);
+  }
+  const declaration = ccxtGoParamDeclarationOf(this, write.left);
+  const declared = this.goDeclaredTypeOfIdentifier(write.left);
+  if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declared !== void 0 && declared !== "any") {
+    return strPtrFamilyExpressionStatement.call(this, node, identation);
+  }
+  const iden = this.getIden(identation);
+  const name = this.printNode(write.left, 0).trim();
+  const value = this.printNode(call, 0).trim();
+  return this.printNodeCommentsIfAny(node, identation, iden + "if derefPtr := " + value + "; derefPtr != nil {\n" + iden + "	" + name + " = *derefPtr\n" + iden + "} else {\n" + iden + "	" + name + " = nil\n" + iden + "}");
+};
+function strPtrFamilySeeded(goTranspiler, declaration, depth = 0) {
+  const init = declaration?.kind === SyntaxKind5.VariableDeclaration ? ral90g4Unparen(declaration.initializer) : void 0;
+  if (init?.kind === SyntaxKind5.Identifier && depth < 2) {
+    return strPtrFamilySeeded(goTranspiler, ccxtGoParamDeclarationOf(goTranspiler, init), depth + 1);
+  }
+  const callee = init?.kind === SyntaxKind5.CallExpression ? init.expression : void 0;
+  return callee?.kind === SyntaxKind5.PropertyAccessExpression && callee.expression?.kind === SyntaxKind5.ThisKeyword && STR_PTR_FAMILY_NEW.includes(String(callee.name?.text ?? ""));
+}
+function strPtrFamilyLiteralTemp(goTranspiler, node) {
+  const left = node?.left;
+  if (left?.kind !== SyntaxKind5.Identifier || node.parent?.kind !== SyntaxKind5.ExpressionStatement || !ral90g4IsStringLiteral(node.right)) {
+    return void 0;
+  }
+  const declaration = ccxtGoParamDeclarationOf(goTranspiler, left);
+  if (!strPtrFamilySeeded(goTranspiler, declaration) || goTranspiler.goDeclaredTypeOfIdentifier(left) !== "*string") {
+    return void 0;
+  }
+  const temp = left.text + "Value";
+  const method = goTranspiler.goOutermostFunction(node);
+  let clash = false;
+  const visit = (n) => {
+    if (n.kind === SyntaxKind5.Identifier && n.text === temp) {
+      clash = true;
+    }
+    if (!clash) {
+      n.forEachChild(visit);
+    }
+  };
+  method?.forEachChild(visit);
+  const block = node.parent.parent;
+  const sameBlock = (block?.statements ?? []).filter((s) => s.kind === SyntaxKind5.ExpressionStatement && s.expression?.kind === SyntaxKind5.BinaryExpression && s.expression.left?.kind === SyntaxKind5.Identifier && s.expression.left.text === left.text && ral90g4IsStringLiteral(s.expression.right));
+  return clash || method === void 0 || sameBlock.length !== 1 ? void 0 : temp;
+}
+var strPtrFamilyPointerWrite = GoTranspiler.prototype.goPointerWriteText;
+GoTranspiler.prototype.goPointerWriteText = function(node, identation) {
+  const temp = strPtrFamilyLiteralTemp(this, node);
+  if (temp === void 0) {
+    return strPtrFamilyPointerWrite.call(this, node, identation);
+  }
+  const value = this.printNode(ral90g4Unparen(node.right), 0).trim();
+  return temp + " := " + value + "\n" + this.getIden(identation) + this.printNode(node.left, 0) + " = &" + temp;
 };
 
 // src/javaTranspiler.ts
