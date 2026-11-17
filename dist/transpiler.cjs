@@ -88179,6 +88179,11 @@ ${iden}}`;
           return true;
         }
         const endpointSplit = this.rust87rfEndpointSplitSource(declaration, init);
+        if (endpointSplit && this.rust90rfMapOrListEndpoint(init) && this.rust90rfArmOf(n, declaration, fn) === "map" && _is.isCallExpression.call(void 0, use) && use.arguments[0] === n && this.rustBorrowedAnyKeyReader(use)) {
+          mapReads++;
+          this.rustOptListBoxes.set(n, "map");
+          return true;
+        }
         if (endpointSplit && this.rust90rfArmOf(n, declaration, fn) === "map" && this.rust90rfMapOrListEndpoint(init) && this.rust90rfWholeBoxUse(n)) {
           mapBoxes.push(n);
           return true;
@@ -88248,6 +88253,11 @@ ${iden}}`;
         return _optionalChain([use, 'optionalAccess', _12684 => _12684.kind]) !== _ast.SyntaxKind.PrefixUnaryExpression && _optionalChain([use, 'optionalAccess', _12685 => _12685.kind]) !== _ast.SyntaxKind.PostfixUnaryExpression && !(_is.isBinaryExpression.call(void 0, use) && use.left === up && rustIsAssignmentOperator(use.operatorToken.kind));
       }
       if (at === n && _is.isCallExpression.call(void 0, up) && (up.arguments[0] === n && this.rustBorrowedAnyKeyReader(up) || this.rustTypedFilterLentSlot(up, n))) {
+        natives++;
+        boxes.push([n, "lend"]);
+        return true;
+      }
+      if (at === n && _is.isCallExpression.call(void 0, up) && up.expression !== n && this.rustLentListSlot(up, n) && !this.rustTypedFilterLentSlot(up, n)) {
         natives++;
         boxes.push([n, "lend"]);
         return true;
