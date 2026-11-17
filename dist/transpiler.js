@@ -44992,6 +44992,172 @@ GoTranspiler.prototype.printCallExpression = function(node, identation) {
   }
   return printCallExpressionBase90g8.call(this, node, identation);
 };
+var GO_R92G8_PRODUCER_CACHE = /* @__PURE__ */ new WeakMap();
+function goR92g8ProducerType(goTranspiler, node) {
+  if (node?.kind !== SyntaxKind5.MethodDeclaration || node.body === void 0) {
+    return void 0;
+  }
+  if (GO_R92G8_PRODUCER_CACHE.has(node)) {
+    return GO_R92G8_PRODUCER_CACHE.get(node);
+  }
+  GO_R92G8_PRODUCER_CACHE.set(node, void 0);
+  const result = goR92g8ProducerTypeUncached(goTranspiler, node);
+  GO_R92G8_PRODUCER_CACHE.set(node, result);
+  return result;
+}
+function goR92g8ProducerTypeUncached(goTranspiler, node) {
+  const name = node.name?.text;
+  const fileName = String(node.getSourceFile?.()?.fileName ?? "");
+  if (typeof name !== "string" || /(^|[\\/])base[\\/]/.test(fileName) || goTranspiler.isAsyncFunction(node) || !ccxtGoGeneralAnnotatedMethodIsClosed(node, name) || goTranspiler.goMethodKeepsBaseSignature?.(node)) {
+    return void 0;
+  }
+  const reserved = ccxtGoReservedMethodNames(node);
+  if (reserved !== void 0 && (reserved.has(name) || reserved.has(name.charAt(0).toUpperCase() + name.slice(1)))) {
+    return void 0;
+  }
+  let alias;
+  let isArray = false;
+  try {
+    const checker = goTranspiler.getChecker();
+    const type = checker.getReturnTypeOfSignature(checker.getSignatureFromDeclaration(node));
+    alias = type?.getAliasSymbol()?.escapedName;
+    isArray = checker.isArrayType(type);
+  } catch (e) {
+    return void 0;
+  }
+  const returns = collectReturnStatements(node.body);
+  if (returns.length === 0) {
+    return void 0;
+  }
+  const annotation = node.type?.getText()?.replace(/\s+/g, "");
+  if (annotation === "Market[]" && isArray) {
+    return returns.every((r) => ccxtGoContainerNeverNil(goTranspiler, r.expression)) ? "[]any" : void 0;
+  }
+  if (alias !== "Num" || annotation !== "Num") {
+    return void 0;
+  }
+  let sawValue = false;
+  for (const r of returns) {
+    const e = r.expression;
+    if (e === void 0) {
+      return void 0;
+    }
+    if (isAbsentExpression(e)) {
+      continue;
+    }
+    const callee = e.kind === SyntaxKind5.CallExpression ? e.expression : void 0;
+    if (callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword || callee.name?.text !== "parseNumber") {
+      return void 0;
+    }
+    sawValue = true;
+  }
+  return sawValue ? "*float64" : void 0;
+}
+function goR92g8CallType(goTranspiler, call) {
+  while (call?.kind === SyntaxKind5.ParenthesizedExpression) {
+    call = call.expression;
+  }
+  const callee = call?.kind === SyntaxKind5.CallExpression ? call.expression : void 0;
+  if (callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword) {
+    return void 0;
+  }
+  let declaration = goTranspiler.goMethodDeclarationOfCallee(callee);
+  if (declaration === void 0) {
+    declaration = ccxtGoInheritedVenueMethod(goTranspiler, call);
+  }
+  return goR92g8ProducerType(goTranspiler, declaration);
+}
+function goR92g8HasNativeUse(goTranspiler, declaration, goType) {
+  if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier) {
+    return false;
+  }
+  const scope = goTranspiler.goEnclosingFunction(declaration);
+  const checker = goTranspiler.checkerOrUndefined();
+  if (scope === void 0 || checker === void 0) {
+    return false;
+  }
+  const symbol = checker.getSymbolAtLocation(declaration.name);
+  const compare = [SyntaxKind5.EqualsEqualsEqualsToken, SyntaxKind5.ExclamationEqualsEqualsToken, SyntaxKind5.EqualsEqualsToken, SyntaxKind5.ExclamationEqualsToken];
+  let found = false;
+  const visit = (n) => {
+    if (found) {
+      return;
+    }
+    if (n.kind === SyntaxKind5.Identifier && n !== declaration.name && n.text === declaration.name.text && checker.getSymbolAtLocation(n) === symbol) {
+      let current = n;
+      while (current.parent?.kind === SyntaxKind5.ParenthesizedExpression) {
+        current = current.parent;
+      }
+      const parent = current.parent;
+      if (goType === "*float64") {
+        found = parent?.kind === SyntaxKind5.BinaryExpression && compare.includes(parent.operatorToken.kind) && isAbsentExpression(parent.left === current ? parent.right : parent.left);
+      } else {
+        found = parent?.kind === SyntaxKind5.ElementAccessExpression && parent.expression === current || parent?.kind === SyntaxKind5.PropertyAccessExpression && parent.expression === current && parent.name?.text === "length";
+      }
+      return;
+    }
+    n.forEachChild(visit);
+  };
+  scope.forEachChild(visit);
+  return found;
+}
+function goR92g8TargetDeclaration(goTranspiler, initializer) {
+  let node = initializer;
+  while (node.parent?.kind === SyntaxKind5.ParenthesizedExpression) {
+    node = node.parent;
+  }
+  const parent = node.parent;
+  if (parent?.kind === SyntaxKind5.VariableDeclaration && parent.initializer === node) {
+    return parent;
+  }
+  if (parent?.kind === SyntaxKind5.BinaryExpression && parent.operatorToken.kind === SyntaxKind5.EqualsToken && parent.right === node && parent.left?.kind === SyntaxKind5.Identifier) {
+    return goTranspiler.goDeclarationOfIdentifier(parent.left);
+  }
+  return void 0;
+}
+var goMarketProducerReturnTypeBase92g8 = GoTranspiler.prototype.goMarketProducerReturnType;
+GoTranspiler.prototype.goMarketProducerReturnType = function(node) {
+  return goMarketProducerReturnTypeBase92g8.call(this, node) ?? goR92g8ProducerType(this, node);
+};
+var goTypeOfInitializerBase92g8 = GoTranspiler.prototype.goTypeOfInitializer;
+GoTranspiler.prototype.goTypeOfInitializer = function(initializer, printedValue) {
+  const shipped = goTypeOfInitializerBase92g8.call(this, initializer, printedValue);
+  if (shipped !== void 0) {
+    return shipped;
+  }
+  const goType = goR92g8CallType(this, initializer);
+  if (goType === void 0) {
+    return void 0;
+  }
+  return goR92g8HasNativeUse(this, goR92g8TargetDeclaration(this, initializer), goType) ? goType : void 0;
+};
+var goAnyLocalHoldsPointerBase92g8 = GoTranspiler.prototype.goAnyLocalHoldsPointer;
+GoTranspiler.prototype.goAnyLocalHoldsPointer = function(decl) {
+  if (goAnyLocalHoldsPointerBase92g8.call(this, decl)) {
+    return true;
+  }
+  if (decl?.kind !== SyntaxKind5.VariableDeclaration || decl.name?.kind !== SyntaxKind5.Identifier) {
+    return false;
+  }
+  const isPointerCall = (e) => String(goR92g8CallType(this, e) ?? "").startsWith("*");
+  if (isPointerCall(decl.initializer)) {
+    return true;
+  }
+  const name = decl.name.text;
+  let holds = false;
+  const visit = (n) => {
+    if (holds) {
+      return;
+    }
+    if (n.kind === SyntaxKind5.BinaryExpression && n.operatorToken.kind === SyntaxKind5.EqualsToken && n.left?.kind === SyntaxKind5.Identifier && n.left.text === name && isPointerCall(n.right)) {
+      holds = true;
+      return;
+    }
+    n.forEachChild(visit);
+  };
+  this.goEnclosingFunction(decl)?.forEachChild(visit);
+  return holds;
+};
 
 // src/javaTranspiler.ts
 init_esm_shims();
