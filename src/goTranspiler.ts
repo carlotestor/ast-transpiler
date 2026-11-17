@@ -36405,6 +36405,15 @@ function ccxtGo90g2GuardedNonNil (goTranspiler, use, name: string): boolean {
         if ((cur.kind === SyntaxKind.IfStatement) && (cur.elseStatement === child) && ccxtGo90g2TestsNil(goTranspiler, cur.expression, name)) {
             return true;
         }
+        // M. the right operand of `x !== undefined && ..` / `x === undefined || ..`, and the else arm of `x === undefined ? .. : ..`
+        if ((cur.kind === SyntaxKind.BinaryExpression) && (cur.right === child)
+            && (((cur.operatorToken?.kind === SyntaxKind.AmpersandAmpersandToken) && goTranspiler.goGuardsNonNil(cur.left, name))
+                || ((cur.operatorToken?.kind === SyntaxKind.BarBarToken) && ccxtGo90g2TestsNil(goTranspiler, cur.left, name)))) {
+            return true;
+        }
+        if ((cur.kind === SyntaxKind.ConditionalExpression) && (cur.whenFalse === child) && ccxtGo90g2TestsNil(goTranspiler, cur.condition, name)) {
+            return true;
+        }
         if ((cur.kind === SyntaxKind.Block) || (cur.kind === SyntaxKind.CaseClause) || (cur.kind === SyntaxKind.DefaultClause)) {
             const statements = cur.statements;
             const index = statements.indexOf(child);
@@ -36571,3 +36580,43 @@ function ccxtGo90g2MapVerdictOk (goTranspiler, declaration): boolean {
     };
 }
 // ===== ral-90g2 K (end) =====
+// L. `xs.join (sep)` on a safeList-seeded list local prints `Join(xs, sep)` for the box and for a []any alike (Join's
+// parameter is `any`; its []any arm is the very arm the box reached), so it may stay once the local is typed. It is
+// only a hand-off, so it is admitted only when the same declaration also has a native `.length` or element read.
+function ccxtGo90g2ListNativeRead (goTranspiler, declaration): boolean {
+    const scope = goTranspiler.goEnclosingFunction(declaration);
+    const checker: Checker | undefined = goTranspiler.checkerOrUndefined();
+    const own: TsSymbol | undefined = checker?.getSymbolAtLocation(declaration.name);
+    if ((scope === undefined) || (own === undefined)) {
+        return false;
+    }
+    return goTranspiler.hasNodeWhere(scope, (n) => {
+        if ((n.kind !== SyntaxKind.Identifier) || (n === declaration.name) || (n.text !== declaration.name.text) || (checker.getSymbolAtLocation(n) !== own)) {
+            return false;
+        }
+        const outer = ccxtGoSafeCollectionTypeOnlyWrapper(n);
+        const parent = outer.parent;
+        return ((parent?.kind === SyntaxKind.PropertyAccessExpression) && (parent.expression === outer) && (parent.name?.text === 'length'))
+            || ((parent?.kind === SyntaxKind.ElementAccessExpression) && (parent.expression === outer) && !goTranspiler.isGoElementAccessAssignmentTarget(parent));
+    });
+}
+{
+    const listReads = GoTranspiler.prototype.goSafeListUseReadsTheList;
+    GoTranspiler.prototype.goSafeListUseReadsTheList = function (node) {
+        if (listReads.call(this, node)) {
+            return true;
+        }
+        const outer = ccxtGoSafeCollectionTypeOnlyWrapper(node);
+        const member = outer.parent;
+        if ((member?.kind !== SyntaxKind.PropertyAccessExpression) || (member.expression !== outer) || (member.name?.text !== 'join')
+            || (member.parent?.kind !== SyntaxKind.CallExpression) || (member.parent.expression !== member) || (member.parent.arguments.length !== 1)) {
+            return false;
+        }
+        const declaration = (node?.kind === SyntaxKind.Identifier) ? this.goDeclarationOfIdentifier(node) : undefined;
+        if ((declaration?.kind !== SyntaxKind.VariableDeclaration) || (this.goSafeListLocalArgs(declaration.initializer) === undefined)) {
+            return false;
+        }
+        return ccxtGo90g2ListNativeRead(this, declaration);
+    };
+}
+// ===== ral-90g2 L (end) =====
