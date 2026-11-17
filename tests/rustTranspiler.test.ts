@@ -26142,3 +26142,27 @@ describe('rust typed filterByCurrencySinceLimit', () => {
         expect(base).toMatch(/self\.filterByCurrencySinceLimit\([^;]*code\.as_deref\(\)/);
     });
 });
+
+describe('rust lent priceToPrecision price slot', () => {
+    const files: Record<string, string> = {
+        "ts/src/base/Exchange.ts": "export type Num = number | undefined;\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeNumber (o: any, k: any, d: Num = undefined): Num { return o; }\n    decimalToPrecision (x: any, r: any): Str { return x; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    priceToPrecision (symbol: Str, price: any): Str {\n        if (price === undefined) {\n            return undefined;\n        }\n        return this.decimalToPrecision (price, symbol);\n    }\n    editThing (symbol: string, params = {}) {\n        const px = this.safeNumber (params, 'px');\n        const out = {};\n        if (px !== undefined) {\n            out['px'] = this.priceToPrecision (symbol, px);\n        }\n        return out;\n    }\n}\n",
+    };
+    let base: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-ptp-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        base = transpiler.transpileRustByPath(path.join (root, 'ts/src/base/Exchange.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test('the price slot takes impl Into<crate::Value> and binds the Value once', () => {
+        expect(base).toMatch(/priceToPrecision\(&self, symbol: [^,]+, price: impl Into<crate::Value>\)/);
+        expect(base).toContain('let mut price: Value = price.into();');
+    });
+    test('a number local handed to the price slot stays Option<f64>, passed unboxed', () => {
+        expect(base).toMatch(/let mut px: Option<f64> = /);
+        expect(base).toMatch(/self\.priceToPrecision\([^;]*, px\)/);
+    });
+});
