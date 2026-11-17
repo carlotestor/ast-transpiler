@@ -72821,7 +72821,7 @@ ${i1}}`;
     if (_RustTranspiler.RUST_BASE_TIER_FILE.test(file) || !/ts[/]src[/]/.test(file) || /ts[/]src[/](?:pro[/])?test[/]/.test(file))
       return false;
     const ret = node.type;
-    if (ret?.kind !== SyntaxKind7.TypeReference || !isIdentifier3(ret.typeName) || String(ret.typeName.text) !== "Market")
+    if (ret !== void 0 && (ret.kind !== SyntaxKind7.TypeReference || !isIdentifier3(ret.typeName) || String(ret.typeName.text) !== "Market"))
       return false;
     if ((node.modifiers ?? []).some((m) => m.kind === SyntaxKind7.AsyncKeyword || m.kind === SyntaxKind7.OverrideKeyword || m.kind === SyntaxKind7.StaticKeyword))
       return false;
@@ -72844,6 +72844,10 @@ ${i1}}`;
           return;
         }
         if (inner !== void 0 && isCallExpression6(inner) && isPropertyAccessExpression3(inner.expression) && String(inner.expression.name.text) === "safeMarket" && this.rustIsSafeMarketCall(inner)) {
+          records++;
+          return;
+        }
+        if (inner !== void 0 && this.rustIsTypedMarketCall(inner) && this.printTypedMarketValue(inner) !== void 0) {
           records++;
           return;
         }
