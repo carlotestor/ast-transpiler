@@ -59330,13 +59330,13 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (copied > 0 && (kind === "str" || kind === "ostr") && this.rustStrMethodRecvLocal(declaration)) {
       const aliasLent = kind === "ostr" && !this.rustTestTierSource(declaration) && this.rustReaderLendBoxes(declaration, false, false, true);
-      const strElem = kind === "ostr" && this.rust76cLocalStrListElement(declaration.initializer);
+      const strElem = kind === "ostr" && (this.rust76cLocalStrListElement(declaration.initializer) || this.rustStrListParamElement(declaration.initializer));
       if (this.rustStrNoLend || !(this.rustUdReaderStr(declaration.initializer) || strElem) || this.rustStrReturnedLocal(declaration, scope) || !(this.rustReaderLendBoxes(declaration) || aliasLent))
         return void 0;
       this.rustStrLentLocals.add(declaration);
     }
     const strParamElem = this.rustListParamElement(declaration.initializer) && this.rustStrListParamElement(declaration.initializer);
-    if (this.rustListParamElement(declaration.initializer) && (strParamElem ? this.rustScalarFeedsWrite(declaration) : copied > 0 || boxed > 0 && typedUses === 0 || this.rustScalarFeedsWrite(declaration)))
+    if (this.rustListParamElement(declaration.initializer) && (strParamElem ? this.rust90raFeedsForeignWrite(declaration, scope) : copied > 0 || boxed > 0 && typedUses === 0 || this.rustScalarFeedsWrite(declaration)))
       return void 0;
     if (this.rustListParamElement(declaration.initializer) && boxed > 0)
       this.rustScalarGuarded.add(declaration);
@@ -61052,6 +61052,38 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return true;
     });
     return feeds;
+  }
+  /** ral-90ra R1: `rustScalarFeedsWrite`, except that a plain `y = x;` statement or a `let y: Str = x;` declaration whose
+   *  target `y` is a local (one declarator, same function) the checker types `string` is allowed: that target is decided by
+   *  the same scalar solve (a string local copied from an `Option<String>` reads the same Str / Null the `Value` held). */
+  rust90raFeedsForeignWrite(declaration, scope) {
+    let foreign = false;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      let at = n;
+      while (at.parent !== void 0 && (isParenthesizedExpression3(at.parent) || at.parent.kind === SyntaxKind7.AsExpression || isConditionalExpression4(at.parent)))
+        at = at.parent;
+      const up = at.parent;
+      let target;
+      if (isBinaryExpression5(up) && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.left !== at) {
+        if (at !== n || !isIdentifier3(up.left) || up.parent?.kind !== SyntaxKind7.ExpressionStatement) {
+          foreign = true;
+          return true;
+        }
+        target = this.rustDeclaredNode(up.left);
+      } else if (isVariableDeclaration3(up) && up.initializer !== void 0) {
+        if (at !== n) {
+          foreign = true;
+          return true;
+        }
+        target = up;
+      } else
+        return true;
+      const list = target?.parent;
+      if (target === void 0 || !isVariableDeclaration3(target) || !isIdentifier3(target.name) || list?.kind !== SyntaxKind7.VariableDeclarationList || list.declarations.length !== 1 || this.rustEnclosingFunction(target) !== scope || this.primitiveKindOfType(this.typeOfNodeIfAny(target.name)) !== "string")
+        foreign = true;
+      return true;
+    });
+    return foreign;
   }
   /** Some statement of the parameter's function assigns the parameter itself. */
   rustParamWritten(param) {

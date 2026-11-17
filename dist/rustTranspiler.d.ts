@@ -1001,6 +1001,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustScalarBareLastWrite(node: any): boolean;
     /** Some use of the local is the source of an assignment or of another declaration. */
     rustScalarFeedsWrite(declaration: any): boolean;
+    /** ral-90ra R1: `rustScalarFeedsWrite`, except that a plain `y = x;` statement or a `let y: Str = x;` declaration whose
+     *  target `y` is a local (one declarator, same function) the checker types `string` is allowed: that target is decided by
+     *  the same scalar solve (a string local copied from an `Option<String>` reads the same Str / Null the `Value` held). */
+    rust90raFeedsForeignWrite(declaration: any, scope: any): boolean;
     /** Some statement of the parameter's function assigns the parameter itself. */
     rustParamWritten(param: any): boolean;
     rustReaderDefaultKind(name: string, args: any[], fresh: boolean): string | undefined;
