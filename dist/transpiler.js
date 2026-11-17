@@ -15170,6 +15170,9 @@ function ccxtGoAnnotatedReturnTypes(goTranspiler, node) {
   if (key === "Str" || key === "Dict" || key === "ExchangeOptions" || key === "Market" || key === "List" || key === "Bool") {
     return CCXT_GO_ANNOTATED_RETURN_NATIVE[key];
   }
+  if (key === "Num" && ccxtGo92NumParseMethod(node)) {
+    return ["*float64"];
+  }
   const general = ccxtGoGeneralAnnotatedReturnTypes(node, type, key);
   if (general !== void 0) {
     return general;
@@ -15580,6 +15583,7 @@ function ccxtGoNilDeclaredJoinType(goTranspiler, declaration) {
   let literalCompareRead = false;
   let stringPtrArgumentRead = false;
   let nilTestRead = false;
+  let numParseWrite = false;
   const visit = (n) => {
     if (readUnproven) {
       return;
@@ -15596,6 +15600,7 @@ function ccxtGoNilDeclaredJoinType(goTranspiler, declaration) {
           return;
         }
         joinType = written;
+        numParseWrite = numParseWrite || ccxtGo92IsNumParseCall(goTranspiler, parent.right);
       } else if (!nilDeclaredReadIsSafe(goTranspiler, n)) {
         if (ccxtGoNilDeclaredStringArgumentRead(goTranspiler, n)) {
           stringOnlyRead = true;
@@ -15634,6 +15639,9 @@ function ccxtGoNilDeclaredJoinType(goTranspiler, declaration) {
     return void 0;
   }
   if (literalCompareRead && joinType !== "*string") {
+    return void 0;
+  }
+  if (numParseWrite && !nilTestRead) {
     return void 0;
   }
   if (stringPtrArgumentRead && (joinType !== "*string" || !(nilTestRead || literalCompareRead))) {
@@ -44991,6 +44999,55 @@ GoTranspiler.prototype.printCallExpression = function(node, identation) {
     }
   }
   return printCallExpressionBase90g8.call(this, node, identation);
+};
+function ccxtGo92NumParseMethod(node) {
+  const name = node?.name?.text;
+  if (typeof name !== "string" || !CCXT_GO_PARSE_METHOD.test(name) || node.type?.getText() !== "Num") {
+    return false;
+  }
+  const fileName = String(node.getSourceFile?.()?.fileName ?? "");
+  return /(^|[\\/])ts[\\/]src[\\/]/.test(fileName) && !/(^|[\\/])ts[\\/]src[\\/](base|test)[\\/]/.test(fileName);
+}
+function ccxtGo92IsNumParseCall(goTranspiler, expression) {
+  while (expression?.kind === SyntaxKind5.ParenthesizedExpression) {
+    expression = expression.expression;
+  }
+  if (expression?.kind !== SyntaxKind5.CallExpression || expression.expression?.kind !== SyntaxKind5.PropertyAccessExpression || expression.expression.expression?.kind !== SyntaxKind5.ThisKeyword) {
+    return false;
+  }
+  let declaration;
+  try {
+    declaration = goTranspiler.getChecker().getResolvedSignature(expression)?.declaration?.resolve();
+  } catch (e) {
+    return false;
+  }
+  return ccxtGo92NumParseMethod(declaration) && ccxtGoAnnotatedMethodReturnType(goTranspiler, declaration) === "*float64";
+}
+function ccxtGo92HasNilTest(goTranspiler, declaration) {
+  const scope = goTranspiler.goEnclosingFunction(declaration);
+  return scope !== void 0 && goTranspiler.hasNodeWhere(scope, (n) => n.kind === SyntaxKind5.Identifier && n !== declaration.name && ccxtGoParamDeclarationOf(goTranspiler, n) === declaration && ccxtGo90IsNilTest(n));
+}
+var ral92g1UpstreamLocalType = GoTranspiler.prototype.getGoLocalType;
+GoTranspiler.prototype.getGoLocalType = function(declaration, parsedValue) {
+  const known = ral92g1UpstreamLocalType.call(this, declaration, parsedValue);
+  if (known === "*float64" && declaration?.kind === SyntaxKind5.VariableDeclaration && declaration.initializer !== void 0 && ccxtGo92IsNumParseCall(this, declaration.initializer) && !ccxtGo92HasNilTest(this, declaration)) {
+    return "any";
+  }
+  return known;
+};
+function ccxtGo92NumParseWrittenWithoutNilTest(goTranspiler, declaration) {
+  const scope = goTranspiler.goEnclosingFunction(declaration);
+  const name = declaration?.name?.text;
+  if (scope === void 0 || typeof name !== "string") {
+    return false;
+  }
+  const written = goTranspiler.hasNodeWhere(scope, (n) => n.kind === SyntaxKind5.BinaryExpression && n.operatorToken.kind === SyntaxKind5.EqualsToken && isIdentifierNamed(n.left, name) && ccxtGoParamDeclarationOf(goTranspiler, n.left) === declaration && ccxtGo92IsNumParseCall(goTranspiler, n.right));
+  return written && !ccxtGo92HasNilTest(goTranspiler, declaration);
+}
+var ral92g1UpstreamNilInitScan = GoTranspiler.prototype.goNilInitLocalTypeScan;
+GoTranspiler.prototype.goNilInitLocalTypeScan = function(declaration) {
+  const result = ral92g1UpstreamNilInitScan.call(this, declaration);
+  return result === "*float64" && ccxtGo92NumParseWrittenWithoutNilTest(this, declaration) ? void 0 : result;
 };
 
 // src/javaTranspiler.ts
