@@ -1371,6 +1371,13 @@ export declare class RustTranspiler extends BaseTranspiler {
         key: string;
         write: boolean;
     } | undefined;
+    /** ral-90b: `k in client.subscriptions` after a write of that field reads the handle's snapshot when every write of
+     *  `client.subscriptions` in the method is a whole statement `client.subscriptions[k] = v` / `delete client.subscriptions[k]`:
+     *  both print through the handle (`add_subscription` / `remove_subscription`), which update the snapshot's key set with the
+     *  live client's, so the key test sees what the live read did. Decided from the AST. */
+    rust90bHandleSyncedInTest(node: Node, plan: {
+        bindPos: number;
+    }): boolean;
     /** ral-80b: a `const client = this.client (url)` local whose declaration has not printed yet. A scalar decision made
      *  ahead of the method's print (a key local's use walk) would otherwise see `declOk` false and refuse every handle
      *  key use; the declaration prints `let mut client: Value = self.client(..)` on one line (the declOk test) when its

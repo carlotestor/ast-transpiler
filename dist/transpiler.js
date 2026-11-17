@@ -63312,9 +63312,50 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     const write = this.isNativeWriteTargetBase(node);
     const first = plan.firstWrite.get(key);
-    if (!write && first !== void 0 && this.rustClientHandleLine(node) >= first)
+    if (!write && first !== void 0 && this.rustClientHandleLine(node) >= first && !this.rust90bHandleSyncedInTest(node, plan))
       return void 0;
     return { plan, key, write };
+  }
+  /** ral-90b: `k in client.subscriptions` after a write of that field reads the handle's snapshot when every write of
+   *  `client.subscriptions` in the method is a whole statement `client.subscriptions[k] = v` / `delete client.subscriptions[k]`:
+   *  both print through the handle (`add_subscription` / `remove_subscription`), which update the snapshot's key set with the
+   *  live client's, so the key test sees what the live read did. Decided from the AST. */
+  rust90bHandleSyncedInTest(node, plan) {
+    if (!isPropertyAccessExpression3(node) || String(node.name.text) !== "subscriptions")
+      return false;
+    const test = this.rustSkipWrappersUp(node.parent);
+    if (!isBinaryExpression5(test) || test.operatorToken.kind !== SyntaxKind7.InKeyword || this.unwrapParens(test.right) !== node)
+      return false;
+    const method = findAncestor(node, (n) => isMethodDeclaration5(n));
+    if (method === void 0)
+      return false;
+    let awaits = false;
+    const visit = (m) => {
+      if (awaits)
+        return;
+      if (m.kind === SyntaxKind7.AwaitExpression) {
+        awaits = true;
+        return;
+      }
+      m.forEachChild?.(visit);
+    };
+    visit(method);
+    if (awaits)
+      return false;
+    const refs = this.rustScopeNameNodes(method, "client");
+    return refs.every((r) => {
+      const p = r.parent;
+      if (r.kind === SyntaxKind7.Identifier && (isCallExpression6(p) || isNewExpression(p)) && (p.arguments ?? []).some((a) => a === r))
+        return false;
+      if (r.kind !== SyntaxKind7.Identifier || r.pos < plan.bindPos || !isPropertyAccessExpression3(p) || p.expression !== r || String(p.name.text) !== "subscriptions" || !this.isNativeWriteTargetBase(p))
+        return true;
+      const access = p.parent;
+      if (!isElementAccessExpression4(access) || access.expression !== p)
+        return false;
+      const up = access.parent;
+      const statement = up?.parent?.kind === SyntaxKind7.ExpressionStatement;
+      return statement && (isDeleteExpression2(up) || isBinaryExpression5(up) && up.left === access && up.operatorToken.kind === SyntaxKind7.EqualsToken);
+    });
   }
   /** ral-80b: a `const client = this.client (url)` local whose declaration has not printed yet. A scalar decision made
    *  ahead of the method's print (a key local's use walk) would otherwise see `declOk` false and refuse every handle
