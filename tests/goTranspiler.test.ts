@@ -15770,7 +15770,7 @@ describe ('ral-90g2 reader-result locals', () => {
         expect (run (body.replace ('return undefined;', 'id = "y";'), 'ts/src/pro')).not.toContain ('var prev map[string]any = ');
     });
     test ('K: a no-default safeDict local filled with a fresh map where it was nil is a map', () => {
-        const body = '    account (): Dict { return {}; }\n    f (result: Dict, code: string, reload: boolean): any {\n        let acc = this.safeDict (result, code);\n        if ((acc === undefined) || reload) {\n            acc = {};\n            acc["total"] = 1;\n        }\n        acc["free"] = 2;\n        result[code] = acc;\n        return acc;\n    }\n';
+        const body = '    account (): Dict { return {}; }\n    f (result: Dict, code: string, reload: boolean): any {\n        let acc = this.safeDict (result, code);\n        if ((acc === undefined) || reload) {\n            acc = {};\n            acc["total"] = 1;\n        }\n        acc["free"] = 2;\n        this.safeString (acc, "free");\n        return acc;\n    }\n';
         const out = run (body, 'ts/src/pro');
         expect (out).toContain ('var acc map[string]any = ');
         expect (out).toContain ('acc = map[string]any{}');
@@ -15778,5 +15778,9 @@ describe ('ral-90g2 reader-result locals', () => {
         expect (run (body.replace ('acc = {};', 'if (reload) {\n                acc = {};\n            }'), 'ts/src/pro')).not.toContain ('var acc map[string]any = ');
         // a write of a value that may be nil keeps the box
         expect (run (body.replace ('acc = {};', 'acc = this.safeDict (result, "x");'), 'ts/src/pro')).not.toContain ('var acc map[string]any = ');
+        // handed whole into another local map: the typed store would print the helper where the box stored natively
+        expect (run (body.replace ('this.safeString (acc, "free");', 'result[code] = acc;'), 'ts/src/pro')).not.toContain ('var acc map[string]any = ');
+        // no native read or write of the map: keep the box
+        expect (run (body.replace ('acc["free"] = 2;', '').replace ('acc["total"] = 1;', ''), 'ts/src/pro')).not.toContain ('var acc map[string]any = ');
     });
 });

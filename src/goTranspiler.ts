@@ -36378,6 +36378,7 @@ GoTranspiler.prototype.goNativeCompoundAssignment = function (op, leftNode, left
 // and every statement after `if (x === undefined || ..) { ..; return | throw | continue | break }` in an enclosing
 // block. A no-default local is never rebound (goMapLocalUseKeepsMap refuses every write), so the guard still holds
 // at the use. Decided from the AST only.
+const ccxtGo90g2State = { on: false };
 function ccxtGo90g2TestsNil (goTranspiler, condition, name: string): boolean {
     const inner = goTranspiler.goUnwrapParenthesizedNode(condition);
     if (inner?.kind !== SyntaxKind.BinaryExpression) {
@@ -36424,7 +36425,7 @@ function ccxtGo90g2GuardedNonNil (goTranspiler, use, name: string): boolean {
 {
     const nonNilBlock = GoTranspiler.prototype.goInsideNonNilBlock;
     GoTranspiler.prototype.goInsideNonNilBlock = function (use, name: string) {
-        return nonNilBlock.call(this, use, name) || ccxtGo90g2GuardedNonNil(this, use, name);
+        return nonNilBlock.call(this, use, name) || (ccxtGo90g2State.on && ccxtGo90g2GuardedNonNil(this, use, name));
     };
 }
 // ===== ral-90g2 (end) =====
@@ -36484,7 +36485,7 @@ function ccxtGo90g2FilledBefore (goTranspiler, use, name: string): boolean {
 {
     const nonNilBlock = GoTranspiler.prototype.goInsideNonNilBlock;
     GoTranspiler.prototype.goInsideNonNilBlock = function (use, name: string) {
-        return nonNilBlock.call(this, use, name) || ccxtGo90g2FilledBefore(this, use, name);
+        return nonNilBlock.call(this, use, name) || (ccxtGo90g2State.on && ccxtGo90g2FilledBefore(this, use, name));
     };
     const keepsMap = GoTranspiler.prototype.goMapLocalUseKeepsMap;
     GoTranspiler.prototype.goMapLocalUseKeepsMap = function (ref, rebinds: Set<any>, noDefault: boolean, ws: boolean, name: string) {
@@ -36492,8 +36493,81 @@ function ccxtGo90g2FilledBefore (goTranspiler, use, name: string): boolean {
             return true;
         }
         const write = ref.parent;
-        return noDefault && (write?.kind === SyntaxKind.BinaryExpression) && (write.left === ref) && (write.operatorToken?.kind === SyntaxKind.EqualsToken)
+        return ccxtGo90g2State.on && noDefault && (write?.kind === SyntaxKind.BinaryExpression) && (write.left === ref) && (write.operatorToken?.kind === SyntaxKind.EqualsToken)
             && (write.parent?.kind === SyntaxKind.ExpressionStatement) && ccxtGo90g2NeverNilMap(this, write.right);
+    };
+}
+// J/K verdict: the extensions above answer only for a declaration the shipped rule leaves boxed, and such a local is
+// typed only when (a) it is never handed whole into another map (`m[k] = x`: a typed map value that may be nil is
+// stored through AddElementToObject, where the boxed value was stored natively) and (b) it has a native use on the map:
+// an element read, `k in x`, or an element write of a literal / non-pointer value.
+function ccxtGo90g2MapVerdictOk (goTranspiler, declaration): boolean {
+    const scope = goTranspiler.goTopFunction(declaration);
+    const checker: Checker | undefined = goTranspiler.checkerOrUndefined();
+    const own: TsSymbol | undefined = checker?.getSymbolAtLocation(declaration.name);
+    if ((scope === undefined) || (own === undefined)) {
+        return false;
+    }
+    let natives = 0;
+    const escapes = goTranspiler.hasNodeWhere(scope, (n) => {
+        if ((n.kind !== SyntaxKind.Identifier) || (n === declaration.name) || (n.text !== declaration.name.text)
+            || (((n.parent?.kind === SyntaxKind.PropertyAccessExpression) || (n.parent?.kind === SyntaxKind.PropertyAssignment)) && (n.parent.name === n))) {
+            return false;
+        }
+        if (checker.getSymbolAtLocation(n) !== own) {
+            return false;
+        }
+        let outer = n;
+        while ((outer.parent !== undefined) && ((outer.parent.kind === SyntaxKind.ParenthesizedExpression) || (outer.parent.kind === SyntaxKind.AsExpression)
+            || (outer.parent.kind === SyntaxKind.NonNullExpression)) && (outer.parent.expression === outer)) {
+            outer = outer.parent;
+        }
+        const parent = outer.parent;
+        if ((parent?.kind === SyntaxKind.BinaryExpression) && (parent.right === outer) && (parent.operatorToken?.kind === SyntaxKind.EqualsToken)
+            && (ccxtGoUnwrapTypeOnly(parent.left)?.kind === SyntaxKind.ElementAccessExpression)
+            && (ccxtGoUnwrapTypeOnly(ccxtGoUnwrapTypeOnly(parent.left).expression)?.kind !== SyntaxKind.PropertyAccessExpression)) {
+            return true; // handed into another local map (a `this.x[k] = v` field store prints the helper either way)
+        }
+        if ((parent?.kind === SyntaxKind.ElementAccessExpression) && (parent.expression === outer)) {
+            const store = parent.parent;
+            if ((store?.kind === SyntaxKind.BinaryExpression) && (store.left === parent) && (store.operatorToken?.kind === SyntaxKind.EqualsToken)) {
+                const value = ccxtGoUnwrapTypeOnly(store.right);
+                if ((value?.kind === SyntaxKind.Identifier) && (value.text === 'undefined')) {
+                    natives++;
+                } else if ((value !== undefined) && goTranspiler.goMapWriteValueIsNotPointer(value)) {
+                    natives++;
+                }
+            } else if (!goTranspiler.isGoElementAccessAssignmentTarget(parent)) {
+                natives++;
+            }
+        } else if ((parent?.kind === SyntaxKind.BinaryExpression) && (parent.right === outer) && (parent.operatorToken?.kind === SyntaxKind.InKeyword)) {
+            natives++;
+        }
+        return false;
+    });
+    return !escapes && (natives > 0);
+}
+{
+    const uncached = GoTranspiler.prototype.goSafeDictMapLocalUncached;
+    GoTranspiler.prototype.goSafeDictMapLocalUncached = function (declaration) {
+        const previous = ccxtGo90g2State.on;
+        ccxtGo90g2State.on = false;
+        try {
+            const shipped = uncached.call(this, declaration);
+            if (shipped !== undefined) {
+                return shipped;
+            }
+            ccxtGo90g2State.on = true;
+            const extended = uncached.call(this, declaration);
+            ccxtGo90g2State.on = false;
+            if ((extended === undefined) || !ccxtGo90g2MapVerdictOk(this, declaration)) {
+                this.goMapLocalRebindWrites.delete(declaration);
+                return undefined;
+            }
+            return extended;
+        } finally {
+            ccxtGo90g2State.on = previous;
+        }
     };
 }
 // ===== ral-90g2 K (end) =====
