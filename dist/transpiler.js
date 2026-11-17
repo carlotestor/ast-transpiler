@@ -12674,7 +12674,7 @@ var CCXT_GO_BOOL_METHOD_NAMES = [
   "IsEmptyString",
   "IsTickPrecision"
 ];
-var CCXT_GO_STRING_PTR_METHOD_NAMES = ["NetworkIdToCode", "FindTimeframe", "AmountToPrecision", "PriceToPrecision", "CurrencyToPrecision", "NetworkCodeToId", "OmitZero"];
+var CCXT_GO_STRING_PTR_METHOD_NAMES = ["NetworkIdToCode", "FindTimeframe", "AmountToPrecision", "PriceToPrecision", "CurrencyToPrecision", "NetworkCodeToId", "HandleTimeInForce", "OmitZero"];
 var CCXT_GO_HELPER_RETURN_TYPES = {
   // Typed twins of GetArg (go/v4/exchange_helpers.go) -- the `var x <T> = GetArg<T>(...)`
   // locals the printer declares for a provable optional argument
@@ -45074,7 +45074,7 @@ GoTranspiler.prototype.printReturnStatement = function(node, identation) {
   const text = kind === "addr" ? "&" + value : kind === "wrap" ? "SafeStringPtr(" + value + ")" : value;
   return this.printNodeCommentsIfAny(node, identation, this.getIden(identation) + "return " + text);
 };
-var STR_PTR_FAMILY_NEW = ["currencyToPrecision", "networkCodeToId"];
+var STR_PTR_FAMILY_NEW = ["currencyToPrecision", "networkCodeToId", "handleTimeInForce"];
 var strPtrFamilyExpressionStatement = GoTranspiler.prototype.printExpressionStatement;
 GoTranspiler.prototype.printExpressionStatement = function(node, identation) {
   const write = node?.expression;
