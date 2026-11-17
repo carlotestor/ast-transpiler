@@ -17198,6 +17198,19 @@ describe('*string safeString seeds rebound by a literal concat', () => {
         expect (out).toContain ('txHash = &txHashValue');
         expect (out).not.toContain ('Add(');
     });
+    test('a defaulted seed grown by += of a Go string prints the guarded concat', () => {
+        const out = print ('class x extends Exchange {\n'
+            + '    f (t: object, tf: string, tz: string) {\n'
+            + '        let bar = this.safeString (t, tf, tf);\n'
+            + '        if (tz === \'UTC\') {\n'
+            + '            bar += tz.toLowerCase ();\n'
+            + '        }\n'
+            + '        return { \'bar\': bar };\n'
+            + '    }\n'
+            + '}\n');
+        expect (out).toContain ('var bar *string = this.SafeString(t, tf, tf)');
+        expect (out).toMatch (/barValue := \*bar \+ (strings\.)?ToLower\(tz\)/);
+    });
     test('a seed handed to another call keeps any', () => {
         const out = print ('class x extends Exchange {\n'
             + '    f (t: object) {\n'
