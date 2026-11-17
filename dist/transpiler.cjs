@@ -60679,7 +60679,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
    *  `Option<f64>` (rustOptParamKind). Its result local is typed only for a native use (rustScalarNeedsNativeUse): boxed
    *  straight back it stays the `Value` it is handed as. */
   rust90rgParseNumberOfNumParam(call) {
-    if (call === void 0 || !_is.isCallExpression.call(void 0, call) || call.arguments.length !== 1)
+    if (call === void 0 || !_is.isCallExpression.call(void 0, call) || call.arguments.length !== 1 || !_is.isPropertyAccessExpression.call(void 0, call.expression) || call.expression.expression.kind !== _ast.SyntaxKind.ThisKeyword || String(call.expression.name.text) !== "parseNumber")
       return false;
     const arg = this.unwrapParens(call.arguments[0]);
     if (!_is.isIdentifier.call(void 0, arg) || this.rustScalarIdentifierKind(arg) !== void 0)
