@@ -17168,3 +17168,44 @@ describe('orderbook delta cache as a typed list', () => {
         expect (out).toContain ('var messages any = orderbook.GetCache()');
     });
 });
+
+describe('*string safeString seeds rebound by a literal concat', () => {
+    const print = (body: string): string => {
+        const dir = fs.mkdtempSync (path.join (os.tmpdir (), 'goconcatseed-'));
+        try {
+            fs.mkdirSync (path.join (dir, 'ts', 'src', 'base'), { 'recursive': true });
+            const file = path.join (dir, 'ts', 'src', 'x.ts');
+            fs.writeFileSync (path.join (dir, 'ts', 'src', 'base', 'Exchange.ts'), 'type Dict = { [key: string]: unknown };\n'
+                + 'class Exchange {\n    safeString (o: unknown, k: string): string | undefined { return undefined; }\n    other (s: unknown) { return s; }\n}\nexport default Exchange;\n');
+            fs.writeFileSync (file, 'import Exchange from \'./base/Exchange.js\';\n' + body);
+            return new Transpiler ({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } }).transpileGoByPath (file).content;
+        } finally {
+            fs.rmSync (dir, { 'recursive': true, 'force': true });
+        }
+    };
+    test('a prefix write prints a guarded native concat on a *string', () => {
+        const out = print ('class x extends Exchange {\n'
+            + '    f (t: object, eth: boolean) {\n'
+            + '        let txHash = this.safeString (t, \'h\');\n'
+            + '        if ((txHash !== undefined) && eth) {\n'
+            + '            txHash = \'0x\' + txHash;\n'
+            + '        }\n'
+            + '        return { \'txid\': txHash };\n'
+            + '    }\n'
+            + '}\n');
+        expect (out).toContain ('var txHash *string = this.SafeString(t, "h")');
+        expect (out).toContain ('txHashValue := "0x" + *txHash');
+        expect (out).toContain ('txHash = &txHashValue');
+        expect (out).not.toContain ('Add(');
+    });
+    test('a seed handed to another call keeps any', () => {
+        const out = print ('class x extends Exchange {\n'
+            + '    f (t: object) {\n'
+            + '        let s = this.safeString (t, \'h\');\n'
+            + '        s = s + \'?\';\n'
+            + '        return this.other (s);\n'
+            + '    }\n'
+            + '}\n');
+        expect (out).not.toContain ('var s *string');
+    });
+});
