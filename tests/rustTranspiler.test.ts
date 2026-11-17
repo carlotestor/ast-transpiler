@@ -26160,3 +26160,21 @@ describe('rust char test on a String reader local', () => {
         expect(out).toContain("decimalPart.chars().nth(__i as usize) == Some('0')");
     });
 });
+
+describe('rust toString of an integer reader local', () => {
+    const base = "export type Int = number | undefined;\nexport default class Exchange {\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return d; }\n}\n";
+    const venue = "import Exchange from './base/Exchange.js';\n"
+        + "export default class venue extends Exchange {\n"
+        + "    channelOf (params: any): string {\n        let channel = 'books';\n        const limit = this.safeInteger (params, 'limit');\n        if ((limit === 5) || (limit === 50)) {\n            channel += limit.toString ();\n        }\n        return channel;\n    }\n}\n";
+    test('the Option<i64> local displays as its Int / Null box', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-93re2-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), venue);
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        let out = '';
+        try { out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+        expect(out).toContain('let mut limit: Option<i64> = ');
+        expect(out).toContain('limit.map_or_else(|| "null".to_string(), |__n| __n.to_string())');
+    });
+});

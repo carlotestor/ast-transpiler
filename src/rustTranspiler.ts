@@ -8500,6 +8500,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (form === undefined && kind === 'ostr' && this.rust70fPushKey(n)) return 'native';
         if (form === undefined && kind === 'ostr' && isElementAccessExpression(n.parent) && n.parent.expression === n && this.rust70fFirstCharTest(this.rustSkipWrappersUp(n.parent.parent) ?? {}) !== undefined) return 'native';
         if (form === undefined && kind === 'str' && isElementAccessExpression(n.parent) && n.parent.expression === n && this.rust93reStrCharTest(this.rustSkipWrappersUp(n.parent.parent) ?? {}) !== undefined) return 'native';
+        if (form === undefined && (kind === 'int' || kind === 'oint') && this.rust93reIntToStringRecv(n)) return 'native';
         // ral-70f: the key of a write `m[x] = v` / `delete m[x]` keeps the key form (the insert prints its key text, the helper its box)
         if (form === undefined && kind === 'ostr' && this.rust70fWriteKey(n)) return 'key';
         return form === undefined && this.rustSbCopyBoxUse(n, kind) ? 'xbox' : form;
@@ -8575,6 +8576,13 @@ export class RustTranspiler extends BaseTranspiler {
         else if (indexKind === 'oint') test = `matches!(${super.printIdentifier(index)}, Some(__i) if __i >= 0 && ${s}.chars().nth(__i as usize) == Some('${c}'))`;
         else return undefined;
         return op === SyntaxKind.EqualsEqualsEqualsToken ? test : `!${test}`;
+    }
+
+    /** `x.toString ()` (no argument) whose receiver `x` is the bare identifier. */
+    rust93reIntToStringRecv(n: Node): boolean {
+        const access: Node = n.parent;
+        return isIdentifier(n) && access !== undefined && isPropertyAccessExpression(access) && access.expression === n && access.name.text === 'toString'
+            && isCallExpression(access.parent) && access.parent.expression === access && access.parent.arguments.length === 0;
     }
 
     /** ral-70f: `n` sits inside the left side (target chain) of an assignment. */
@@ -35745,6 +35753,10 @@ export class RustTranspiler extends BaseTranspiler {
     // Typed `Option<String>` receivers have no `Display`, so they keep the helper.
     printRustNativeToString(node, name: string): string | undefined {
         const receiver = node?.expression?.expression;
+        // an `i64` / `Option<i64>` local displays as the `Int` / `Null` box it replaces (`n` / `null`)
+        const intLocal = receiver !== undefined && isIdentifier(receiver) && this.rust93reIntToStringRecv(receiver) && this.rustScalarUseForms.get(receiver) === 'native' ? this.rustScalarLocalOf(receiver) : undefined;
+        if (intLocal?.kind === 'int') return this.rustRecordFormatToString(node, super.printIdentifier(receiver));
+        if (intLocal?.kind === 'oint') return `Value::Str(${super.printIdentifier(receiver)}.map_or_else(|| "null".to_string(), |__n| __n.to_string()).into())`;
         // sb: a Copy number local boxed at its `.toString()` read displays the box (`format!("{}", Value::from(x))`)
         const sbLocal = receiver !== undefined && isIdentifier(receiver) ? this.rustScalarLocalOf(receiver) : undefined;
         if (sbLocal !== undefined && this.rustScalarUseForms.get(receiver) === 'xbox' && this.rustSbCopyBoxUse(receiver, sbLocal.kind)) return this.rustRecordFormatToString(node, name);
