@@ -6601,7 +6601,17 @@ export class RustTranspiler extends BaseTranspiler {
         return this.rustBytesLocalOf(source) === undefined ? undefined : source;
     }
 
+    /** `this.packb (..)` / `this.ethAbiEncode (..)` resolved to the base tier: the runtime answers the byte list boxed
+     *  (`packb` always a list, `ethAbiEncode` a list or `Null` on an unsupported type). Only a local initializer takes
+     *  it, unboxed once into the `Bytes` handle (`Null` reads as no bytes, as every byte slot reads it). */
+    rustBoxedBytesProducer(node: Node): boolean {
+        if (node === undefined || !isCallExpression(node) || !isPropertyAccessExpression(node.expression) || node.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
+        const name = String(node.expression.name.text);
+        return (name === 'packb' || name === 'ethAbiEncode') && !this.rustTestTierSource(node) && this.rustCalleeIsRuntimeBase(node);
+    }
+
     rustBytesBareText(node, identation = 0): string {
+        if (this.rustBoxedBytesProducer(node)) return `crate::value::Bytes(${this.printNode(node, identation).trim()}.into_list())`;
         const sliced: Node = this.rustBytesSliceSource(node);
         if (sliced !== undefined) {
             const [ start, end ] = [ Number(node.arguments[1].getText()), Number(node.arguments[2].getText()) ];
@@ -6643,7 +6653,8 @@ export class RustTranspiler extends BaseTranspiler {
         const list: any = declaration.parent;
         if (!isIdentifier(declaration.name) || list?.declarations?.length !== 1 || list.parent?.kind !== SyntaxKind.VariableStatement) return false;
         const init: any = this.unwrapParens(declaration.initializer);
-        if (!this.rustBytesProducer(init) || (this.rustTestTierSource(declaration) && !this.rustScalarReceiver(init.expression.expression))) return false;
+        const boxed = this.rustBoxedBytesProducer(init);
+        if (!boxed && (!this.rustBytesProducer(init) || (this.rustTestTierSource(declaration) && !this.rustScalarReceiver(init.expression.expression)))) return false;
         const fn: any = this.rustEnclosingFunction(declaration);
         if (fn === undefined || isSourceFile(fn)) return false;
         const forms = new Map<Node, string>();
@@ -6662,6 +6673,8 @@ export class RustTranspiler extends BaseTranspiler {
             return false;
         });
         if (!ok) return false;
+        // a `Null` from `ethAbiEncode` stays visible to a `Value` hand-off: only byte slots may read that local
+        if (boxed && String(init.expression.name.text) === 'ethAbiEncode' && [ ...forms.values() ].some((f) => f !== 'lend')) return false;
         for (const [ n, form ] of forms) this.rustBytesUseForms.set(n, form);
         return true;
     }

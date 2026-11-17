@@ -26169,3 +26169,28 @@ describe('rust byte-buffer slices', () => {
         expect(out).toContain('let mut seed: Value = self.arraySlice(Value::from(&secretBytes), Value::Int(0), &[n.clone()]);');
     });
 });
+
+describe('rust boxed byte producers', () => {
+    const base = "export default class Exchange {\n    packb (x: any): any { return x; }\n    ethAbiEncode (types: any, args: any): Uint8Array { return new Uint8Array (); }\n    binaryToBase16 (b: Uint8Array): string { return ''; }\n    hash (request: any, hash: any, digest: string = 'hex'): any { return ''; }\n    hold (x: any): any { return x; }\n}\n";
+    const venue = "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n"
+        + "    packIt (action: any): string {\n        const dataBinary = this.packb (action);\n        return this.binaryToBase16 (dataBinary);\n    }\n"
+        + "    abiIt (a: any): string {\n        const data = this.ethAbiEncode ([ 'uint256' ], [ a ]);\n        return this.hash (data, 'keccak', 'hex');\n    }\n"
+        + "    abiHeld (a: any): any {\n        const data = this.ethAbiEncode ([ 'uint256' ], [ a ]);\n        return this.hold (data);\n    }\n}\n";
+    let out = '';
+    beforeAll(() => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-93rg2-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), venue);
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        try { out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+    });
+    test('a packb / ethAbiEncode local unboxes once into the byte handle and lends it', () => {
+        expect(out).toContain('let mut dataBinary: crate::value::Bytes = crate::value::Bytes(self.packb(action, &[]).into_list());');
+        expect(out).toContain('self.binaryToBase16(&dataBinary');
+        expect(out).toMatch(/let mut data: crate::value::Bytes = crate::value::Bytes\(self\.ethAbiEncode\([^;]*\)\.into_list\(\)\);\n[^\n]*self\.hash\(&data, /);
+    });
+    test('an ethAbiEncode local handed on as a Value keeps its Null', () => {
+        expect(out).toMatch(/let mut data: Value = self\.ethAbiEncode\([^;]*\);\n[^\n]*self\.hold\(data\)/);
+    });
+});
