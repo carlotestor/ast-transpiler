@@ -45084,6 +45084,16 @@ function go92g2StringListScan(goTranspiler, declaration) {
     return printVariableDeclarationList.call(this, node, identation);
   };
 }
+function go92g2LengthOf(goTranspiler, node, declaration) {
+  if (node?.kind === SyntaxKind5.PropertyAccessExpression && node.name?.text === "length" && node.expression?.kind === SyntaxKind5.Identifier && goTranspiler.goIdentifierRefersToDeclaration(node.expression, declaration)) {
+    return true;
+  }
+  if (node?.kind !== SyntaxKind5.Identifier) {
+    return false;
+  }
+  const alias = goTranspiler.goDeclarationOfIdentifier(node);
+  return alias !== void 0 && alias !== declaration && (alias.parent?.flags & NodeFlags2.Const) !== 0 && alias.initializer?.kind === SyntaxKind5.PropertyAccessExpression && go92g2LengthOf(goTranspiler, alias.initializer, declaration);
+}
 function go92g2LoopIndexOver(goTranspiler, index, declaration, use) {
   if (index?.kind !== SyntaxKind5.Identifier) {
     return false;
@@ -45094,7 +45104,7 @@ function go92g2LoopIndexOver(goTranspiler, index, declaration, use) {
     return false;
   }
   const cond = loop.condition;
-  if (cond?.kind !== SyntaxKind5.BinaryExpression || cond.operatorToken?.kind !== SyntaxKind5.LessThanToken || cond.left?.kind !== SyntaxKind5.Identifier || goTranspiler.goDeclarationOfIdentifier(cond.left) !== indexDecl || cond.right?.kind !== SyntaxKind5.PropertyAccessExpression || cond.right.name?.text !== "length" || cond.right.expression?.kind !== SyntaxKind5.Identifier || !goTranspiler.goIdentifierRefersToDeclaration(cond.right.expression, declaration)) {
+  if (cond?.kind !== SyntaxKind5.BinaryExpression || cond.operatorToken?.kind !== SyntaxKind5.LessThanToken || cond.left?.kind !== SyntaxKind5.Identifier || goTranspiler.goDeclarationOfIdentifier(cond.left) !== indexDecl || !go92g2LengthOf(goTranspiler, cond.right, declaration)) {
     return false;
   }
   for (let up = use; up !== void 0; up = up.parent) {
@@ -45118,7 +45128,9 @@ function go92g2LoopListLocal(goTranspiler, declaration) {
   go92g2LoopListVerdicts.set(declaration, false);
   const call = declaration.initializer;
   const callee = call?.expression;
-  if (call?.kind !== SyntaxKind5.CallExpression || callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword || callee.name?.text !== "safeList" || call.arguments.length !== 3 || [SyntaxKind5.ArrayLiteralExpression, SyntaxKind5.ObjectLiteralExpression, SyntaxKind5.SpreadElement].includes(call.arguments[2].kind) || call.arguments.some((a) => a.kind === SyntaxKind5.SpreadElement)) {
+  const method = String(callee?.name?.text ?? "");
+  const nilExact = method === "safeListN" && call?.arguments?.length === 2;
+  if (call?.kind !== SyntaxKind5.CallExpression || callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword || call.arguments.some((a) => a.kind === SyntaxKind5.SpreadElement) || !(nilExact || method === "safeList" && call.arguments.length === 3 && ![SyntaxKind5.ArrayLiteralExpression, SyntaxKind5.ObjectLiteralExpression].includes(call.arguments[2].kind))) {
     return false;
   }
   const scope = goTranspiler.goEnclosingFunction(declaration);
@@ -45145,6 +45157,9 @@ function go92g2LoopListLocal(goTranspiler, declaration) {
       lengths++;
       return false;
     }
+    if (nilExact && goTranspiler.goIsNilComparisonOperand(n, parent)) {
+      return false;
+    }
     const reader = parent?.expression;
     if (parent?.kind === SyntaxKind5.CallExpression && parent.arguments[0] === n && parent.arguments.length >= 2 && reader?.kind === SyntaxKind5.PropertyAccessExpression && reader.expression?.kind === SyntaxKind5.ThisKeyword && /^safe(Dict|String|Integer|Number|Value|Bool|Float|Timestamp)$/.test(String(reader.name?.text ?? "")) && go92g2LoopIndexOver(goTranspiler, parent.arguments[1], declaration, parent)) {
       return false;
@@ -45164,7 +45179,8 @@ function go92g2LoopListLocal(goTranspiler, declaration) {
   GoTranspiler.prototype.goSafeListUnboxValue = function(declaration, identation) {
     if (listType.call(this, declaration) === void 0 && go92g2LoopListLocal(this, declaration)) {
       const args = declaration.initializer.arguments.map((a, i) => this.printNode(a, i === 0 ? identation : 0).trim());
-      return `this.SafeListSlice(${args.join(", ")})`;
+      const reader = declaration.initializer.expression.name.text === "safeListN" ? "SafeListNSlice" : "SafeListSlice";
+      return `this.${reader}(${args.join(", ")})`;
     }
     return listValue.call(this, declaration, identation);
   };
