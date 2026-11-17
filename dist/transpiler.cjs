@@ -95434,7 +95434,9 @@ _RustTranspiler.RUST_VENUE_KEPT_STR_ARMS = {
   "modetrade.ts#modetrade": ["hashMessage"],
   "polymarket.ts#polymarket": ["hashMessage", "signMessage", "signHash"],
   // yd: pro phemex fromEn joins venue phemex fromEn's `-> Option<String>` group; its by-name `from_en` arm stays
-  "pro/phemex.ts#phemex": ["fromEn"],
+  "pro/phemex.ts#phemex": ["fromEn", "fromEp", "fromEv", "fromEr"],
+  // phemex fromEp / fromEv / fromEr: typed `Str` after their by-name arms existed (REST and pro), the arms stay
+  "phemex.ts#phemex": ["fromEp", "fromEv", "fromEr"],
   // ral-52k: typed by name (no ts/src declaration change); its by-name arm boxes the `Option<String>` once
   "hyperliquid.ts#hyperliquid": ["updateSpotCurrencyCode"]
 };
