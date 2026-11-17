@@ -45158,6 +45158,67 @@ GoTranspiler.prototype.goAnyLocalHoldsPointer = function(decl) {
   this.goEnclosingFunction(decl)?.forEachChild(visit);
   return holds;
 };
+function goR92g8DefaultedSafeListWrite(goTranspiler, write, declaration) {
+  const right = goR92g8Unparen(write?.right);
+  if (right?.kind !== SyntaxKind5.CallExpression || right.arguments.length !== 3 || right.expression?.kind !== SyntaxKind5.PropertyAccessExpression || right.expression.expression?.kind !== SyntaxKind5.ThisKeyword || right.expression.name?.text !== "safeList") {
+    return false;
+  }
+  const fallback = goR92g8Unparen(right.arguments[2]);
+  if (fallback?.kind === SyntaxKind5.ArrayLiteralExpression) {
+    return true;
+  }
+  return fallback?.kind === SyntaxKind5.Identifier && ccxtGoParamDeclarationOf(goTranspiler, fallback) === declaration;
+}
+function goR92g8Unparen(node) {
+  while (node?.kind === SyntaxKind5.ParenthesizedExpression || node?.kind === SyntaxKind5.AsExpression) {
+    node = node.expression;
+  }
+  return node;
+}
+function goR92g8ListSeedIsSafe(goTranspiler, scope, declaration, varName) {
+  const init = goR92g8Unparen(declaration?.initializer);
+  if (!/(^|[\\/])ts[\\/]src[\\/]/.test(String(declaration?.getSourceFile?.()?.fileName ?? ""))) {
+    return false;
+  }
+  if (declaration?.kind !== SyntaxKind5.VariableDeclaration || init?.kind !== SyntaxKind5.ArrayLiteralExpression || init.elements.length === 0 || declaration.type !== void 0 && declaration.type.getText().replace(/\s+/g, "") !== "string[]" || scope === void 0) {
+    return false;
+  }
+  let writes = 0;
+  const unsafe = goTranspiler.hasNodeWhere(scope, (n) => {
+    if (n.kind !== SyntaxKind5.Identifier || n.text !== varName || n === declaration.name || ccxtGoParamDeclarationOf(goTranspiler, n) !== declaration) {
+      return false;
+    }
+    const parent = n.parent;
+    if (parent?.kind === SyntaxKind5.BinaryExpression && parent.left === n && parent.operatorToken?.kind === SyntaxKind5.EqualsToken) {
+      if (goR92g8DefaultedSafeListWrite(goTranspiler, parent, declaration)) {
+        writes += 1;
+        return false;
+      }
+      return true;
+    }
+    if (parent?.kind === SyntaxKind5.CallExpression && parent.arguments.indexOf(n) === 2 && parent.parent?.kind === SyntaxKind5.BinaryExpression && goR92g8DefaultedSafeListWrite(goTranspiler, parent.parent, declaration)) {
+      return false;
+    }
+    return ccxtGoWriteSiteShippedVeto(goTranspiler, n, parent, "[]any");
+  });
+  return !unsafe && writes > 0 && goR92g8HasNativeUse(goTranspiler, declaration, "[]any");
+}
+var goLocalIsSafeToTypeBase92g8 = GoTranspiler.prototype.goLocalIsSafeToType;
+GoTranspiler.prototype.goLocalIsSafeToType = function(scope, declaration, varName, goType, stringWriteProven = false) {
+  return goLocalIsSafeToTypeBase92g8.call(this, scope, declaration, varName, goType, stringWriteProven) || goType === "[]any" && goR92g8ListSeedIsSafe(this, scope, declaration, varName);
+};
+var printBinaryExpressionBase92g8 = GoTranspiler.prototype.printBinaryExpression;
+GoTranspiler.prototype.printBinaryExpression = function(node, identation) {
+  const right = goR92g8Unparen(node?.right);
+  if (node?.operatorToken?.kind === SyntaxKind5.EqualsToken && node.left?.kind === SyntaxKind5.Identifier && right?.kind === SyntaxKind5.CallExpression && right.expression?.name?.text === "safeList") {
+    const declaration = ccxtGoParamDeclarationOf(this, node.left);
+    if (declaration?.kind === SyntaxKind5.VariableDeclaration && goR92g8DefaultedSafeListWrite(this, node, declaration) && this.goDeclaredTypeOfIdentifier(node.left) === "[]any") {
+      const args = goR92g8Unparen(node.right).arguments.map((a) => this.printNode(a, 0).trim());
+      return this.printNode(node.left, 0) + " = SafeListTypedDefault(" + args.join(", ") + ")";
+    }
+  }
+  return printBinaryExpressionBase92g8.call(this, node, identation);
+};
 
 // src/javaTranspiler.ts
 init_esm_shims();
