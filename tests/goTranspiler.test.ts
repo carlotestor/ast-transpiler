@@ -16523,3 +16523,86 @@ describe('ral-90g8 R4 annotated int counters and loop-index writes', () => {
         expect(out).toContain('page = page + 1');
     });
 });
+
+function goTranspile92g8(source: string): string {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ral-92g8-'));
+    fs.mkdirSync(path.join(dir, 'ts', 'src'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'ts', 'src', 'ex.ts'), source);
+    const cwd = process.cwd();
+    try {
+        process.chdir(dir);
+        const x = new Transpiler({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        installCcxtGoLocalTypes(x.goTranspiler);
+        return x.transpileGoByPath('ts/src/ex.ts').content;
+    } finally {
+        process.chdir(cwd);
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+}
+
+describe('ral-92g8 R1/R2 venue Num and Market[] producers print typed returns', () => {
+    const head = 'type Num = number | undefined;\n'
+        + 'type Str = string | undefined;\n'
+        + 'interface MarketInterface { id: string; }\n'
+        + 'type Market = MarketInterface | undefined;\n'
+        + 'type Dict = { [key: string]: unknown };\n'
+        + 'class base {\n'
+        + '    parseNumber (v: Str): Num { return undefined; }\n'
+        + '}\n'
+        + 'export class ex extends base {\n'
+        + '    parseScaled (value: Str): Num {\n'
+        + '        if (value === undefined) {\n'
+        + '            return undefined;\n'
+        + '        }\n'
+        + '        return this.parseNumber (value);\n'
+        + '    }\n'
+        + '    eventMarkets (e: Dict): Market[] {\n'
+        + '        const result: Market[] = [];\n'
+        + '        return result;\n'
+        + '    }\n';
+    test('a Num producer over parseNumber prints *float64 and a nil-tested local takes it', () => {
+        const out = goTranspile92g8(head
+            + '    f (s: Str) {\n'
+            + '        const fee = this.parseScaled (s);\n'
+            + '        if (fee !== undefined) {\n'
+            + '            return { \'cost\': fee };\n'
+            + '        }\n'
+            + '        return { \'v\': this.parseScaled (s) };\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain(') ParseScaled(value any) *float64 {');
+        expect(out).toContain('var fee *float64 = this.ParseScaled(s)');
+        expect(out).toContain('if fee != nil {');
+    });
+    test('a Market[] producer prints []any and an indexed local takes it', () => {
+        const out = goTranspile92g8(head
+            + '    g (e: Dict) {\n'
+            + '        const ms = this.eventMarkets (e);\n'
+            + '        for (let i = 0; i < ms.length; i++) {\n'
+            + '            this.use (ms[i]);\n'
+            + '        }\n'
+            + '    }\n'
+            + '    use (m: Market) { return m; }\n'
+            + '}\n');
+        expect(out).toContain(') EventMarkets(e any) []any {');
+        expect(out).toContain('var ms []any = this.EventMarkets(e)');
+        expect(out).toContain('ms[i]');
+    });
+    test('a local only handed on keeps the box', () => {
+        const out = goTranspile92g8(head
+            + '    h (s: Str) {\n'
+            + '        const fee = this.parseScaled (s);\n'
+            + '        return { \'cost\': fee };\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('var fee any = this.ParseScaled(s)');
+    });
+    test('a Num producer with another return keeps any', () => {
+        const out = goTranspile92g8('type Num = number | undefined;\n'
+            + 'class base {}\n'
+            + 'export class ex extends base {\n'
+            + '    other (v: number): Num { return v * 2; }\n'
+            + '}\n');
+        expect(out).not.toContain('*float64 {');
+    });
+});
