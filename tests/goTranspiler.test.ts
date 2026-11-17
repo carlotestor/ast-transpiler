@@ -17140,11 +17140,10 @@ describe('map-row lists read through string-keyed safe readers', () => {
         + '            result.push (' + use + ');\n'
         + '        }\n'
         + '        return result;\n';
-    test('the list reads SafeListMapsTyped and the row is the slice index', () => {
+    test('rows read only through safe readers keep the boxed list', () => {
         const out = goTranspileMapRows(head + '    f (response: Dict) {\n        // kept\n' + loop('{ \'id\': this.safeString (entry, \'id\') }') + '    }\n}\n');
         expect(out).toContain('// kept');
-        expect(out).toContain('var rows []map[string]any = this.SafeListMapsTyped(response, "data")');
-        expect(out).toContain('var entry map[string]any = rows[i]');
+        expect(out).not.toContain('SafeListMapsTyped');
     });
     test('a row handed on whole keeps the boxed list', () => {
         const out = goTranspileMapRows(head + '    f (response: Dict) {\n' + loop('entry') + '    }\n}\n');
@@ -17170,7 +17169,7 @@ describe('map-row lists: annotated Dict[] list with an empty default and an info
             + '        const result = [];\n'
             + '        for (let i = 0; i < rows.length; i++) {\n'
             + '            const entry = rows[i];\n'
-            + '            result.push ({ \'info\': entry, \'id\': this.safeString (entry, \'id\') });\n'
+            + '            result.push ({ \'info\': entry, \'v\': entry[\'v\'], \'id\': this.safeString (entry, \'id\') });\n'
             + '        }\n'
             + '        return result;\n'
             + '    }\n'

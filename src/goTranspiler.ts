@@ -39166,7 +39166,7 @@ function goMapRowElementLocal (goTranspiler, declaration, list): boolean {
         return false;
     }
     const uses = goMapRowIdentifierUses (goTranspiler, declaration);
-    return (uses !== undefined) && (uses.length > 0) && uses.some ((n) => goMapRowSafeReaderUse (goTranspiler, n) || goMapRowKeyRead (goTranspiler, n))
+    return (uses !== undefined) && (uses.length > 0) && uses.some ((n) => goMapRowKeyRead (goTranspiler, n))
         && uses.every ((n) => goMapRowSafeReaderUse (goTranspiler, n) || goMapRowKeyRead (goTranspiler, n)
             || ((list.type !== undefined) && (n.parent?.kind === SyntaxKind.PropertyAssignment) && (n.parent.initializer === n)));
 }
