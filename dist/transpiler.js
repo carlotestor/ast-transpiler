@@ -43501,6 +43501,12 @@ function ccxtGo90g2GuardedNonNil(goTranspiler, use, name) {
     if (cur.kind === SyntaxKind5.IfStatement && cur.elseStatement === child && ccxtGo90g2TestsNil(goTranspiler, cur.expression, name)) {
       return true;
     }
+    if (cur.kind === SyntaxKind5.BinaryExpression && cur.right === child && (cur.operatorToken?.kind === SyntaxKind5.AmpersandAmpersandToken && goTranspiler.goGuardsNonNil(cur.left, name) || cur.operatorToken?.kind === SyntaxKind5.BarBarToken && ccxtGo90g2TestsNil(goTranspiler, cur.left, name))) {
+      return true;
+    }
+    if (cur.kind === SyntaxKind5.ConditionalExpression && cur.whenFalse === child && ccxtGo90g2TestsNil(goTranspiler, cur.condition, name)) {
+      return true;
+    }
     if (cur.kind === SyntaxKind5.Block || cur.kind === SyntaxKind5.CaseClause || cur.kind === SyntaxKind5.DefaultClause) {
       const statements = cur.statements;
       const index = statements.indexOf(child);
@@ -43645,6 +43651,40 @@ function ccxtGo90g2MapVerdictOk(goTranspiler, declaration) {
     } finally {
       ccxtGo90g2State.on = previous;
     }
+  };
+}
+function ccxtGo90g2ListNativeRead(goTranspiler, declaration) {
+  const scope = goTranspiler.goEnclosingFunction(declaration);
+  const checker = goTranspiler.checkerOrUndefined();
+  const own = checker?.getSymbolAtLocation(declaration.name);
+  if (scope === void 0 || own === void 0) {
+    return false;
+  }
+  return goTranspiler.hasNodeWhere(scope, (n) => {
+    if (n.kind !== SyntaxKind5.Identifier || n === declaration.name || n.text !== declaration.name.text || checker.getSymbolAtLocation(n) !== own) {
+      return false;
+    }
+    const outer = ccxtGoSafeCollectionTypeOnlyWrapper(n);
+    const parent = outer.parent;
+    return parent?.kind === SyntaxKind5.PropertyAccessExpression && parent.expression === outer && parent.name?.text === "length" || parent?.kind === SyntaxKind5.ElementAccessExpression && parent.expression === outer && !goTranspiler.isGoElementAccessAssignmentTarget(parent);
+  });
+}
+{
+  const listReads = GoTranspiler.prototype.goSafeListUseReadsTheList;
+  GoTranspiler.prototype.goSafeListUseReadsTheList = function(node) {
+    if (listReads.call(this, node)) {
+      return true;
+    }
+    const outer = ccxtGoSafeCollectionTypeOnlyWrapper(node);
+    const member = outer.parent;
+    if (member?.kind !== SyntaxKind5.PropertyAccessExpression || member.expression !== outer || member.name?.text !== "join" || member.parent?.kind !== SyntaxKind5.CallExpression || member.parent.expression !== member || member.parent.arguments.length !== 1) {
+      return false;
+    }
+    const declaration = node?.kind === SyntaxKind5.Identifier ? this.goDeclarationOfIdentifier(node) : void 0;
+    if (declaration?.kind !== SyntaxKind5.VariableDeclaration || this.goSafeListLocalArgs(declaration.initializer) === void 0) {
+      return false;
+    }
+    return ccxtGo90g2ListNativeRead(this, declaration);
   };
 }
 
