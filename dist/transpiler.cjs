@@ -42448,6 +42448,19 @@ function go87g8CounterWriteOk(goTranspiler, assignment, declaration) {
   }
   return _optionalChain([right, 'optionalAccess', _7856 => _7856.kind]) === _ast.SyntaxKind.BinaryExpression && (right.operatorToken.kind === _ast.SyntaxKind.PlusToken || right.operatorToken.kind === _ast.SyntaxKind.MinusToken) && go87g8IsOwnRef(goTranspiler, right.left, declaration) && go87g8IntLiteral(right.right);
 }
+function go87g8NumberOperand(goTranspiler, node) {
+  let type = void 0;
+  try {
+    type = goTranspiler.getChecker().getTypeAtLocation(node);
+  } catch (e) {
+    return false;
+  }
+  if (type === void 0) {
+    return false;
+  }
+  const parts = typeof type.isUnionType === "function" && type.isUnionType() ? type.getTypes() : [type];
+  return parts.some((t) => (t.flags & _sync.TypeFlags.NumberLike) !== 0) && parts.every((t) => (t.flags & (_sync.TypeFlags.NumberLike | _sync.TypeFlags.Undefined)) !== 0);
+}
 var go87g8CounterCache = /* @__PURE__ */ new WeakMap();
 function go87g8IsIntCounter(goTranspiler, declaration) {
   if (_optionalChain([declaration, 'optionalAccess', _7857 => _7857.kind]) !== _ast.SyntaxKind.VariableDeclaration || _optionalChain([declaration, 'access', _7858 => _7858.name, 'optionalAccess', _7859 => _7859.kind]) !== _ast.SyntaxKind.Identifier || !go87g8IntLiteral(declaration.initializer) || declaration.type !== void 0 || (_optionalChain([declaration, 'access', _7860 => _7860.parent, 'optionalAccess', _7861 => _7861.flags]) & ts.NodeFlags.Let) === 0) {
@@ -42494,6 +42507,10 @@ function go87g8IsIntCounter(goTranspiler, declaration) {
       const other = parent.left === n ? parent.right : parent.left;
       if (op === _ast.SyntaxKind.GreaterThanToken || op === _ast.SyntaxKind.GreaterThanEqualsToken || op === _ast.SyntaxKind.LessThanToken || op === _ast.SyntaxKind.LessThanEqualsToken || op === _ast.SyntaxKind.EqualsEqualsEqualsToken || op === _ast.SyntaxKind.ExclamationEqualsEqualsToken) {
         if (go87g8IntLiteral(other)) {
+          comparisons += 1;
+          return false;
+        }
+        if (op !== _ast.SyntaxKind.EqualsEqualsEqualsToken && op !== _ast.SyntaxKind.ExclamationEqualsEqualsToken && go87g8NumberOperand(goTranspiler, other)) {
           comparisons += 1;
           return false;
         }

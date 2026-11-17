@@ -42449,6 +42449,19 @@ function go87g8CounterWriteOk(goTranspiler, assignment, declaration) {
   }
   return right?.kind === SyntaxKind5.BinaryExpression && (right.operatorToken.kind === SyntaxKind5.PlusToken || right.operatorToken.kind === SyntaxKind5.MinusToken) && go87g8IsOwnRef(goTranspiler, right.left, declaration) && go87g8IntLiteral(right.right);
 }
+function go87g8NumberOperand(goTranspiler, node) {
+  let type = void 0;
+  try {
+    type = goTranspiler.getChecker().getTypeAtLocation(node);
+  } catch (e) {
+    return false;
+  }
+  if (type === void 0) {
+    return false;
+  }
+  const parts = typeof type.isUnionType === "function" && type.isUnionType() ? type.getTypes() : [type];
+  return parts.some((t) => (t.flags & TypeFlags4.NumberLike) !== 0) && parts.every((t) => (t.flags & (TypeFlags4.NumberLike | TypeFlags4.Undefined)) !== 0);
+}
 var go87g8CounterCache = /* @__PURE__ */ new WeakMap();
 function go87g8IsIntCounter(goTranspiler, declaration) {
   if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier || !go87g8IntLiteral(declaration.initializer) || declaration.type !== void 0 || (declaration.parent?.flags & ts.NodeFlags.Let) === 0) {
@@ -42495,6 +42508,10 @@ function go87g8IsIntCounter(goTranspiler, declaration) {
       const other = parent.left === n ? parent.right : parent.left;
       if (op === SyntaxKind5.GreaterThanToken || op === SyntaxKind5.GreaterThanEqualsToken || op === SyntaxKind5.LessThanToken || op === SyntaxKind5.LessThanEqualsToken || op === SyntaxKind5.EqualsEqualsEqualsToken || op === SyntaxKind5.ExclamationEqualsEqualsToken) {
         if (go87g8IntLiteral(other)) {
+          comparisons += 1;
+          return false;
+        }
+        if (op !== SyntaxKind5.EqualsEqualsEqualsToken && op !== SyntaxKind5.ExclamationEqualsEqualsToken && go87g8NumberOperand(goTranspiler, other)) {
           comparisons += 1;
           return false;
         }
