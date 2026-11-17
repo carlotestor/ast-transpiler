@@ -87177,6 +87177,10 @@ ${iden}}`;
         none = true;
         continue;
       }
+      if (r.scalar === true && !flight && (r.rpats ?? r.pats).every((rp) => rp.some((s) => s !== null))) {
+        none = true;
+        continue;
+      }
       if (r.kind !== "book" && r.kind !== "cache" && r.kind !== "dict" && r.kind !== "list")
         return void 0;
       if (kind !== void 0 && kind !== r.kind)
