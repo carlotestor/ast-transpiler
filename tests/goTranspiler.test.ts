@@ -15871,3 +15871,45 @@ describe('ral-90g8 R3 pagination counters advanced by this.sum', () => {
         expect(out).toContain('var page any = 1');
     });
 });
+
+describe('ral-90g8 R4 annotated int counters and loop-index writes', () => {
+    const head = 'type Dict = { [key: string]: unknown };\n'
+        + 'type int = number;\n'
+        + 'export class ex {\n'
+        + '    sum (a: number, b: number): number { return a + b; }\n'
+        + '    async get (r: Dict): Promise<number[]> { return []; }\n';
+    test('an `: int` offset advanced by a len local types int', () => {
+        const out = goTranspile87g8(head
+            + '    async f () {\n'
+            + '        let offset: int = 0;\n'
+            + '        while (true) {\n'
+            + '            const rows = await this.get ({ \'offset\': offset });\n'
+            + '            const n = rows.length;\n'
+            + '            if (n === 0) {\n'
+            + '                break;\n'
+            + '            }\n'
+            + '            offset = this.sum (offset, n);\n'
+            + '        }\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('var offset int = 0');
+        expect(out).toContain('offset = offset + n');
+    });
+    test('a page counter also written from a for index types int', () => {
+        const out = goTranspile87g8(head
+            + '    async f (pages: number) {\n'
+            + '        let page = 1;\n'
+            + '        const request: Dict = { \'page\': page };\n'
+            + '        for (let i = 2; i <= pages; i++) {\n'
+            + '            page = i;\n'
+            + '            request[\'page\'] = page;\n'
+            + '        }\n'
+            + '        page = this.sum (page, 1);\n'
+            + '        request[\'page\'] = page;\n'
+            + '        await this.get (request);\n'
+            + '    }\n'
+            + '}\n');
+        expect(out).toContain('var page int = 1');
+        expect(out).toContain('page = page + 1');
+    });
+});

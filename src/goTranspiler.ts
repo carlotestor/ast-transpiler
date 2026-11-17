@@ -36539,22 +36539,41 @@ function go90g8SumOfSelf(goTranspiler, right, declaration): boolean {
     if (!go87g8IsOwnRef(goTranspiler, a, declaration)) {
         return false;
     }
-    if (go87g8IntLiteral(b)) {
-        return true;
-    }
-    if ((b?.kind !== SyntaxKind.Identifier) || (b.text === declaration.name.text)) {
+    return go87g8IntLiteral(b) || go90g8OtherIntLocal(goTranspiler, b, declaration);
+}
+// ral-90g8 R4: another local (a loop index, a `len` result) whose own Go declaration is `int`
+function go90g8OtherIntLocal(goTranspiler, node, declaration): boolean {
+    node = go90g8Unparen(node);
+    if ((node?.kind !== SyntaxKind.Identifier) || (node.text === declaration.name.text)) {
         return false;
     }
-    const other = goTranspiler.goDeclarationOfIdentifier(b);
+    const other = goTranspiler.goDeclarationOfIdentifier(node);
     if ((other === undefined) || (other === declaration)) {
         return false;
     }
-    return goTranspiler.goDeclaredTypeOfIdentifier(b) === 'int';
+    if (goTranspiler.goDeclaredTypeOfIdentifier(node) === 'int') {
+        return true;
+    }
+    // a `for (let i = <int literal>; ..)` index: Go declares it `i := <literal>`, an int, and the
+    // compiler holds every write of it to int
+    return (other.parent?.kind === SyntaxKind.VariableDeclarationList) && (other.parent.parent?.kind === SyntaxKind.ForStatement)
+        && (other.parent.parent.initializer === other.parent) && (other.type === undefined) && go87g8IntLiteral(other.initializer);
+}
+// ral-90g8 R4: no annotation, or the `int` / `number` keyword annotation (both print the same any box)
+function go90g8IntAnnotation(declaration): boolean {
+    const type = declaration.type;
+    if (type === undefined) {
+        return true;
+    }
+    if (type.kind === SyntaxKind.NumberKeyword) {
+        return true;
+    }
+    return (type.kind === SyntaxKind.TypeReference) && (type.typeName?.kind === SyntaxKind.Identifier) && (type.typeName.text === 'int');
 }
 const go90g8SumCounterCache = new WeakMap<object, boolean>();
 function go90g8IsSumCounter(goTranspiler, declaration): boolean {
     if ((declaration?.kind !== SyntaxKind.VariableDeclaration) || (declaration.name?.kind !== SyntaxKind.Identifier)
-        || !go87g8IntLiteral(declaration.initializer) || (declaration.type !== undefined)
+        || !go87g8IntLiteral(declaration.initializer) || !go90g8IntAnnotation(declaration)
         || ((declaration.parent?.flags & ts.NodeFlags.Let) === 0)) {
         return false;
     }
@@ -36588,7 +36607,7 @@ function go90g8IsSumCounter(goTranspiler, declaration): boolean {
             if (parent.operatorToken.kind !== SyntaxKind.EqualsToken) {
                 return true;
             }
-            if (go87g8IntLiteral(parent.right)) {
+            if (go87g8IntLiteral(parent.right) || go90g8OtherIntLocal(goTranspiler, parent.right, declaration)) {
                 return false;
             }
             if (go90g8SumOfSelf(goTranspiler, parent.right, declaration)) {
@@ -36647,4 +36666,4 @@ GoTranspiler.prototype.printCallExpression = function (node, identation) {
     }
     return printCallExpressionBase90g8.call(this, node, identation);
 };
-// ===== ral-90g8 R3 (end) =====
+// ===== ral-90g8 R3 (end), R4 inside =====
