@@ -86601,7 +86601,7 @@ ${iden}}`;
       return `${text}__map${form === "mapBox" ? ".clone()" : ""}.map_or(Value::Null, Value::Dict)`;
     if (form === "rejoin" || form === "rejoinMove") {
       const c = form === "rejoin" ? ".clone()" : "";
-      return `${text}${c}.map(Value::Arr).or_else(|| ${text}__map${c}.map(Value::Dict)).unwrap_or_default()`;
+      return `(match ${text}${c} { Some(__l) => Value::Arr(__l), None => ${text}__map${c}.map_or(Value::Null, Value::Dict) })`;
     }
     return form === "move" ? `${text}.map_or(Value::Null, Value::Arr)` : `${text}.clone().map_or(Value::Null, Value::Arr)`;
   }
