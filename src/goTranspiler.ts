@@ -39198,8 +39198,8 @@ GoTranspiler.prototype.goOrderBookCacheLocal = function (declaration) {
 // ===== end orderbook delta cache =====
 
 // ===== *string seeds rebound by a literal concat =====
-// `let x = this.safeString (o, k)` whose only writes are `x = <chain>`, the chain a `+` of string literals and x itself
-// (once): Add(..) answered nil for a nil x and the concatenation otherwise, so the write prints
+// `let x = this.safeString (o, k[, d])` whose only writes are `x = <chain with x once>` or `x += <chain>`, every other
+// leaf a string literal or a Go string expression: Add(..) answered nil for a nil x and the concatenation otherwise, so the write prints
 // `if x != nil { xValue := "lit" + *x; x = &xValue }` and the local is declared *string. Every other use must be a nil
 // test, a string-literal compare, an object-literal value, the receiver of `.indexOf (literal)` or the first argument of
 // `this.watch` / `this.watchMultiple` / `this.client` (each derefs it); decided from the AST and the checker.
@@ -39228,11 +39228,32 @@ function goConcatSeedLeaves(n, out: Node[]): Node[] | undefined {
 function goConcatSeedIsSelf(checker: Checker, n, declaration): boolean {
     return (n?.kind === SyntaxKind.Identifier) && (checker.getSymbolAtLocation(n)?.valueDeclaration?.resolve?.() === declaration);
 }
-function goConcatSeedWriteOk(checker: Checker, right, declaration): boolean {
-    const leaves = goConcatSeedLeaves(right, []);
-    return (leaves !== undefined) && (leaves.length >= 2)
-        && (leaves.filter((l) => goConcatSeedIsSelf(checker, l, declaration)).length === 1)
-        && leaves.every((l) => goConcatSeedIsSelf(checker, l, declaration) || goConcatSeedIsLiteral(l));
+// a leaf that prints as a Go string: a literal, or an expression whose printed static type is string
+function goConcatSeedIsStringLeaf(goTranspiler: GoTranspiler, leaf): boolean {
+    if (goConcatSeedIsLiteral(leaf)) {
+        return true;
+    }
+    if (goTranspiler.hasNodeWhere(leaf, (n) => n.kind === SyntaxKind.AwaitExpression)) {
+        return false;
+    }
+    try {
+        const printed = goTranspiler.goWithExprDepth(1, () => goTranspiler.printNode(leaf, 0));
+        return !printed.includes('\n') && (goTranspiler.goOperandStaticType(leaf, printed) === 'string');
+    } catch (e) {
+        return false;
+    }
+}
+// `x = <chain with x once>` or `x += <chain without x>`, every other leaf a Go string
+function goConcatSeedWriteOk(goTranspiler: GoTranspiler, checker: Checker, write, declaration): boolean {
+    const leaves = goConcatSeedLeaves(write.right, []);
+    if (leaves === undefined) {
+        return false;
+    }
+    const selfCount = leaves.filter((l) => goConcatSeedIsSelf(checker, l, declaration)).length;
+    const others = leaves.filter((l) => !goConcatSeedIsSelf(checker, l, declaration));
+    const shapeOk = (write.operatorToken.kind === SyntaxKind.PlusEqualsToken) ? (selfCount === 0)
+        : ((write.operatorToken.kind === SyntaxKind.EqualsToken) && (selfCount === 1) && (leaves.length >= 2));
+    return shapeOk && others.every((l) => goConcatSeedIsStringLeaf(goTranspiler, l));
 }
 function goConcatSeed(goTranspiler: GoTranspiler, declaration): boolean {
     if ((declaration?.kind !== SyntaxKind.VariableDeclaration) || (declaration.name?.kind !== SyntaxKind.Identifier) || (declaration.type !== undefined)
@@ -39241,7 +39262,7 @@ function goConcatSeed(goTranspiler: GoTranspiler, declaration): boolean {
     }
     const call = goConcatSeedUnwrap(declaration.initializer);
     if ((call?.kind !== SyntaxKind.CallExpression) || (call.expression?.kind !== SyntaxKind.PropertyAccessExpression)
-        || (call.expression.expression?.kind !== SyntaxKind.ThisKeyword) || (call.expression.name?.text !== 'safeString') || (call.arguments?.length !== 2)) {
+        || (call.expression.expression?.kind !== SyntaxKind.ThisKeyword) || (call.expression.name?.text !== 'safeString') || (call.arguments?.length < 2) || (call.arguments.length > 3)) {
         return false;
     }
     if (goConcatSeedVerdicts.has(declaration)) {
@@ -39286,8 +39307,8 @@ function goConcatSeed(goTranspiler: GoTranspiler, declaration): boolean {
         const parent = current.parent;
         if ((parent?.kind === SyntaxKind.BinaryExpression) && (parent.left === current)
             && (parent.operatorToken.kind >= ASSIGNMENT_KIND_MIN) && (parent.operatorToken.kind <= ASSIGNMENT_KIND_MAX)) {
-            if ((current === n) && (parent.operatorToken.kind === SyntaxKind.EqualsToken) && (parent.parent?.kind === SyntaxKind.ExpressionStatement)
-                && goConcatSeedWriteOk(checker, parent.right, declaration)) {
+            if ((current === n) && (parent.parent?.kind === SyntaxKind.ExpressionStatement)
+                && goConcatSeedWriteOk(goTranspiler, checker, parent, declaration)) {
                 writes.push(parent);
             } else {
                 unsafe = true;
@@ -39354,9 +39375,22 @@ function goConcatSeed(goTranspiler: GoTranspiler, declaration): boolean {
             return goPointerWriteTextConcatSeed.call(this, node, identation);
         }
         const name = this.printNode(left, 0).trim();
-        const parts = goConcatSeedLeaves(node.right, []).map((leaf) => goConcatSeedIsSelf(checker, leaf, declaration) ? ('*' + name) : this.printNode(leaf, 0).trim());
+        const leaves = goConcatSeedLeaves(node.right, []);
+        const parts = ((node.operatorToken.kind === SyntaxKind.PlusEqualsToken) ? [ '*' + name ] : [])
+            .concat(leaves.map((leaf) => goConcatSeedIsSelf(checker, leaf, declaration) ? ('*' + name) : this.goWithExprDepth(1, () => this.printNode(leaf, 0)).trim()));
         const inner = this.getIden(identation + 1);
         return `if ${name} != nil {\n${inner}${temp} := ${parts.join(' + ')}\n${inner}${name} = &${temp}\n${this.getIden(identation)}}`;
+    };
+    // `x += ..` reaches the compound printer, not the pointer-write one
+    const printCustomBinaryConcatSeed = GoTranspiler.prototype.printCustomBinaryExpressionIfAny;
+    GoTranspiler.prototype.printCustomBinaryExpressionIfAny = function (node, identation) {
+        if ((node?.operatorToken?.kind === SyntaxKind.PlusEqualsToken) && goConcatSeedWriteTemps.has(node)) {
+            const printed = this.goPointerWriteText(node, identation);
+            if (printed !== undefined) {
+                return printed;
+            }
+        }
+        return printCustomBinaryConcatSeed.call(this, node, identation);
     };
 }
 // ===== end *string concat seeds =====
