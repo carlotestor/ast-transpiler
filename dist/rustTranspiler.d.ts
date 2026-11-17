@@ -2044,6 +2044,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-76e: `c`, `c + k` or `c - k` (parentheses skipped) where `c` is an always-`Int` for counter (rustValueIntCounter) and
      *  `k` an int literal: the runtime value is an `Int` on every path. */
     rust76eCounterStep(node: any): boolean;
+    /** ral-87rb R4: `node` is (inside parentheses) the initializer of a declaration (or an operand of one) whose every
+     *  `this.sum (..)` use has only int-literal partners. */
+    rust87rbSumLiteralOnly(node: Node): boolean;
     /** tb: `const b = this.parseToInt (..)` (an `Int`-or-`Null` producer, `i64` / `Option<i64>`). */
     rustTbParseToIntInit(declaration: any): boolean;
     /** 40d: `const n = this.safeInteger* (.., <integer literal>)`: the reader answers an `Int` on every path (parsed or the

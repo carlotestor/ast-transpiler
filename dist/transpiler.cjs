@@ -66708,10 +66708,32 @@ ${ind}];`;
       return false;
     if (_is.isIdentifier.call(void 0, inner))
       return this.rustValueIntCounter(inner);
+    if (_is.isBinaryExpression.call(void 0, inner) && (inner.operatorToken.kind === _ast.SyntaxKind.AsteriskToken || inner.operatorToken.kind === _ast.SyntaxKind.PlusToken || inner.operatorToken.kind === _ast.SyntaxKind.MinusToken) && _is.isBinaryExpression.call(void 0, this.unwrapParens(inner.left)) && this.rust76eCounterStep(inner.left) && this.rustScalarIntLiteral(this.unwrapParens(inner.right)) !== void 0)
+      return this.rust87rbSumLiteralOnly(inner);
+    if (_is.isBinaryExpression.call(void 0, inner) && inner.operatorToken.kind === _ast.SyntaxKind.AsteriskToken) {
+      const factor = this.unwrapParens(inner.left);
+      return _is.isIdentifier.call(void 0, factor) && this.rustValueIntCounter(factor) && this.rustScalarIntLiteral(this.unwrapParens(inner.right)) !== void 0 && this.rust87rbSumLiteralOnly(inner);
+    }
     if (!_is.isBinaryExpression.call(void 0, inner) || inner.operatorToken.kind !== _ast.SyntaxKind.PlusToken && inner.operatorToken.kind !== _ast.SyntaxKind.MinusToken)
       return false;
     const left = this.unwrapParens(inner.left);
     return _is.isIdentifier.call(void 0, left) && this.rustValueIntCounter(left) && this.rustScalarIntLiteral(this.unwrapParens(inner.right)) !== void 0;
+  }
+  /** ral-87rb R4: `node` is (inside parentheses) the initializer of a declaration (or an operand of one) whose every
+   *  `this.sum (..)` use has only int-literal partners. */
+  rust87rbSumLiteralOnly(node) {
+    let top = node;
+    while (top.parent !== void 0 && (_is.isParenthesizedExpression.call(void 0, top.parent) || _is.isBinaryExpression.call(void 0, top.parent)))
+      top = top.parent;
+    const declaration = top.parent;
+    if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || declaration.initializer !== top || !_is.isIdentifier.call(void 0, declaration.name))
+      return false;
+    return this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      const call = n.parent;
+      if (!_is.isCallExpression.call(void 0, call) || !this.rustSumShape(call))
+        return true;
+      return Array.from(call.arguments).every((a) => a === n || this.rustScalarIntLiteral(this.unwrapParens(a)) !== void 0);
+    });
   }
   /** tb: `const b = this.parseToInt (..)` (an `Int`-or-`Null` producer, `i64` / `Option<i64>`). */
   rustTbParseToIntInit(declaration) {

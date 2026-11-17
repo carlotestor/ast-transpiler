@@ -66709,10 +66709,32 @@ ${ind}];`;
       return false;
     if (isIdentifier3(inner))
       return this.rustValueIntCounter(inner);
+    if (isBinaryExpression5(inner) && (inner.operatorToken.kind === SyntaxKind7.AsteriskToken || inner.operatorToken.kind === SyntaxKind7.PlusToken || inner.operatorToken.kind === SyntaxKind7.MinusToken) && isBinaryExpression5(this.unwrapParens(inner.left)) && this.rust76eCounterStep(inner.left) && this.rustScalarIntLiteral(this.unwrapParens(inner.right)) !== void 0)
+      return this.rust87rbSumLiteralOnly(inner);
+    if (isBinaryExpression5(inner) && inner.operatorToken.kind === SyntaxKind7.AsteriskToken) {
+      const factor = this.unwrapParens(inner.left);
+      return isIdentifier3(factor) && this.rustValueIntCounter(factor) && this.rustScalarIntLiteral(this.unwrapParens(inner.right)) !== void 0 && this.rust87rbSumLiteralOnly(inner);
+    }
     if (!isBinaryExpression5(inner) || inner.operatorToken.kind !== SyntaxKind7.PlusToken && inner.operatorToken.kind !== SyntaxKind7.MinusToken)
       return false;
     const left = this.unwrapParens(inner.left);
     return isIdentifier3(left) && this.rustValueIntCounter(left) && this.rustScalarIntLiteral(this.unwrapParens(inner.right)) !== void 0;
+  }
+  /** ral-87rb R4: `node` is (inside parentheses) the initializer of a declaration (or an operand of one) whose every
+   *  `this.sum (..)` use has only int-literal partners. */
+  rust87rbSumLiteralOnly(node) {
+    let top = node;
+    while (top.parent !== void 0 && (isParenthesizedExpression3(top.parent) || isBinaryExpression5(top.parent)))
+      top = top.parent;
+    const declaration = top.parent;
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.initializer !== top || !isIdentifier3(declaration.name))
+      return false;
+    return this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      const call = n.parent;
+      if (!isCallExpression6(call) || !this.rustSumShape(call))
+        return true;
+      return Array.from(call.arguments).every((a) => a === n || this.rustScalarIntLiteral(this.unwrapParens(a)) !== void 0);
+    });
   }
   /** tb: `const b = this.parseToInt (..)` (an `Int`-or-`Null` producer, `i64` / `Option<i64>`). */
   rustTbParseToIntInit(declaration) {
