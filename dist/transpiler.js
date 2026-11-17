@@ -66251,6 +66251,8 @@ ${ind}];`;
         return this.rustScalarInsertKeyUse(n);
       if (enumerated && keyRead && isElementAccessExpression4(this.rustSkipWrappers(local.initializer)) && this.rust62kOwnKeyOnlyRead(declaration, name, n))
         return this.rustScalarInsertKeyUse(n);
+      if (enumerated && keyRead && this.rust84cNilStrInKey(local))
+        return this.rustScalarInsertKeyUse(n);
       if (enumerated)
         return !keyRead && (isElementAccessExpression4(this.rustSkipWrappers(local.initializer)) || this.rustTbNetworkCodeInit(local.initializer) || this.rust55xGuardedSafeStringKey(n, local)) && this.rustScalarInsertKeyUse(n);
       return this.rustBearerWriteKeyOk(n, name) || this.rustScalarInsertKeyUse(n);
