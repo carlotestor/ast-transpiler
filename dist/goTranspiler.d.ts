@@ -2051,3 +2051,9 @@ export interface GoTranspiler {
 export interface GoTranspiler {
     goTernaryJoin90SafeReaderArgument(node: any): boolean;
 }
+export interface GoTranspiler {
+    go92g7Int64Operands(call: any): Node[] | undefined;
+    go92g7MinMaxName(call: any): string | undefined;
+    go92g7OperandText(operand: any, index: number): string;
+    go92g7HasNumericUse(declaration: any): boolean;
+}
