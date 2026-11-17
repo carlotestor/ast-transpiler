@@ -69681,6 +69681,8 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
         return dry ? "_" : `${name}.push_str(${super.printIdentifier(right)}.as_deref().unwrap_or("null"))`;
       if (_is.isCallExpression.call(void 0, right) && right.arguments.length === 0 && _is.isPropertyAccessExpression.call(void 0, right.expression) && String(right.expression.name.text) === "toString" && _is.isIdentifier.call(void 0, right.expression.expression) && _optionalChain([this, 'access', _11427 => _11427.rustScalarLocalOf, 'call', _11428 => _11428(right.expression.expression), 'optionalAccess', _11429 => _11429.kind]) === "int")
         return dry ? "_" : `${name}.push_str(&${super.printIdentifier(right.expression.expression)}.to_string())`;
+      if (_is.isCallExpression.call(void 0, right) && this.rustBaseTypedReturnKind(right) === "str")
+        return dry ? "_" : `${name}.push_str(&${this.rustBaseTypedBareText(right)})`;
       const joined = this.rustStrPushValueText(node.left, right, dry);
       if (joined !== void 0)
         return dry ? "_" : `${name}.push_str(&${joined})`;
@@ -96404,6 +96406,7 @@ _RustTranspiler.RUST_BASE_TYPED_METHODS = {
   requestId: ["int", "int"],
   isPostOnly: ["boolean", "bool"],
   usesPrivateKey: ["boolean", "bool"],
+  paramsToString: ["string", "str"],
   // pg: the precision formatters answer `Str` (overrides may spell `string`); every return is a string or undefined
   amountToPrecision: ["Str|string", "ostr"],
   priceToPrecision: ["Str|string", "ostr"],
