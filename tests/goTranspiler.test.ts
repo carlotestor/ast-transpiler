@@ -15082,3 +15082,31 @@ describe('ral-87g6 a pair-rebound omit local re-omitted from another local keeps
         expect(output).toContain('var paramsOmitted any = this.Omit(params, "internal")');
     });
 });
+
+describe('ral-87g6 a map copy rebound only by a pair write needs a native use', () => {
+    const run = (tail: string) => {
+        const inst = new Transpiler({ 'verbose': false });
+        installCcxtGoLocalTypes((inst as any).goTranspiler);
+        const input =
+        "type Dict = { [key: string]: any };\n" +
+        "class T {\n" +
+        "    extend (...a) { return {}; }\n" +
+        "    handleOptionBoolAndParams (params: Dict, m: string, o: string, d: boolean = false): [boolean, Dict] { return [ d, params ]; }\n" +
+        "    f (params: Dict = {}) {\n" +
+        "        let paramsLoop = params;\n" +
+        "        let flag = false;\n" +
+        "        [ flag, paramsLoop ] = this.handleOptionBoolAndParams (paramsLoop, 'f', 'flag', false);\n" +
+        tail +
+        "    }\n" +
+        "}\n";
+        return inst.transpileGo(input).content;
+    };
+    test('a copy only handed to helpers keeps the box', () => {
+        const output = run("        return this.extend ({}, paramsLoop);\n");
+        expect(output).toContain('var paramsLoop any = params');
+    });
+    test('a copy read natively is a map local', () => {
+        const output = run("        if (paramsLoop['x'] === undefined) {\n            return flag;\n        }\n        return this.extend ({}, paramsLoop);\n");
+        expect(output).toContain('var paramsLoop map[string]any = params');
+    });
+});
