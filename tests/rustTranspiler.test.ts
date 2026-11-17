@@ -26142,3 +26142,29 @@ describe('rust typed filterByCurrencySinceLimit', () => {
         expect(base).toMatch(/self\.filterByCurrencySinceLimit\([^;]*code\.as_deref\(\)/);
     });
 });
+
+describe('a sync ws `Dict` request builder types the string slot its callers fill with `string[]` elements', () => {
+    const exchange = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    async watch (url: string, hash: string, req: Dict): Promise<any> { return undefined; }\n}\n";
+    const build = (name: string, venueBody: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync (path.join (dir, 'ts/src/pro'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), exchange);
+        fs.writeFileSync (path.join (dir, 'ts/src/pro/venue.ts'), "import Exchange from '../base/Exchange.js';\nimport type { Dict, Str } from '../base/Exchange.js';\nexport default class venue extends Exchange {\n" + venueBody + "}\n");
+        transpiler.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts'));
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/pro/venue.ts')).content;
+    };
+    const body = "    subscribeRequest (channel: string): Dict {\n        return { 'method': 'subscribe', 'params': { 'channel': channel } };\n    }\n    async subscribeAt (url: string, channels: string[], index: number): Promise<any> {\n        const channel = channels[index];\n        const request = this.subscribeRequest (channel);\n        return await this.watch (url, 'sub:' + channel, request);\n    }\n    async subscribeOne (url: string): Promise<any> {\n        return await this.watch (url, 'one', this.subscribeRequest ('trades'));\n    }\n";
+    test('the slot prints &str and the element local is an Option<String>', () => {
+        const out = build ('ral93ra-dict', body);
+        expect(out).toMatch(/fn subscribeRequest\(&self, channel: &str\)/);
+        expect(out).toContain('self.subscribeRequest("trades")');
+        expect(out).toContain('let mut channel: Option<String> = ');
+        expect(out).toContain('self.subscribeRequest(channel.as_deref().unwrap_or_default())');
+    });
+    test('negative: the parameter is also read by key, the slot and the element stay Value', () => {
+        const out = build ('ral93ra-dict-neg', body.replace ("'channel': channel }", "'channel': channel, 'n': channel.length }"));
+        expect(out).toMatch(/fn subscribeRequest\(&self, channel: Value\)/);
+        expect(out).not.toContain('let mut channel: Option<String> = ');
+    });
+});
