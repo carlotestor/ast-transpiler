@@ -39343,6 +39343,24 @@ function goConcatSeed(goTranspiler: GoTranspiler, declaration): boolean {
             && (parent.expression.expression?.kind === SyntaxKind.ThisKeyword) && ['watch', 'watchMultiple', 'client'].includes(parent.expression.name?.text)) {
             return false;
         }
+        // a key of a this.safe* reader (SafeValueN derefs every key) and the hash of `client.resolve` (derefs it)
+        if ((parent?.kind === SyntaxKind.CallExpression) && (parent.arguments.indexOf(current) >= 1) && (parent.expression?.kind === SyntaxKind.PropertyAccessExpression)
+            && (((parent.expression.expression?.kind === SyntaxKind.ThisKeyword) && /^safe(Value|Dict|List|String|Integer|Number|Bool)2?$/.test(parent.expression.name?.text ?? ''))
+                || ((parent.expression.name?.text === 'resolve') && (parent.arguments.indexOf(current) === 1) && (parent.expression.expression?.kind === SyntaxKind.Identifier)
+                    && (parent.expression.expression.text === 'client')))) {
+            return false;
+        }
+        // an operand of a `+` read keeps the Add helper (see the goDerefableStringOperand hook below)
+        if ((parent?.kind === SyntaxKind.BinaryExpression) && (parent.operatorToken.kind === SyntaxKind.PlusToken)) {
+            let top = parent;
+            while ((top.parent?.kind === SyntaxKind.BinaryExpression) && (top.parent.operatorToken.kind === SyntaxKind.PlusToken)) {
+                top = top.parent;
+            }
+            const leaves = goConcatSeedLeaves(top, []);
+            if ((leaves !== undefined) && leaves.every((l) => goConcatSeedIsSelf(checker, l, declaration) || goConcatSeedIsLiteral(l))) {
+                return false;
+            }
+        }
         unsafe = true;
         return false;
     });
@@ -39380,6 +39398,27 @@ function goConcatSeed(goTranspiler: GoTranspiler, declaration): boolean {
             .concat(leaves.map((leaf) => goConcatSeedIsSelf(checker, leaf, declaration) ? ('*' + name) : this.goWithExprDepth(1, () => this.printNode(leaf, 0)).trim()));
         const inner = this.getIden(identation + 1);
         return `if ${name} != nil {\n${inner}${temp} := ${parts.join(' + ')}\n${inner}${name} = &${temp}\n${this.getIden(identation)}}`;
+    };
+    // a `+` read of an admitted local keeps Add (nil answers nil): never a bare deref outside the guarded write
+    const goDerefableConcatSeed = GoTranspiler.prototype.goDerefableStringOperand;
+    GoTranspiler.prototype.goDerefableStringOperand = function (node): boolean {
+        if (node?.kind === SyntaxKind.Identifier) {
+            const declaration = this.checkerOrUndefined()?.getSymbolAtLocation(node)?.valueDeclaration?.resolve?.();
+            if ((declaration !== undefined) && (goConcatSeedVerdicts.get(declaration) === true)) {
+                return false;
+            }
+        }
+        return goDerefableConcatSeed.call(this, node);
+    };
+    const goNilProvenConcatSeed = GoTranspiler.prototype.goNilProvenStringDeref;
+    GoTranspiler.prototype.goNilProvenStringDeref = function (node): boolean {
+        if (node?.kind === SyntaxKind.Identifier) {
+            const declaration = this.checkerOrUndefined()?.getSymbolAtLocation(node)?.valueDeclaration?.resolve?.();
+            if ((declaration !== undefined) && (goConcatSeedVerdicts.get(declaration) === true)) {
+                return false;
+            }
+        }
+        return goNilProvenConcatSeed.call(this, node);
     };
     // `x += ..` reaches the compound printer, not the pointer-write one
     const printCustomBinaryConcatSeed = GoTranspiler.prototype.printCustomBinaryExpressionIfAny;
