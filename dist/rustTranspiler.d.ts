@@ -4317,6 +4317,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_WS_NIL_HASH;
     /** The hash patterns of `n`: segments are literal text or `null` (any text). */
     rustWsHashPatterns(n: any, depth: number, seen: Set<Node>): Array<Array<string | null>>;
+    /** The appended parts of `x = x + a + b` (x the local `declaration` names, left-nested `+`), in order; undefined for
+     *  any other right side. */
+    rust93rfSelfAppendTail(assign: BinaryExpression, declaration: VariableDeclaration): Node[] | undefined;
     /** ral-47h: the dispatch keys a handler local `const x = this.safeString (message, 'f')` can hold, or undefined.
      *  Proof: x is never reassigned; `message` is the handler's unwritten second parameter; the handler is a method of a
      *  ws venue class whose every `this.<handler>` mention is a value of the one `const methods = { 'k': this.h, .. }`

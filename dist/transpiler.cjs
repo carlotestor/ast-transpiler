@@ -86039,12 +86039,21 @@ ${iden}}`;
         if (_is.isIdentifier.call(void 0, r) && _is.isBinaryExpression.call(void 0, p) && p.left === r && rustIsAssignmentOperator(p.operatorToken.kind)) {
           if (this.rustDeclarationOfIdentifier(r) !== declaration)
             return any;
-          if (p.operatorToken.kind === _ast.SyntaxKind.PlusEqualsToken) {
+          const selfLeft = p.operatorToken.kind === _ast.SyntaxKind.EqualsToken ? this.rust93rfSelfAppendTail(p, declaration) : void 0;
+          if (p.operatorToken.kind === _ast.SyntaxKind.PlusEqualsToken || selfLeft !== void 0) {
             for (let a = p.parent; a !== void 0 && a !== scope; a = a.parent) {
               if (a.kind === _ast.SyntaxKind.ForStatement || a.kind === _ast.SyntaxKind.WhileStatement || a.kind === _ast.SyntaxKind.DoStatement || _is.isForInStatement.call(void 0, a) || _is.isForOfStatement.call(void 0, a))
                 return any;
             }
-            const tail = this.rustWsHashPatterns(p.right, depth + 1, seen);
+            let tail = selfLeft === void 0 ? this.rustWsHashPatterns(p.right, depth + 1, seen) : [[]];
+            for (const part of _nullishCoalesce(selfLeft, () => ( []))) {
+              const next = [];
+              for (const x of tail)
+                for (const y of this.rustWsHashPatterns(part, depth + 1, seen))
+                  if (next.length < 16)
+                    next.push([...x, ...y]);
+              tail = next;
+            }
             const grown = [];
             for (const x of out)
               for (const y of tail)
@@ -86062,6 +86071,17 @@ ${iden}}`;
     } finally {
       seen.delete(declaration);
     }
+  }
+  /** The appended parts of `x = x + a + b` (x the local `declaration` names, left-nested `+`), in order; undefined for
+   *  any other right side. */
+  rust93rfSelfAppendTail(assign, declaration) {
+    const parts = [];
+    let e = this.rustStripWrappers(assign.right);
+    while (e !== void 0 && _is.isBinaryExpression.call(void 0, e) && e.operatorToken.kind === _ast.SyntaxKind.PlusToken) {
+      parts.unshift(e.right);
+      e = this.rustStripWrappers(e.left);
+    }
+    return e === void 0 || !_is.isIdentifier.call(void 0, e) || this.rustDeclarationOfIdentifier(e) !== declaration || parts.length === 0 ? void 0 : parts;
   }
   /** ral-47h: the dispatch keys a handler local `const x = this.safeString (message, 'f')` can hold, or undefined.
    *  Proof: x is never reassigned; `message` is the handler's unwritten second parameter; the handler is a method of a
