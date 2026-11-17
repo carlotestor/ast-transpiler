@@ -66463,6 +66463,15 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       if (_is.isIdentifier.call(void 0, b) && _optionalChain([this, 'access', _10512 => _10512.rustScalarLocalOf, 'call', _10513 => _10513(b), 'optionalAccess', _10514 => _10514.kind]) === "bool")
         return `(${text("obool", o)} ${sign} Some(${text("bool", b)}))`;
     }
+    if (!equality && base(lk) === "str" && base(rk) === "str" && _is.isIdentifier.call(void 0, left) && _is.isIdentifier.call(void 0, right)) {
+      if (dry)
+        return "_";
+      const side = (k, n) => k === "str" ? `Some(${text(k, n)}.as_str())` : `${text(k, n)}.as_deref()`;
+      const strict = symbol.charAt(0);
+      const orEqual = symbol.length === 2;
+      const order = `(match (__x.parse::<f64>(), __y.parse::<f64>()) { (Ok(__p), Ok(__q)) => __p ${strict} __q, _ => __x ${strict} __y })`;
+      return `(match (${side(lk, left)}, ${side(rk, right)}) { (Some(__x), Some(__y)) => ${order}${orEqual ? " || __x == __y" : ""}, ${orEqual ? "(None, None) => true, " : ""}_ => false })`;
+    }
     if (lk === "bool" || rk === "bool" || base(lk) === "str" || base(rk) === "str")
       return void 0;
     const lo = lk.startsWith("o");
