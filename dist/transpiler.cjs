@@ -62553,10 +62553,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const init = this.unwrapParens(declaration.initializer);
     if (!this.rustStrRuntimeCall(init))
       return false;
-    if (!_RustTranspiler.RUST_STR_RUNTIME_APPEND_VETO.has(String((_nullishCoalesce(init.expression.name, () => ( init.expression))).text))) {
-      const scope = this.rustEnclosingFunction(declaration);
-      return this.rustStrReturnedLocal(declaration, scope) && !["str", "ostr"].includes(_nullishCoalesce(this.rustMethodTypedReturnKind(scope), () => ( "")));
-    }
+    if (!_RustTranspiler.RUST_STR_RUNTIME_APPEND_VETO.has(String((_nullishCoalesce(init.expression.name, () => ( init.expression))).text)))
+      return this.rustStrReturnedLocal(declaration, this.rustEnclosingFunction(declaration));
     let appended = false;
     this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
       let top = n;
@@ -96409,7 +96407,6 @@ _RustTranspiler.RUST_BASE_TYPED_METHODS = {
   isPostOnly: ["boolean", "bool"],
   usesPrivateKey: ["boolean", "bool"],
   paramsToString: ["string", "str"],
-  customUrlencode: ["Str", "ostr"],
   generateBatchPayload: ["string", "str"],
   // pg: the precision formatters answer `Str` (overrides may spell `string`); every return is a string or undefined
   amountToPrecision: ["Str|string", "ostr"],
