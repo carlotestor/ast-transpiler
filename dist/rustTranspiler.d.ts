@@ -794,6 +794,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-53k: `c['code']` (a unified string key of a market / currency record) on an `Option<Dict>` local, printed as the
      *  owned `KeyRead::key_read(&&c, "code")` temporary moved into its string (`into_opt_string`: `None` for a missing key). */
     rustOptDictStrKeyText(node: any): string | undefined;
+    /** ral-87rh R2: `node` reads a never-written base-tier `market: Market = undefined` parameter that is no typed market
+     *  slot (it prints as the plain `Value` get_arg gave back); the parameter declaration, else undefined. */
+    rust87rhValueMarketParam(node: Node): ParameterDeclaration | undefined;
     /** ral-84e: an optional market / currency record (`Option<Market>` local, lent `Option<&Market>` / currency slot, currency
      *  local): its `KeyRead` reads the record's own map and answers `Null` when absent, the same `Value` the boxed read held. */
     rust84eOptRecordRecv(recv: Node): boolean;
@@ -2263,6 +2266,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-87rh R1: `outer` is a plain read `<inner>['k']` (string-literal key) of `inner`: no write target, update, delete,
      *  call or deeper chain link. */
     rust87rhPrecisionRead(outer: Node | undefined, inner: Node | undefined): boolean;
+    /** ral-87rh R1: a market struct local R1 freed (one of its reads is `m['precision']['k']`): its listed string fields box
+     *  borrowed (`Value::from(m.f.as_str())`, the same `Str` the boxed key read copied), no field clone. */
+    rust87rhPrecisionLocal(declaration: Node): boolean;
     /** The listed field a `this.safeString|safeBool (m, 'k')` call reads (no default, or a `false` default for a flag). */
     rustMarketSafeReadField(call: any): string | undefined;
     /** `this.safeString (m, 'k', '')`: three arguments, the last an empty string literal. */

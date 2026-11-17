@@ -58709,6 +58709,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (/[/]test[/]/.test(String(node.getSourceFile?.()?.fileName ?? "")))
       return void 0;
+    const marketParam = this.rust87rhValueMarketParam(node.expression);
+    if (marketParam !== void 0 && String(node.argumentExpression.text) === "symbol") {
+      return `${super.printIdentifier(node.expression)}.as_map().and_then(|__m| __m.get("symbol")).and_then(Value::as_str).map(str::to_owned)`;
+    }
     const local = this.rustOptContainerOf(node.expression);
     if ((local === void 0 || local.kind !== "dict") && !this.rust84eOptRecordRecv(node.expression))
       return void 0;
@@ -58716,6 +58720,30 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (!/^(?:crate|ccxt)::value::KeyRead::key_read\(&{1,2}[A-Za-z_][A-Za-z0-9_]*, "[A-Za-z]+"\)$/.test(read))
       return void 0;
     return `${read}.into_opt_string()`;
+  }
+  /** ral-87rh R2: `node` reads a never-written base-tier `market: Market = undefined` parameter that is no typed market
+   *  slot (it prints as the plain `Value` get_arg gave back); the parameter declaration, else undefined. */
+  rust87rhValueMarketParam(node) {
+    if (node === void 0 || !isIdentifier3(node))
+      return void 0;
+    const param = this.rustDeclaredNode(node);
+    if (param === void 0 || !isParameterDeclaration3(param) || !isIdentifier3(param.name) || !isMethodDeclaration5(param.parent) || param.dotDotDotToken !== void 0)
+      return void 0;
+    if (param.initializer === void 0 || this.literalKindOfNode(this.unwrapParens(param.initializer)) !== "null")
+      return void 0;
+    const annotation = param.type;
+    if (annotation === void 0 || annotation.kind !== SyntaxKind7.TypeReference || annotation.getText() !== "Market")
+      return void 0;
+    if (!_RustTranspiler.RUST_BASE_TIER_FILE.test(String(param.getSourceFile?.()?.fileName ?? "")) || this.rustMarketSlotParam(param))
+      return void 0;
+    for (const n of this.rustScopeNameNodes(param.parent, String(param.name.text))) {
+      if (n === param.name || !isIdentifier3(n))
+        continue;
+      const up = n.parent;
+      if (isBinaryExpression5(up) && up.left === n && rustIsAssignmentOperator(up.operatorToken.kind))
+        return void 0;
+    }
+    return param;
   }
   /** ral-84e: an optional market / currency record (`Option<Market>` local, lent `Option<&Market>` / currency slot, currency
    *  local): its `KeyRead` reads the record's own map and answers `Null` when absent, the same `Value` the boxed read held. */
@@ -67994,6 +68022,17 @@ ${i1}}`;
       return false;
     return true;
   }
+  /** ral-87rh R1: a market struct local R1 freed (one of its reads is `m['precision']['k']`): its listed string fields box
+   *  borrowed (`Value::from(m.f.as_str())`, the same `Str` the boxed key read copied), no field clone. */
+  rust87rhPrecisionLocal(declaration) {
+    if (!isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name))
+      return false;
+    const fn = this.rustEnclosingFunction(declaration);
+    const own = declaration.name;
+    if (fn === void 0)
+      return false;
+    return this.rustScopeNameNodes(fn, String(own.text)).some((n) => n !== own && isElementAccessExpression4(n.parent) && n.parent.expression === n && isStringLiteralLikeNode4(n.parent.argumentExpression) && String(n.parent.argumentExpression.text) === "precision" && this.rust87rhPrecisionRead(n.parent.parent, n.parent));
+  }
   /** The listed field a `this.safeString|safeBool (m, 'k')` call reads (no default, or a `false` default for a flag). */
   rustMarketSafeReadField(call) {
     const callee = call.expression;
@@ -69317,6 +69356,8 @@ ${i1}}`;
       if (optField !== void 0)
         return `Value::from(${recv}.${optField}.as_deref().unwrap_or(""))`;
     }
+    if (field !== void 0 && this.rust87rhPrecisionLocal(declaration))
+      return `Value::from(${recv}.${field}.as_str())`;
     if (field !== void 0)
       return `Value::from(${recv}.${field}.clone())`;
     if (optField !== void 0)
