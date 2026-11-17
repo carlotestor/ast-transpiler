@@ -53135,6 +53135,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustBookSideParams = /* @__PURE__ */ new WeakMap();
     this.rustVenueOptMarketDecisions = /* @__PURE__ */ new WeakMap();
     this.rustOptMarketBoxing = /* @__PURE__ */ new Set();
+    /** ral-87re: a `const` local whose checker type is an object record (`Dict` / `Market` / a list): no scalar solve decides it,
+     *  so reading it while a comparison seed is open prints the same text it prints later. */
+    this.rust87reRecordSeeds = /* @__PURE__ */ new WeakSet();
     // `const [a, b] = this.handleXAndParams (..)` over a proven `Vec<Value>`: a `string` slot used only in
     // null / literal compares is `Option<String>`; a `boolean` slot used only as a condition is `bool`.
     this.rustTupleSlotDecisions = /* @__PURE__ */ new WeakMap();
@@ -58052,6 +58055,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const clientOnce = nativeUses === 0 && boxed === 1 && this.rustWsClientOnlyUse(declaration);
     if (anyLength && typedUses === 0)
       return void 0;
+    if (kind === "bool" && typedUses === 0 && this.rust87reRecordSeeds.has(declaration))
+      return void 0;
     if (optionDefault && typedUses === 0)
       return void 0;
     if (kind === "obool" && typedUses === 0 && this.rustHandleOptionLiteralKind(this.rust62pBoolCastOption(this.unwrapParens(declaration.initializer)) ? this.unwrapParens(declaration.initializer).expression : declaration.initializer) === "obool")
@@ -60449,7 +60454,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
    *  way (the `&Value` operand takes the moved string), so the receiver's decision does not read this local's type. */
   rustScalarPreciseFeed(n, write, declaration) {
     const form = this.rustScalarUseForms.get(n);
-    if (form !== "box" && form !== "parg" || !this.rustPreciseStringCall(declaration.initializer) || form === "box" && !this.rustLocalLastUse(n, declaration))
+    const selfWrite = form === "parg" && isIdentifier3(this.unwrapParens(write.left)) && this.rustDeclaredNode(this.unwrapParens(write.left)) === declaration;
+    if (form !== "box" && form !== "parg" || !selfWrite && !this.rustPreciseStringCall(declaration.initializer) || form === "box" && !this.rustLocalLastUse(n, declaration))
       return false;
     let top = n;
     for (; ; ) {
@@ -69162,6 +69168,16 @@ ${i1}}`;
       return void 0;
     return this.nativeEqualityText(node) !== void 0 ? "bool" : void 0;
   }
+  rust87reRecordLocal(d) {
+    if (!isVariableDeclaration3(d) || !isIdentifier3(d.name) || (d.parent?.flags & NodeFlags4.Const) === 0)
+      return false;
+    const type = this.typeOfNodeIfAny(d.name);
+    if (type === void 0 || this.primitiveKindOfType(type) !== void 0)
+      return false;
+    const parts = type.flags & TypeFlags6.Union ? typeParts(type) ?? [] : [type];
+    const real = parts.filter((m) => (m.flags & (TypeFlags6.Undefined | TypeFlags6.Null)) === 0);
+    return real.length > 0 && real.every((m) => (m.flags & TypeFlags6.Object) !== 0);
+  }
   /** A `const x = <comparison>` initializer whose native text exists and whose local's checker type is `boolean`. */
   rustBoolCompareSeed(node) {
     let top = node;
@@ -69172,19 +69188,30 @@ ${i1}}`;
     if (this.primitiveKindOfType(this.typeOfNodeIfAny(top.parent.name)) !== "boolean")
       return false;
     let readsLocal = false;
+    let recordRead = false;
     const visit = (n) => {
       if (readsLocal)
         return;
       if (isIdentifier3(n) && !this.rustIdentifierIsPropertyName(n)) {
         const d = this.rustDeclaredNode(n);
-        if (d !== void 0 && !isParameterDeclaration3(d))
-          readsLocal = true;
+        if (d !== void 0 && !isParameterDeclaration3(d)) {
+          if (this.rust87reRecordLocal(d))
+            recordRead = true;
+          else
+            readsLocal = true;
+        }
         return;
       }
       n.forEachChild(visit);
     };
     visit(node);
-    return !readsLocal && this.rustBoolNativeText(node) !== void 0;
+    if (readsLocal || this.rustBoolNativeText(node) === void 0)
+      return false;
+    if (recordRead)
+      this.rust87reRecordSeeds.add(top.parent);
+    else
+      this.rust87reRecordSeeds.delete(top.parent);
+    return true;
   }
   // ── string fields of a typed market local as scalar seeds (rustMarketFieldScalar) ──
   /** `m['symbol']` / `m.id` off a loaded `crate::types::Market` local: the field's own `String` / `Option<String>`
