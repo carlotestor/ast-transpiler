@@ -17109,3 +17109,43 @@ describe('ral-92g8 R4 venue string[] producers over a literal-defaulted safeList
         expect(out).toContain('OrderFlags(flags any) any {');
     });
 });
+
+describe('venue paged-list producers print []any', () => {
+    const head = 'type Dict = { [key: string]: unknown };\n'
+        + 'class base {\n'
+        + '    safeList (o: unknown, k: string, d: unknown = undefined): unknown[] { return []; }\n'
+        + '    safeString (o: unknown, k: string): string | undefined { return undefined; }\n'
+        + '}\n'
+        + 'export class ex extends base {\n'
+        + '    paged (response: Dict): Dict[] {\n'
+        + '        const data: Dict[] = this.safeList (response, \'data\', []) as Dict[];\n'
+        + '        const cursor = this.safeString (response, \'next\');\n'
+        + '        if ((cursor !== undefined) && (data.length > 0)) {\n'
+        + '            const first = data[0];\n'
+        + '            first[\'next\'] = cursor;\n'
+        + '            data[0] = first;\n'
+        + '        }\n'
+        + '        return data;\n'
+        + '    }\n';
+    test('the producer and an indexed caller local print []any with bare element reads', () => {
+        const out = goTranspile92g8(head
+            + '    g (r: Dict) {\n'
+            + '        const rows = this.paged (r);\n'
+            + '        for (let i = 0; i < rows.length; i++) {\n'
+            + '            this.use (rows[i]);\n'
+            + '        }\n'
+            + '    }\n'
+            + '    use (m: unknown) { return m; }\n'
+            + '}\n');
+        expect(out).toContain(') Paged(response any) []any {');
+        expect(out).toContain('var data []any = SafeListTypedDefault(response, "data", []any{})');
+        expect(out).toContain('var rows []any = this.Paged(r)');
+        expect(out).not.toContain('DerefScalar(data[0])');
+    });
+    test('a list local handed to another call keeps the boxed producer', () => {
+        const out = goTranspile92g8(head.replace('        return data;\n', '        this.other (data);\n        return data;\n')
+            + '    other (x: unknown) { return x; }\n'
+            + '}\n');
+        expect(out).toContain(') Paged(response any) any {');
+    });
+});
