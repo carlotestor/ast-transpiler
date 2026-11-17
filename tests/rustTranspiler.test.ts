@@ -24706,3 +24706,25 @@ describe('ral-84h R2: `i + 1` of an always-Int for counter at a declaration is a
         expect(out).not.toContain('let mut iteration: Value');
     });
 });
+
+describe("ral-87rb R1: a precision string read inside a nested element write source is an Option<String>", () => {
+    const files: Record<string, string> = {
+        "ts/src/base/Exchange.ts": "export type Str = string | undefined;\nexport interface Dict { [key: string]: any }\nexport default class Exchange {\n    orders: any = undefined;\n    currencyToPrecision (code: Str, fee: any, networkCode: Str = undefined): Str { return fee; }\n    safeString (obj: any, key: any, d: Str = undefined): Str { return obj[key]; }\n    safeDict (obj: any, key: any, d: Dict = undefined): Dict | undefined { return obj[key]; }\n    safeList (obj: any, key: any, d: any[] = undefined): any[] | undefined { return obj[key]; }\n    sum (...xs: any[]): any { return xs[0]; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n",
+        "ts/src/pro/venue.ts": "import Exchange from '../base/Exchange.js';\nimport type { Dict } from '../base/Exchange.js';\nexport default class venue extends Exchange {\n    handleMyTrade (symbol: string, orderId: string, tradeFee: Dict) {\n        const orders = this.safeDict (this.orders, symbol, {});\n        const order = this.safeDict (orders, orderId);\n        if (order !== undefined) {\n            const fees: Dict[] | undefined = this.safeList (order, 'fees');\n            if (fees !== undefined) {\n                for (let i = 0; i < fees.length; i++) {\n                    const orderFee = fees[i];\n                    const feeCost = this.sum (tradeFee['cost'], orderFee['cost']);\n                    let feeCostString = this.currencyToPrecision (tradeFee['currency'], feeCost);\n                    if (feeCostString === undefined) {\n                        feeCostString = '0';\n                    }\n                    order['fees'][i]['cost'] = parseFloat (feeCostString);\n                    break;\n                }\n            } else {\n                let feeCostString = this.currencyToPrecision (tradeFee['currency'], tradeFee['cost']);\n                if (feeCostString === undefined) {\n                    feeCostString = '0';\n                }\n                order['fee']['cost'] = parseFloat (feeCostString);\n            }\n        }\n        return order;\n    }\n}\n",
+    };
+    let out: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), "astfx-rs-87rb1-"));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = transpiler.transpileRustByPath(path.join (root, "ts/src/pro/venue.ts")).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test("binance pro handleMyTrade feeCostString: Option<String>, tested and parsed natively", () => {
+        expect(out).toContain('let mut feeCostString: Option<String> = ');
+        expect(out).toContain('if (feeCostString.is_none()) {');
+        expect(out).not.toContain('let mut feeCostString: Value');
+    });
+});
