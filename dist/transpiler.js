@@ -47667,7 +47667,19 @@ var JavaTranspiler = class extends BaseTranspiler {
     return `(${target} == null || ${keyText} >= ${list}.size() ? null : ${list}.get(${keyText}))`;
   }
   printElementAccessExpression(node, identation) {
-    return this.printCheckerTypedElementAccessRead(node) ?? super.printElementAccessExpression(node, identation);
+    return this.printJavaHandlerElementRead(node) ?? this.printCheckerTypedElementAccessRead(node) ?? super.printElementAccessExpression(node, identation);
+  }
+  // ral-87j2: `methods[key]` on a proven handler table prints the typed table's own get (the table is a
+  // fresh non-null HashMap<String, String>; get answers null for a missing or null key)
+  printJavaHandlerElementRead(node) {
+    if (!isElementAccessExpression3(node) || !isIdentifier2(node.expression)) {
+      return void 0;
+    }
+    this.javaScanHandlerTables(node);
+    if (!this.javaHandlerReads.has(this.javaHandlerKey(node))) {
+      return void 0;
+    }
+    return `${this.printNode(node.expression, 0).trim()}.get(${this.printNode(node.argumentExpression, 0).trim()})`;
   }
   // generated library tiers only (exchanges, pro, prediction, base); tests keep the helpers
   javaLibraryTierNode(node) {
@@ -51046,7 +51058,7 @@ var JavaTranspiler = class extends BaseTranspiler {
     if (argument === void 0) {
       return void 0;
     }
-    if (this.javaWsClientMapReceiver(argument)) {
+    if (this.javaWsClientMapReceiver(argument) || this.javaHandlerTableIdentifier(argument)) {
       return `new java.util.ArrayList<Object>(${this.printNode(argument, 0)}.keySet())`;
     }
     if (isPropertyAccessExpression2(argument)) {
@@ -52242,9 +52254,40 @@ var JavaTranspiler = class extends BaseTranspiler {
     visit(scope);
     return failed ? void 0 : references;
   }
-  // the table is read only as the first argument of `this.safeValue (methods, key)`
+  // the table is read only as the first argument of `this.safeValue (methods, key)`, or as the
+  // receiver of a `methods[key]` read with a string key (ral-87j2: both answer the entry or null)
   javaIsHandlerTableRead(call, read) {
+    if (call !== void 0 && isElementAccessExpression3(call) && call.expression === read) {
+      return !this.isLeftSideOfAssignment(call) && call.parent?.kind !== SyntaxKind6.DeleteExpression && this.javaHandlerStringKey(call.argumentExpression);
+    }
     return call !== void 0 && isCallExpression5(call) && call.arguments?.[0] === read && isPropertyAccessExpression2(call.expression) && call.expression.name?.text === "safeValue" && call.expression.expression?.kind === SyntaxKind6.ThisKeyword;
+  }
+  // ral-87j2: a key whose checker type is string (undefined allowed): HashMap.get answers null for a
+  // missing or null key, like the helper's map branch
+  javaHandlerStringKey(key) {
+    const checker = this.checkerOrUndefined();
+    if (key === void 0 || checker === void 0) {
+      return false;
+    }
+    if (isStringLiteralLikeNode3(key)) {
+      return true;
+    }
+    let type;
+    try {
+      type = checker.getNonNullableType(checker.getTypeAtLocation(key));
+    } catch (e) {
+      return false;
+    }
+    return type !== void 0 && (type.flags & TypeFlags5.StringLike) !== 0;
+  }
+  // ral-87j2: a read that only asks for the table's keys (`Object.keys (methods)`, `k in methods`):
+  // the keys are the literal's, whatever the value box is
+  javaIsHandlerKeyRead(read) {
+    const parent = read.parent;
+    if (parent !== void 0 && isCallExpression5(parent) && parent.arguments?.length === 1 && parent.arguments[0] === read && isPropertyAccessExpression2(parent.expression) && isIdentifier2(parent.expression.expression) && parent.expression.expression.text === "Object" && parent.expression.name?.text === "keys") {
+      return true;
+    }
+    return parent !== void 0 && parent.kind === SyntaxKind6.BinaryExpression && parent.right === read && parent.operatorToken.kind === SyntaxKind6.InKeyword;
   }
   // the local a table read is bound to: its declaration, or the plain write that reassigns it
   javaHandlerBoundName(call) {
@@ -52280,7 +52323,7 @@ var JavaTranspiler = class extends BaseTranspiler {
     while (current !== void 0 && (current.kind === SyntaxKind6.ParenthesizedExpression || current.kind === SyntaxKind6.ConditionalExpression)) {
       current = current.kind === SyntaxKind6.ConditionalExpression ? current.whenTrue === void 0 ? current.whenFalse : current.whenTrue : current.expression;
     }
-    const read = current?.kind === SyntaxKind6.CallExpression ? current.arguments?.[0] : void 0;
+    const read = current?.kind === SyntaxKind6.CallExpression ? current.arguments?.[0] : current !== void 0 && isElementAccessExpression3(current) ? current.expression : void 0;
     if (current === void 0 || read === void 0 || read.kind !== SyntaxKind6.Identifier || read.text !== tableName.text) {
       return false;
     }
@@ -52350,6 +52393,9 @@ var JavaTranspiler = class extends BaseTranspiler {
       const readCalls = [];
       let proven = true;
       for (const read of reads) {
+        if (this.javaIsHandlerKeyRead(read)) {
+          continue;
+        }
         const call = read.parent;
         if (!this.javaIsHandlerTableRead(call, read)) {
           proven = false;
@@ -52413,6 +52459,17 @@ ${this.getIden(identation)}}}`;
     const table = this.printNode(node.arguments[0], 0).trim();
     const key = this.printNode(node.arguments[1], 0).trim();
     return `${table}.get(${key})`;
+  }
+  // ral-87j2: an identifier naming the local a proven handler table literal initialises
+  javaHandlerTableIdentifier(node) {
+    if (node === void 0 || !isIdentifier2(node)) {
+      return false;
+    }
+    const declaration = this.javaDeclarationOfIdentifier(node);
+    if (declaration === void 0 || !isVariableDeclaration2(declaration) || declaration.name?.text !== node.text || declaration.initializer === void 0) {
+      return false;
+    }
+    return this.javaHandlerDeclarationType(declaration) === JAVA_HANDLER_TABLE_TYPE;
   }
   // the declared Java type of the table local or of the local bound to one of its reads
   javaHandlerDeclarationType(declaration) {
