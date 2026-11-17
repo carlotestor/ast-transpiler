@@ -59231,6 +59231,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const strKind = kind === "str" || kind === "ostr";
     const handOff = nativeUses === 0 && boxed >= 1 && (copied === 0 || !strKind || !this.rustStrNoLend && (this.rustStrLendSites(declaration) || kind === "str" && this.rustClockString(this.unwrapParens(declaration.initializer)) && this.rustReaderLendBoxes(declaration) || this.rustScOwnSelfCall(declaration.initializer) && !this.rustOdExcludedCallee(declaration.initializer) && !this.rustVenueLocalHandedOn(declaration) && this.rustReaderLendBoxes(declaration))) && !this.rust66s3StrReturnedVeto(declaration, scope);
     const storeOnly = guarded && nativeUses === 0 && boxed === 1 && !handOff;
+    if (ok && nativeUses === 0 && (kind === "str" || kind === "ostr") && this.rust90reParsedPairLocal(declaration))
+      return void 0;
     if (ok && nativeUses === 0 && kind === "ostr" && this.rust84eRecordArmTernary(declaration.initializer))
       return void 0;
     const unused = typedUses === 0 && !handOff && this.rustScalarNeedsNativeUse(declaration.initializer) && !this.rustVenueIntReboxed(declaration, kind, boxed);
@@ -61557,7 +61559,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (form === "concat" && (trial === "str" || trial === "ostr"))
         continue;
       const push = findAncestor(n, (m) => isStatement(m) || isCallExpression6(m) && isPropertyAccessExpression3(m.expression) && m.expression.name.text === "push");
-      if (push !== void 0 && isCallExpression6(push) && !this.rustCopyPushPairElement(n, push, trial) && !this.rustPushSelfCallArgUse(n, push, trial) && !r70f)
+      if (push !== void 0 && isCallExpression6(push) && !this.rustCopyPushPairElement(n, push, trial) && !this.rustPushSelfCallArgUse(n, push, trial) && !this.rust90reParsedPairElement(n, push, trial) && !r70f)
         return false;
       const write = findAncestor(n, (m) => isStatement(m) || isBinaryExpression5(m) && m.operatorToken.kind === SyntaxKind7.EqualsToken);
       if (write !== void 0 && isBinaryExpression5(write) && this.isNodeInsideNode(n, write.right) && !this.rustScalarBoxedField(n, write, declaration) && !this.rustScalarFeedsElementWrite(n, write) && !this.rustScalarPreciseFeed(n, write, declaration) && !this.rustScalarCacheFieldCtor(n, write) && !this.rustScalarSumOperandWrite(n, write) && !this.rust58kDictReaderKeyWrite(n, write) && !this.rust60kBaseCallArgDictWrite(n, write) && !this.rust62pBaseCallArgKeyWrite(n, write) && !this.rust64nTypedArgWrite(n, write, form) && !this.rust68fReaderSelfArgWrite(n, write, form, declaration) && !(r70f && (form !== "targ" || this.rust70fTargLocalWrite(write))))
@@ -61694,6 +61696,35 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     const form = this.rustScalarUseForms.get(n);
     return (form === "box" || form === "xbox") && this.isNodeInsideNode(n, call) && call.arguments.some((a) => this.isNodeInsideNode(n, a));
+  }
+  /** ral-90re R1: a string local boxed as the one argument of a base-tier `this.parseNumber (x)` that is a direct element of
+   *  the array literal pushed whole (`rows.push ([ this.parseNumber (price), this.parseNumber (size) ])`): the element prints
+   *  `self.parse_number(<box>, &[])` inside `Value::from(vec![..])`, a source ccxt's rustVecPushInline takes whatever its
+   *  elements print (as rustCopyPushPairElement), and the box converts the very `Str` / `Null` the `Value` local held. */
+  /** ral-90re R1: some read of the local is the boxed argument of a pushed `this.parseNumber` pair (rust90reParsedPairElement). */
+  rust90reParsedPairLocal(declaration) {
+    const scope = this.rustEnclosingFunction(declaration);
+    if (scope === void 0 || !isIdentifier3(declaration.name))
+      return false;
+    return this.rustScopeNameNodes(scope, String(declaration.name.text)).some((u) => {
+      if (u === declaration.name || this.rustDeclaredNode(u) !== declaration)
+        return false;
+      const push = findAncestor(u, (m) => isStatement(m) || isCallExpression6(m) && isPropertyAccessExpression3(m.expression) && m.expression.name.text === "push");
+      return push !== void 0 && isCallExpression6(push) && this.rust90reParsedPairElement(u, push, "ostr");
+    });
+  }
+  rust90reParsedPairElement(n, push, kind) {
+    if (kind !== "ostr" && kind !== "str" || push.arguments.length !== 1)
+      return false;
+    const call = n.parent;
+    if (!isCallExpression6(call) || call.arguments.length !== 1 || call.arguments[0] !== n || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(call.expression.name.text) !== "parseNumber")
+      return false;
+    const callee = this.rustScalarCallee(call);
+    if (callee === void 0 || !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(callee.getSourceFile().fileName)))
+      return false;
+    if (!isArrayLiteralExpression4(call.parent) || this.unwrapParens(push.arguments[0]) !== call.parent)
+      return false;
+    return this.rustScalarUseForms.get(n) === "box";
   }
   /** 40d: a Copy number that is a direct element of the array literal pushed whole (`rows.push ([ price, amount ])`):
    *  the element prints `Value::from(x)` (the Int / Float / Null its box held, no copy) inside `Value::from(vec![..])`,

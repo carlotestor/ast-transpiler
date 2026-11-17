@@ -1122,6 +1122,13 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  argument of `xs.push (..)` (`result.push (this.safeMarketStructure ({ 'quote': quote }))`): the pushed source prints
      *  `self.m(..)`, so ccxt's native-push pass reads that call's text and never this operand's box. */
     rustPushSelfCallArgUse(n: any, push: any, kind: string | undefined): boolean;
+    /** ral-90re R1: a string local boxed as the one argument of a base-tier `this.parseNumber (x)` that is a direct element of
+     *  the array literal pushed whole (`rows.push ([ this.parseNumber (price), this.parseNumber (size) ])`): the element prints
+     *  `self.parse_number(<box>, &[])` inside `Value::from(vec![..])`, a source ccxt's rustVecPushInline takes whatever its
+     *  elements print (as rustCopyPushPairElement), and the box converts the very `Str` / `Null` the `Value` local held. */
+    /** ral-90re R1: some read of the local is the boxed argument of a pushed `this.parseNumber` pair (rust90reParsedPairElement). */
+    rust90reParsedPairLocal(declaration: VariableDeclaration): boolean;
+    rust90reParsedPairElement(n: Node, push: CallExpression, kind: string | undefined): boolean;
     /** 40d: a Copy number that is a direct element of the array literal pushed whole (`rows.push ([ price, amount ])`):
      *  the element prints `Value::from(x)` (the Int / Float / Null its box held, no copy) inside `Value::from(vec![..])`,
      *  which ccxt's rustVecPushInline (build/rustTranspiler.ts) already treats as a marker-free source whatever the
