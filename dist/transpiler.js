@@ -96407,6 +96407,7 @@ _RustTranspiler.RUST_BASE_TYPED_METHODS = {
   requestId: ["int", "int"],
   isPostOnly: ["boolean", "bool"],
   usesPrivateKey: ["boolean", "bool"],
+  isGateFuturesContractWithDecimalSize: ["boolean", "bool"],
   paramsToString: ["string", "str"],
   generateBatchPayload: ["string", "str"],
   // pg: the precision formatters answer `Str` (overrides may spell `string`); every return is a string or undefined
