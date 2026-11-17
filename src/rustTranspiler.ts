@@ -22367,6 +22367,41 @@ export class RustTranspiler extends BaseTranspiler {
     /** `this.<m>(…)` whose every return is a fresh untagged
      *  container of `kind` — the method's own body, no venue override (the
      *  checker resolves the most derived declaration for `this`). */
+    /** ral-90rg R4: `inner` is a `this.m (..)` call returned whole from `owner` (a base-tier method), `m` a base method no venue
+     *  declares (rustVenueReturnTypesHas), not dispatched virtually, not typed, not async, not `owner`: the implementation (the
+     *  same-named member with a body when the checker resolves a bodiless overload, as ral-55i reads it), else undefined. */
+    rust90rgBaseTailForward(owner: Node, inner: Node): MethodDeclaration | undefined {
+        if (owner === undefined || inner === undefined || !isCallExpression(inner) || !isPropertyAccessExpression(inner.expression)
+            || inner.expression.expression.kind !== SyntaxKind.ThisKeyword || !isIdentifier(inner.expression.name)) return undefined;
+        if (!RustTranspiler.RUST_BASE_TIER_FILE.test(String(owner.getSourceFile().fileName))) return undefined;
+        const name = String(inner.expression.name.text);
+        const target: Node = this.rustScalarCallee(inner);
+        if (target === undefined || !isMethodDeclaration(target) || !RustTranspiler.RUST_BASE_TIER_FILE.test(String(target.getSourceFile().fileName))) return undefined;
+        const impl: MethodDeclaration = target.body !== undefined ? target : Array.from((target.parent as ClassDeclaration)?.members ?? []).find((m: Node) => isMethodDeclaration(m)
+            && m.body !== undefined && isIdentifier(m.name) && String(m.name.text) === name) as MethodDeclaration;
+        if (impl === undefined || impl === owner || this.isAsyncFunction(impl) || this.rustVenueReturnTypesHas(inner, name)
+            || this.rustVirtualDispatch?.[this.toSnakeCaseName(name)] !== undefined || this.rustTypedUnified.has(name) || this.rustTypedSignature(impl) !== undefined) return undefined;
+        return impl;
+    }
+
+    /** ral-90rg R4: every `return` of `impl` (closures skipped) is an array literal or another built list (rustBuiltContainerKind). */
+    rust90rgImplReturnsList(impl: MethodDeclaration, depth: number): boolean {
+        let returns = 0;
+        let ok = true;
+        const visit = (node: Node) => {
+            if (!ok) return;
+            if (node !== impl.body && isFunctionLike(node)) return;
+            if (isReturnStatement(node)) {
+                returns++;
+                if (this.rustBuiltContainerKind(node.expression, depth + 1) !== 'list') ok = false;
+                return;
+            }
+            node.forEachChild(visit);
+        };
+        impl.body.forEachChild(visit);
+        return ok && returns > 0;
+    }
+
     rustCallBuildsContainer(call: any, kind: 'map' | 'list', depth = 0): boolean {
         if (depth > 2) return false;
         // A pass-through builder hands back its own first argument (it only adds
@@ -22406,7 +22441,11 @@ export class RustTranspiler extends BaseTranspiler {
                     if (own === declaration) return;
                 }
                 returns++;
-                if (this.rustBuiltContainerKind(node.expression, depth + 1) !== kind) ok = false;
+                // ral-90rg R4: a base method's `return this.m (..)` tail forward to another base method (handleMarginModeAndParams ->
+                // handleOptionStringAndParams) yields what that callee builds: no proof depth for the hop
+                if (this.rustBuiltContainerKind(node.expression, depth + 1) === kind) return;
+                const forward = kind === 'list' ? this.rust90rgBaseTailForward(declaration, inner) : undefined;
+                if (forward === undefined || !this.rust90rgImplReturnsList(forward, depth)) ok = false;
                 return;
             }
             // A store write (`this.orderbooks[sym] = book`, `this.tickers = ..`)

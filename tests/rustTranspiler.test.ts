@@ -25286,3 +25286,26 @@ describe('ral-90rg R3: a const alias of a never-empty marketSymbols list at its 
         expect(out).toContain('symbolsList.len()');
     });
 });
+
+describe('ral-90rg R4: a base method returning another base method call whose implementation builds a list', () => {
+    test('handleMarginModeAndParams -> handleOptionStringAndParams (overloaded) is a list: its result local is a read-only Vec<Value>', () => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-90rg-r4-'));
+        const files: Record<string, string> = {
+            'ts/src/base/Exchange.ts': "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n"
+                + "    handleOptionStringAndParams (params: Dict, methodName: Str, optionName: string, defaultValue: string): [string, Dict];\n"
+                + "    handleOptionStringAndParams (params: Dict, methodName: Str, optionName: string, defaultValue?: Str): [Str, Dict];\n"
+                + "    handleOptionStringAndParams (params: Dict, methodName: Str, optionName: string, defaultValue: Str = undefined): [Str, Dict] {\n        return [ defaultValue, params ];\n    }\n"
+                + "    handleMarginModeAndParams (methodName: string, params: Dict = {}, defaultValue: Str = undefined): [Str, Dict] {\n        return this.handleOptionStringAndParams (params, methodName, 'marginMode', defaultValue);\n    }\n}\n",
+            'ts/src/venue.ts': "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n"
+                + "    pick (orderParams: Dict) {\n        const marginResult = this.handleMarginModeAndParams ('createOrders', orderParams);\n        const currentMarginMode = marginResult[0];\n        return currentMarginMode;\n    }\n}\n",
+        };
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const out = t.transpileRustByPath(path.join (root, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut marginResult: Vec<Value> = ');
+        expect(out).toContain('marginResult.get(0)');
+    });
+});
