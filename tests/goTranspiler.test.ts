@@ -16572,3 +16572,42 @@ describe ('ral-92g2 R1 string-list reader locals', () => {
         expect (out).toContain ('var types []string');
     });
 });
+
+describe ('ral-92g2 R2 expression-defaulted list locals read by length-bounded loops', () => {
+    const PRELUDE =
+        'type Dict = { [key: string]: any };\n' +
+        'export class Exchange {\n' +
+        '    safeList (a: any, k: any, d: any = undefined): any[] { return a; }\n' +
+        '    safeDict (a: any, k: any, d: any = undefined): Dict { return a; }\n' +
+        '    safeString (a: any, k: any, d: any = undefined): string { return a; }\n';
+    const run = (members: string): string => {
+        const tmp = fs.mkdtempSync (path.join (os.tmpdir (), 'r92g2b-'));
+        try {
+            const src = path.join (tmp, 'ts', 'src');
+            fs.mkdirSync (src, { recursive: true });
+            const file = path.join (src, 'x.ts');
+            fs.writeFileSync (file, PRELUDE + members + '}\n');
+            return new Transpiler ({ verbose: false, go: { parser: { NUM_LINES_END_FILE: 0 } } }).transpileGoByPath (file).content;
+        } finally {
+            fs.rmSync (tmp, { recursive: true, force: true });
+        }
+    };
+    const body = '    f (response: any): Dict {\n' +
+        '        const result: Dict = {};\n' +
+        '        const balances = this.safeList (response, "balances", response);\n' +
+        '        for (let i = 0; i < balances.length; i++) {\n' +
+        '            const balance = this.safeDict (balances, i);\n' +
+        '            result[this.safeString (balance, "asset")] = balance;\n' +
+        '        }\n' +
+        '        return result;\n' +
+        '    }\n';
+    test ('the local is the SafeListSlice slice and its length is len', () => {
+        const out = run (body);
+        expect (out).toContain ('var balances []any = this.SafeListSlice(response, "balances", response)');
+        expect (out).toContain ('i < len(balances)');
+    });
+    test ('a read outside the bounded loop keeps the box', () => {
+        const out = run (body.replace ('return result;', 'result["first"] = this.safeDict (balances, 0);\n        return result;'));
+        expect (out).not.toContain ('var balances []any');
+    });
+});
