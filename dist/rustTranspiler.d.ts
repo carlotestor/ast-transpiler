@@ -4528,6 +4528,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A base-tier list source that may return `undefined` (a `safeList*` default must be absent or nullish). */
     rustOptListSource(node: any): boolean;
     rustOptListLocalUncached(declaration: any): boolean;
+    /** ral-87rf R1: `const x = await this.m (..)` where `m` is an implicit-API endpoint (declared in `ts/src/abstract/`), outside
+     *  the test tier. Whatever the endpoint answers, the split form keeps the list it held (`Some`) and the map it held, so an
+     *  `Array.isArray (x)` test reads `is_some()` and every list-arm use reads the held list. */
+    rust87rfEndpointSplitSource(declaration: Node, init: Node): boolean;
     /** ral-80c R1: an unwritten method parameter whose typed signature slot is a string list (decided from the signature table). */
     rust80cStrVecParamAlias(init: Expression | undefined): boolean;
     /** ral-80c R1: `this.symbols` / `this.ids`, base fields declared `string[]` (always a list). */

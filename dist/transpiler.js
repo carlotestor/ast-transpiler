@@ -84655,6 +84655,9 @@ ${iden}}`;
       if (src !== void 0 && this.rustBorrowedLocalKind(src) === "list")
         return `${this.printNode(left, 0).trim()} = ${this.rustOptListName(rhs)}`;
     }
+    const take = isIdentifier3(rhs) ? this.rustOptListBoxes.get(rhs) : void 0;
+    if ((take === "take" || take === "takeClone") && this.rustOptListOf(rhs) !== void 0)
+      return `${this.printNode(left, 0).trim()} = ${this.rustOptListName(rhs)}${take === "takeClone" ? ".clone()" : ""}.unwrap_or_default()`;
     const guarded = isIdentifier3(rhs) && isBinaryExpression5(rhs.parent) ? this.rustOptListGuardedMove(rhs.parent) : void 0;
     if (guarded !== void 0)
       return `${this.printNode(left, 0).trim()} = ${rhs.text}.${this.rustDefaultedListValue(guarded, rhs) ? "into_list" : "unwrap_or_default"}()`;
@@ -84724,7 +84727,7 @@ ${iden}}`;
       init = this.rustSkipWrappers(init.expression);
     const nil = this.rustOptListNilInit(declaration);
     const strVecAlias = !nil && this.rust80cStrVecParamAlias(init);
-    const split = !nil && !strVecAlias && !this.rustOptListSource(init) && (list.flags & NodeFlags4.Const) !== 0 && init !== void 0 && this.rustSafeValueKeyReadSource(init) && String(init.getText()).split("\n")[0].length <= 240;
+    const split = !nil && !strVecAlias && !this.rustOptListSource(init) && (list.flags & NodeFlags4.Const) !== 0 && init !== void 0 && (this.rustSafeValueKeyReadSource(init) || this.rust87rfEndpointSplitSource(declaration, init)) && String(init.getText()).split("\n")[0].length <= 240;
     if (!nil && !strVecAlias && !split && !this.rustOptListSource(init))
       return false;
     const name = String(declaration.name.text);
@@ -84753,6 +84756,11 @@ ${iden}}`;
         }
         if (!this.rust80dInListArm(n, declaration, fn))
           return false;
+        if (isBinaryExpression5(use) && use.right === n && use.operatorToken.kind === SyntaxKind7.EqualsToken && use.parent?.kind === SyntaxKind7.ExpressionStatement && isIdentifier3(use.left) && this.rust87rfEndpointSplitSource(declaration, init) && this.rustBuiltListOf(use.left) !== void 0) {
+          natives++;
+          this.rustOptListBoxes.set(n, this.rustLocalLastUse(n, declaration) ? "take" : "takeClone");
+          return true;
+        }
         if (isBinaryExpression5(use) || isPropertyAccessExpression3(use) && !(use.expression === n && String(use.name.text) === "length"))
           return false;
       }
@@ -84834,6 +84842,15 @@ ${iden}}`;
       this.rustOptListBoxes.set(n, sole || last ? "move" : form);
     }
     return true;
+  }
+  /** ral-87rf R1: `const x = await this.m (..)` where `m` is an implicit-API endpoint (declared in `ts/src/abstract/`), outside
+   *  the test tier. Whatever the endpoint answers, the split form keeps the list it held (`Some`) and the map it held, so an
+   *  `Array.isArray (x)` test reads `is_some()` and every list-arm use reads the held list. */
+  rust87rfEndpointSplitSource(declaration, init) {
+    const awaited = this.rustSkipWrappers(declaration.initializer);
+    if (awaited === void 0 || awaited.kind !== SyntaxKind7.AwaitExpression || !isCallExpression6(init) || this.rustTestTierSource(init))
+      return false;
+    return this.rustBorrowedSourceKind(init) === "api";
   }
   /** ral-80c R1: an unwritten method parameter whose typed signature slot is a string list (decided from the signature table). */
   rust80cStrVecParamAlias(init) {
@@ -85004,7 +85021,7 @@ ${iden}}`;
   /** `&x` at an any-key reader, the shared handle at a `Value` slot, a move at `return x`. */
   printOptListIdentifier(node, text) {
     const form = this.rustOptListBoxes.get(node);
-    if (form === void 0 || this.rustOptListOf(node) === void 0)
+    if (form === void 0 || form === "take" || form === "takeClone" || this.rustOptListOf(node) === void 0)
       return void 0;
     if (form === "lend")
       return `&${text}`;
