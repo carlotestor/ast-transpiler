@@ -45872,6 +45872,152 @@ GoTranspiler.prototype.goOrderBookCacheLocal = function(declaration) {
     return printArrayPushCallOrderBookCache.call(this, node, identation, name, parsedArg);
   };
 }
+var goConcatSeedVerdicts = /* @__PURE__ */ new WeakMap();
+var goConcatSeedWriteTemps = /* @__PURE__ */ new WeakMap();
+function goConcatSeedUnwrap(n) {
+  let current = n;
+  while (current?.kind === SyntaxKind5.ParenthesizedExpression || current?.kind === SyntaxKind5.AsExpression) {
+    current = current.expression;
+  }
+  return current;
+}
+function goConcatSeedIsLiteral(n) {
+  const u = goConcatSeedUnwrap(n);
+  return u?.kind === SyntaxKind5.StringLiteral || u?.kind === SyntaxKind5.NoSubstitutionTemplateLiteral;
+}
+function goConcatSeedLeaves(n, out) {
+  const u = goConcatSeedUnwrap(n);
+  if (u?.kind === SyntaxKind5.BinaryExpression && u.operatorToken.kind === SyntaxKind5.PlusToken) {
+    return goConcatSeedLeaves(u.left, out) !== void 0 && goConcatSeedLeaves(u.right, out) !== void 0 ? out : void 0;
+  }
+  out.push(u);
+  return out;
+}
+function goConcatSeedIsSelf(checker, n, declaration) {
+  return n?.kind === SyntaxKind5.Identifier && checker.getSymbolAtLocation(n)?.valueDeclaration?.resolve?.() === declaration;
+}
+function goConcatSeedWriteOk(checker, right, declaration) {
+  const leaves = goConcatSeedLeaves(right, []);
+  return leaves !== void 0 && leaves.length >= 2 && leaves.filter((l) => goConcatSeedIsSelf(checker, l, declaration)).length === 1 && leaves.every((l) => goConcatSeedIsSelf(checker, l, declaration) || goConcatSeedIsLiteral(l));
+}
+function goConcatSeed(goTranspiler, declaration) {
+  if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier || declaration.type !== void 0 || declaration.parent?.parent?.kind !== SyntaxKind5.FirstStatement || declaration.parent.declarations?.length !== 1) {
+    return false;
+  }
+  const call = goConcatSeedUnwrap(declaration.initializer);
+  if (call?.kind !== SyntaxKind5.CallExpression || call.expression?.kind !== SyntaxKind5.PropertyAccessExpression || call.expression.expression?.kind !== SyntaxKind5.ThisKeyword || call.expression.name?.text !== "safeString" || call.arguments?.length !== 2) {
+    return false;
+  }
+  if (goConcatSeedVerdicts.has(declaration)) {
+    return goConcatSeedVerdicts.get(declaration);
+  }
+  goConcatSeedVerdicts.set(declaration, false);
+  const checker = goTranspiler.checkerOrUndefined();
+  const scope = goTranspiler.goOutermostFunction(declaration);
+  if (checker === void 0 || scope === void 0 || goTranspiler.goTypeNameIsShadowed(scope, "*string")) {
+    return false;
+  }
+  const name = declaration.name.text;
+  const tempSpelled = new RegExp("^" + name + "Value\\d*$");
+  const writes = [];
+  let unsafe = false;
+  goTranspiler.hasNodeWhere(scope, (n) => {
+    if (unsafe || n.kind !== SyntaxKind5.Identifier) {
+      return false;
+    }
+    if (tempSpelled.test(n.text)) {
+      unsafe = true;
+      return false;
+    }
+    if (n.text !== name || n === declaration.name) {
+      return false;
+    }
+    const p = n.parent;
+    if ((p?.kind === SyntaxKind5.PropertyAccessExpression || p?.kind === SyntaxKind5.PropertyAssignment) && p.name === n) {
+      return false;
+    }
+    const target = checker.getSymbolAtLocation(n)?.valueDeclaration?.resolve?.();
+    if (target !== declaration) {
+      if (target !== void 0 && target.kind !== SyntaxKind5.PropertyDeclaration && target.kind !== SyntaxKind5.MethodDeclaration) {
+        unsafe = true;
+      }
+      return false;
+    }
+    let current = n;
+    while (current.parent?.kind === SyntaxKind5.ParenthesizedExpression || current.parent?.kind === SyntaxKind5.AsExpression) {
+      current = current.parent;
+    }
+    const parent = current.parent;
+    if (parent?.kind === SyntaxKind5.BinaryExpression && parent.left === current && parent.operatorToken.kind >= ASSIGNMENT_KIND_MIN && parent.operatorToken.kind <= ASSIGNMENT_KIND_MAX) {
+      if (current === n && parent.operatorToken.kind === SyntaxKind5.EqualsToken && parent.parent?.kind === SyntaxKind5.ExpressionStatement && goConcatSeedWriteOk(checker, parent.right, declaration)) {
+        writes.push(parent);
+      } else {
+        unsafe = true;
+      }
+      return false;
+    }
+    for (let up = parent; up !== void 0; up = up.parent) {
+      if (writes.indexOf(up) >= 0) {
+        return false;
+      }
+      if (up.kind !== SyntaxKind5.BinaryExpression && up.kind !== SyntaxKind5.ParenthesizedExpression) {
+        break;
+      }
+    }
+    if (parent?.kind === SyntaxKind5.BinaryExpression && COMPARISON_TOKENS.indexOf(parent.operatorToken.kind) >= 0) {
+      const other = goConcatSeedUnwrap(parent.left === current ? parent.right : parent.left);
+      if (!ral90g5IsNil(other) && !goConcatSeedIsLiteral(other)) {
+        unsafe = true;
+      }
+      return false;
+    }
+    if (parent?.kind === SyntaxKind5.PropertyAssignment && parent.initializer === current && parent.parent?.kind === SyntaxKind5.ObjectLiteralExpression) {
+      return false;
+    }
+    if (parent?.kind === SyntaxKind5.PropertyAccessExpression && parent.expression === current && parent.name?.text === "indexOf" && parent.parent?.kind === SyntaxKind5.CallExpression && parent.parent.expression === parent && parent.parent.arguments.length === 1 && goConcatSeedIsLiteral(parent.parent.arguments[0])) {
+      return false;
+    }
+    if (parent?.kind === SyntaxKind5.CallExpression && parent.arguments[0] === current && parent.expression?.kind === SyntaxKind5.PropertyAccessExpression && parent.expression.expression?.kind === SyntaxKind5.ThisKeyword && ["watch", "watchMultiple", "client"].includes(parent.expression.name?.text)) {
+      return false;
+    }
+    unsafe = true;
+    return false;
+  });
+  const writesWaitForAllRefs = writes.every((w) => goTranspiler.goEnclosingFunction(w) === goTranspiler.goEnclosingFunction(declaration));
+  const ok = !unsafe && writes.length > 0 && writesWaitForAllRefs;
+  if (ok) {
+    const printedName = goTranspiler.printNode(declaration.name, 0);
+    writes.sort((x, y) => x.pos - y.pos).forEach((w, i) => goConcatSeedWriteTemps.set(w, printedName + "Value" + (i === 0 ? "" : String(i + 1))));
+  }
+  goConcatSeedVerdicts.set(declaration, ok);
+  return ok;
+}
+{
+  const goLocalIsSafeToTypeConcatSeed = GoTranspiler.prototype.goLocalIsSafeToType;
+  GoTranspiler.prototype.goLocalIsSafeToType = function(scope, declaration, varName, goType, stringWriteProven = false) {
+    if (goLocalIsSafeToTypeConcatSeed.call(this, scope, declaration, varName, goType, stringWriteProven)) {
+      return true;
+    }
+    return goType === "*string" && goConcatSeed(this, declaration);
+  };
+  const goPointerWriteTextConcatSeed = GoTranspiler.prototype.goPointerWriteText;
+  GoTranspiler.prototype.goPointerWriteText = function(node, identation) {
+    const temp = goConcatSeedWriteTemps.get(node);
+    const left = node?.left;
+    const checker = this.checkerOrUndefined();
+    const declaration = left?.kind === SyntaxKind5.Identifier ? checker?.getSymbolAtLocation(left)?.valueDeclaration?.resolve?.() : void 0;
+    if (temp === void 0 || declaration === void 0 || goConcatSeedVerdicts.get(declaration) !== true || this.goDeclaredTypeOfIdentifier(left) !== "*string") {
+      return goPointerWriteTextConcatSeed.call(this, node, identation);
+    }
+    const name = this.printNode(left, 0).trim();
+    const parts = goConcatSeedLeaves(node.right, []).map((leaf) => goConcatSeedIsSelf(checker, leaf, declaration) ? "*" + name : this.printNode(leaf, 0).trim());
+    const inner = this.getIden(identation + 1);
+    return `if ${name} != nil {
+${inner}${temp} := ${parts.join(" + ")}
+${inner}${name} = &${temp}
+${this.getIden(identation)}}`;
+  };
+}
 
 // src/javaTranspiler.ts
 init_esm_shims();
