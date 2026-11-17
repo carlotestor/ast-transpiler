@@ -31417,6 +31417,9 @@ export class RustTranspiler extends BaseTranspiler {
             const src: any = this.rustDeclarationOfIdentifier(rhs);
             if (src !== undefined && this.rustBorrowedLocalKind(src) === 'list') return `${this.printNode(left, 0).trim()} = \u0004${this.rustOptListName(rhs)}`;
         }
+        // ral-87rf R1: the list an `Array.isArray`-split endpoint local holds in its list arm (`Some` there)
+        const take = isIdentifier(rhs) ? this.rustOptListBoxes.get(rhs) : undefined;
+        if ((take === 'take' || take === 'takeClone') && this.rustOptListOf(rhs) !== undefined) return `${this.printNode(left, 0).trim()} = ${this.rustOptListName(rhs)}${take === 'takeClone' ? '.clone()' : ''}.unwrap_or_default()`;
         const guarded: any = isIdentifier(rhs) && isBinaryExpression(rhs.parent) ? this.rustOptListGuardedMove(rhs.parent) : undefined;
         if (guarded !== undefined) return `${this.printNode(left, 0).trim()} = ${rhs.text}.${this.rustDefaultedListValue(guarded, rhs) ? 'into_list' : 'unwrap_or_default'}()`;
         if (isIdentifier(rhs) && isBinaryExpression(rhs.parent) && this.rustDefaultedAliasMove(rhs.parent) !== undefined) return `${this.printNode(left, 0).trim()} = ${rhs.text}.into_list()`;
@@ -31452,7 +31455,7 @@ export class RustTranspiler extends BaseTranspiler {
 
     private rustOptListDecisions = new WeakMap<any, boolean>();
 
-    private rustOptListBoxes = new WeakMap<any, 'clone' | 'move' | 'lend' | 'map'>();
+    private rustOptListBoxes = new WeakMap<any, 'clone' | 'move' | 'lend' | 'map' | 'take' | 'takeClone'>();
 
     /** ral-80d: optional list locals held in the split list-vs-map-vs-null form (a second `<name>__map` binding). */
     private rust80dSplitLocals = new WeakSet<any>();
@@ -31501,7 +31504,10 @@ export class RustTranspiler extends BaseTranspiler {
         const strVecAlias = !nil && this.rust80cStrVecParamAlias(init);
         // ral-80d: a `const x = this.safeValue* (..)` tested with `Array.isArray (x)`: x splits once into the list it holds
         // (`Option<List>`) and the map it holds (`x__map: Option<Dict>`); anything else (Null, scalars) is None in both
-        const split = !nil && !strVecAlias && !this.rustOptListSource(init) && (list.flags & NodeFlags.Const) !== 0 && init !== undefined && this.rustSafeValueKeyReadSource(init)
+        // ral-87rf R1: or a `const x = await this.<implicit endpoint> (..)` (any declared answer: a map, a list, a string) tested
+        // with `Array.isArray (x)`: the same split, the endpoint answer moved out of the box once
+        const split = !nil && !strVecAlias && !this.rustOptListSource(init) && (list.flags & NodeFlags.Const) !== 0 && init !== undefined
+            && (this.rustSafeValueKeyReadSource(init) || this.rust87rfEndpointSplitSource(declaration, init))
             && String(init.getText()).split('\n')[0].length <= 240;
         if (!nil && !strVecAlias && !split && !this.rustOptListSource(init)) return false;
         const name = String(declaration.name.text);
@@ -31525,6 +31531,13 @@ export class RustTranspiler extends BaseTranspiler {
                 if (this.rustSafeValueKeyReaderUse(n)) { mapReads++; this.rustOptListBoxes.set(n, 'map'); return true; }
                 // every other use reads the list, so it must sit where `Array.isArray (x)` held
                 if (!this.rust80dInListArm(n, declaration, fn)) return false;
+                // ral-87rf R1: `t = x` (a statement) handing the held list to a built list local `t`: the list moves out of `Some`
+                if (isBinaryExpression(use) && use.right === n && use.operatorToken.kind === SyntaxKind.EqualsToken && use.parent?.kind === SyntaxKind.ExpressionStatement
+                    && isIdentifier(use.left) && this.rust87rfEndpointSplitSource(declaration, init) && this.rustBuiltListOf(use.left) !== undefined) {
+                    natives++;
+                    this.rustOptListBoxes.set(n, this.rustLocalLastUse(n, declaration) ? 'take' : 'takeClone');
+                    return true;
+                }
                 // ral-84d R4: a `.length` read in the list arm reads the held list's slice (Some there: the boxed length)
                 if (isBinaryExpression(use) || (isPropertyAccessExpression(use) && !(use.expression === n && String(use.name.text) === 'length'))) return false;
             }
@@ -31601,6 +31614,15 @@ export class RustTranspiler extends BaseTranspiler {
             this.rustOptListBoxes.set(n, sole || last ? 'move' : form);
         }
         return true;
+    }
+
+    /** ral-87rf R1: `const x = await this.m (..)` where `m` is an implicit-API endpoint (declared in `ts/src/abstract/`), outside
+     *  the test tier. Whatever the endpoint answers, the split form keeps the list it held (`Some`) and the map it held, so an
+     *  `Array.isArray (x)` test reads `is_some()` and every list-arm use reads the held list. */
+    rust87rfEndpointSplitSource(declaration: Node, init: Node): boolean {
+        const awaited: Node | undefined = this.rustSkipWrappers((declaration as VariableDeclaration).initializer);
+        if (awaited === undefined || awaited.kind !== SyntaxKind.AwaitExpression || !isCallExpression(init) || this.rustTestTierSource(init)) return false;
+        return this.rustBorrowedSourceKind(init) === 'api';
     }
 
     /** ral-80c R1: an unwritten method parameter whose typed signature slot is a string list (decided from the signature table). */
@@ -31767,7 +31789,7 @@ export class RustTranspiler extends BaseTranspiler {
     /** `&x` at an any-key reader, the shared handle at a `Value` slot, a move at `return x`. */
     printOptListIdentifier(node: any, text: string): string | undefined {
         const form = this.rustOptListBoxes.get(node);
-        if (form === undefined || this.rustOptListOf(node) === undefined) return undefined;
+        if (form === undefined || form === 'take' || form === 'takeClone' || this.rustOptListOf(node) === undefined) return undefined;
         if (form === 'lend') return `&${text}`;
         if (form === 'map') return `&${text}__map`;
         return form === 'move' ? `${text}.map_or(Value::Null, Value::Arr)` : `${text}.clone().map_or(Value::Null, Value::Arr)`;
