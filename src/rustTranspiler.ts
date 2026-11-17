@@ -30539,6 +30539,9 @@ export class RustTranspiler extends BaseTranspiler {
         for (const r of table) {
             if (!((flight ? r.rpats : undefined) ?? r.pats).some((rp) => hashes!.some((wp) => RustTranspiler.rustWsPatternsMeet(rp, wp)))) continue;
             if (r.kind === 'none') { none = true; continue; }
+            // on a watch, a boolean settle (`cleanUnsubscription`'s `client.resolve (true, h)`) whose own hash text is known
+            // converts to no book / no cache, as a Null settle does
+            if (r.scalar === true && !flight && (r.rpats ?? r.pats).every((rp) => rp.some((s) => s !== null))) { none = true; continue; }
             if (r.kind !== 'book' && r.kind !== 'cache' && r.kind !== 'dict' && r.kind !== 'list') return undefined;
             if (kind !== undefined && kind !== r.kind) return undefined;
             kind = r.kind;
