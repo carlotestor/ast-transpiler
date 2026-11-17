@@ -56556,6 +56556,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return `${indent}let mut ${varName}: crate::value::List = ${super.printIdentifier(this.rust66cBookCacheRead(declaration.initializer))}.cache_items()`;
     if (node.declarations.length === 1 && this.rustLentListLocal(declaration) && this.rustTypedListField(declaration.initializer))
       return `${indent}let mut ${varName}: crate::value::List = self.${String(this.rustSkipWrappers(declaration.initializer).name.text)}.clone()`;
+    if (node.declarations.length === 1 && this.rustLentListLocal(declaration) && this.rust90rgLentListAliasSource(declaration.initializer) !== void 0)
+      return `${indent}let mut ${varName}: crate::value::List = ${super.printIdentifier(this.rustSkipWrappers(declaration.initializer))}`;
     if (node.declarations.length === 1 && this.rustLentListLocal(declaration))
       return _nullishCoalesce(this.printBuiltListDeclaration(declaration, indent, varName), () => ( `${indent}let mut ${varName}: crate::value::List = ${_nullishCoalesce(this.rustWsFieldGetText(this.rustSkipWrappers(declaration.initializer), false), () => ( parsedValue))}.into_list()`));
     if (node.declarations.length === 1 && this.rustBorrowedDictLocal(declaration) && this.rustEcdsaCall(this.rustSkipWrappers(declaration.initializer))) {
@@ -81608,6 +81610,8 @@ ${iden}}`;
   rustLentListSource(init) {
     if (this.rustTypedListField(init))
       return true;
+    if (this.rust90rgLentListAliasSource(init) !== void 0)
+      return true;
     if (this.rust66cBookCacheRead(init) !== void 0)
       return true;
     if (!_is.isCallExpression.call(void 0, init) || !_is.isPropertyAccessExpression.call(void 0, init.expression))
@@ -81631,6 +81635,30 @@ ${iden}}`;
     if (method === "arraySlice")
       return !this.rustTestTierSource(init) && this.rustBaseArraySliceCall(init);
     return this.rustDefaultedListRead(init);
+  }
+  /** ral-90rg R3: `init` is (through wrappers) a read of a never-reassigned `const xs = <never-empty base list source>` of the same
+   *  function (a `marketSymbols (.., false, ..)` result and the like, rustLentListSource without this rule) that is the whole
+   *  initializer of a `const` declaration at the source's last use: the source's declaration, else undefined. Structural only
+   *  (never asks rustLentListLocal of the source, so the source's own decision can ask about this alias). */
+  rust90rgLentListAliasSource(init) {
+    const node = this.rustSkipWrappers(init);
+    if (node === void 0 || !_is.isIdentifier.call(void 0, node))
+      return void 0;
+    let top = node;
+    while ((_is.isAsExpression.call(void 0, top.parent) || _is.isParenthesizedExpression.call(void 0, top.parent)) && top.parent.expression === top)
+      top = top.parent;
+    const alias = top.parent;
+    if (alias === void 0 || !_is.isVariableDeclaration.call(void 0, alias) || alias.initializer !== top || !_is.isIdentifier.call(void 0, alias.name) || (alias.parent.flags & _ast.NodeFlags.Const) === 0)
+      return void 0;
+    const source = this.rustDeclaredNode(node);
+    if (source === void 0 || !_is.isVariableDeclaration.call(void 0, source) || source === alias || !_is.isIdentifier.call(void 0, source.name) || (source.parent.flags & _ast.NodeFlags.Const) === 0)
+      return void 0;
+    if (this.rustEnclosingFunction(source) !== this.rustEnclosingFunction(alias) || !this.rustLocalLastUse(node, source))
+      return void 0;
+    const sourceInit = this.rustSkipWrappers(source.initializer);
+    if (sourceInit === void 0 || _is.isIdentifier.call(void 0, sourceInit) || !this.rustLentListSource(sourceInit))
+      return void 0;
+    return source;
   }
   /** ral-48e: `xs[i]['k'] = v` (a statement) on a `[]`-defaulted list local, `i` an i64 counter or a non-negative integer
    *  literal: the write prints `add_element_to_object(get_value_mut(&mut xs, &Value::Int(i)), ..)` as before, and the
@@ -81779,6 +81807,10 @@ ${iden}}`;
       }
       if (_is.isReturnStatement.call(void 0, up) && up.expression === n) {
         boxes.push([n, "move"]);
+        return true;
+      }
+      if (at === n && _is.isVariableDeclaration.call(void 0, up) && up.initializer === n && this.rust90rgLentListAliasSource(n) === declaration && this.rustLentListLocal(up)) {
+        natives++;
         return true;
       }
       if (at === n && (this.rustLentListSlot(up, n) || this.rustLentVenueSlot(up, n) !== void 0)) {

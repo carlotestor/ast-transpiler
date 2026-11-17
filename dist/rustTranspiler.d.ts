@@ -4027,6 +4027,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustLentListLocal(declaration: any): boolean;
     /** A call that yields a string list on every path (never `undefined`). */
     rustLentListSource(init: any): boolean;
+    /** ral-90rg R3: `init` is (through wrappers) a read of a never-reassigned `const xs = <never-empty base list source>` of the same
+     *  function (a `marketSymbols (.., false, ..)` result and the like, rustLentListSource without this rule) that is the whole
+     *  initializer of a `const` declaration at the source's last use: the source's declaration, else undefined. Structural only
+     *  (never asks rustLentListLocal of the source, so the source's own decision can ask about this alias). */
+    rust90rgLentListAliasSource(init: Node): VariableDeclaration | undefined;
     /** ral-48e: `xs[i]['k'] = v` (a statement) on a `[]`-defaulted list local, `i` an i64 counter or a non-negative integer
      *  literal: the write prints `add_element_to_object(get_value_mut(&mut xs, &Value::Int(i)), ..)` as before, and the
      *  runtime `get_value_mut` hops a held `List` exactly as the `Value::Arr` arm did (the same padded slot). */
