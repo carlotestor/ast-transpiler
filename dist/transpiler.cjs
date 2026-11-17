@@ -92554,7 +92554,7 @@ ${this.getIden(identation)}}`;
     if (_optionalChain([intLocal, 'optionalAccess', _13390 => _13390.kind]) === "int")
       return this.rustRecordFormatToString(node, super.printIdentifier(receiver));
     if (_optionalChain([intLocal, 'optionalAccess', _13391 => _13391.kind]) === "oint")
-      return `Value::Str(${super.printIdentifier(receiver)}.map_or_else(|| "null".to_string(), |__n| __n.to_string()).into())`;
+      return `Value::Str((match ${super.printIdentifier(receiver)} { Some(__n) => __n.to_string(), None => "null".to_string() }).into())`;
     const sbLocal = receiver !== void 0 && _is.isIdentifier.call(void 0, receiver) ? this.rustScalarLocalOf(receiver) : void 0;
     if (sbLocal !== void 0 && this.rustScalarUseForms.get(receiver) === "xbox" && this.rustSbCopyBoxUse(receiver, sbLocal.kind))
       return this.rustRecordFormatToString(node, name);

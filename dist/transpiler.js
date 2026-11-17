@@ -92555,7 +92555,7 @@ ${this.getIden(identation)}}`;
     if (intLocal?.kind === "int")
       return this.rustRecordFormatToString(node, super.printIdentifier(receiver));
     if (intLocal?.kind === "oint")
-      return `Value::Str(${super.printIdentifier(receiver)}.map_or_else(|| "null".to_string(), |__n| __n.to_string()).into())`;
+      return `Value::Str((match ${super.printIdentifier(receiver)} { Some(__n) => __n.to_string(), None => "null".to_string() }).into())`;
     const sbLocal = receiver !== void 0 && isIdentifier3(receiver) ? this.rustScalarLocalOf(receiver) : void 0;
     if (sbLocal !== void 0 && this.rustScalarUseForms.get(receiver) === "xbox" && this.rustSbCopyBoxUse(receiver, sbLocal.kind))
       return this.rustRecordFormatToString(node, name);
