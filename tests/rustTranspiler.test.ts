@@ -25810,3 +25810,24 @@ describe('ral-92rg R3: a venue market slot read by key readers and boxed once in
         expect(text).toMatch(/pub fn handedOn\(&self, market: Value\)/);
     });
 });
+
+describe('ral-92rg R4: a venue Str result keying a map that is only enumerated', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\n"
+        + "export default class Exchange {\n    options: Dict = {};\n    safeString (o: any, k: any, d: Str = undefined): Str { return d; }\n}\n";
+    const venue = "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\n"
+        + "export default class venue extends Exchange {\n"
+        + "    symbolOf (id: Str): Str {\n        const s = this.safeString (this.options, id);\n        return s;\n    }\n"
+        + "    handle (changes: Dict[]): string[] {\n        const updated: Dict = {};\n        for (let i = 0; i < changes.length; i++) {\n            const id = this.safeString (changes[i], 'id');\n            const sym = this.symbolOf (id);\n            if (sym === undefined) {\n                continue;\n            }\n            updated[sym] = true;\n        }\n        return Object.keys (updated);\n    }\n}\n";
+    test('the local is Option<String> and the insert takes its key text', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-92rg4-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), venue);
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        let out = '';
+        try { out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+        expect(out).toMatch(/pub fn symbolOf\(&self, [^)]*\) -> Option<String>/);
+        expect(out).toContain('let mut sym: Option<String> = self.symbolOf(');
+        expect(out).toContain('updated.insert(sym.as_deref().unwrap_or("null").to_string(), Value::Bool(true));');
+    });
+});

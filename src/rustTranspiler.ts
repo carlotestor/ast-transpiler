@@ -13439,6 +13439,8 @@ export class RustTranspiler extends BaseTranspiler {
             // and the push on the bucket read is printed natively by arrPush (rustLitKeyBearerReadLocal), not by a ccxt pass
             // ral-56k: and a map only enumerated (never read back by key: btse fetchBalance `totals[code] = ..`): same key text
             if (enumerated && this.rustSafeCurrencyCodeInit(local.initializer)) return this.rustScalarInsertKeyUse(n);
+            // ral-92rg R4: likewise an owned venue `-> Option<String>` result (rustVenueStrCall) keying a map only enumerated
+            if (enumerated && !keyRead && this.rustVenueStrCall(this.unwrapParens(local.initializer))) return this.rustScalarInsertKeyUse(n);
             // ral-61k: the only key reads of the map are the very slot `m[k]` read inside the value of this write `m[k] = f(m[k])`
             if (enumerated && keyRead && isElementAccessExpression(this.rustSkipWrappers(local.initializer)) && this.rust61kSelfReassignOnlyRead(declaration, name, n)) return this.rustScalarInsertKeyUse(n);
             // ral-62k: every key read of the map is keyed by this very binding (anywhere after its write, e.g. safeBalance
