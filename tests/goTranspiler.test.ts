@@ -17109,3 +17109,38 @@ describe('ral-92g8 R4 venue string[] producers over a literal-defaulted safeList
         expect(out).toContain('OrderFlags(flags any) any {');
     });
 });
+
+describe ('ral-93g2 R1 marketIds locals joined as strings', () => {
+    const PRELUDE =
+        'type Strings = string[] | undefined;\n' +
+        'export class Exchange {\n' +
+        '    marketIds (symbols: Strings = undefined): Strings { return symbols; }\n';
+    const run = (members: string): string => {
+        const tmp = fs.mkdtempSync (path.join (os.tmpdir (), 'r93g2-'));
+        try {
+            const src = path.join (tmp, 'ts', 'src');
+            fs.mkdirSync (src, { recursive: true });
+            const file = path.join (src, 'x.ts');
+            fs.writeFileSync (file, PRELUDE + members + '}\n');
+            return new Transpiler ({ verbose: false, go: { parser: { NUM_LINES_END_FILE: 0 } } }).transpileGoByPath (file).content;
+        } finally {
+            fs.rmSync (tmp, { recursive: true, force: true });
+        }
+    };
+    const body = '    f (symbols: Strings = undefined): string {\n' +
+        '        const ids = this.marketIds (symbols);\n' +
+        '        if (ids === undefined) {\n' +
+        '            return \'\';\n' +
+        '        }\n' +
+        '        return ids.join (\',\');\n' +
+        '    }\n';
+    test ('a marketIds local only nil-tested and joined is a []string read by strings.Join', () => {
+        const out = run (body);
+        expect (out).toContain ('var ids []string = this.MarketIdsStrings(symbols)');
+        expect (out).toContain ('strings.Join(ids, ",")');
+    });
+    test ('a marketIds local handed on whole keeps the box', () => {
+        const out = run (body.replace ('return ids.join', 'this.marketIds (ids);\n        return ids.join'));
+        expect (out).not.toContain ('var ids []string');
+    });
+});

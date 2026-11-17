@@ -39108,3 +39108,9 @@ GoTranspiler.prototype.printReturnStatement = function (node, identation) {
     }
     return printReturnStatementBaseTypedVenue.call (this, node, identation);
 };
+
+// ===== ral-93g2 R1: marketIds locals joined as strings =====
+// `const ids = this.marketIds (symbols)` read only by nil tests and `.join ('lit')` is the []string
+// BaseExchange.MarketIdsStrings returns (nil exactly where MarketIds is nil, else what Join joins).
+GO92G2_STRING_LIST_READERS['marketIds'] = [ 'MarketIdsStrings', 1 ];
+// ===== ral-93g2 R1 (end) =====
