@@ -5094,6 +5094,9 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  arm), base `sortBy`/`sortBy2` of an Arr-only local (returns its input's variant), and a
      *  plain alias of a non-nullable Arr-only local (COW: the push never reaches the alias). */
     extraArrSource(n: any): boolean;
+    /** ral-87rg R4: `this.aggregate (x)` bound to the base helper (a hand-written runtime stub that returns `Value::Array(..)` for
+     *  every input: the non-list case answers `[]`), so a `sortBy` over it hands a list back. */
+    rust87rgAggregateCall(n: any): boolean;
     arrAlias(ident: any): boolean;
     assumedNumericSelf(inner: any): string | undefined;
     private strVisiting;

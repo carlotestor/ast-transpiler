@@ -89096,11 +89096,18 @@ ${this.getIden(identation)}}`;
         return n.arguments.length === 2 && this.rustCalleeIsBase(n);
       if (callee === "sortBy" || callee === "sortBy2") {
         const first = this.rustStripWrappers(n.arguments[0]);
+        if (first !== void 0 && this.rust87rgAggregateCall(first))
+          return this.rustCalleeIsBase(n);
         return first !== void 0 && _is.isIdentifier.call(void 0, first) && this.rustCalleeIsBase(n) && this.arrAlias(first);
       }
       return false;
     }
     return _is.isIdentifier.call(void 0, n) && String(n.text) !== "undefined" && this.arrAlias(n);
+  }
+  /** ral-87rg R4: `this.aggregate (x)` bound to the base helper (a hand-written runtime stub that returns `Value::Array(..)` for
+   *  every input: the non-list case answers `[]`), so a `sortBy` over it hands a list back. */
+  rust87rgAggregateCall(n) {
+    return n !== void 0 && _is.isCallExpression.call(void 0, n) && _is.isPropertyAccessExpression.call(void 0, n.expression) && n.expression.expression.kind === _ast.SyntaxKind.ThisKeyword && String(n.expression.name.text) === "aggregate" && n.arguments.length === 1 && this.rustCalleeIsBase(n) && !this.rustTestTierSource(n);
   }
   arrAlias(ident) {
     const declaration = this.rustSingleLocalDeclaration(ident);
