@@ -45858,7 +45858,14 @@ function goMapRowElementLocal(goTranspiler, declaration, list) {
     return false;
   }
   const uses = goMapRowIdentifierUses(goTranspiler, declaration);
-  return uses !== void 0 && uses.length > 0 && uses.every((n) => goMapRowSafeReaderUse(goTranspiler, n));
+  return uses !== void 0 && uses.length > 0 && uses.some((n) => goMapRowSafeReaderUse(goTranspiler, n)) && uses.every((n) => goMapRowSafeReaderUse(goTranspiler, n) || list.type !== void 0 && n.parent?.kind === SyntaxKind5.PropertyAssignment && n.parent.initializer === n);
+}
+function goMapRowListAnnotationIsRows(type) {
+  if (type === void 0) {
+    return true;
+  }
+  const element = type.kind === SyntaxKind5.ArrayType ? type.elementType : void 0;
+  return element?.kind === SyntaxKind5.TypeReference && element.typeName?.text === "Dict";
 }
 function goMapRowList(goTranspiler, declaration) {
   if (goMapRowListVerdicts.has(declaration)) {
@@ -45867,7 +45874,7 @@ function goMapRowList(goTranspiler, declaration) {
   goMapRowListVerdicts.set(declaration, false);
   let verdict = false;
   const file = String(declaration?.getSourceFile?.()?.fileName ?? "");
-  const args = declaration?.kind === SyntaxKind5.VariableDeclaration && declaration.name?.kind === SyntaxKind5.Identifier && declaration.type === void 0 && declaration.parent?.declarations?.length === 1 && !/(^|[\\/])base[\\/]/.test(file) ? goTranspiler.goSafeListLocalArgs(declaration.initializer) : void 0;
+  const args = declaration?.kind === SyntaxKind5.VariableDeclaration && declaration.name?.kind === SyntaxKind5.Identifier && goMapRowListAnnotationIsRows(declaration.type) && declaration.parent?.declarations?.length === 1 && !/(^|[\\/])base[\\/]/.test(file) ? goTranspiler.goSafeListLocalArgs(declaration.initializer) : void 0;
   if (args !== void 0) {
     const uses = goMapRowIdentifierUses(goTranspiler, declaration);
     let elements = 0;
