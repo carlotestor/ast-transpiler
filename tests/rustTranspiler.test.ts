@@ -24732,3 +24732,23 @@ describe('ral-87rd R1: a []-defaulted safeList local pushed onto is a typed list
         expect(out).not.toContain('let mut orderTrades: crate::value::List');
     });
 });
+describe('ral-87rd R2: a literal-key delete on a defaulted safeDict copy of a local keeps it a typed Dict', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    safeDict (o: any, k: any, d: any = undefined): Dict { return o; }\n    safeString (o: any, k: any, d: any = undefined): string { return o; }\n    extend (...args: any[]): any { return args[0]; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        transpiler.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts'));
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('foxbit createOrders: read, delete literal keys, extend', () => {
+        const out = write ('ral-87rd-r2a', "    m (order: Dict, request: Dict) {\n        const orderParams = this.safeDict (order, 'params', {});\n        const timeInForce = this.safeString (orderParams, 'timeInForce');\n        if (timeInForce !== undefined) {\n            delete orderParams['timeInForce'];\n        }\n        return this.extend (request, orderParams);\n    }\n");
+        expect(out).toContain('let mut orderParams: crate::value::Dict = ');
+        expect(out).toContain('std::sync::Arc::make_mut(&mut orderParams).shift_remove("timeInForce")');
+    });
+    test('negative: a safeDict with no default stays Value', () => {
+        const out = write ('ral-87rd-r2n', "    m (order: Dict, request: Dict) {\n        const orderParams = this.safeDict (order, 'params');\n        const timeInForce = this.safeString (orderParams, 'timeInForce');\n        if (timeInForce !== undefined) {\n            delete orderParams['timeInForce'];\n        }\n        return this.extend (request, orderParams);\n    }\n");
+        expect(out).not.toContain('let mut orderParams: crate::value::Dict');
+    });
+});
